@@ -1,180 +1,152 @@
-# Pitfalls Research
+# Pitfalls Research — Adding Entra ID Group Mapping to gr8r SSO
 
-**Domain:** Instance-level email-domain admission (env-gated allowlists) added to an existing multi-tenant invite system with OIDC JIT, hardened invite-accept, i18n parity gate and contract tests — plus lint cleanup and locale verification.
-**Researched:** 2026-11-19
-**Confidence:** HIGH (prior-art from GitLab, Gitea, Outline, OneTimeSecret; CVE/GHSA-backed email-parsing findings; ESLint rule documentation) with project-specific analysis from `PROJECT.md` and the codebase.
+**Domain:** Entra ID group → workspace-membership/role mapping on an existing hand-rolled OIDC SSO client (JIT provisioning, domain doors, multi-workspace governance, last-operator guard, zero-dependency invariant)
+**Researched:** 2026-11-20
+**Confidence:** HIGH (claim behaviors are documented Entra semantics; integration pitfalls derived from the v3.x shipped architecture in PROJECT.md)
 
-> Scope note: this milestone's features are exactly where the historical bugs live. Every
-> "prior art" reference below shipped a real bypass or lockout that v3.0 must not repeat.
+**Scope note:** these pitfalls are for *adding* group mapping to a working system. The generic OIDC/SSO pitfalls were already paid down in v1.6/v3.0 (pinned tenant, verified-email linking, fail-closed doors). Everything below is about where the new feature touches existing invariants.
+
+---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Raw `split('@')` email parsing — the door the attacker walks through
+### Pitfall 1: The `groups` claim overage (>`_claim_names` silently ignored)
 
-**What goes wrong:**
-The domain check is implemented as `email.split('@').pop()` or a naive regex, and admission is decided on whatever string arrives. RFC 5321/5322 allow quoted local parts (`"a@b"@corp.com`), comments (`user@(comment)corp.com`), and — critically for an allowlist — the *domain* side itself can arrive in non-canonical forms:
+**What goes wrong:** Entra caps the `groups` claim at ~200 group IDs (or 150 with names). A user past the cap gets *no inline `groups` array* — instead a `_claim_names: { groups: "_groups" }` / `_claim_sources` pointer to a Graph URL. A client that does `token.groups.map(...)` gets `undefined` and treats the user as group-less → every group mapping silently stops applying for exactly the power users (who are in many groups). Worse: if removal-sync is active, a group-less claim reads as "removed from all groups" and can demote/strip the user.
 
-- **Unicode homoglyph separators:** a fullwidth `＠` (U+FF0E / U+FF20 class) that normalizes to `@` under NFKC. Auth.js shipped exactly this bug (GHSA-7rqj-j65f-68wh, Critical): "Email normalizer validates the address *before* Unicode normalization, allowing a homoglyph `@` bypass." A check run on the raw string sees `user@corp.com` where mail libraries later see a different domain — or vice versa: a hostile domain that *renders* like `corp.com` passes a length/shape check and then canonicalizes INTO the allowed domain on the wrong side of the comparison.
-- **Trailing dot FQDN:** `user@corp.com.` is a fully equivalent DNS name per RFC 1034/1035, so mail actually delivers to corp.com — but `String.endsWith('corp.com')` or a Set lookup on the raw string misses it. The trailing-dot trick is a documented origin/allowlist bypass class (soltanali0 write-up; the same trick broke GitLab and Express origin checks).
-- **Case:** `CORP.COM`, `Corp.Com` — Set lookups are case-sensitive.
-- **Quoted local parts / multiple `@`:** `"evil@corp.com"@attacker.io` — splitting on the first or last `@` naively yields the *wrong* domain either way.
+**Why it happens:** works fine with test users in ≤5 groups; only breaks with real org users. The overage is a documented Entra behavior, not a bug.
 
-**Why it happens:**
-The check is written against the happy-path email the invite modal produces, and unit tests only cover lowercase ASCII. The PortSwigger paper "Splitting the email atom" documents parser-discrepancy access-control bypasses as a whole class: the validation parser and the *delivery* parser are different programs.
+**How to avoid:** at claim ingestion, detect `_claim_names.groups` and fail-safe: log + treat as "overage — group evidence incomplete" and *skip group-derived grants AND removals* for that login (do not treat as empty). Optionally document the `emitSecurityGroupsUsed` / assigned-roles-only mitigation (tenant-side) in DEPLOY.md. Never let a missing/overage claim trigger removal.
 
-**How to avoid:**
-One shared canonicalization funnel, used by every door (JIT, signup, invite create/edit/accept — exactly the gr8r pattern of one shared validator like D-53-2):
+**Warning signs:** e2e tests pass with tiny test groups; a single production tester in a big org reports mappings "don't work"; removal-sync tests only ever exercise explicit group lists.
 
-1. Normalize FIRST: `String(email).trim().normalize('NFKC').toLowerCase()` — then reject any residual non-ASCII in the domain part (gr8r is not an IDN deployment; refuse `xn--` and non-ASCII domains outright rather than punycoding them).
-2. Parse LAST: take the substring after the LAST `@`, and if the local part contains a quoted section (starts with `"`), reject or parse strictly — do not hand-roll.
-3. Strip one trailing `.` from the domain before lookup.
-4. Compare against an allowlist that was itself normalized at boot (lowercase, trailing dots stripped, no whitespace entries) with **exact equality** — the seed design says exact-domain matching, so resist any temptation to add `endsWith`/suffix or wildcard matching "for convenience": `notcorp.com` and `evilcorp.com` both end with `corp.com`.
-5. Store the canonical email at account/invite creation, never the raw string.
-
-**Warning signs:**
-Contract tests that only use `alice@corp.com`; any `endsWith`, `includes('.')` or non-lowercased comparison in the diff; the canonicalizer existing but not being the single call site (grep for `split('@')` — it must appear once).
-
-**Phase to address:**
-Domain-admission phase — the canonicalization funnel + an adversarial table-driven contract test (`＠`, trailing dot, mixed case, quoted local, subdomain, `notcorp.com`) is the first task, before any route is wired to it.
+**Phase to address:** Config ingestion (claim parsing) — and it must be co-designed with removal sync, since the failure mode is a removal, not a no-op.
 
 ---
 
-### Pitfall 2: Fail-open on unset vs empty, and on config-parse errors
+### Pitfall 2: Group Object IDs vs display names, and tenant-dependence
 
-**What goes wrong:**
-The gate answers "allowed" when the env var is missing *or malformed or empty*, and those are not the same state. Documented cases: OneTimeSecret's SSO docs state "an explicitly empty, readable allowlist is the configured allow-all state, not a fallback for missing or corrupt configuration" — i.e. they had to distinguish three states. The classic accident: `ALLOW_SIGNUP_DOMAINS=""` in docker-compose (set-but-empty) silently means open-to-all, while the operator believes the variable's *presence* means restricted. The other classic: `"corp.com, corp.com "` or a stray newline from a YAML fold produces a list containing `""` and `" corp.com"`, and depending on implementation the whole check throws (fail-open via catch) or matches nothing (silent total lockout).
+**What goes wrong:** mapping config keyed on group *display names* ("Developers") breaks on rename, duplicates, and across tenants. Keyed on object IDs it's stable — but IDs are tenant-specific GUIDs, so a config copy between a staging and prod tenant silently matches nothing (fail-closed, but mysterious). Also: some apps emit group *names* (if configured `SecurityGroup`/`ApplicationGroup` vs the default SAMAccountName-ish formats), so a config written against one claim format doesn't survive a tenant-side claim-config change.
 
-**Why it happens:**
-`process.env.X || DEFAULT_OPEN` and `env.X?.split(',')` both quietly conflate undefined/empty/whitespace, and JavaScript's falsy `""` does the rest.
+**Why it happens:** names are readable and tempting; GUIDs are copy-paste from Entra portal and get lost in config review.
 
-**How to avoid:**
-- Parse env once at boot into an explicit tri-state: `unset` (per seed design: inherit — signup list for invites; signup unset = open), `set-and-empty` (owner decision: what does the seed design say? — document it in code as a named constant with a comment, never an accident), `set-with-values`.
-- Boot-time validation: strip whitespace/empties, dedupe, lowercase, log the effective resolved list at startup ("signup doors restricted to: corp.com, corp.dev; invite doors inherit"), and refuse-and-exit on a syntactically broken value (e.g. a `*` or `http://` prefix) rather than failing open at request time. gr8r already has loud boot validation precedent (D-K2 for MASTER_KEY) — reuse that posture.
-- Fail-closed at *accept* time is already the seed design: accept-time re-validation must treat "cannot determine list" as refuse, never as allow. The `firstWorkspace()` fail-closed twins (v1.7 HARD) are the in-house pattern.
+**How to avoid:** map on Object IDs only, validated at boot (GUID shape check, strict-token parse like the v3.0 tri-state env pattern); refuse boot or warn loudly on malformed IDs. Store the display name alongside the ID *as a comment/label only*, never as the match key. Document that mappings are tenant-pinned.
 
-**Warning signs:**
-A `try/catch` around the list parse that returns `true`; `.split(',')` with no trim/filter(Boolean); tests that never boot with the var absent, empty, and whitespace-padded.
+**Warning signs:** a mapping "stops working" after an Entra-side group rename; duplicate group names in the tenant; someone pastes a staging config into prod.
 
-**Phase to address:**
-Domain-admission phase — boot resolver as its own unit with a test matrix of env shapes (`undefined`, `''`, `' '`, `'a,b'`, `'a,,b'`, `' a , B '`), plus a DEPLOY.md section pinning the semantics.
+**Phase to address:** Config ingestion (mapping config schema + boot validation).
 
 ---
 
-### Pitfall 3: Door-matrix confusion — admin sets only `ALLOW_INVITE_DOMAINS` expecting signup to be restricted (or vice versa)
+### Pitfall 3: Claim lands in the ID token but not the access token (or vice versa)
 
-**What goes wrong:**
-Two variables × four doors (OIDC JIT, direct signup, invite create/edit, invite accept) = an eight-cell matrix, and operators — and developers — fill in cells from intuition. The specific surprise named in the seed design: **unset-inherits-signup** means `ALLOW_INVITE_DOMAINS` unset does NOT mean "invites unrestricted" — it means "invites follow the signup list". An admin who sets only the invite list while signup is open gets: invites restricted to corp.com, but anyone with any email can self-signup through the signup door (and then... is already in). Conversely, an admin who tightens `ALLOW_SIGNUP_DOMAINS` after onboarding and expects OIDC JIT to be "invite-adjacent" may leave JIT governed by the signup list and lock out a partner domain that invites were still allowed to bring in. Gitea's docs record the sibling trap: `EMAIL_DOMAIN_ALLOWLIST` applies to *registration* only, and issue #27457 is exactly the confusion when an admin-created (invite-like) user path behaved differently from registration.
+**What goes wrong:** Entra group-claim config is per-application and per-token-type. Teams configure "ID token" only, then later add a server-side check that reads groups from the *access token* (or from the userinfo-style refresh path) and get nothing. Conversely, claims added to access tokens for a multi-tenant/implicit setup can bloat tokens past header/proxy size limits (431 errors at Traefik — gr8r's actual reverse proxy).
 
-**Why it happens:**
-"Signup" and "invite" sound like one policy; the inheritance rule is invisible in the env var name. Nobody re-reads the door matrix after the first route works.
+**Why it happens:** gr8r's hand-rolled client validates/uses the ID token for identity; the milestone naturally reads groups from the ID token callback. The trap is *later* code paths (reconcile, MCP, session re-assert) reading a different token.
 
-**How to avoid:**
-- Write the door matrix as a **literal table in code and in DEPLOY.md** (rows: JIT / signup / invite create / invite edit / invite accept; columns: which list, which fallback), and make the resolver the only place that reads the two env vars.
-- A boot-time advisory log when the lists diverge ("signup open, invites restricted to X — is that intended?"), like GitLab surfaces sign-up restrictions in admin settings.
-- Contract tests assert every cell of the matrix, including both inherit directions and the accept-time re-validation cell — the seed design already demands a contract suite; make the matrix the suite's table of contents.
-- DEPLOY.md gets one worked example per confusion ("I set only ALLOW_INVITE_DOMAINS and signup is still open — why") because this is an operator-education bug as much as a code bug.
+**How to avoid:** pick ONE source of truth — the ID token at the SSO callback, matching the snapshot-at-login design — and centralize claim extraction in a single function. Never read groups elsewhere. Keep token size in mind: if many groups are emitted, the callback POST/cookie can balloon; groups are used server-side only and never mirrored into the session cookie.
 
-**Warning signs:**
-Any route checking the list inline (`if (ALLOW_SIGNUP_DOMAINS...)`) instead of calling the resolver; contract tests that cover signup and invite-accept but not JIT or invite-edit.
+**Warning signs:** two different code paths extracting `groups`; a session that "loses" operator rights on some endpoints but not others; Traefik returning 400/431 on login for group-heavy users.
 
-**Phase to address:**
-Domain-admission phase — resolver + matrix table + full-matrix contract tests are the milestone's spine; DEPLOY.md section in the same phase.
+**Phase to address:** Config ingestion (single extraction point, contract test on token source).
 
 ---
 
-### Pitfall 4: Timing-of-check — the list changes between invite send and accept (TOCTOU)
+### Pitfall 4: Transitive membership surprise (DirectAssignments / transitive vs direct)
 
-**What goes wrong:**
-Invite created when `corp.com` was allowed; list tightened (or rotated to a new corporate domain) a week later; invitee clicks the token and gets admitted to a domain that is now forbidden. If the check lives only at invite-create, the tightened list is a lie. The reverse also bites: list *loosened* so a re-invite passes create, but a stale pending invite from the strict era is accepted — fine, but the audit trail then shows a member whose admission contradicts the list in force at their signup. This is why the seed design mandates **fail-closed accept-time re-validation**.
+**What goes wrong:** the default `groups` claim includes *transitive* memberships (via nested groups); a tenant-side toggle (`DirectAssignments`-style application-assignment filter or claim config) changes this. A mapping built assuming "users in group X directly" behaves differently after an admin toggles nested-group semantics — users gain or lose access without any app change. ApplicationGroup/assigned-roles emission also changes what appears.
 
-**Why it happens:**
-Invites are long-lived tokens; the natural implementation validates once at issuance. The hardened accept route (sameOrigin-first, silent body whitelist) already treats accept as an untrusted re-entry point — but the domain check must be added *to that re-validation pass*, not only to create.
+**Why it happens:** the app can't tell direct from transitive in the claim; the difference lives entirely in tenant config the app doesn't control.
 
-**How to avoid:**
-- Accept-time re-validation as the authority (seed-mandated): the pending invite is checked against the list *in force at accept*, with a **keyed localized refusal** (`inviteDomainRevoked`-class key, not a generic error) so the invitee understands the invite expired by policy.
-- Invite **edit** also re-validates (changing the email on a pending invite to a now-forbidden domain must refuse).
-- Decide and document the existing-member-immunity interaction at accept: re-validation applies to the *admission email*, not to the inviter or to already-members (seed: existing-member immunity). A test proving immunity survives accept-time re-validation is essential — it is the easiest invariant to accidentally break by reusing one helper on both sides.
-- Contract test: create invite under list A, tighten to list B, accept → refused with the keyed reason; loosen, accept → admitted.
+**How to avoid:** treat the claim as opaque evidence ("Entra says this user is in these groups"), don't model direct/transitive in app logic. Document in DEPLOY.md that nesting semantics are tenant-controlled. Don't build deny-mappings (group X *excludes* you) — transitivity makes deny-lists unpredictable; gr8r's model is admission-by-mapping only, keep it that way.
 
-**Warning signs:**
-A `domains` snapshot stored on the invite row "for audit" that the accept path reads back *instead of* the live list; the accept handler importing only the create-time validator.
+**Warning signs:** access changes reported "out of nowhere" after an Entra reorganization; nested-group test scenarios never covered in tests.
 
-**Phase to address:**
-Domain-admission phase — the re-validation branch of the hardened accept route, with the tighten/loosen contract tests.
+**Phase to address:** Mapping resolution (opaque-claim policy) + DEPLOY.md documentation in the same phase.
 
 ---
 
-### Pitfall 5: Breaking existing flows — pre-existing members blocked from re-invite, and SSO-linked accounts locked out after tightening
+### Pitfall 5: Removal sync strips the workspace owner or the last operator
 
-**What goes wrong:**
-Two documented lockout modes:
+**What goes wrong:** group-driven removal runs at login: user removed from group → membership deleted/demoted. But (a) a group-mapped user was made workspace *owner*; group removal deletes the membership and orphans the workspace (v3.1 explicitly built orphan-reassignment for this — triggering it via sync is still a governance incident); (b) group removal demotes/removes the *last operator* on the instance — the v3.1 last-operator guard exists for manual demotion, and a naive sync path bypasses it.
 
-1. **Re-invite of a pre-existing member refused.** Admin invites `alice@oldpartner.com` (already a member from before the list existed, or with an out-of-list email) → invite-create refuses even though the target is already in the workspace and the invite is really just a re-share. GitLab's MR 76272 is the canonical *adjacent* bug: "a user can bypass the domain allowlist by creating an account with an allowed email, then *changing* their email" — meaning GitLab had to add email-change re-validation, i.e. the *account-update* door must be in the matrix too, and it must not be confused with re-invite.
-2. **SSO-linked accounts locked out after list tightening.** The signup list now excludes a domain whose OIDC accounts already exist. If JIT/allowlist logic accidentally gates *login* rather than *account creation*, existing members can't sign in. OneTimeSecret documents the correct stance explicitly: "Restrictions apply to **new account creation only** — existing linked accounts can still log in" and "Do not clear or bypass an allowlist for returning accounts." Also: their "missing email yields `missing_email`; malformed yields `invalid_email`; disallowed yields `domain_not_allowed`" — distinct keyed refusals, never one generic error.
+**Why it happens:** sync is a new write path into memberships; the guards live in the manual-edit endpoints, not in a shared funnel.
 
-**Why it happens:**
-The check gets attached to "user with this email appears" rather than "new admission event". OIDC JIT's existing gate (tenant pin + `email_verified`) is a natural place to bolt on the domain check — and the wrong variable (invite list) or wrong semantics (login-blocking) gets bolted on.
+**How to avoid:** route every group-derived membership change through the same guard funnel as manual edits (last-operator refused, owner-removal refused → leave the user with a documented "kept despite group removal" state + log, exactly like existing immunity rows in v3.0). Group sync must be *admission* (can grant) never *forced revocation past guards*. Snapshot-at-login means the demotion applies at next login — a mid-session operator who lost group membership keeps working until re-login; that is the intended semantics, state it explicitly.
 
-**How to avoid:**
-- One predicate: `isAdmissible(domain, door)` where door ∈ {jit, signup, inviteCreate, inviteEdit, inviteAccept}; **membership lookup short-circuits before the predicate** for re-invite and for login — the allowlist never applies to authentication of an existing account.
-- Invite-create: check the *new-admission* semantics — if a membership row already exists for that email in that workspace, the domain check is skipped (re-share), and the UI copy stays the existing "already a member" path.
-- Email-change on an account (if gr8r supports it) re-validates the *new* email against the signup list — the GitLab MR 76272 lesson; if email change isn't supported, add a contract test documenting the door is absent.
-- OIDC JIT keeps its existing gate order (tenant pin → email_verified → admissible) and refuses with a **keyed localized refusal** distinct from the tenant-pin refusal, so logs and support can tell the two apart.
-- Contract tests: pre-existing member + out-of-list email re-invite → succeeds; existing SSO account of a now-forbidden domain logs in → succeeds; new JIT on forbidden domain → refused with key.
+**Warning signs:** a sync code path that calls membership/role mutations directly instead of the guard funnel; tests for sync that never exercise a sole-operator scenario.
 
-**Warning signs:**
-The domain check reachable from the login/session code path; an `await membershipLookup` that happens *after* `isAdmissible`; a single refusal key for both JIT-tenant and JIT-domain failures.
-
-**Phase to address:**
-Domain-admission phase — predicate + door wiring with the three "existing account" contract tests; this is also the phase's primary regression risk against the pinned contract suite (any pre-existing contract test that pins un-restricted behavior on these routes must be consciously updated, never loosened).
+**Phase to address:** Removal sync — the core pitfall of this milestone.
 
 ---
 
-### Pitfall 6: eslint `no-unused-vars` cleanup — deleting code that had side effects
+### Pitfall 6: Cyclic / self-referential operator mapping
 
-**What goes wrong:**
-The 17 pre-existing unused-vars errors get "fixed" by deleting the variable *and its initializer*, and the initializer was load-bearing: `const server = startServer()` (never started), `const rev = bumpRevision(doc)` (mutation skipped), a destructured import whose module had side-effectful top-level code, or a function parameter removed from a callback whose arity the caller depends on. ESLint itself does not autofix this rule for precisely this reason — the typescript-eslint maintainers' stance on issue #3456: "No-unused-vars does not have an autofixer. It's not safe to remove random variables from code automatically. Side effects are everywhere." Write-only reads are another trap Oxlint documents: `y = 5` counts as unused (self-increment `z = z + 1` too), so "cleanup" of an accumulator or counter silently removes state transitions.
+**What goes wrong:** operator *editing* of the group→operator mapping (from the governance console) can lock everyone out: the operator maps a group they're not in, demotes the only group granting operator rights, or maps a group to a role that can't edit mappings. No check prevents the last path to operator power from being deleted in one edit.
 
-**Why it happens:**
-The errors accumulated across 17 sites and get batch-fixed mechanically; each fix looks locally harmless and the diff reads as noise.
+**Why it happens:** mapping config is data; nothing recomputes "can the instance still be administered" after an edit.
 
-**How to avoid:**
-- One commit per site (or per cluster), never one sweep — gr8r's atomic-commit discipline applies to lint debt too.
-- For each site, classify before touching: dead local (delete all of it including any call), intentional discard (rename `_x` per the `argsIgnorePattern`/`varsIgnorePattern` convention), or side-effectful initializer (keep the call, drop the binding: `{ startServer(); }`).
-- The standing gates are the safety net and must run per commit: full unit suite (1809 tests), e2e, build. A deletion that breaks a contract test is the suite doing its job — investigate the side effect, don't update the test to match.
-- Beware the second-order case: a variable becomes "unused" only *because* an earlier cleanup removed its last consumer — chain removals one at a time.
+**How to avoid:** validate mapping edits against the same last-operator logic as v3.1 demotion: refuse an edit that would leave *no* surviving path to operator (no group with operator rights AND no manually-flagged instance admin). Because manual `is_instance_admin` flags exist as an independent seat (v3.1, D-114 break-glass), the rule can be: refuse only if BOTH no manual operator AND no group-mapped operator path remains. Log every mapping edit to the audit trail (AUD precedent).
 
-**Warning signs:**
-A single commit touching multiple unrelated files "lint cleanup"; any `--fix`-style bulk change; test counts that shift between commits.
+**Warning signs:** mapping edit endpoint lacking a "would anyone still be an operator?" check; no audit rows for mapping changes.
 
-**Phase to address:**
-Maintenance phase (lint/translation phase) — but the rule "one commit per site, suite per commit" belongs in the plan's task breakdown.
+**Phase to address:** Removal sync + governance editing (validation must exist before mapping edit UI ships).
 
 ---
 
-### Pitfall 7: Locale verification — missing keys falling back silently, and the three spots where the parity gate can't see
+### Pitfall 7: Group mapping evaluated in the wrong order relative to domain doors (JIT)
 
-**What goes wrong:**
-The nl/de/es spot-check passes a screenshot review, but real failures hide in three blind spots of a static parity scan:
+**What goes wrong:** the v3.0 door matrix gates JIT provisioning (DP-4 fresh-provision arm). Group mapping *also* admits users. If group mapping is evaluated before/outside the domain doors, a user in a mapped group but on a non-allow-listed domain gets provisioned (door bypass); if doors run first and the mapped group was supposed to be the admission path for an external domain, the user is refused and mapping never applies. Double-negative variant: a user passes the domain door, but the mapped group also gates a workspace — and the code assumes "mapped ⇒ provisioned" without re-checking doors.
 
-1. **Silent fallback-to-key or fallback-to-EN:** `t('inviteDomainRevoked')` on a missing key renders the raw key or English, with no error — users see `"inviteDomainRevoked"` (or unexplained English) in Dutch. The existing i18n gate catches *uncatalogued new literals* in EN/FR; it does not by itself guarantee nl/de/es have the *new* domain-refusal keys, unless the catalogue scan is key-parity across all locales (gr8r's post-v2.7 full catalogues are parity-gated — confirm the new keys join that parity, not just EN+FR).
-2. **Server-side keys vs client-side catalogues:** the refusal keys are emitted by the *server* (`tFor()` core, v1.8 precedent) and rendered by the client's code-translation layer (ERR-01/02). A key present in the server catalogue but missing from a client locale catalogue falls back to the English server message — by design — which *is* correct behavior but must be *verified*, not assumed: a typo'd key (EN exists, `inviteDomainRevoke` emitted) shows English everywhere and the parity gate stays green on both sides.
-3. **Interpolation differences:** `{domain}` in "…is not allowed for {door}" — the Dutch/German/Spanish word order puts the variable elsewhere; a translation that drops `{domain}` renders the placeholder literally or empty, and no parity scan catches it (same key count, wrong content).
+**Why it happens:** two parallel admission concepts (owner ruling: "group match is a parallel admission concept beside the domain door matrix, which is unchanged") — parallel means both must pass for JIT, which is easy to implement as either-or by accident.
 
-**Why it happens:**
-Parity scans count keys; they don't validate placeholders or rendered output. Spot-checking is done on happy-path screens, not on refusal states that only appear behind an env-gated feature.
+**How to avoid:** make the ordering explicit and owner-ratified: domain doors remain the *provisioning* gate (unchanged, DP-4); group mapping only decides *workspace membership + role* for users who exist. Group matching never substitutes for a domain door; a mapped group on a non-matching domain does not provision. Encode this as a boot-matrix log line (D-11 precedent: combined 5-door log → now 6-row with group mapping state).
 
-**How to avoid:**
-- Emit the refusal keys server-side through `tFor()` (established funnel), and add the new keys to the parity scan's catalogue in the same commit as the routes — the "no-French-byte" style gate pattern from v2.5 (label keys) generalizes: no refusal key ships without all-locale entries.
-- A unit test per new key asserting all locales resolve AND every `{placeholder}` present in EN is present in each translation (mechanical placeholder-diff — cheap and catches the word-order drop).
-- The translation spot-check phase drives the *refusal path* in the real app per locale (e.g. set `ALLOW_INVITE_DOMAINS=corp.com`, attempt an out-of-domain invite with locale=de) — screenshot the refusal toast, not just nav labels. That makes the pitfall 3/5 refusals and the locale check the same UAT flow.
-- Client fallback posture is already pinned (ERR-02: unknown code → server English message): add one contract test asserting the unknown-code fallback still fires for the new keys so "missing key" degrades to readable English, never an empty toast (v1.2 decision: "No toast is ever empty").
+**Warning signs:** an e2e scenario missing for "mapped group + blocked domain"; the door-matrix boot log not extended; tests where mapping alone provisions a fresh account.
 
-**Warning signs:**
-Spot-check limited to Settings/dashboard; new keys added to EN+FR only; any `{` count mismatch between locales in the diff.
+**Phase to address:** Mapping resolution (JIT ordering), verified in the same phase with the door-matrix contract test.
 
-**Phase to address:**
-Maintenance/translation phase for the spot-check — but the placeholder-parity unit test belongs in the domain-admission phase's i18n task, not deferred.
+---
+
+### Pitfall 8: Slug rename breaks links, clients, and mapping targets
+
+**What goes wrong:** the deferred v3.1 feature — renaming a workspace slug from /governance — breaks: notification deep links `/w/:slug/task/:key` (already emitted, unclickable), MCP client configs, browser bookmarks, `/next=` carries, and any mapping config that targeted workspaces by slug. Rename collisions hit the `slug unique` constraint.
+
+**Why it happens:** slug is the public address AND the config key. Renaming is a data edit with URL-shaped blast radius.
+
+**How to avoid:** (a) mapping config must reference workspaces by stable ID, never slug — resolve slug→ID only for display; (b) rename keeps the old slug as a redirect (301 or internal redirect preserving `?next=` paths) for at least the notification-link lifetime, or explicitly documents old links die; (c) collision = keyed localized refusal (same 5-locale pattern as every v3.x refusal, same commit); (d) tokenize/validate slug input with the same canonicalization funnel discipline as `canonicalizeDomain` (v3.0).
+
+**Warning signs:** governance UI binding mappings to slug strings; no redirect handler test after rename; rename endpoint without collision handling.
+
+**Phase to address:** Governance editing.
+
+---
+
+### Pitfall 9: Deleted/renamed Entra group leaves a dead mapping
+
+**What goes wrong:** a group is deleted in Entra; its object ID no longer appears in any claim. With removal-sync, all its mapped users lose membership/role at next login — potentially the operator path (see Pitfall 5). With fail-closed no-op handling instead, the mapping silently does nothing and nobody knows. Display-name-labeled mappings make it worse: the label still shows a plausible name for a dead ID.
+
+**Why it happens:** gr8r deliberately has no Graph SDK, so it can never *query* Entra to learn the group died. The claim is the only evidence.
+
+**How to avoid:** accept that dead mappings are undetectable server-side (constraints-first: document it). Mitigations that fit the zero-dependency design: (a) boot/warning surface in the operator console listing mappings with "never matched any login in N days" (weak evidence, honest about it); (b) removal-sync changes must be auditable — audit log rows for every group-derived grant/demotion with the group ID, so an operator can diagnose after the fact; (c) DEPLOY.md runbook: "a mapping whose group was deleted demotes at next login — guards still apply."
+
+**Warning signs:** audit trail lacking group-derived changes; no operator visibility into mapping effectiveness.
+
+**Phase to address:** Removal sync (audit rows) + governance editing (mapping list UI).
+
+---
+
+### Pitfall 10: Self-removal / self-demotion mid-session confusion
+
+**What goes wrong:** an operator logs in, group sync demotes them (they were removed from the operator group in Entra), and they're mid-edit in the governance console — subsequent API calls 403 and the UI half-works, or worse they're removed from the workspace whose page is open. The SPA has no "your access changed" handling; stale UI silently fails.
+
+**Why it happens:** snapshot-at-login means changes land exactly at the transition into a session; the client built pre-mapping assumes stable access within a session.
+
+**How to avoid:** follow the v1.3 precedent — the central mid-session 401 teardown exists for revoked sessions; add the analogous handling for demotion (403s on formerly-allowed endpoints trigger a clean "your access changed, re-authenticating" path rather than scattered broken UI). Keep the snapshot semantics (no mid-session revocation) — the demotion happens *at login*, so the worst case is the first requests after login; make login-time sync apply before session issue, atomically.
+
+**Warning signs:** sync applied after session cookie issuance; no 403 recovery path in the client; governance console assuming per-request role re-checks exist.
+
+**Phase to address:** Removal sync (ordering) + a client-side recovery path in the same phase.
 
 ---
 
@@ -182,94 +154,94 @@ Maintenance/translation phase for the spot-check — but the placeholder-parity 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Inline domain check per route instead of one resolver | Faster wiring | Door matrix drifts; Gitea #27457-style inconsistency; untestable cells | Never — the resolver IS the feature |
-| Suffix/wildcard matching instead of exact-domain | Operators ask for `*.corp.com` | `notcorp.com` matches; seed design says exact — ambiguity | Never in v3.0; document as a future opt-in if ever needed |
-| Snapshotting the allowed list onto the invite row | "Audit trail" | Accept reads the snapshot → TOCTOU hole returns | Never for the gate; a *log* line is fine |
-| `_`-prefix ignore pattern for all 17 lint errors | One commit, lint green | Side-effectful initializers survive undeleted; debt re-accumulates | Only for genuine discard params, case by case |
-| Skipping placeholder-parity test ("translators are careful") | Zero extra code | Broken Dutch refusal string ships; silent fallback masks it | Never — it's 10 lines |
+| Mapping config keyed on group display names | Human-readable config | Renames/duplicates silently break; cross-tenant copies mismatch | Never — Object IDs only |
+| Treating missing `groups` claim as empty array | Simple code | Overage users silently lose all mappings; removal-sync may demote them | Never — must be "unknown/incomplete" state |
+| Direct membership mutations in sync path | Faster to build | Bypasses last-operator/owner guards; two permission code paths diverge | Never — shared funnel |
+| Mapping workspaces by slug in config | Easy to author | Slug rename breaks mappings | Never (slug = display only) |
+| No audit rows for group-derived changes | Less noise | Undiagnosable "why did I lose access?" incidents | Only if explicitly deferred with owner sign-off |
+| Periodic background reconcile job instead of login-time | "Fresher" data | New scheduler surface, Graph dependency pressure, violates snapshot-at-login design | Never (owner ruling: snapshot-at-login) |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| OIDC JIT (Entra) | Gating JIT with `ALLOW_INVITE_DOMAINS` (wrong list) or blocking *login* of existing linked accounts | JIT uses the signup list (or its own resolved cell of the matrix); existing linked accounts authenticate unconditionally (OneTimeSecret stance) |
-| Hardened invite-accept route | Domain check added *before* the sameOrigin/whitelist hardening so a refusals' error shape leaks whether the token exists | Keep the silent-body-whitelist posture: refusal for bad token and revoked-by-domain indistinguishable externally, keyed reason only for the legitimate holder |
-| Env/config (docker-compose, Traefik stack) | `ALLOW_SIGNUP_DOMAINS=""` believed to mean "restrict" | Boot resolver tri-state + DEPLOY.md examples + startup log of the effective matrix |
-| i18n parity gate | New server refusal keys only in EN+FR catalogues | All-locale parity in same commit; `tFor()` is the only emission path |
-| MCP mirror | MCP invite tools forget the domain gate (v1.10 MCP has invite-like ops) | Same shared predicate; the MCP mirror is a fifth row of the door matrix |
-
-## Performance Traps
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Re-splitting/re-normalizing the env list on every request | Immeasurable at small scale but per-request string churn in hot invite paths | Parse once at boot; resolver reads a frozen normalized Set | Only stylistic — no real scale risk here |
-| Unbounded allowlist acceptance (no validation) | Operator pastes 5,000 domains; Set is fine but the boot log floods | Cap size, log count not full list above N | Large operators |
+| Entra tenant claim config | Configuring the `groups` claim only for ID tokens, then reading access tokens elsewhere | One extraction point in the SSO callback; contract test pins the token source |
+| Entra group object IDs | Copying IDs from the wrong tenant (staging/prod) | Boot-validate GUID shape + log a mapping-match matrix at first login |
+| Entra overage (`_claim_names`) | Not handling it at all | Detect pointer claims; skip grants AND removals, log loudly |
+| Traefik (gr8r's proxy) | Token/cookie bloat from emitting many groups to the client | Groups used server-side only; never mirrored into cookies |
+| Graph (NOT used — by design) | Temptation to "just check" group state via Graph API | Violates zero-dependency invariant; stay claims-first, document the blind spots honestly |
+| SPA client | Assuming role/membership stable within a session | 403-demotion recovery path mirroring the 401 teardown precedent |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Exact-match done with `endsWith` "for robustness" | `evil-corp.com` / `notcorp.com` admitted | Strict Set membership on the canonical domain |
-| No Unicode normalization before the check | Homoglyph `@`/domain bypass (GHSA-7rqj-j65f-68wh class, Critical) | NFKC normalize → reject non-ASCII domain → parse |
-| Trailing dot not stripped | `corp.com.` delivered as corp.com but refused-or-missed inconsistently across doors | Strip one trailing dot in the canonicalizer |
-| Refusal message lists the allowed domains | Instance policy disclosure to attackers (OneTimeSecret explicitly never reveals them) | Keyed localized refusal, generic wording; allowed list stays server-side |
-| Domain check on the login path "for defense in depth" | Legitimate existing members locked out after tightening; availability incident | Admission ≠ authentication; immunity for existing accounts is a tested invariant |
-| Accept-time re-validation reading a stored snapshot | List tightening defeated by pre-tightening invites | Read the live list at accept (seed-mandated fail-closed) |
+| Mapping on group display names from the claim | Spoofable/confusable names grant operator rights | Object IDs only; IDs are unguessable tenant GUIDs |
+| Group mapping as JIT provisioning bypass | Mapped user on non-allow-listed domain provisions | Doors remain the provisioning gate (owner-ratified ordering); mapping only assigns membership post-existence |
+| Deny-mappings (group X excludes) | Transitive membership makes deny unpredictable; lockout vector | Admission-only model; no exclusion semantics |
+| Group claim trusted from a non-validated token | Forged/relay token grants operator | Reuse the v1.6 pinned-tenant RS256/JWKS validation — group extraction strictly downstream of signature+issuer validation |
+| Silent fail-open on malformed mapping config | Unknown state grants access | Strict-token boot parse (v3.0 tri-state precedent): invalid = boot-refuse |
 
 ## UX Pitfalls
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Generic "Invite failed" for domain refusal | Admin can't tell policy refusal from bug | Keyed localized refusal per door (`inviteDomainNotAllowed`-class) |
-| Invitee gets raw English on a tightened list | Looks like a broken link | Recipient-locale `tFor()` message; suggest contacting the admin |
-| No operator feedback at boot | Misconfigured list discovered via a failed invite weeks later | Startup log of the resolved door matrix (Pitfall 3) |
+| "Removed from workspace" with no explanation | User lost access, thinks account broken | Audit trail + operator-visible mapping list; the await-access page pattern from v3.1 for refused JIT |
+| Operator demoted at login with no warning | Mid-edit 403s look like bugs | Clean "access changed" client path; snapshot semantics documented |
+| Mapping config shows GUIDs only | Operators can't maintain config | Display-name labels alongside IDs (labels informational only) |
+| Silent no-op when no group matches | User waits for access that never comes | Fail-closed = today's behavior (unmapped users unchanged) — but log mapping-miss at login for diagnosis |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Canonicalization funnel:** verify exactly ONE `split('@')` call site exists; adversarial table test covers `＠`, trailing dot, case, quoted local, `notcorp.com`, whitespace-padded env entries
-- [ ] **Door matrix:** every cell (JIT / signup / invite create / edit / accept / MCP) has a contract test, including both inherit directions of unset `ALLOW_INVITE_DOMAINS`
-- [ ] **Existing-member immunity:** re-invite of out-of-list pre-existing member succeeds; existing SSO account of a removed domain still logs in
-- [ ] **Timing:** tighten-between-create-and-accept contract test refuses with keyed reason; loosen-then-accept admits
-- [ ] **Fail-closed accept:** "cannot determine list" state refuses at accept; unset/empty semantics pinned by boot-resolver tests
-- [ ] **Refusal i18n:** every new key exists in en/fr/nl/de/es AND placeholder sets match across locales; unknown-key fallback shows English, never an empty toast
-- [ ] **Contract suite integrity:** any pre-existing pinned test touched by the new gates was consciously re-approved, not weakened
-- [ ] **Lint cleanup:** one commit per site; unit suite + e2e green per commit; no bulk `--fix`
+- [ ] **Claim ingestion:** overage (`_claim_names`) handled — verify a fixture with a pointer-claim token produces "incomplete", not "no groups"
+- [ ] **Claim ingestion:** claim read from exactly ONE token type — grep proves no second `groups` extraction site
+- [ ] **Mapping resolution:** mapped group + non-allow-listed domain does NOT provision — e2e exists
+- [ ] **Mapping resolution:** boot-matrix log extended to include group-mapping state (D-11 successor)
+- [ ] **Removal sync:** sole operator removed from operator group is NOT demoted (guard funnel shared with manual edit) — test exists
+- [ ] **Removal sync:** workspace owner removed from mapped group is NOT orphaned — test exists
+- [ ] **Removal sync:** every group-derived change writes an audit row with group ID
+- [ ] **Removal sync:** sync applies before session issuance, atomically
+- [ ] **Governance editing:** mapping edit refused when it would leave zero operator paths
+- [ ] **Governance editing:** slug rename collision → keyed refusal in all 5 locales, same commit
+- [ ] **Governance editing:** mappings reference workspace IDs, not slugs
+- [ ] **Governance editing:** old-slug links behavior decided (redirect or documented death) and tested
+- [ ] **All new refusal keys in en/fr/nl/de/es in the same commit** (standing v3.x gate)
+- [ ] **Zero new dependencies** (no Graph SDK) — package.json untouched
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Bypass discovered (homoglyph/trailing dot) | LOW | Fix canonicalizer, rotate/re-validate: audit accounts+invites created since the hole opened, deny/delete the rogue admissions |
-| Operator lockout (existing members blocked) | MEDIUM | Correct env, restart; memberships were never deleted — access restored immediately; audit whether any invite deletes happened |
-| Admitted under stale list after tightening | MEDIUM | Remove members via existing admin revocation tier (audited); consider listing `inviteDomainRevoked` audit verb |
-| Lint cleanup broke a flow | LOW | `git revert` that commit; re-classify the site (side-effectful initializer) |
-| Locale string broken/missing | LOW | Fix catalogue; ERR-02 fallback meant users saw English meanwhile — no data harm |
+| Overage-caused mass demotion | MEDIUM | Re-add memberships manually / script against `memberships`; fix overage handling; re-login users |
+| Last operator demoted by sync | LOW | D-114 break-glass manual DB update (existing documented fallback) + restore mapping |
+| Owner orphaned by sync | LOW | v3.1 operator console already reassigns orphaned members |
+| Dead mapping silently failing | LOW | Re-add corrected group ID in config; audit log reveals when it last matched |
+| Slug rename broke links | MEDIUM | Add redirect route retroactively; regenerate affected notification emails impossible — accept dead old links |
+| Lockout via cyclic mapping edit | LOW | Break-glass operator flag (D-114) + correct the mapping |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| 1 Parsing/normalization bypass | Domain-admission phase (funnel first) | Adversarial contract table green; single `split('@')` site |
-| 2 Fail-open config | Domain-admission phase (boot resolver) | Env-shape test matrix; DEPLOY.md doc-parity test (v1.9 KEY-03 pattern) |
-| 3 Door-matrix confusion | Domain-admission phase | Full-matrix contract tests; startup log e2e |
-| 4 TOCTOU invite lifecycle | Domain-admission phase (accept re-validation) | Tighten/loosen contract tests |
-| 5 Existing-flow lockouts | Domain-admission phase | Re-invite immunity + SSO-login immunity contract tests |
-| 6 Lint side-effect deletion | Maintenance phase | Per-commit suite; test counts stable |
-| 7 Locale silent fallback | Both (test in admission phase, spot-check in maintenance) | Placeholder-parity unit test; per-locale refusal-path UAT screenshot |
+| Overage / `_claim_names` | Config ingestion | Fixture token with pointer claim → "incomplete" state, no removals |
+| Object IDs vs names; tenant-pinning | Config ingestion | Boot GUID validation; strict-token boot-refuse test |
+| Single token source for claims | Config ingestion | Contract test + grep-level single-extraction check |
+| Transitive membership opacity | Mapping resolution | No deny-mapping semantics; DEPLOY.md section exists |
+| JIT ordering vs domain doors | Mapping resolution | e2e: mapped group + blocked domain refused; boot log extended |
+| Owner/last-operator stripped by sync | Removal sync | Guard-funnel shared with manual edits; sole-operator + owner e2e |
+| Audit rows for group-derived changes | Removal sync | Audit test per sync mutation |
+| Sync ordering vs session issuance | Removal sync | Sync-before-session test; 403 recovery path in client |
+| Dead mapping handling | Removal sync + Governance | Audit trail; operator mapping-list surface |
+| Cyclic operator-mapping lockout | Governance editing | Edit-refusal test: zero surviving operator paths rejected |
+| Slug rename (collision, links, mapping keys) | Governance editing | Collision refusal 5-locale; mappings keyed by ID; redirect test |
 
 ## Sources
 
-- GHSA-7rqj-j65f-68wh — Auth.js email normalizer validated before Unicode normalization (homoglyph `@` bypass), Critical — HIGH confidence
-- Birch, "HostSplit: Exploitable Antipatterns in Unicode Normalization" (BlackHat USA 2019) — HIGH confidence
-- PortSwigger, "Splitting the email atom: exploiting parsers to bypass access controls" — HIGH confidence
-- "Bypassing Origin Checks Using Trailing Dot Trick" (soltanali0) — MEDIUM confidence (write-up, technique sound)
-- GitLab docs: Sign-up restrictions (email domain allowlist/denylist) + MR 76272 "Prevent user from bypassing domain signup restrictions" via post-signup email change — HIGH confidence
-- Gitea docs: Configuration Cheat Sheet `EMAIL_DOMAIN_ALLOWLIST`/`BLOCKLIST` (registration-only semantics, wildcard support) + issue #27457 (admin registration vs allowlist) — HIGH confidence
-- OneTimeSecret docs: per-install SSO `ALLOWED_SIGNUP_DOMAIN` — new-account-only semantics, distinct keyed refusals (`missing_email`/`invalid_email`/`domain_not_allowed`), never reveal allowed domains, empty-vs-unset distinction — HIGH confidence (directly citable design posture)
-- Outline self-host docs: `ALLOWED_DOMAINS` restricting signups — MEDIUM confidence (third-party setup guide)
-- ESLint docs + typescript-eslint #3456 ("not safe to remove random variables… side effects are everywhere"), Oxlint `no-unused-vars` (write-only/self-increment reads) — HIGH confidence
-- Project context: `PROJECT.md` (seed design SEED-261119-f3w, hardened accept route HARD-01..05, D-53-2 shared validator, `tFor()` server i18n, ERR-01/02, i18n parity gates, 17 lint errors, standing gates)
+- Microsoft Entra ID official docs: `groups` claim configuration, overage/`_claim_names` behavior, optional-claims per-token-type semantics (Microsoft identity platform documentation — HIGH confidence, stable documented behavior)
+- gr8r PROJECT.md: v1.6 SSO architecture, v3.0 door matrix & boot-log precedent, v3.1 operator/last-operator guards, orphan reassignment, standing zero-dependency and 5-locale gates (HIGH — direct from shipped record)
+- Entra SSO community wisdom on group-claim gotchas (overage, transitive membership, rename breakage) — MEDIUM, consistent with official docs
+- Integration pitfalls derived from the v3.2 milestone-context surfaces (removal sync × guards, mapping × doors, governance editing) — design analysis, not external sources
 
 ---
-*Pitfalls research for: v3.0 Access Control & Hardening (domain admission + maintenance debt)*
-*Researched: 2026-11-19*
+*Pitfalls research for: v3.2 Entra group mapping & governance backlog — gr8r (Projects Studio)*
+*Researched: 2026-11-20*

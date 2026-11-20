@@ -1,167 +1,271 @@
-# Architecture Research — Domain Admission Rules (v3.0)
+# Architecture Patterns: Entra Group Mapping & Governance Backlog (v3.2)
 
-**Domain:** Instance-level email-domain admission for a single-file, zero-dependency Node server (`server.js`, 8863 lines)
-**Researched:** 2026-11-19
-**Confidence:** HIGH (all integration points verified against the live code; prior-art cross-check MEDIUM via GitLab/Appsmith/Outline docs)
+**Domain:** SSO-driven group→workspace/role/operator mapping on an existing hand-rolled Node server
+**Researched:** 2026-11-20
+**Mode:** Architecture integration research (codebase-verified; no external deps — claims-first design, zero new dependencies per PROJECT.md)
 
-## Standard Architecture (gr8r's, as it exists today)
+> All line numbers verified against HEAD at research time. server.js ≈ 9300+ lines, single module.
 
-The relevant "architecture" is not a layer diagram — it is the guard-chain idiom every route in `server.js` already follows:
+---
+
+## Recommended Architecture
+
+Claims-first, snapshot-at-login, fail-closed, zero dependencies. The `groups` claim is read
+from the **already-verified ID token** in the SSO callback (server.js:5122–5131) — no Graph
+API call, no token exchange, no scheduled reconcile. Group Object IDs are matched against
+boot-frozen env mapping configuration exactly like the Phase 75/76 domain-door pattern.
 
 ```
-request → route regex match
-        → sameOrigin(req)            [cross-origin first, before body read/throttle]
-        → tooMany(...) throttle      [per-IP budget]
-        → requireUser/requireWorkspace(minRole)  [auth + tenant pin; 404 not 403]
-        → readJson(req)
-        → structural validation      [emailOk, password strength, inviteRole]
-        → policy/permission funnels  [validateGuestInviteShape, allowInviteGuests re-derive]
-        → db write(s) in db.tx()
+ID token (RS256-verified, oidc.js) 
+  └─ SSO callback server.js:5083–5334
+       ├─ ① claims → sub/email (existing, :5131–5136)
+       ├─ ② identity resolution: linking / JIT / DP-4 signup door (existing, :5138–5213)
+       ├─ ③ NEW: groups claim extraction + mapping resolution (pure function)
+       ├─ ④ NEW: membership reconcile — grant/promote/demote/remove w/ guards
+       ├─ ⑤ invite reconciliation DP-5 (existing, :5215–5279)
+       ├─ ⑥ 2FA challenge-then-stop (existing, :5281–5301)
+       └─ ⑦ session mint + audit (existing, :5303–5328)
 ```
 
-Every refusal flows through one helper: `fail(res, status, code, message, extra)` (server.js:4657) — the keyed-refusal shape the client translates via the i18n layer (ERR-01/02, decided v1.2 #7: client translates `code`, falls back to the English message).
+### Component Boundaries
 
-### Component Responsibilities (what the validator must plug into)
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `oidc.js` (unchanged) | Token verification — `verifyIdToken` already returns the full `claims` object | callback |
+| NEW `groups.js` (server-side, sibling of `domains.js`) | Env parse of group→mapping triples; pure match functions `resolveWorkspaceMappings(groupIds, role?)`, `resolveOperatorGroup(groupIds)`; overage detection helper | callback, boot log |
+| SSO callback block in `server.js` (modified ~:5131–5328) | Extract `claims.groups`, call the resolver, apply the reconcile | groups.js, db, audit |
+| NEW reconcile helpers in `server.js` (or groups.js) | `reconcileGroupMemberships(row, groupIds)` — diff desired vs actual memberships; reuses `addMembership` (:4606) | db, membership guards |
+| `users.is_instance_admin` (existing, D-112) | Operator identity — group mapping only ever SETS it to 1, never 0 | operator flag endpoints |
+| Governance endpoints (existing Phase 79 family) | Workspace list/archive/delete/reassign; NEW rename/slug edit rides the existing `PUT /api/workspaces/:slug` (:7399) | client |
+| `src/pages/governance.js` (modified) | Workspace settings editing UI (name/slug) added to the existing table | actions.js |
+| `src/actions/actions.js` (modified) | `A.workspaceRename` action + optimistic doc revision handling | api.js |
 
-| Existing component | Location (server.js) | Role in v3.0 |
-|---|---|---|
-| `ALLOW_SIGNUP` env const | :135 | The boot-time fail-absent pattern to copy: parse once at boot into a module const, feature off when unset |
-| `emailOk(email)` | :671 | Structural email check that runs BEFORE any policy check — domain validation slots in right after it |
-| Signup route `/api/auth/signup` | :6703 | Decision point 1 (self-serve signup) |
-| Invite-create route `POST /api/workspaces/:slug/invites` | :7626 | Decision point 2 (invite create); the emails loop + `emailOk` check sits at ~:7745 |
-| Invite-accept route `POST /api/invites/:token/accept` | :7852 | Decision point 3 (fail-closed accept re-validation) |
-| OIDC callback `/api/auth/oidc/callback` | :5033, JIT branch ~:5120 | Decision point 4 (JIT provision `createUser` inside the `email_verified === true` branch) |
-| SSO invite reconciliation (SSO-07) | ~:5155 | Implicit decision point 5 — auto-accepts a pending invite during OIDC login; must NOT silently bypass the accept-time rule |
-| `tFor(locale, key, params)` + `registerCatalogue` | :61/:110 | Server-side localized strings (FR catalogue registered at boot from the same `src/locales/*.json` the client ships) |
-| `validateGuestInviteShape(role, projects)` | funnel returning `{code, message}` or null | The exact shape the new domain validator should copy |
+---
 
-## Recommended Integration
+## Decision 1: Where mapping config lives — env triples, NOT a DB table
 
-### One shared validator, funnel-shaped (copy `validateGuestInviteShape`)
+**Recommendation: env triples mirroring the ALLOW_*_DOMAINS pattern.** e.g.
+`ENTRA_GROUP_MAP` = `objectId=slug:role,objectId=slug:role,…` and
+`ENTRA_OPERATOR_GROUP` = single objectId. Parsed once at boot by a new `groups.js`
+module via a tri-state parse **adapted from `parseDomainList`** (domains.js:53).
 
-No new file, no new dependency — the whole feature is ~40 lines inside `server.js`, placed in the helper zone next to `emailOk` (:671). This respects the single-file posture exactly the way `validateGuestInviteShape`, `projectPermFor` and `memberCanReadProject` do.
+**Why env, and why this is consistent with precedent:**
 
-```javascript
-/* Boot-time parse — fail-absent: unset → null → feature off. Set-but-empty →
-   empty Set → deny-all (an operator who sets the var MEANS it). Lowercase,
-   trim, strip a leading '@', drop empties. Log-and-skip malformed entries
-   (defensive; the regex keeps it honest). */
-const parseDomainList = (raw) => {
-  if (raw === undefined) return null;                 // unset → inherit / off
-  const set = new Set(String(raw).split(',').map(s =>
-    s.trim().toLowerCase().replace(/^@/, '')).filter(Boolean));
-  return set;
-};
-const SIGNUP_DOMAINS = parseDomainList(process.env.ALLOW_SIGNUP_DOMAINS);
-const INVITE_DOMAINS = parseDomainList(process.env.ALLOW_INVITE_DOMAINS)
-  ?? SIGNUP_DOMAINS;                                   // the inheritance rule, one line
+- **The tri-state precedent fits, the boolean gate doesn't.** D-78-1 collapsed
+  `WORKSPACE_CREATION` to a boolean *because it had exactly two outcomes*. Group mapping
+  has three observable states (unset = feature off; set-but-empty/garbage = deny-all-map
+  fail-closed; set-valid = active) — that is precisely the Phase 75 tri-state shape:
+  `unset → null` (feature off, unmapped users behave exactly as today), `set → Set/Map`
+  even if empty. Reuse the strict-undefined comparison trick (domains.js:60 comment —
+  "the unset/set-empty distinction is made by the caller's strict undefined comparison").
+- **Snapshot-at-login semantics make env sufficient.** There is no periodic reconcile and
+  no mid-session change: mapping only matters at login. The Phase 76 "boot-frozen door
+  matrix — tightening takes effect on restart" rationale (domains.js:72–77) transfers
+  verbatim: operators already accept restart-to-change-policy posture for the domain doors.
+- **No admin UI for mapping = smaller blast radius.** A DB table + admin UI implies CRUD
+  endpoints, existence-leak analysis, last-X guards on config, migrations, and 5-locale
+  strings for every refusal — for a config surface the Phase 79 governance work just
+  established operators *do* touch via env today (WORKSPACE_CREATION, domain lists).
+- **GUID validation replaces DOMAIN_SHAPE:** entries must be exact Entra Object IDs
+  (`/^[0-9a-f]{32}$|^[0-9a-f]{8}-[0-9a-f]{4}-…/i`, case-insensitive canonicalize) —
+  warn-and-clean on invalid entries exactly like D-05, so a typo'd GUID can never
+  silently create a dead door.
+- **The overage case is the one thing env can't solve, and it doesn't need to:** when a
+  user is in >200 groups Entra stops embedding `groups` and emits `_claim_names.groups`
+  + `_claim_sources` pointing at a Graph endpoint. Claims-first design = **detect and
+  refuse** (log + generic `sso=error`, or proceed as unmapped — ratify at discuss-phase;
+  recommend proceed-as-unmapped, since blocking 200-group users from logging in at all
+  would break logins that work today).
 
-/* Exact-domain match — no subdomain or wildcard matching (Outline precedent:
-   tom@int.acme.com is denied when acme.com is allow-listed). Case-insensitive
-   via lowercasing at parse AND at check time. */
-const emailDomain = (email) => String(email).toLowerCase().split('@')[1] || '';
+**Anti-recommendation (do not build this milestone):** DB `group_mappings` table +
+governance-page CRUD. It reintroduces exactly the env-edit friction the milestone says it
+wants to remove, but for a config that changes rarely; it also adds a second source of
+truth beside the domain lists. If a UI is ever wanted, it can be added later without
+changing the callback contract (resolver input = list of GUIDs, whatever produced it).
 
-/* The funnel. Returns null when allowed, or {code, message} — the exact
-   contract of validateGuestInviteShape, so every call site reads identically. */
-const emailDomainRefusal = (email, list) => {
-  if (!list) return null;                              // fail-absent: unset → off
-  if (list.has(emailDomain(email))) return null;
-  return { code: 'domainNotAllowed', message: `Sign-ups from @${emailDomain(email)} are not allowed` };
-};
-```
+## Decision 2: Where group resolution slots in the callback
 
-**Boot-time vs request-time: parse at boot, decide at request time.** This matches the existing `ALLOW_SIGNUP`/`SESSION_DAYS`/`INVITE_DAYS` posture (all env → module consts at :133–146). Domain sets are immutable per process; recomputing a Set parse per request is waste and creates a mid-request consistency window. Restart is the reload mechanism (same as every other env var in this app — DEPLOY.md documents restart-driven env changes). One deliberate consequence worth stating in the plan: changing the allowlist requires a server restart; that is the established operator contract for ALL env in gr8r.
+**Between identity resolution (②) and invite reconciliation (⑤) — after the `row` is
+guaranteed, before the DP-5 filter.** Rationale:
 
-### The inheritance rule (invite unset → inherit signup)
+- The reconcile needs a resolved `row` (user id) and the raw `claims`; both exist at :5213.
+- **It must come AFTER the DP-4 signup door.** Group mapping grants *membership*, not
+  account existence — a user outside `SIGNUP_DOMAINS` must not be JIT-provisioned because
+  they're in a mapped group. One door, one rule (DOM-03): the groups mapping is a parallel
+  admission concept beside the domain matrix (PROJECT.md explicitly states this); it never
+  bypasses a door.
+- **It must come BEFORE the "zero memberships" invite check** — otherwise a group-mapped
+  user with a pending invite would get both a group membership and the invite auto-accept,
+  or worse, the invite reconcile would skip because a group membership now exists. Order:
+  groups reconcile first, then invite reconciliation sees a user who may already have
+  memberships and correctly skips (the existing `select 1 from memberships` guard at :5223
+  does the skipping for free). **Ratify the precedence at discuss-phase:** if both a group
+  mapping and a pending invite target the same workspace, which role wins? Recommendation:
+  invite wins (explicit human grant beats ambient group), i.e. run invite reconciliation
+  FIRST, then group reconcile fills gaps — but the one-membership-query ordering must be
+  explicit in the plan either way.
+- **It must come BEFORE 2FA and session mint** (⑥⑦) so membership changes are committed
+  before the session cookie exists — the login lands with correct access, no post-login
+  refetch.
 
-Implemented entirely in the boot consts above: `parseDomainList` returns **`null` for unset** (distinct from set-but-empty → empty Set), and `??` performs the inheritance once, at boot. Benefits:
+Fail-closed contract for the new block: any resolver/mapping error is caught inside the
+existing try (:5105) and funnels to the generic `errorRedirect()` — group mapping failures
+never produce a partial login. unmapped user + no mapping feature = byte-identical
+behavior to today (the null-config path returns early, writes nothing).
 
-- Every decision point tests one variable — no per-site `ALLOW_INVITE_DOMAINS ?? ALLOW_SIGNUP_DOMAINS` re-derivation to get wrong.
-- "Set but empty" stays expressible as deny-all-invites-while-signup-list-is-open, which is a real operator need (freeze the invite door without closing signup).
-- The unset/empty distinction is unit-testable as three pure cases (unset → off, set-nonempty → exact list, set-empty → deny all; invite unset → equals signup list).
+## Decision 3: Removal-sync and guard composition
 
-### The 5 decision points, in order relative to existing gates
+Removal-sync is a **diff at login**: desired memberships (from group map ∪ explicit
+invites) vs actual `memberships` rows. Rules:
 
-**DP-1 — Self-serve signup (`/api/auth/signup`, :6703).**
-Chain: sameOrigin → `ALLOW_SIGNUP` gate → throttle → readJson → structural (name/password) → **domain check** → `createUser`. Put the domain refusal with the other 400s after `readJson`, i.e. after the password-strength check — it is a policy refusal, not a transport guard. Keyed refusal `fail(res, 400, 'domainNotAllowed', msg, { domain })` (mirrors `invalidEmail` which already passes `{ email }`).
+| Situation | Action | Guard |
+|-----------|--------|-------|
+| In mapped group, not a member | `addMembership(ws, user, mappedRole)` (:4606) | none needed |
+| In mapped group, member with LOWER role | promote to mapped role | none (escalation is safe) |
+| In mapped group, member with HIGHER role (manual owner/admin) | leave untouched — explicit grants beat group grants | — |
+| NOT in mapped group, membership came from a group | demote to `member` or remove | **last-owner guard** (`needOwner` pattern, server.js:7473/7491: refuse if `ownerCount(ws) === 0` after removal) |
+| NOT in any group, `is_instance_admin = 1` | **leave the flag** — groups can grant operator, never revoke (asymmetry is deliberate: demoting the last operator via a lost group membership would lock the instance out; flag removal stays a manual console action, D-78-2 break-glass) | last-operator guard unconditionally respected |
 
-**DP-2 — Invite create (`POST /api/workspaces/:slug/invites`, :7626).**
-Chain: `requireWorkspace(..., 'member')` → sameOrigin → owner-escalation guard → `validateGuestInviteShape` → tier gates (member ceiling, `inviteGuestToggleOff`) → teams validation → emails dedupe + `emailOk` → **domain check per email** → HARD-02 admin-email-required → `db.tx()`. The natural insertion point is the existing per-email loop at ~:7745 (`if (!emailOk(email)) return fail(... 'invalidEmail', ..., { email })`) — add the domain refusal immediately after it, keyed with `{ email }`. This runs before any insert and before the invite-replacement write, so a refused batch leaves zero side effects. Note: the admin/owner `inviteAdminEmailRequired` gate runs *after* the email loop for structural reasons (empty array); domain validation of an empty array is vacuously fine, so order between them does not matter.
+**Provenance tracking is the crux.** To demote/remove correctly you must know *why* a
+membership exists. Two options:
 
-**DP-3 — Invite accept (`POST /api/invites/:token/accept`, :7852).**
-Chain: sameOrigin → throttle → token lookup → expiry/used checks → HARD-02 admin-email gate → `validateGuestInviteShape` re-derive → **allowInviteGuests fail-closed re-derive (current-doc block, ~:7920)** → **domain fail-closed re-derive, immediately after it** → body read → account resolution → membership write. Two rules:
+- **Option A (recommended): provenance column** — `memberships.source` (`'invite'`,
+  `'manual'`, `'group:<guid>'`), additive `adapterEnsureColumn` migration (server.js:695
+  pattern, zero-dependency, byte-identical second boot). Removal-sync only touches rows
+  whose source starts with `group:` and whose GUID is no longer satisfied. Manual/invite
+  rows are immune — a group-removed user who was separately invited keeps the invite grant.
+- **Option B: no provenance** — remove any membership whose workspace appears in the map
+  but whose role ≤ mapped role and whose user isn't in the group. Simpler, but demotes
+  invited members of mapped workspaces and cannot distinguish "invited by owner" from
+  "granted by group". Reject: violates the existing-account immunity spirit (DOM-05).
 
-- **Validate the invite row's stored email** (`invite.email`), not the body — the row is the door ticket. For a link-only invite (`invite.email` null), validate the body email that the accept form submits (right after the existing `emailOk(email)` + `inviteForOtherEmail` checks in the account-creation branch, ~:7950).
-- **This is the fail-closed heart of the feature** (seed: "fail-closed accept-time re-validation"): an invite minted before the operator tightened the list (or under a previous env) must die at accept without being consumed — exactly the D-50-8 pattern that already kills stale guest invites when the project toggle flips. Place it BEFORE any `createUser`/`addMembership` write so the refusal leaves no side effects, and use 403 (matching the toggle's refusal, which is a "no longer open" policy refusal, not a 400 form error).
+**Guards compose naturally because they're all count-before-write:**
+- workspace owner removal → `ownerCount(ws.id)` check before `delete from memberships`
+  (identical to :7473). If the last owner's membership is group-derived and the group was
+  lost, **refuse the removal and log loudly** — an instance operator fixes it via
+  governance; the login still succeeds (never fail the login over a membership diff).
+- instance operator flag → never touched by the sync (above), so the `lastOperator` count
+  guard (:6815) is structurally unreachable from group logic. Document this as a decision:
+  *group mapping grants `is_instance_admin`, it never clears it.*
 
-**DP-4 — OIDC JIT provision (`/api/auth/oidc/callback` JIT branch, ~:5110–5135).**
-Chain: token verify → `emailOk` → identity resolution → `email_verified === true` gate (G-30-1) → **domain check → `createUser`**. Only the *fresh provisioning* branch is gated. Do NOT gate the already-linked-identity path — the callback's own doctrine (comment at :5085–5096) is that established identities resolve without re-checking claims, "repeat logins must not break"; the same immunity logic is the seed's "existing-member immunity". Refusal shape: this route answers with browser 302s to the generic `/login?sso=error` surface (no JSON, no keyed payload — a 302 with a domain-specific query param would leak the rule to unauthenticated callers). Log server-side (`logSecurity(row-having-no-id …)` won't exist yet — use `logInfo`/`logSecurity` with the email domain, not the full address, or a plain `logInfo('sso signup domain refused: <domain>')`) and redirect to the same generic `errorRedirect()`. Optional new security verb only if the plan wants an audit line; keep the client surface generic either way.
+## Data Flow (new paths only)
 
-**DP-5 — SSO invite reconciliation (SSO-07 block, ~:5155).**
-This auto-accepts a pending invite during OIDC login with "the acceptance recipe VERBATIM from the accept route". Verbatim must now include the domain re-validation: check the invite's stored email against `INVITE_DOMAINS` before `addMembership`, and on refusal **consume nothing and skip that invite** (it stays pending; the existing `pendingInvites.length === 1` vs `> 1` branching already handles the "surface, don't guess" outcome — a refused single invite can either fall through to `/#invitations` or be treated as zero candidates; recommend treating it as refused: consume nothing, redirect stays whatever SSO-07 computes, since the user IS signed in and can see invitations). Simplest honest option: filter refused invites out of `pendingInvites` before the branching, so `0` → normal login, `1` → auto-accept only if in-domain, `>1` → surface. This keeps DP-5 a two-line change instead of a new redirect path.
+1. **Boot:** `groups.js` parses `ENTRA_GROUP_MAP` / `ENTRA_OPERATOR_GROUP` tri-state;
+   boot log extends the D-11 door-matrix line (server.js:9296–9304) with a
+   `groups: <n mappings>` segment (unset = `off`).
+2. **Login:** verified `claims.groups` (array of GUID strings; tolerate a single string)
+   → `resolveWorkspaceMappings(groupIds)` → `{slug: maxRole}` map + operator flag.
+3. **Reconcile:** per mapped workspace — resolve slug→ws (missing workspace = skip + log,
+   never 500); apply the Decision-3 table in one transactional pass.
+4. **Audit:** `logSecurity(row.id, 'sso_group_grant')` / `sso_group_demote` /
+   `sso_group_removed` — mirrors `sso_invite_accepted` (:5262). No group GUIDs in logs
+   beyond what the mapping table itself contains (PII ban D-09 posture).
+5. **Client:** no change to login flow; `/api/me` naturally reflects new memberships.
 
-**Note on "invite edit":** there is **no PUT/PATCH invite route today** (verified: only POST create, GET list, DELETE revoke at :7841). The only "edit" semantics that exist are the create-route's replace-a-live-link write (`update invites set used_at ... where ... used_at is null`, one live invite per address). If the seed's 5th decision point means invite *editing*, the honest reading is: (a) re-minting via create is already covered by DP-2, and (b) if a genuine edit route is added later, it must call the same validator — but do not invent a new route to host a decision point. Flag this for the planner to reconcile with the seed wording.
+## New vs Modified Files
 
-### Validation order relative to the named existing gates (per point)
+**New:**
+- `groups.js` — parser, resolver, overage detector, shape validation (server-only, NOT
+  under src/, same rule as oidc.js header comment :7–9)
+- `test/groups-mapping.test.mjs` — parser tri-state matrix, resolver, callback reconcile
+  via the existing mock-IdP harness (`OIDC_ISSUER_OVERRIDE`, test/oidc-sso.test.mjs)
+- `test/groups-removal.test.mjs` — removal-sync + guard composition
+- likely `test/workspace-rename.test.mjs` for the governance edit
 
-| Gate | Signup | Invite create | Invite accept | OIDC JIT |
-|---|---|---|---|---|
-| sameOrigin | before | before | before | n/a (GET browser flow) |
-| throttle | before | (route has none; member tier caps abuse) | before | n/a |
-| auth / requireWorkspace | n/a (public) | before (member tier) | n/a (token is the credential) | n/a |
-| tenant pin | n/a | via requireWorkspace | via token→workspace_id (HARD-03) | n/a (invites carry workspace_id) |
-| `ALLOW_SIGNUP` master gate | before domain check | n/a | n/a | n/a |
-| `email_verified` | n/a | n/a | n/a | **before** domain check |
-| structural (`emailOk`, password) | before | before | before (body email) | before |
-| policy funnels (guest shape, toggle) | n/a | before | before (fail-closed re-derive) | n/a |
-| **domain check** | last 400 before `createUser` | with the emailOk loop, before `db.tx` | after toggle re-derive, before any write | last gate before `createUser` |
-| membership/guest-toggle re-derive | — | — | before domain check (both fail-closed, toggle first) | — |
+**Modified:**
+- `server.js` — SSO callback block (:5131–5213 region, insert between ② and ⑤);
+  reconcile helpers near `addMembership` (:4606); boot log (:9296); `PUT
+  /api/workspaces/:slug` gains slug-change validation (uniqueness + slug-shape —
+  :7399 already writes name+slug, so this is validation + keyed refusals, not a new
+  route); optional `memberships.source` migration (:695 pattern)
+- `src/pages/governance.js` — workspace name/slug edit affordance in the table (Phase 79
+  table exists; v3.1 deferral made explicit in PROJECT.md)
+- `src/actions/actions.js` — rename action wired to existing PUT; i18n keys
+- `src/locales/*.json` ×5 — refusal keys in the SAME commit as the emitting gate
+  (standing constraint); key-count parity test auto-covers
+- `DEPLOY.md` — new env vars documented alongside the domain doors
+- `PROJECT.md`/`package.json` — 3.2.0 at ship
 
-Rationale for "domain last among refusals": it depends on a parsed email, so structural checks must precede it; and it must precede ALL writes so refusals are side-effect-free everywhere (the invariant every recent hardening phase enforced).
+## Suggested Build Order (server-first waves, v3.1 pattern)
 
-### Existing-member immunity (where it comes for free)
+**Wave 1 — pure core, no UI (Phase A):** `groups.js` parser + resolver + tests; boot log
+extension. No callback wiring yet — the module is inert. Establishes the tri-state matrix
+and GUID shape validation as pure, fully-tested units.
 
-The validator is only ever called at doors — DP-1..DP-5. `requireWorkspace`, `projectPermFor`, `memberCanReadProject` and the member lists never consult domain rules, so existing memberships are immune by construction. The only immunities to state explicitly in the plan: (1) OIDC repeat logins of an already-linked identity (DP-4 skip), (2) an existing account accepting an invite to a NEW workspace is NOT immune — it is a door (DP-3 applies to it; this matches Appsmith/GitLab prior art where invited users pass the signup allowlist only because the invite list is the separate, stricter list).
+**Wave 2 — grant path (Phase B):** callback wiring: groups extraction, workspace/role
+grants, operator grant. Removal-sync explicitly OFF (grant-only). Includes migration for
+`memberships.source` (must land before any removal logic can exist). Mock-IdP tests for
+the full callback flow including overage detection.
 
-### Refusal keys → i18n catalogues
+**Wave 3 — removal-sync + guards (Phase C):** the Decision-3 diff table, last-owner
+guard composition, immunity rules for manual/invite rows, audit verbs. Largest test
+surface — every guard combination deserves a pin. Depends on Wave 2's provenance column.
 
-Reuse the v1.2-decided keyed-error flow — no new mechanism:
+**Wave 4 — governance rename/slug edit (Phase D, independent of A–C):** server
+validation + keyed refusals on the existing PUT route, then client edit UI. **Can run in
+parallel with Waves 2–3** — zero shared code with the callback; only the i18n key-count
+gate is shared, so locale commits should be grouped per phase (v3.1 pattern: keys land in
+the same commit as the first emitting gate).
 
-- Server emits stable codes via `fail()`: **`domainNotAllowed`** (signup, invite create, invite accept — one code, disambiguated by the `extra` payload `{ domain }` / `{ email }`; mirroring how `invalidEmail`/`inviteGuestToggleOff` are shared across routes). If the seed wants distinct door wording, a second code `inviteDomainNotAllowed` is the only other key needed — but one code with `{ domain }` interpolation (`t('domainNotAllowed', { domain: 'acme.com' })`) is the lighter, precedent-matching choice.
-- Catalogue keys land in **all five** locale files (`src/locales/en|fr|de|es|nl.json`) in the same commit that first emits the code — the build gate (`scripts/i18n-scan.mjs`) is EN+FR-hard and the catalogues are parity-gated at 1946 keys each since v2.7, so a missing nl/de/es entry fails the gate anyway.
-- Server-side localized contexts (none needed for the refusal itself — the API returns English + code; the client translates). The invite *email* sent by `MAILER.sendInvite` is unaffected: an invite to a now-forbidden domain can still be created only if the invite list allows it; if the planner wants the operator-facing DEPLOY.md wording, that is documentation, not catalogue.
-- OIDC JIT refusal needs NO catalogue key (generic `sso=error` redirect, no keyed payload — see DP-4).
+**Wave 5 — client polish + backlog (Phase E):** governance page integration points,
+56-02 e2e debt, Phase 57 mobile follow-up — only if the roadmap keeps them in v3.2
+(PROJECT.md lists them; they are independent of groups entirely and can be split out).
 
-### Anti-patterns to avoid (grounded in this codebase's history)
+**Dependency note:** Wave 1 → 2 → 3 is strictly sequential (module → wiring → diff
+logic needs provenance). Wave 4 is fully parallel. If phases are cut along these waves,
+Phase B+D can start in the same milestone concurrently; plan numbering should follow
+dependency, not feature grouping.
 
-1. **Validating the body email at accept instead of the invite row's email** — the row is the ticket; the HARD-02/`inviteForOtherEmail` discipline exists precisely because the body is untrusted.
-2. **Subdomain/wildcard matching** — seed says exact-domain; Outline's precedent (denied `int.acme.com`) confirms operators expect exactness; wildcards also break the "one shared validator, no config language" simplicity.
-3. **Request-time env re-parsing** — boot-time consts only; a mid-request env change would make the 5 decision points disagree with each other within one deploy window.
-4. **A new file/module for the validator** — every comparable funnel (`validateGuestInviteShape`, `hiddenFor`, `projectPermFor`) lives in `server.js`; a new `domain-rules.js` would be the first standalone policy module and invites import-tangle for zero gain.
-5. **Keyed refusal on the OIDC redirect** — the callback's fail-closed doctrine is a generic error surface; a domain-revealing query param is an oracle.
-6. **Gating DP-5 (SSO auto-accept) differently from DP-3** — the code comment says "VERBATIM from the accept route"; keep it verbatim by filtering, not by writing a parallel policy.
+## Patterns to Follow
 
-## Recommended Build Order (dependency-driven)
+### Pattern 1: Tri-state env parse with boot-frozen consts
+**What:** exactly the `parseDomainList` shape — pure function, `undefined → null`,
+caller makes the unset/set distinction via strict comparison, `?? ` inheritance where a
+derived default makes sense (e.g. operator group could default to unset, no inheritance).
+**When:** every new env var in this milestone.
 
-1. **Parser + validator + boot consts + unit tests** — pure functions, zero route coupling. Tests pin the three-state semantics (unset/empty/list), the inheritance rule, exact-domain matching, and case-insensitivity. Everything else depends on this.
-2. **Signup gate (DP-1)** — smallest consumer, public door, JSON keyed refusal; also brings the first i18n keys (`domainNotAllowed` in all 5 catalogues) so the i18n build gate stays green per commit.
-3. **Invite create (DP-2)** — same validator, per-email loop insertion; tests assert zero side effects on refusal (no invite row, no replacement write).
-4. **Invite accept fail-closed (DP-3)** — the re-derive block after the guest-toggle re-derive; tests must cover the stale-invite-killed-without-consumption case (the D-50-8 analog).
-5. **OIDC JIT (DP-4) + SSO reconciliation (DP-5)** — last because they are redirect-surface (hardest to assert, e2e-only) and DP-5's filter depends on the DP-3 semantics being settled.
-6. **DEPLOY.md + contract test sweep** — env documentation in the DEPLOY.md env table (the doc-parsing parity tests from Phase 26 pin DEPLOY.md env documentation).
+### Pattern 2: Door matrix boot log extension
+**What:** append groups to the D-11 combined log (server.js:9304) rather than a separate
+line — one place to read the whole admission posture at boot.
 
-Phases 2–4 are independent of 5–6 once phase 1 lands, so the milestone can parallelize if plans are split.
+### Pattern 3: Callback-local fail-closed error funnel
+**What:** new logic lives inside the existing `try` (:5105) and returns `errorRedirect()`
+on any anomaly; never throws past the boundary; never adds a new redirect param
+(no-oracle rule, DP-4 rationale :5173–5179).
 
-## Scalability / Correctness Considerations
+### Pattern 4: Count-before-write guards
+**What:** `ownerCount` / operator-count checks BEFORE the UPDATE (the :6811–6822
+lastOperator comment is the canonical form) — never count after.
 
-| Concern | Assessment |
-|---|---|
-| Perf | Set lookup per door-crossing; negligible. No new index, no migration, no schema change. |
-| Storage | None. The rule is env-declared state; invites store emails as today. |
-| Cross-driver | Pure JS on the request path — identical behavior SQLite/pg (no SQL touched). |
-| MCP mirror | Out of the 5 decision points, but note for the planner: `mcp.js` write tools ride the same funnels; if MCP can mint invites or provision, it inherits the rule only via the shared validator — verify during planning whether MCP has an invite/provision surface (it operates on existing members, so likely n/a). |
+## Anti-Patterns to Avoid
+
+- **Graph API in the callback.** Even for overage, don't call Graph — the whole
+  claims-first design and the zero-dependency invariant (pinned by
+  test/dependencies.test.mjs) forbid it. Overage = detect + treat-as-unmapped.
+- **Reconciling outside login.** No scheduler, no mid-session demotion — sessions minted
+  before a group change stay valid until expiry (snapshot semantics, PROJECT.md).
+  This matches the v3.0 existing-account immunity philosophy.
+- **Groups bypassing DP-4.** Group membership must never JIT-provision a user the signup
+  domain door would refuse — resolve groups only after the row exists.
+- **A slug edit that breaks links silently.** Slug rename must validate uniqueness and
+  shape (reuse createWorkspace slug derivation, :3533) and update in the same keyed-refusal
+  style; old slugs 404 (existing no-oracle behavior is acceptable — document it).
+
+## Scalability Considerations
+
+| Concern | Now (single instance) | If it ever grows |
+|---------|----------------------|------------------|
+| Mapping size | tens of `k=v` triples in env | fine to ~100 mappings; beyond that, revisit DB table (deliberately deferred) |
+| Reconcile cost | O(mapped workspaces) SELECTs per SSO login | negligible at SQLite/pg scale for one login |
+| >200-group users | overage → unmapped | only path forward would be Graph — out of scope by design |
 
 ## Sources
 
-- Direct code inspection of `server.js` (routes :6703, :7626, :7841–:7960; OIDC callback :5033–:5250; helpers :671, :4657; env consts :133–146; i18n :61–:110) — HIGH
-- Prior art: GitLab sign-up restrictions (docs.gitlab.com/administration/settings/sign_up_restrictions), Appsmith `APPSMITH_SIGNUP_ALLOWED_DOMAINS` (docs.appsmith.com — invited users bypass, existing users unaffected), Outline `ALLOWED_DOMAINS` exact matching + admin bypass (docs.getoutline.com, outline/outline #3412) — MEDIUM (web)
+- Codebase-verified (HIGH confidence): server.js :4606, :5100–5334, :6811–6822, :695,
+  :7399, :7473, :9296–9304; domains.js :53–90; oidc.js full read; PROJECT.md v3.2
+  section; v3.1-ROADMAP.md phase structure.
+- Entra groups claim / overage behavior (MEDIUM — from model knowledge, standard
+  documented Microsoft behavior; recommend a docs check at Phase A plan time):
+  `_claim_names`/`_claim_sources` overage shape, `groups` claim as GUID array when
+  `Group membership claims` is configured on the app registration (operators must set
+  this in Azure — a DEPLOY.md prerequisite note, no code).

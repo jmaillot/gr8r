@@ -1,164 +1,146 @@
 # Feature Research
 
-**Domain:** Instance-level domain admission rules for a self-hosted PM workspace (v3.0 Access Control & Hardening)
-**Researched:** 2026-11-19
-**Confidence:** HIGH for verified prior art (GitLab/Gitea official docs fetched directly); MEDIUM/LOW where noted (Mattermost/Outline/Authelia from model knowledge — search infrastructure was rate-limited; flag for phase-specific re-verification)
-
-> Scope note: the seed design (two env vars, door matrix, unset-inherits, fail-closed accept-time re-validation, existing-member immunity, exact-domain matching, keyed localized refusals) is owner-validated and NOT re-litigated here. This file maps the feature landscape around it, with complexity and dependencies on the existing Phase 30 (OIDC JIT), Phase 33 (hardened accept route) and Phase 50 (invite refusals) code.
+**Domain:** Group-based access mapping for a self-hosted SaaS (Entra ID groups → workspace membership, roles, operator rights)
+**Researched:** 2026-11-20
+**Confidence:** HIGH (patterns verified against Microsoft Entra identity-platform docs, Okta SCIM concepts, GitHub Enterprise SCIM deprovisioning behavior; product behaviors cross-checked against widely documented IdP-driven access models)
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-What comparable self-hosted products treat as the baseline for domain admission.
+Features operators of Entra-connected SaaS (GitLab, Tailscale, Notion, GitHub Enterprise, Teleport, Zitadel, Keycloak-based tools) assume exist. Missing these = the mapping feels broken.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Allowlist gates new doors, never existing accounts | GitLab documents this explicitly: restrictions apply "only during new account creation by an external user"; admins can add disallowed-domain users, and users can later change their email to a disallowed domain. Gitea's `EMAIL_DOMAIN_ALLOWLIST` applies to registration only. | LOW | gr8r plan already states "existing accounts never touched". Implement as pure gate functions at the door matrix points; no membership scan, no migration. |
-| Comma-separated env-var list, tolerant parsing | Gitea: comma-separated list. GitLab accepts whitespace/semicolon/comma/newline. Operators copy-paste lists from mail/notes; whitespace and empty entries (`a.com,,b.com`, `a.com, ,b.com`) are routine. | LOW | Parse at boot once: split on `,`, trim each entry, drop empties, lowercase both sides at comparison time (see edge cases below). Tolerant parsing is table stakes; strict parsing produces "why is my list ignored?" bug reports. |
-| Case-insensitive matching | Email domains are case-insensitive per RFC 5321 (`User@EXAMPLE.com` == `user@example.com`). Every comparable implementation normalizes case; none treat `Example.com` and `example.com` as different entries. | LOW | Lowercase the parsed list once at boot; lowercase the email's domain part at check time. Do NOT lowercase the local part. |
-| Exact-domain matching as the default semantics | No major product silently admits `sub.example.com` when `example.com` is allowed — wildcard admission is opt-in syntax (`*.company.com` in GitLab and Gitea), never implicit. | LOW | Matches the seed ruling. Compare the email's domain string exactly against the list; document that subdomains must be listed explicitly. |
-| Localized refusal to the person at the door | Comparable products return a specific error at signup ("email domain not allowed" class) rather than a generic failure. gr8r has the ERR-01 keyed-code precedent plus Phase 50 keyed invite refusals — this is the established house pattern. | LOW | New leaf i18n keys in all 5 catalogues (EN base; full nl/de/es catalogues exist since v2.7, parity-gated). Server returns a stable code; client translates; unknown codes fall back to the English message (ERR-02). |
-| Fail-closed behavior when state changed between invite and accept | The hardened Phase 33 accept route and the Phase 50 guest re-derivation already establish the fail-closed-at-accept pattern; operators of self-hosted tools expect policy re-checked at use time, not just at issue time. | MEDIUM | Re-validate `invite.email` (and the body email when creating a new account) against the invite list inside the accept route, after the existing guest-shape re-derivation block and before any account/membership write. |
-| Unset variable = feature off (no behavior change) | Every env-based allowlist in this class (Gitea `EMAIL_DOMAIN_ALLOWLIST: **empty**`, Outline, Authelia) is a no-op when unset. | LOW | Empty/whitespace-only value should also be treated as "feature off" (an operator setting the var but leaving it blank must not lock everyone out). A explicitly-set-but-every-entry-invalid value is a boot-time warning, not a lockout. |
+| Read `groups` claim from the ID token at SSO callback | This is THE integration point. Every "groups-driven access" SaaS starts here. Claims-first (no Graph SDK, no SCIM server) is the standard lightweight pattern. | LOW | gr8r already has hand-rolled OIDC with JWKS RS256 — add one claim read. No new deps, matches the standing constraint. |
+| Overage handling (fail-closed, documented) | Entra caps the `groups` claim at **200 Object IDs for JWT** (150 SAML); beyond that, tokens carry no groups (or a `_claim_names` overage pointer). Apps that ignore this silently fail open (no groups → no removals) or fail closed (no groups → lockout). Documented overage behavior is table stakes. | LOW–MEDIUM | gr8r's fail-closed philosophy aligns: treat missing/absent `groups` claim as "no group evidence this login" and log it; never fall back to stale mappings. Detect the overage marker (`_claim_names.groups`) and surface a distinct audit line. |
+| Env-var mapping config (operator-editable, boot-validated) | Single-Docker-image self-hosted apps (Gitea, Outline, Bitwarden RS, Tailscale) configure SSO via env vars. Operators expect `GROUP_WORKSPACE_MAP="objectId:slug:role,..."`-style strict parsing with boot-refuse on garbage — exactly gr8r's `WORKSPACE_CREATION` / `SIGNUP_DOMAINS` precedent. | MEDIUM | Strict-token env parse, fail-closed, boot-frozen (v3.0 tri-state precedent: unset vs empty semantics decided explicitly). Reuse the keyed-refusal + 5-locale catalogue pattern. |
+| JIT auto-membership at first login / any login | If a user authenticates via SSO and is in a mapped group, they expect to land inside the workspace without anyone clicking "invite" in gr8r. This is what "SSO-driven access" means to operators. | LOW | Extends the existing JIT-provision arm (DP-4): after provisioning, map groups → memberships. Also applies to already-provisioned accounts at every login (group added later → membership granted at next login). |
+| Removal sync at login (demote/remove membership) | GitHub Enterprise SCIM, Okta-driven apps, and Tailscale all revoke group-inherited access when the IdP group no longer contains the user. With snapshot-at-login (gr8r's chosen model), removals are observed at next login — this is a legitimate, documented pattern (GitLab/JITZ-style "reconcile at session establishment") and simpler than SCIM push. | MEDIUM | The hard part is role **downgrade** semantics: membership removed entirely vs demoted to viewer. Standard answer (see Competitor Analysis): group-driven grant is *inherited* — user loses it when group membership ends; manually-granted memberships (via invite) are *explicit* and survive. Must be a documented, one-sentence distinction. |
+| Last-operator / last-owner protection enforced during group sync | Every competitor with group-driven roles (GitLab's role inheritance, Okta admin mappings) guards against sync demoting the last owner — otherwise a group edit in Entra bricks the instance. gr8r already has this guard in the operator console; the sync path must reuse it, not reimplement it. | LOW | One shared guard function called from both paths. Sync demotion that would violate the guard is skipped + audit-logged (skip, not refuse — the login itself must still succeed). |
+| Audit logging of group-driven changes | Operators need to answer "why did Élodie become admin?" The only sane answer is an audit row: `group_sync` verb, source group Object ID, resulting change (granted/demoted/removed/skipped-guard). Okta/GitLab/SCIM implementations all log provisioning events. gr8r has an audit-trail precedent (v1.5 AUD-01..03). | LOW | One audit line per effective change per login, keyed verb (machine verbs, not prose — Phase 9 ACT-01 precedent). |
+| Unmapped users behave exactly as today | Fail-closed / no-surprise behavior: no mapped group → no group-driven change. Table stakes for upgrade trust. | LOW | Already a stated milestone constraint; make it a verification requirement, not an assumption. |
+| Workspace rename + slug edit from governance page | Every multi-workspace SaaS admin surface (Notion admin, GitLab group settings, Zitadel org settings) exposes rename in the admin list. Slug editing is the risky half: URLs are `/w/:slug/...`, so competitors either forbid slug change (most common for tenant-path SaaS) or redirect old slugs. | LOW–MEDIUM | Rename: trivial (`UPDATE workspaces SET name`). Slug change: must handle uniqueness collision, redirect semantics (or explicit 404-on-old-slug, documented), and member-session `ws` references. Recommend: allow rename freely; allow slug edit with collision refusal + old-slug 404 (fail-closed, no redirect machinery) — matches gr8r's no-existence-oracle posture. |
 
 ### Differentiators (Competitive Advantage)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Two independent doors (signup list vs invite list) with unset-inherits | GitLab/Gitea/Mattermost have ONE domain knob; separating self-serve admission from admin-mediated admission is finer-grained than any of them. Admins can invite contractors from outside the company while signup stays company-only. | LOW (already the validated design) | Implementation is one extra parse + a validator parameterized by which list applies. Inheritance resolved at boot: `ALLOW_INVITE_DOMAINS` unset → use the signup list; set (even empty after cleaning) → use as-is. Decide and document set-but-empty = deny-all-invites vs inherit; recommend set-but-empty = explicit deny-all (the operator wrote the var deliberately). |
-| Zero-dependency, env-only configuration | Outline and Mattermost put domain restriction behind admin-UI or SSO-provider settings; a pure env var matches gr8r's zero-runtime-dependency constraint and Docker/DEPLOY.md posture. | LOW | No config table, no migration, no admin UI. Boot-parsed constants following the existing `ALLOW_SIGNUP` pattern. |
-| Exact-domain (no wildcard syntax) | GitLab/Gitea accept wildcards; supporting `*.corp.com` invites regex-adjacent parsing, IDN-wildcard interactions, and confusion about whether bare `corp.com` also matches. Exact matching keeps the validator ~10 lines and auditable. | LOW | Anti-differentiator on purpose: document "no subdomain matching" in DEPLOY.md and the refusal copy if feasible. |
-| Refusal at the earliest door point (invite CREATE, not just accept) | Comparable products validate at account creation only; gr8r can refuse at invite create/edit so the admin learns immediately that the email is inadmissible — better UX than a silent invite that fails at accept. | LOW | New check in the invite create route next to the existing email-shape check (Phase 50 keyed-refusal precedent, e.g. `invalidEmail` with `{email}` extra). Also covered at accept per fail-closed ruling. |
-| OIDC JIT admission consistent with password signup | GitLab gates SSO signups under the same allowlist; gr8r's Phase 30 JIT provisioning is a signup door and should honor `ALLOW_SIGNUP_DOMAINS` — many self-hosted tools forgot the SSO door and had to retrofit (Mattermost's domain restriction applies to email signup but SSO behavior historically needed separate configuration). | MEDIUM | Gate the JIT provision branch (bare-account creation) in the OIDC callback after the existing `emailOk` + verified-email checks. Existing linked accounts keep logging in (immunity). Refusal is a browser redirect surface, not JSON — reuse the existing OIDC error-redirect pattern. |
+| Claims-first zero-dependency design | No Graph SDK, no SCIM server, no webhook receiver = no new attack surface, no deps, no scheduled jobs. Most competitors force SCIM or Graph on you; snapshot-at-login is refreshingly small. | (already decided) | Marketing/docs angle as much as code. |
+| Snapshot-at-login with honest audit of what changed | "Your gr8r access is exactly what your Entra groups said at your last login" is a *clearer* mental model than eventual SCIM consistency. Differentiator: the audit log shows per-login group-driven deltas. | LOW | Rides on the audit work above. |
+| Group mapping as a parallel admission concept beside domain doors | Combining domain-door admission (v3.0) with group mapping (v3.2) covers both "anyone from contoso.com can sign up" and "members of grp-X get workspace Y" — the two orthogonal admission axes. Competitors usually ship only one. | LOW | Already the milestone design; document as the access-matrix story. |
+| Explicit skip-and-log on last-owner guard during sync | Competitors either brick the instance or silently demote anyway. A visible "skipped: would demote last operator" audit line is operator-trust gold. | LOW | Cheap once the guard is shared. |
+| Overage-detection with distinct audit signal | Detecting `_claim_names` overage and logging "groups claim incomplete this login" beats every small self-hosted competitor (LibreChat et al. shipped this late, via user complaints). | LOW | One claim-shape check. |
+| Operator auto-promotion via group with promotion *only ever going up* from mapping | Mapping grants operator; manual demotion by another operator clears a mapped grant? Decide: mapped operator survives manual demote (re-granted at next login) unless a config pin excludes the user — the "why won't my demotion stick?" trap. Making this explicit and documented is a differentiator. | MEDIUM | See Anti-Features: pin/exempt lists are the escape hatch competitors use (GitHub: "managed user" exemptions). |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Subdomain wildcards (`*.example.com`) | "Our subsidiaries have subdomains" | Adds parser complexity, IDN interactions, ambiguity with bare-domain entries; GitLab/Gitea needed wildcards only because they also have denylists/regex use-cases gr8r doesn't | Exact-domain matching; operators list the subdomains explicitly (seed ruling) |
-| Admin-UI editable allowlist | "Nicer than editing docker-compose" | Needs a config table, migration, cache invalidation, admin permission surface — violates the zero-migration/env-only posture of this milestone | Env vars documented in DEPLOY.md; change = restart |
-| Denylist in addition to allowlist | Spam blocking | Doubles the decision matrix (allow∧deny interactions, precedence debates); gr8r is private-workspace oriented, not open-registration | Allowlist only; an unset allowlist = open door remains the operator's choice |
-| Retroactive enforcement against existing members | "Kick out people whose domain changed" | Breaks the owner-validated "existing accounts never touched" ruling; GitLab explicitly does NOT retro-enforce either | Immunity for existing accounts; policy applies only at doors |
-| Per-email validation beyond the domain (MX checks, disposable-email lists) | Anti-spam | Network calls in the signup path, external list dependencies, nondeterministic failures | Exact domain list; refuse fast and locally |
+| Periodic background reconcile against Graph API | "Removals should be instant, not at-next-login." | Requires Graph credentials, token handling, rate limits, a scheduler, a secrets surface — everything the milestone explicitly excludes. Snapshot-at-login is the standard lightweight alternative and satisfies real-world security needs (access dies when the session dies / next auth). | Sync at login only; sessions already expire. Document the delay honestly. |
+| In-app admin UI for group mapping (admin console CRUD over mappings) | "Env vars are clunky." | Mappings touch 40-char Object IDs and instance-level secrets; an in-app editor implies a config-write path (file or DB), multi-seat operator authority over instance config, and migration between storage modes — a milestone-sized feature for near-zero operator gain (operators already edit env vars for SSO/domains). GitHub/Gitea/Tailscale all stay env/CLI-configured for exactly this. | Env vars now; revisit an admin-UI editor only if operators complain (backlog candidate, not v3.2). |
+| Nesting / transitive group resolution via Graph | "Users are in nested groups." | `groups` claim with `GroupAssignments`/transitive options partially covers this token-side; resolving nested memberships app-side requires Graph. Choose Entra claim config (transitive) and document it — do NOT build nested resolution. | Configure the claim as transitive in Entra (`Groups assigned to the application` + transitive option); treat unmapped nested gaps as config issues. |
+| Group → guest-role mappings, per-project group grants | "Map group to a single project." | Explodes the mapping matrix (workspace×role×project) with ambiguous precedence. Workspace-level role mapping is the proven 80% (GitLab top-level groups, Tailscale tag grants). | Map to workspace roles only (viewer/member/admin/owner). Per-project grants stay manual. |
+| SCIM server (RFC 7644 endpoint) in gr8r | "Then Entra pushes changes instantly." | An entire protocol server, auth surface, and test matrix — massive scope, duplicates what login-sync delivers for a self-hosted single-image app. | Explicitly out of scope; note as possible far-future differentiator only if multi-thousand-user demand appears. |
+| Group-name ↔ Object-ID dual matching | "I don't want to copy GUIDs." | Group display names are mutable in Entra; matching by name is a known foot-gun (rename = silent access change). Every serious implementation matches on Object ID. | Object ID only; the searchable token-chip picker backlog item can't help here (Entra Object IDs aren't discoverable in-app without Graph). Provide paste-friendly config + boot-time log of matched/unmapped IDs. |
+| Slug redirects after rename | "Don't break old links." | Redirect machinery + existence-oracle tension (v1.1's 404 posture) + session/ws-reference staleness. Competitors with tenant-path URLs mostly break old links too or keep redirects as a separate paid feature. | 404 on old slug, documented in the rename confirmation UI. Old links dying is honest and fail-closed. |
 
 ## Feature Dependencies
 
 ```
-[Env parsing + validator (shared module)]
-    └──requires──> nothing new (node built-ins only)
+[Groups claim ingestion + overage detection]
+    └──requires──> [Existing OIDC SSO callback (shipped)]
+                        └──requires──> [JIT provisioning arm DP-4 (shipped)]
 
-[Signup gate (ALLOW_SIGNUP_DOMAINS)]
-    └──requires──> [Env parsing + validator], [i18n keys]
+[Group → workspace membership+role mapping] ──requires──> [claim ingestion]
+    └──requires──> [Role-conflict precedence rules]
+    └──requires──> [Audit log of group-driven changes]
 
-[Invite create/edit gate (ALLOW_INVITE_DOMAINS, inherit)]
-    └──requires──> [Env parsing + validator], [Phase 50 keyed-refusal pattern]
+[Group → operator mapping] ──requires──> [claim ingestion]
+    └──requires──> [Last-operator guard (shipped, shared)]
+    └──requires──> [Manual-demotion vs mapped-grant precedence decision]
 
-[Fail-closed accept-time re-validation]
-    └──requires──> [Env parsing + validator], [Phase 33 hardened accept route]
+[Removal sync at login] ──requires──> [all mapping features]
+    └──requires──> [last-operator guard]
+    └──conflicts──> [nothing shipped — but requires the "mapped vs manual grant" distinction to be encoded in data]
 
-[OIDC JIT admission gate]
-    └──requires──> [Env parsing + validator], [Phase 30 JIT branch]
+[Workspace rename/slug edit] ──independent──> (governance page, v3.1 deferral; no dependency on group work)
 
-[i18n localized refusals] ──enhances──> all four gates
+[Searchable token-chip pickers, e2e cleanup, mobile follow-ups] ──independent──> (pure backlog, ship anywhere)
 ```
 
 ### Dependency Notes
 
-- **All gates require the shared validator:** one module (e.g. `parseDomainList()` + `domainRefusal(email, list, kind)`) used by signup, invite create, accept and OIDC JIT. D-50-2's lesson applies: one shared validator, not per-route logic.
-- **Accept re-validation requires the Phase 33 route structure:** it slots into the existing re-derivation block after token/expiry checks, before account creation or membership writes.
-- **OIDC JIT gate depends on Phase 30's verified-email ordering:** the check must run after `email_verified` is established (a provider-supplied unverified email must not satisfy the allowlist).
-- **i18n keys land with the first gate:** the i18n-scan build gate fails any uncatalogued literal, so refusal keys must be added (all 5 catalogues) in the same phase as the first user-facing refusal.
+- **Everything mapping-related requires claim ingestion first:** it is the single data source; phase 1 of any roadmap.
+- **Removal sync requires the mapped-vs-manual grant distinction to exist in the data model:** without it, "remove membership at login" cannot tell an invite-granted membership from a group-granted one and either over-deletes (breaking manual invites) or under-deletes (breaking removals). This is the one genuinely new schema decision of the milestone.
+- **Group→operator mapping requires the shared last-operator guard:** reimplementing it per-path is how the guard gets skipped in one path and an instance gets bricked (a documented Okta failure mode).
+- **Workspace settings editing is dependency-free:** it can run as a parallel workstream/phase, useful for scheduling flexibility.
 
 ## MVP Definition
 
-### Launch With (v1 — this milestone)
+### Launch With (v3.2 core)
 
-- [ ] Shared env parser + exact-domain validator (tolerant parsing, lowercase, drop empties, boot warning for invalid entries) — the single source of truth
-- [ ] `ALLOW_SIGNUP_DOMAINS` gate on self-serve signup — simplest door, no dependencies
-- [ ] `ALLOW_INVITE_DOMAINS` gate on invite create (and edit if a PUT path exists) with unset-inherits — Phase 50 keyed-refusal pattern
-- [ ] Fail-closed re-validation at accept — the owner-validated security invariant
-- [ ] OIDC JIT gate — closes the second signup door; without it the feature is bypassable via SSO
-- [ ] Keyed localized refusals in all 5 catalogues — table stakes + build-gate requirement
-- [ ] DEPLOY.md section documenting the door matrix, exact-domain semantics and edge-case parsing
+- [ ] Groups claim ingestion with overage detection + audit signal — the foundation; nothing else works without it
+- [ ] Env-var group→workspace mapping (strict parse, boot-frozen, fail-closed, keyed refusals, 5 locales) — the core value
+- [ ] JIT + login auto-membership with role precedence rules — the feature operators actually want
+- [ ] Removal sync at login with mapped-vs-manual grant distinction — the other half of the same value
+- [ ] Shared last-operator/last-owner guard on all sync paths, skip-and-audit on violation — non-negotiable safety
+- [ ] Audit logging of every group-driven delta per login — operator trust + debuggability
+- [ ] Unmapped-user no-change verification — regression gate on the fail-closed contract
 
-### Add After Validation (v1.x)
+### Add After Validation (v3.2 or immediate follow-up)
 
-- [ ] Boot log summarizing the effective door matrix (which doors are gated, inherited lists resolved) — trigger: operator confusion reports
-- [ ] Allowlist-aware admin UI hint in the invite modal — trigger: admins complaining about refused invites
+- [ ] Group→operator mapping — same machinery, one extra sink; safe to phase after workspace mapping proves the precedence model
+- [ ] Workspace rename + slug edit on governance page — independent; schedule freely; slug semantics (404 on old) decided up front
+- [ ] Overage operator documentation in DEPLOY.md (claim config for "Groups assigned to application" + transitive option) — cheap, high operator value
 
-### Future Consideration (v2+)
+### Future Consideration (backlog, explicitly deferred)
 
-- [ ] Wildcard support — only if a real operator asks; exact matching is the documented contract
-- [ ] Per-workspace domain lists — current need is instance-level only
+- [ ] Admin-UI mapping editor — trigger: >2 operators complain about env syntax
+- [ ] SCIM server — trigger: large-tenant demand; do not spec now
+- [ ] Slug redirects — trigger: real link-rot complaints
+- [ ] Searchable token-chip pickers / e2e cleanup / mobile follow-ups — pure backlog, no coupling
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Shared validator + env parsing | HIGH | LOW | P1 |
-| Signup gate | HIGH | LOW | P1 |
-| Invite create gate + inheritance | HIGH | LOW | P1 |
-| Accept-time fail-closed re-validation | HIGH | MEDIUM | P1 |
-| OIDC JIT gate | HIGH | MEDIUM | P1 |
-| Localized refusals (5 catalogues) | MEDIUM | LOW | P1 |
-| Boot-time door-matrix log | LOW | LOW | P3 |
-| Wildcards / per-workspace lists | LOW | HIGH | P3 |
+| Groups claim ingestion + overage detection | HIGH | LOW | P1 |
+| Env-var group→workspace mapping | HIGH | MEDIUM | P1 |
+| JIT/login auto-membership + role precedence | HIGH | MEDIUM | P1 |
+| Removal sync at login (mapped-vs-manual grants) | HIGH | MEDIUM | P1 |
+| Last-operator guard shared across sync paths | HIGH | LOW | P1 |
+| Audit logging of group-driven changes | HIGH | LOW | P1 |
+| Unmapped-user no-change contract | MEDIUM | LOW | P1 |
+| Group→operator mapping | HIGH | LOW (reuses machinery) | P2 |
+| Workspace rename/slug edit (governance page) | MEDIUM | LOW–MEDIUM | P2 |
+| DEPLOY.md overage/claim-config docs | MEDIUM | LOW | P2 |
+| Backlog: token-chip pickers, e2e, mobile | MEDIUM | LOW | P3 |
+| Admin-UI mapping editor | LOW | HIGH | P3 (defer) |
+| SCIM server | LOW | HIGH | P3 (defer) |
 
 ## Competitor Feature Analysis
 
-| Feature | GitLab (self-managed) | Gitea | Mattermost* | Outline* | gr8r v3.0 plan |
-|---------|----------------------|-------|-------------|----------|----------------|
-| Allowlist + denylist | Both (admin UI) | Both (env) | Allowlist only (admin UI) | Allowlist via SSO domain config | Allowlist only (env) |
-| Wildcards | Yes (`*.company.com`) | Yes | Yes (documented) | Provider-dependent | No (exact, deliberate) |
-| List separators | whitespace / semicolon / comma / newline | comma | comma | n/a | comma, tolerant of whitespace/empties |
-| When enforced | Account creation only; admin adds + later email changes bypass | Registration only | Signup (+ email-change in recent versions) | SSO account provisioning | All doors: signup, invite create, accept (fail-closed), OIDC JIT; existing accounts immune |
-| SSO door covered | Yes (same restriction) | Partially (external registration flag separate) | Historically separate config | Via provider domain restriction | Yes, via JIT gate |
-| Refusal feedback | Error at signup form | Registration error page | Form error | Provider-level error | Keyed localized refusal (toast/form), 5 languages |
-| Case sensitivity | Normalized | Not documented* | Normalized* | n/a | Normalized both sides |
-
-\* Mattermost/Outline rows from model knowledge (docs unreachable during research — search rate-limited); confidence LOW/MEDIUM. GitLab and Gitea rows verified directly against official docs on 2026-11-19.
-
-## Edge-Case Behavior Recommendations
-
-Concrete recommended behavior per edge case (these are recommendations, to be ratified at phase planning — not owner-validated rulings):
-
-| Edge case | Recommendation | Rationale |
-|-----------|----------------|-----------|
-| Case sensitivity | Lowercase list entries at boot; lowercase the email's domain part at check; keep local part untouched | RFC 5321 domains are case-insensitive; matches competitor normalization |
-| Trailing dot (`example.com.`) | Normalize: strip one trailing dot from list entries AND from the checked domain before comparing | FQDN vs relative form ambiguity; a trailing dot is never a distinct registrable domain |
-| IDN / Unicode domains | No IDN conversion in the validator (zero-dep); if the env var contains Unicode, normalize with the IDN-mapped form being the operator's responsibility — document in DEPLOY.md; the check compares the email's raw domain string | `URL.parse()` / `URLDomainToASCII` exist in Node but adding IDNA semantics invites homograph confusion; document punycode (`xn--…`) as the canonical entry form |
-| Empty entries in comma lists (`a.com,,b.com`) | Dropped silently at parse | Tolerant parsing is table stakes; empty string must never become "match nothing" or "match everything" |
-| Whitespace (` a.com , b.com`) | Trimmed at parse; list-level whitespace around commas tolerated | GitLab accepts multiple separators for exactly this reason |
-| Whitespace INSIDE an entry (`ex ample.com`) | Invalid entry → boot-time warning + dropped (do NOT silently keep as an unmatchable literal) | An unmatchable literal entry = silent policy hole; loud boot warning surfaces typos |
-| Entire list invalid / set-but-empty-after-clean | Warning + treated as... decision point: recommend "deny-all" for explicitly-set-but-empty (deliberate), "feature-off" for unset/whitespace-only | Distinguishes "operator wrote nothing" from "operator wrote an empty deny-all" |
-| Multiple email domains per user | Irrelevant at gr8r's doors — each door sees exactly one email (signup email, invite email, OIDC verified email). No per-user multi-domain concept exists | GitLab-style "user later changes email to a disallowed domain" is accepted behavior in gr8r too: existing-account immunity covers it |
-| Sub-addressing (`user+tag@domain`) | Transparent: domain check reads only the part after the LAST `@`; `user+tag@example.com` matches allowlist entry `example.com` | Domain-level checks are inherently sub-address-agnostic; do NOT strip or reject `+tag` — that's an email-shape concern already handled by the existing email validation |
-| Email with no `@` / multiple `@` | Refused by the existing email-shape check BEFORE the domain check runs (ordering matters) | Keeps the domain validator simple; ordering: shape check → domain check |
-| Bare domain in email (`user@localhost`, `user@internal`) | Valid domain string for matching purposes — if `localhost` is on the allowlist it passes | Don't add registrable-domain (PSL) logic; zero-dep and deterministic |
-
-## Admin-facing feedback in comparable products (when an invite/signup is refused)
-
-- **GitLab:** the signup form rejects inline with a domain-specific validation error; the admin sees nothing special (no per-refusal audit). Admin-facing feedback is limited to the settings UI itself.
-- **Gitea:** registration fails with a generic error page; the admin learns from the log, not from structured feedback.
-- **Mattermost:** inline form error at signup; admins get no refusal event stream.
-- **Pattern conclusion (MEDIUM confidence):** inline, immediate, user-facing refusal at the door is table stakes; server-side admin telemetry (audit verbs, boot logs) is the differentiator. gr8r already has the audit-verb infrastructure (Phase 24) — a `signup_domain_refused`-class activity verb at invite-create refusals would exceed competitor practice at LOW cost; recommend as optional polish (P3), not MVP.
-- **For gr8r specifically:** the admin who creates the invite gets the keyed refusal toast immediately at invite create (better than GitLab/Gitea, which only check at account creation). The invitee gets the localized refusal at accept if the list changed between create and accept (fail-closed) — this asymmetry should be documented in DEPLOY.md so admins aren't surprised.
-
-## MVP Recommendation
-
-Prioritize:
-1. Shared env parser + exact-domain validator (single funnel, D-50-2 pattern)
-2. The four doors in order: signup → invite create → accept (fail-closed) → OIDC JIT
-3. Keyed localized refusals in all 5 catalogues
-
-Defer: wildcards, per-workspace lists, denylists, admin-UI editing, refusal-audit verbs (P3, none block the milestone).
+| Feature | GitHub Enterprise (SCIM) | Okta-driven SaaS apps | GitLab / Tailscale (group/tag mapping) | Our Approach |
+|---------|--------------------------|----------------------|----------------------------------------|--------------|
+| Source of group truth | IdP pushes via SCIM (RFC 7644) | SCIM push or JIT claims | Claims/token groups or SCIM | Claims (token `groups`), snapshot at login |
+| Removal semantics | Deactivate + remove from SCIM-mapped teams; reinstatement window (90 days) | Configurable: deactivate vs remove; group removal ≠ account deactivation | Group-inherited access revoked when group membership ends; explicit grants survive | Mapped grants removed/demoted at next login; manual (invited) grants survive; never deactivates the account |
+| Last-owner protection | Sync skips actions that would orphan the org (admins managed separately) | Admin role mappings respect guard rails | Role demotion guarded; break-glass via root/API | Skip-and-audit; break-glass stays D-114 manual DB path |
+| Config surface | Admin UI + SCIM setup | Admin console | Admin UI (GitLab) / YAML+API (Tailscale) | Env vars, strict-token, boot-frozen (matches self-hosted peers like Gitea/Outline) |
+| Audit of group changes | Provisioning event log | System log with provisioning events | Audit events for membership changes | Audit row per effective change, keyed verbs |
+| Workspace/tenant rename from admin surface | Org rename allowed, URLs mostly stable (gh.io handles) | Admin console rename | Group rename free; path slugs change with redirect/404 per object type | Rename free; slug edit allowed with collision refusal + documented 404 on old slug (no redirect machinery) |
+| Nested groups | Flattened upstream (IdP responsibility) | App-dependent | IdP responsibility | Entra claim transitive option; no app-side resolution |
 
 ## Sources
 
-- GitLab "New user account restrictions" — https://docs.gitlab.com/administration/settings/sign_up_restrictions/ (fetched 2026-11-19; allow/denylist, wildcards, separators, creation-time-only enforcement — HIGH confidence, direct read)
-- Gitea Configuration Cheat Sheet — https://docs.gitea.com/administration/config-cheat-sheet (`EMAIL_DOMAIN_ALLOWLIST`/`EMAIL_DOMAIN_BLOCKLIST`, comma-separated, wildcard supported — HIGH confidence, direct read)
-- Outline `.env.sample` — https://github.com/outline/outline (SSO-provider env vars inspected; domain restriction via provider config — MEDIUM confidence)
-- Mattermost configuration docs — unreachable during research (404s/rate limits); `RestrictCreationToDomains` behavior from model knowledge — LOW confidence, re-verify at phase research if load-bearing
-- Authelia sub-addressing semantics — model knowledge — LOW confidence
-- gr8r internal: PROJECT.md (Phases 30/33/50 records), existing email-shape and keyed-refusal patterns — HIGH confidence
+- Microsoft Entra identity platform — RBAC in Node.js web apps, group claims configuration, token customization, app-roles guidance (groups claim overage: 150 SAML / 200 JWT; overage via `_claim_names`; "use app roles" and claims-filtering recommendations) — HIGH
+- Microsoft security-docs Zero Trust — configure tokens: group claims & app roles (token-size limits, Graph recommendation) — HIGH
+- Okta developer docs & Okta dev forum — SCIM concepts, deactivation vs removal semantics, group-membership-driven deactivation edge cases — HIGH
+- GitHub Enterprise Cloud docs — SCIM deprovisioning and reinstatement (team mapping removal, 90-day reinstatement) — HIGH
+- Clerk, Stytch, WorkOS-published SCIM explainers — standard SaaS SCIM/group provisioning feature sets (what the market ships) — MEDIUM
+- Community evidence of overage pain: LibreChat issue #9196 (>200-group deployments silently losing claims) — MEDIUM
+- gr8r PROJECT.md — standing constraints (zero deps, i18n gate, keyed refusals, fail-closed precedent), shipped capabilities (OIDC+JIT, domain doors, operator console, audit trail) — HIGH
+
+---
+*Feature research for: Entra group-based access mapping & governance backlog (gr8r v3.2)*
+*Researched: 2026-11-20*

@@ -1,149 +1,171 @@
 # Project Research Summary
 
-**Project:** gr8r — v3.0 Access Control & Hardening (domain admission + maintenance)
-**Domain:** Self-hosted PM workspace — env-gated email-domain allowlists, lint cleanup, i18n spot-check
-**Researched:** 2026-11-19
-**Confidence:** HIGH (stack verified by direct execution; features against GitLab/Gitea docs; architecture against live code; pitfalls CVE-backed)
+**Project:** gr8r / Projects Studio — v3.2 Entra Group Mapping & Governance Backlog
+**Domain:** Self-hosted SaaS identity governance (Entra ID groups → workspace membership / roles / operator rights)
+**Researched:** 2026-11-20
+**Confidence:** HIGH
 
 ## Executive Summary
 
-gr8r v3.0 adds instance-level email-domain admission rules (`ALLOW_SIGNUP_DOMAINS` + `ALLOW_INVITE_DOMAINS`) to an already-hardened single-file Node server, plus lint cleanup (17 errors: 15 code fixes + 2 eslint.config.js globals) and an nl/de/es translation spot-check. The entire milestone honors the zero-new-dependency constraint: the domain feature is ~40 lines of stdlib JS inside `server.js` (one parse helper, one email-domain extractor, one funnel-shaped validator copied from the existing `validateGuestInviteShape` precedent), wired at exactly five decision points (signup, invite create, invite accept, OIDC JIT, SSO invite reconciliation). No migration, no schema change, no admin UI, no new file.
+This milestone adds Entra ID group-driven access mapping to gr8r's existing hand-rolled, zero-dependency OIDC SSO stack, plus the deferred v3.1 workspace rename/slug-edit governance feature. All four research streams converge on one architectural verdict: **claims-first, snapshot-at-login, zero new dependencies**. Everything needed is JSON-shaped — the `groups` claim already rides along in the full claims object that `verifyIdToken()` returns, the mapping config is env-var triples following the v3.0 domain-door tri-state parse precedent, and even the >200-group overage case requires at most a plain `fetch` POST (or, per the architecture recommendation, no network call at all: detect `_claim_names` and treat as UNMAPPED). MSAL, Graph SDK, openid-client, and jose are explicitly things NOT to add — the `test/dependencies.test.mjs` invariant pins this.
 
-Every comparable product (GitLab, Gitea, Outline, OneTimeSecret) restricts new account creation only and treats existing accounts as immune; gr8r's design is *stricter* than all of them by also gating invites at create AND at accept (fail-closed re-validation). The recommended build order is dependency-driven: (1) boot-time tri-state parser + exact-domain validator + adversarial unit tests, (2) the five doors in risk order (signup → invite create → fail-closed accept → OIDC JIT → SSO reconciliation), (3) keyed localized refusals in all 5 locales riding the existing ERR-01/`tFor()` patterns, (4) DEPLOY.md door-matrix documentation. Lint and translation work are independent maintenance tracks.
+The design centers on one insertion point: the SSO callback in `server.js` (~:5131–5213), after identity resolution (the DP-4 signup door has run — group mapping grants *membership*, never account existence) and before DP-5 invite reconciliation and session mint. A new server-only `groups.js` (sibling of `domains.js`) parses `ENTRA_GROUP_MAP` / `ENTRA_OPERATOR_GROUP` with the strict tri-state pattern (unset = feature off; set-but-garbage = boot-refuse), keys on Entra group **Object ID GUIDs** (display names are labels only, never match keys). Removal sync at login is the genuinely hard part: it requires a new `memberships.provenance` column (`invite` / `manual` / `group:<guid>`) so removal only touches group-derived rows, and it must route every mutation through the existing count-before-write guard funnel — last-owner removal is refused (login still succeeds), and group mapping **grants** `is_instance_admin`, never revokes it.
 
-The dominant risks are parsing bypasses (homoglyph `＠`, trailing dot, quoted local parts — CVE-backed class), fail-open config semantics (unset vs set-but-empty vs whitespace), door-matrix confusion for operators, and the TOCTOU hole of invites minted under a since-tightened list. All are mitigated by one canonicalization funnel (single `split('@')` call site), a tri-state boot resolver with a startup log of the resolved matrix, full-matrix contract tests, and live-list re-validation at accept — with existing-member immunity as a tested invariant, never an accident.
+The dominant risk is the overage failure mode: Entra omits the `groups` claim entirely past 200 groups, emitting a `_claim_names` pointer instead. A naive implementation reads that as "no groups" and — with removal-sync active — silently strips the power user's access. All researchers agree: `_claim_names` must be treated as UNMAPPED/UNKNOWN (skip grants AND removals, log loudly), never as an empty list. Secondary risks: mapping bypassing the DP-4 provisioning door, sync bypassing the last-owner/last-operator guards, and slug rename breaking deep links and mapping config. All have concrete prevention strategies with e2e-able verification checks (see PITFALLS.md checklist).
 
 ## Key Findings
 
 ### Recommended Stack
 
-Zero new dependencies — every capability is Node 24 stdlib plus the repo's existing ESLint 10 flat config. All stdlib behaviors verified by direct execution on Node 24.21.0; lint baseline verified by live `npx eslint .` run (17 errors, exact composition known).
+**Zero new runtime or dev dependencies — confirmed independently by STACK.md and ARCHITECTURE.md.** See [STACK.md](./STACK.md) for the full rejection table.
 
-**Core technologies:**
-- `String.prototype` env parsing (`split/trim/toLowerCase/filter`) — tolerant comma-list parsing; unset vs empty-string distinction must be made pre-parse via `'ALLOW_INVITE_DOMAINS' in process.env`
-- `new Set()` exact-match — `endsWith` is a **verified security bug** here (`'evilexample.com'.endsWith('example.com')` → true)
-- `node:test` — pure functions make the door matrix, tri-state semantics and fail-closed behavior cheaply exhaustively testable
-- Existing i18n tooling (`scripts/i18n-scan.mjs`, `fr-parity.mjs`, Playwright `selectLanguage` helper) — no new tooling for nl/de/es spot-check
-- ESLint ^10.15 flat config — 15 per-line code fixes; 2 `no-undef` fixes are **config** fixes (add `webhook-formats.js`, `webhook-ssrf.js` to the `globals.node` files array); zero `eslint-disable` needed
+**Core technologies (all existing):**
+- `oidc.js` `verifyIdToken()` — already returns the full claims object; the single ingestion point for `groups`, `_claim_names`, `hasgroups`
+- `fetch` + JSON — sufficient for any overage fallback (client-credentials POST to the token-provided `_claim_sources` endpoint); no SDK
+- New `groups.js` (server-only, sibling of `domains.js`) — tri-state env parse, GUID shape validation, pure resolver functions
+- Existing `addMembership`, last-operator/owner guard funnels, `adapterEnsureColumn` migration pattern, audit-trail and 5-locale keyed-refusal precedents — all reused, never reimplemented
+
+**Entra-side config (one-time, tenant admin, documented in DEPLOY.md):** set `groupMembershipClaims: "ApplicationGroup"` (sidesteps the 200-group limit entirely; direct membership only — matches how operators reason about mappings), add the `groups` optional claim to the **ID token**. Only if overage fallback is wanted: `GroupMember.Read.All` application permission + admin consent (the one change that widens the secret-leak blast radius — flag to requirements).
 
 ### Expected Features
 
-**Must have (table stakes, competitor-validated):**
-- Allowlist gates new doors only; existing accounts immune (GitLab/Gitea/OneTimeSecret explicit stance)
-- Tolerant comma parsing (whitespace, empty entries, case-insensitive both sides)
-- Exact-domain matching as default — no implicit subdomain admission
-- Localized keyed refusal at every door (`domainNotAllowed` class, ERR-01 pattern)
-- Fail-closed accept-time re-validation (gr8r already pioneered this at Phase 33)
-- Unset = feature off (no behavior change)
+See [FEATURES.md](./FEATURES.md) for the full landscape and competitor analysis (GitHub Enterprise SCIM, Okta, GitLab/Tailscale patterns).
 
-**Should have (differentiators beyond competitors):**
-- Two independent doors (signup vs invite list) with unset-inherits — finer-grained than GitLab/Gitea/Mattermost's single knob
-- Refusal at invite CREATE, not just accept — admin learns immediately
-- OIDC JIT gate — closes the SSO bypass door competitors historically forgot
+**Must have (table stakes):**
+- `groups` claim ingestion at the SSO callback with overage detection + distinct audit signal
+- Env-var group→workspace mapping: strict tri-state parse, boot-frozen, fail-closed, keyed refusals, 5 locales
+- JIT + login auto-membership with role precedence rules
+- Removal sync at login with mapped-vs-manual grant distinction (provenance in data)
+- Shared last-operator/last-owner guard on all sync paths, skip-and-audit on violation
+- Audit logging of every group-driven delta per login (keyed verbs)
+- Unmapped-user byte-identical behavior (verification requirement, not assumption)
 
-**Defer (v2+):** wildcards/subdomain matching, per-workspace lists, denylists, admin-UI editing, refusal-audit verbs (P3).
+**Should have (differentiators):**
+- Group→operator mapping (reuses workspace-mapping machinery; one extra sink)
+- Honest "skipped: would demote last operator" audit lines — operator-trust gold
+- Overage-detection audit signal (most small competitors shipped this late)
+- Workspace rename + slug edit on governance page (independent workstream)
+
+**Defer (backlog, with triggers):**
+- Admin-UI mapping editor (trigger: >2 operators complain about env syntax)
+- SCIM server, slug redirects, nested-group app-side resolution — explicitly anti-features
+- Per-project group grants, group-name matching, deny-mappings — rejected with rationale
 
 ### Architecture Approach
 
-No new abstractions: the whole feature lives in `server.js`'s helper zone next to `emailOk` (:671). Boot-time parse into tri-state module consts (`null` = unset/inherit-or-off; empty Set = deliberate deny-all; populated Set = the list); the inheritance rule is one `??` line at boot. Domain check runs **last among refusals, before any write**, at five decision points, reusing the `fail(res, status, code, msg, extra)` keyed-refusal funnel and the D-50-2 one-shared-validator discipline. Refusals are side-effect-free everywhere.
+Claims-first with one insertion point and one new module. See [ARCHITECTURE.md](./ARCHITECTURE.md) for verified line numbers and the callback-flow diagram.
 
-**Major components / decision points:**
-1. Shared validator (`parseDomainList` + `emailDomain` + `emailDomainRefusal`) — the single source of truth; one `split('@')` call site repo-wide
-2. DP-1 signup (:6703) and DP-2 invite create (:7626, per-email loop) — JSON keyed refusals, 400
-3. DP-3 invite accept (:7852, after the guest-toggle fail-closed re-derive) — validate `invite.email` (row, not body), 403, refuse without consuming
-4. DP-4 OIDC JIT (~:5120, after `email_verified`) and DP-5 SSO reconciliation (~:5155) — generic `sso=error` redirect (no domain-revealing query param); DP-5 filters refused invites before the existing branching, verbatim with DP-3 semantics
+**Major components:**
+1. `groups.js` (new, server-only) — tri-state env parse, GUID validation, pure resolvers (`resolveWorkspaceMappings`, `resolveOperatorGroup`), overage detector
+2. SSO callback block in `server.js` (~:5131–5213 region) — NEW steps ③④ inserted between identity resolution ② and invite reconciliation ⑤, strictly after the DP-4 signup door, before 2FA/session mint
+3. Reconcile helpers + `memberships.provenance` column — diff desired vs actual, only touching `group:<guid>` rows, through the shared count-before-write guard funnel
+4. Governance rename/slug edit — rides existing `PUT /api/workspaces/:slug` (:7399): validation + keyed refusals, not a new route; zero shared code with the group work
+
+**Callback ordering contract (locked by research):** after identity resolution, before DP-5 invite reconciliation, strictly after DP-4. Group mapping never bypasses a door.
 
 ### Critical Pitfalls
 
-1. **Email-parsing bypass (Critical, CVE-backed)** — homoglyph `＠` (GHSA-7rqj-j65f-68wh), trailing-dot FQDN, quoted local parts, case. Avoid: NFKC-normalize first, reject non-ASCII domains, parse after LAST `@`, strip one trailing dot, exact Set match, single canonicalization funnel with adversarial table tests.
-2. **Fail-open config tri-state** — `""` vs unset vs whitespace conflation. Avoid: explicit tri-state boot resolver, env-shape test matrix (`undefined`/`''`/`' '`/`'a,b'`/`'a,,b'`/`' a , B '`), boot log of resolved matrix, refuse-and-exit on broken values.
-3. **Door-matrix confusion** — 2 vars × 5 doors; unset-inherits is invisible in the var name. Avoid: literal matrix table in code + DEPLOY.md, full-matrix contract tests, worked operator examples.
-4. **TOCTOU invite lifecycle** — invites minted under a since-tightened list. Avoid: live-list re-validation at accept (never a stored snapshot), tighten/loosen contract tests, keyed `inviteDomainRevoked`-class refusal.
-5. **Breaking existing flows** — re-invite of out-of-list existing members refused; SSO login blocked after tightening. Avoid: membership lookup short-circuits before the predicate; admission ≠ authentication; three "existing account" contract tests.
+Top 5 of 10 — full mapping of pitfall→phase→verification in [PITFALLS.md](./PITFALLS.md):
 
-Maintenance pitfalls: lint cleanup must be one commit per site (side-effectful initializers — no autofix is safe, per typescript-eslint #3456); locale spot-check must cover refusal states (placeholders, silent fallbacks) not just happy-path nav labels.
+1. **Overage (`_claim_names`) read as empty list** — the worst case is a *removal*, not a no-op: power users get stripped. Detect the pointer and treat as UNMAPPED/UNKNOWN: skip grants AND removals that login, log loudly. Co-design with removal sync.
+2. **Sync bypassing the guard funnel** — a naive removal path can orphan a workspace owner or demote the last operator. Route every group-derived mutation through the same count-before-write funnel as manual edits; guard violation = skip + audit, login still succeeds.
+3. **Group mapping bypassing the DP-4 provisioning door** — mapped user on a non-allow-listed domain must NOT be provisioned. Ordering is explicit: doors gate existence; groups only assign membership post-existence. e2e: mapped group + blocked domain refused.
+4. **Group names / slugs as keys** — names are mutable and colliding; slugs are URL-shaped public addresses. Match on Object ID GUIDs only; mapping config references workspace IDs (or slugs never renamed — ratify), labels display-only.
+5. **Claim from the wrong token / second extraction site** — one extraction point in the callback, one token type (ID token), grep-provable single site; groups never mirrored into session cookies (Traefik token-bloat risk).
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure (milestone is small; 3 phases + carryovers):
+Research converges on a 4+1 phase structure following ARCHITECTURE.md's wave ordering. Waves 1→2→3 are strictly sequential (module → wiring → removal logic needs provenance); the governance phase is fully parallel and can be scheduled anywhere.
 
-### Phase 1: Domain Admission Core (parser + signup + invite doors)
-**Rationale:** Everything depends on the shared validator; the JSON-refusal doors are the cheapest to build and test, and the first i18n keys must land in this phase (parity gate fails otherwise).
-**Delivers:** Tri-state boot resolver + exact-domain funnel + unit tests; DP-1 signup gate; DP-2 invite create gate; DP-3 fail-closed accept re-validation; `domainNotAllowed` keyed refusals in all 5 catalogues with placeholder-parity unit test; DEPLOY.md door-matrix section.
-**Addresses:** Signup gate, invite gates, accept re-validation, localized refusals (all P1)
-**Avoids:** Pitfalls 1, 2, 4 (canonicalization, tri-state, TOCTOU) — the funnel and its adversarial tests are the first task
+### Phase 1: Group mapping core — parser, resolver, overage detection
+**Rationale:** Everything mapping-related requires claim ingestion and the parsed config first; this wave is pure and inert (no callback wiring), so the tri-state matrix, GUID shape validation, and overage detection are established as fully-tested units.
+**Delivers:** `groups.js` with tri-state env parse (`ENTRA_GROUP_MAP`, `ENTRA_OPERATOR_GROUP`), GUID validation, pure resolvers, overage detector (`_claim_names` → UNMAPPED, never empty), boot-log extension of the D-11 door matrix.
+**Addresses:** claim ingestion + overage detection + env mapping config (P1 table stakes).
+**Avoids:** Pitfalls 1, 2, 4 (overage-as-empty, name-keyed config, transitive surprise) at the unit level.
 
-### Phase 2: OIDC/SSO Doors + Door-Matrix Hardening
-**Rationale:** Redirect-surface doors are e2e-only to assert and DP-5's filter depends on DP-3 semantics being settled; grouping the SSO work together keeps the "existing-account immunity" contract tests in one place.
-**Delivers:** DP-4 JIT gate (after `email_verified`, generic error redirect, server-side domain-only logging); DP-5 SSO reconciliation filter; existing-member immunity contract tests (re-invite of out-of-list member succeeds; existing SSO account logs in); full-matrix contract suite incl. both inherit directions; boot-time resolved-matrix log.
-**Addresses:** OIDC JIT gate (P1), immunity invariants, door-matrix documentation
-**Avoids:** Pitfalls 3 and 5 (matrix confusion, lockouts)
+### Phase 2: Grant path — callback wiring + provenance schema
+**Rationale:** Needs Phase 1's module; removal sync is explicitly OFF here, but the `memberships.provenance` migration MUST land in this phase because Phase 3's removal logic cannot exist without it. Grants only: JIT/login auto-membership + role precedence + operator grant (never revoke).
+**Delivers:** Callback steps ③④ inserted after identity resolution, before DP-5; `memberships.provenance` (`invite`/`manual`/`group:<guid>`) via `adapterEnsureColumn`; operator grant (`is_instance_admin` set-only); mock-IdP tests through the full callback flow.
+**Addresses:** JIT/login auto-membership, group→operator mapping (P1 + early P2).
+**Avoids:** Pitfall 7 (door bypass — e2e "mapped group + blocked domain refused"), Pitfall 3 (single extraction site contract test).
 
-### Phase 3: Maintenance — Lint Cleanup + Locale Spot-Check
-**Rationale:** Fully independent of Phases 1–2 (except that new refusal keys give the locale spot-check a real refusal path to screenshot); safe to run in parallel or last.
-**Delivers:** 17 lint errors resolved (15 per-site code fixes, one commit per site, suite green per commit; 2 config fixes adding webhook files to `globals.node`); nl/de/es rendering spot-check via Playwright incl. per-locale refusal-path screenshots; WR-01/WR-02/IN advisory carryovers as scoped.
-**Avoids:** Pitfalls 6 and 7 (side-effectful lint deletions, silent locale fallbacks)
+### Phase 3: Removal sync + guard composition + audit
+**Rationale:** The largest test surface; strictly depends on Phase 2's provenance column. This is the core pitfall zone of the milestone (Pitfalls 1, 5, 9, 10 all land here) — every guard combination deserves a pin.
+**Delivers:** Diff-at-login reconcile (grant/promote/demote/remove per the Decision-3 table), shared last-owner guard (skip-and-audit on violation, login still succeeds), audit rows per group-derived change with group ID, sync-before-session-issuance ordering, client 403 "access changed" recovery path.
+**Addresses:** removal sync, guard sharing, audit logging, unmapped-user no-change regression gate.
+**Avoids:** Pitfalls 1 (removal side), 5, 9, 10.
+
+### Phase 4: Governance — workspace rename + slug edit (parallel workstream)
+**Rationale:** Zero shared code with Phases 1–3 (only the i18n key-count gate is shared — locale keys land in the same commit as the first emitting gate, per v3.1 pattern). Can run concurrently with Phases 2–3.
+**Delivers:** Rename + slug edit on the existing `PUT /api/workspaces/:slug` route: uniqueness + shape validation, keyed localized refusals (5 locales), client edit UI in governance page, old-slug policy implemented and documented.
+**Addresses:** rename/slug-edit table-stakes (P2).
+**Avoids:** Pitfall 8 (slug blast radius: deep links, mapping config, collision).
+
+### Phase 5 (or fold into 2/4): DEPLOY.md + ship polish
+**Rationale:** Entra-side prerequisites are deploy-time documentation, not code — but they gate real usage. Version bump to 3.2.0 at ship.
+**Delivers:** DEPLOY.md sections: ApplicationGroup claim config, optional overage-fallback permission (`GroupMember.Read.All` + consent), transitive/direct membership semantics, dead-mapping runbook, old-slug policy. Remaining backlog items (56-02 e2e, Phase 57 mobile) only if kept in v3.2 scope.
+**Addresses:** operator-facing docs (P2); backlog decoupling.
 
 ### Phase Ordering Rationale
 
-- Phase 1 first because the shared validator is the dependency root and its i18n keys cannot slip past the parity gate
-- Phase 2 second because JIT/SSO semantics depend on accept-route semantics (DP-3) being settled, and DP-5's "verbatim from accept" doctrine requires it
-- Phase 3 parallelizable — no coupling to the domain feature; ARCHITECTURE.md notes Phases "2–4 independent of 5–6 once phase 1 lands" if plans are split
-- Architect's note for the planner: there is **no PUT/PATCH invite route today** (verified) — reconcile the seed's "invite edit" decision point with reality; re-minting via create is already covered by DP-2
+- **Strict sequence 1→2→3:** module → callback wiring → removal logic; provenance must exist before any removal code.
+- **Phase 4 fully parallel:** governance edit shares nothing with the callback; scheduling flexibility is the benefit (FEATURES.md dependency notes).
+- **Removal sync last among group phases:** it's the highest-risk surface and needs the grant path proven first; overage handling is co-designed at Phase 1 so the removal side inherits the safe contract.
+- **Overage fallback (Graph client-credentials) is deliberately NOT a phase:** with `ApplicationGroup` it should never fire; ARCHITECTURE recommends detect-and-treat-as-unmapped. If requirements wants the network fallback, it's a small addition to Phase 1 — ratify there.
+
+### Open Decisions for Requirements (ratify before/at discuss-phase)
+
+1. **Overage policy:** proceed-as-unmapped (recommended — never block logins that work today) vs refuse login vs Graph fallback.
+2. **Role-conflict precedence:** manual higher role beats group grant (recommended); demote-or-remove on lost group membership.
+3. **Invite-vs-group precedence:** which wins when both target the same workspace (architecture recommends invite/explicit-human wins; ordering of the DP-5 query must be explicit either way).
+4. **Mapped-grants-survive-demotion policy:** does manual demotion of a group-mapped operator stick, or does the group re-grant at next login (FEATURES.md flags the "why won't my demotion stick?" trap)?
+5. **Old-slug policy:** 404 on old slug (recommended — fail-closed, no redirect machinery) vs redirect.
+6. **Mapping config keys:** workspace slug in env (simple, but rename-coupled — Pitfall 8) vs stable workspace IDs (safer; slightly worse ergonomics). Must be decided before Phase 1's parse schema.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 2 (OIDC/SSO doors):** redirect-surface refusal UX and DP-5 invite-filtering behavior need e2e design decisions; verify whether MCP mirror has any invite/provision surface (likely n/a but unconfirmed)
-- **Phase 3 (carryovers):** WR-01/WR-02/IN advisory items were not re-researched this cycle — scope them at discuss-phase
+Phases likely needing `/gsd-plan-phase --research-phase`:
+- **Phase 3 (removal sync + guards):** highest combined test surface; guard composition across provenance states, overage×removal interaction, and the client 403 recovery path all need careful planning. No external research needed — the complexity is internal invariants, but plan-phase should be thorough.
+- **Phase 1 (parser/resolver):** mostly standard (tri-state parse precedent is verbatim from domains.js); flag only if the Graph overage fallback is ratified into scope (then verify the client-credentials + getMemberObjects contract against current docs).
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** every integration point verified against live code with line numbers; stdlib verified by execution; house patterns (Phase 33/50/53, ERR-01, tFor) fully established
+- **Phase 2 (callback wiring):** the insertion point, funnel, and mock-IdP harness are all codebase-verified with line numbers.
+- **Phase 4 (rename/slug):** rides an existing route; validation + keyed-refusal pattern is v3.x boilerplate.
+- **Phase 5 (docs):** no research needed.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All stdlib behaviors executed on Node 24.21.0; live eslint run on HEAD; Context7-verified ESLint docs |
-| Features | HIGH | GitLab/Gitea verified against official docs 2026-11-19; Mattermost/Outline/Authelia rows LOW/MEDIUM (rate-limited) — not load-bearing for design |
-| Architecture | HIGH | All decision points verified in live server.js with line numbers; prior-art cross-check MEDIUM (web) |
-| Pitfalls | HIGH | CVE/GHSA-backed bypass class + official docs (GitLab MR 76272, OneTimeSecret posture, ESLint #3456) |
+| Stack | HIGH | Every Entra claim behavior verified against live learn.microsoft.com docs dated 2025-04→2026-08; zero-dep verdict cross-confirmed by two researchers |
+| Features | HIGH | Competitor patterns (GitHub SCIM, Okta, GitLab/Tailscale) well documented; MVP split is consensus-grade |
+| Architecture | HIGH | Codebase-verified with exact line numbers at research HEAD; insertion point and guards confirmed against shipped v3.x code |
+| Pitfalls | HIGH | Claim behaviors documented; integration pitfalls derived from shipped architecture — design analysis, not speculation |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Mattermost/Outline competitor rows:** model-knowledge only; re-verify only if a competitor-comparison claim becomes load-bearing (it isn't for implementation)
-- **"Invite edit" decision point:** no edit route exists — planner must reconcile seed wording (treat re-minting as covered by DP-2; don't invent a route)
-- **MCP mirror invite surface:** confirm during Phase 1 planning whether mcp.js can mint invites; if yes it's a sixth matrix cell on the shared validator
-- **Email-change door:** if gr8r supports account email change, it must re-validate (GitLab MR 76272 lesson); if not, add a contract test documenting the door's absence
-- **Set-but-empty semantics for ALLOW_INVITE_DOMAINS:** research recommends "deliberate deny-all" (FEATURES) and the tri-state design supports it — needs owner ratification at planning
-- **WR-01/WR-02/IN carryovers:** advisory items carried from prior milestones — scope not re-researched this cycle
+- **Overage fallback decision:** STACK.md specifies the full client-credentials recipe; ARCHITECTURE recommends never calling Graph. One policy decision resolves it (recommended: treat-as-unmapped; keep the recipe in DEPLOY.md as an operator-side mitigation note). If the fallback is wanted, verify the Graph contract at plan time.
+- **`ApplicationGroup` nesting semantics:** direct-membership-only under ApplicationGroup is documented, but transitivity under other modes is tenant-controlled. DEPLOY.md must document that nesting semantics live tenant-side; no app-side resolution either way.
+- **Architecturally (minor):** Entra overage details in ARCHITECTURE.md came from model knowledge (MEDIUM) while STACK.md verified them live — treat STACK.md as the authoritative source; a fixture-token test with `_claim_names` is the verification gate regardless.
+- **Dead-mapping detection:** server-side undetectable by design (no Graph). Mitigations (audit rows, "never matched" boot/console surface) are recommended but unratified — decide scope in requirements.
+- **Six open policy decisions** listed above — all resolvable in requirements definition; none block roadmap structure.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct execution on Node 24.21.0 — env parsing, email extraction, `endsWith` bypass, `domainToASCII` (STACK)
-- Live `npx eslint .` on gr8r HEAD 2026-11-19 + `eslint.config.js` inspection (STACK)
-- GitLab sign-up restrictions docs + MR 76272 (bypass via email change) — docs.gitlab.com
-- Gitea config cheat sheet `EMAIL_DOMAIN_ALLOWLIST`/`BLOCKLIST` + issue #27457 — docs.gitea.com
-- OneTimeSecret SSO docs — new-account-only semantics, distinct keyed refusals, never reveal allowlist
-- GHSA-7rqj-j65f-68wh (Auth.js homoglyph-@ bypass, Critical); PortSwigger "Splitting the email atom"; BlackHat HostSplit 2019
-- typescript-eslint #3456 (no autofix for no-unused-vars — side effects) + Oxlint write-only-read docs
-- Context7 `/eslint/eslint` official docs (caughtErrorsIgnorePattern v9 change, disable-comment guidance)
-- Direct code inspection: server.js routes :6703/:7626/:7852, OIDC :5033–:5250, helpers :671/:4657, env consts :133–146 (ARCHITECTURE)
-- gr8r PROJECT.md (SEED-261119-f3w, HARD-01..05, D-50-2/D-53-2, ERR-01/02, tFor, i18n parity gates)
+- learn.microsoft.com — optional-claims (2026-08-11), optional-claims-reference (2026-08-20), how-to-connect-fed-group-claims (2026-02-26), graph getMemberObjects: `groups` claim config, ApplicationGroup, 200/150 limits, overage shape, permission matrix
+- gr8r PROJECT.md + shipped v1.x–v3.1 record: zero-dep invariant (`test/dependencies.test.mjs`), door matrix, last-operator guards, 5-locale gate, audit precedents
+- gr8r codebase at HEAD (server.js, domains.js, oidc.js read in full): line-verified integration points
 
 ### Secondary (MEDIUM confidence)
-- Appsmith `APPSMITH_SIGNUP_ALLOWED_DOMAINS` (invited users bypass, existing users unaffected)
-- Outline `ALLOWED_DOMAINS` exact matching + issue #3412
-- Trailing-dot origin-bypass write-up (soltanali0)
-- Outline .env.sample / Mattermost config (partial)
+- Microsoft security-docs Zero Trust token-config guidance; Okta/GitHub Enterprise SCIM docs (deprovisioning semantics); Clerk/Stytch/WorkOS SCIM explainers
+- LibreChat issue #9196 (community evidence of overage pain)
 
 ### Tertiary (LOW confidence)
-- Mattermost `RestrictCreationToDomains`, Authelia sub-addressing — model knowledge, rate-limited search; re-verify at phase research if load-bearing
-- Generic searxng results on allowlist practice — superseded by direct verifications
+- Entra community wisdom on claim gotchas (consistent with official docs; ARCHITECTURE.md's model-knowledge Entra details superseded by STACK.md's live-doc verification)
 
 ---
-*Research completed: 2026-11-19*
+*Research completed: 2026-11-20*
 *Ready for roadmap: yes*
