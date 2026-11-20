@@ -7430,6 +7430,29 @@ async function handleApi(req, res, url) {
     });
   }
 
+  if (pathname === '/api/auth/operator/dead-mappings' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // T-80-04: operator gate before any data read — non-operators get the
+    // exact 403 operatorOnly, unauthenticated callers the generic 401.
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    // NO throttle: read route (Phase 78/79 GET read precedent) — derived
+    // on read per D-09, zero schema change, no boot snapshot.
+    // Query A — the boot dead-mapping predicate (logWarn loop) moved
+    // on-read: exact JS Set membership, a mapping is alive ONLY on exact
+    // id match. Raw values returned; the FIRST-colon split for rendering
+    // is a client concern (D-08) — the server does not transform the
+    // encoded action strings.
+    const mappings = await db.all('select group_guid, workspace_id, kind, label from group_mappings');
+    const wsIds = new Set((await db.all('select id from workspaces')).map(r => r.id));
+    const orphans = mappings.filter(m => !wsIds.has(m.workspace_id));
+    // Query B — Phase 82 encoded guard trail (group_<delta>:group:<guid>:<reason>),
+    // bounded and newest-first (discretion bound: 100).
+    const trail = await db.all("select action, workspace_id, created_at from audit_log where action like 'group_%:group:%' order by created_at desc limit 100");
+    return json(res, 200, { orphans, trail });
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */

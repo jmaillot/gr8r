@@ -384,6 +384,12 @@ export const api = {
   async operatorWsRename(id, { name, slug }) {
     return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/rename`, { name, slug });
   },
+  /* Phase 83 (D-09): derived-on-read dead-mapping visibility — orphaned
+     group_mappings plus the Phase 82 encoded guard trail. Read route: no
+     throttle; the payload is raw values (escaping happens at first render). */
+  async operatorDeadMappings() {
+    return call('GET', '/api/auth/operator/dead-mappings');
+  },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.
      D-52-3: the caller refetches on every open; nothing is cached here. */
