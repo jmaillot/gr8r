@@ -37,10 +37,10 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 
 ### Group Mapping — Removal Sync (GS)
 
-- [ ] **GS-01**: At login, a user no longer in any group mapping a workspace loses only their group-derived (`group:<guid>`) membership; invite/manual grants are immune.
-- [ ] **GS-02**: Removal sync routes through the shared guard funnel: removal of a workspace owner or last operator is refused (count-before-write), logged loudly, and **the login still succeeds** (skip-and-audit).
-- [ ] **GS-03**: Removal sync only downgrades role when a mapped role drops below the current grant AND the current grant is group-derived; manual/invite roles are never downgraded.
-- [ ] **GS-04**: All group-driven changes (grants, role changes, removals, skips) are audit-logged with group GUID and reason.
+- [x] **GS-01**: At login, a user no longer in any group mapping a workspace loses only their group-derived (`group:<guid>`) membership; invite/manual grants are immune.
+- [x] **GS-02**: Removal sync routes through the shared guard funnel: removal of a workspace owner or last operator is refused (count-before-write), logged loudly, and **the login still succeeds** (skip-and-audit).
+- [x] **GS-03**: Removal sync only downgrades role when a mapped role drops below the current grant AND the current grant is group-derived; manual/invite roles are never downgraded.
+- [x] **GS-04**: All group-driven changes (grants, role changes, removals, skips) are audit-logged with group GUID and reason.
 
 ### Governance — Workspace Settings Editing (GV)
 
@@ -81,10 +81,10 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | GW-04 | Phase 81 | Complete |
 | GO-01 | Phase 81 | Complete |
 | GO-02 | Phase 81 | Complete |
-| GS-01 | Phase 82 | Pending |
-| GS-02 | Phase 82 | Pending |
-| GS-03 | Phase 82 | Pending |
-| GS-04 | Phase 82 | Pending |
+| GS-01 | Phase 82 | Complete |
+| GS-02 | Phase 82 | Complete |
+| GS-03 | Phase 82 | Complete |
+| GS-04 | Phase 82 | Complete |
 | GV-01 | Phase 83 | Pending |
 | GV-02 | Phase 83 | Pending |
 | GV-03 | Phase 83 | Pending |
