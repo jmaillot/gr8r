@@ -29,7 +29,11 @@
   2. The server reads the `groups` claim from the ID token; an `_claim_names` overage pointer is detected and resolved as UNMAPPED (never as an empty group list), proven by a fixture-token test
   3. Malformed GUIDs or unknown workspace IDs in the mapping config are refused or warned as dead mappings at boot; display labels are never used as match keys
   4. With no mapping env set, the server boots and behaves byte-identically to today (all existing suites green, no behavior change)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 80-01-PLAN.md — groups.js core (validators, four-outcome overage detector, D-82-1 resolver) + dual-schema group_mappings table with fixture tests
+- [ ] 80-02-PLAN.md — operator-gated save API with keyed 5-locale refusals + boot dead-mapping warning + Dockerfile/dependency-test updates
 
 ### Phase 81: Group Grant Path — Callback Wiring + Provenance
 **Goal**: At SSO login, mapped groups automatically grant workspace membership (with highest-role precedence) and instance-operator rights — grants only; nothing is ever removed by groups yet
