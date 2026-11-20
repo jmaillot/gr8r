@@ -102,7 +102,13 @@ Plans:
   3. Phase 57 mobile layout follow-ups are delivered and pinned by e2e at mobile viewport
   4. DEPLOY.md documents the Entra-side prerequisites (ApplicationGroup claim config, optional overage fallback recipe, dead-mapping runbook, old-slug policy) and package.json is bumped to 3.2.0
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 84-01-PLAN.md — BP-02 e2e red-set repair (tracer: nav-step swap, STOP_LIST, flows 2FA hardening, D-06 triple-green)
+- [ ] 84-02-PLAN.md — BP-01 searchable team pickers (invite + member-edit, 5 locales, chunk gate)
+- [ ] 84-03-PLAN.md — BP-03 mobile columns-button fix + phone-viewport sweep + IN-01/IN-02 strays
+- [ ] 84-04-PLAN.md — DEPLOY.md Entra group-mapping docs + CHANGELOG backfill + 3.2.0 bump (ship gate, last per D-11)
 
 ## Progress Table
 
