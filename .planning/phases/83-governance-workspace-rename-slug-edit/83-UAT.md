@@ -8,10 +8,10 @@ updated: 2026-11-20T16:10:00Z
 
 ## Current Test
 
-number: 3
-name: 409 slugTaken → suggestion + one-click adopt (D-07)
+number: 4
+name: Refusals render keyed 5-locale messages (D-04, D-12)
 expected: |
-  Rename a workspace to a slug already taken by another workspace → modal stays open, shows slugTakenHint with suggested slug and an Adopt button that fills the slug field
+  Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
 awaiting: user response
 
 ## Tests
@@ -26,7 +26,7 @@ result: [passed]
 
 ### 3. 409 slugTaken → suggestion + one-click adopt (D-07)
 expected: Rename a workspace to a slug already taken by another workspace → modal stays open, shows slugTakenHint with suggested slug and an Adopt button that fills the slug field
-result: [pending]
+result: [passed]
 
 ### 4. Refusals render keyed 5-locale messages (D-04, D-12)
 expected: Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
@@ -43,9 +43,9 @@ result: [pending]
 ## Summary
 
 total: 6
-passed: 2
+passed: 3
 issues: 0
-pending: 4
+pending: 3
 skipped: 0
 blocked: 0
 
