@@ -292,17 +292,17 @@ A.govEditSave = el => {
 | A4 | `err.*` keys for invalidSlug/slugTaken exist in all 5 locales (only en verified this session) | i18n keys | Medium — planner should grep the other 4 files before assuming reuse |
 | A5 | `refreshGovernanceWorkspaces` is the canonical table refresh fn (referenced in actions.js:4668) | Code Examples | Low |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Are archived workspaces renameable?**
+1. **Are archived workspaces renameable?** — RESOLVED: YES.
    - What we know: fetch-by-id makes them reachable; archive/unarchive actions on the row are state-flips, rename is a metadata edit.
-   - Recommendation: allow (simplest, matches row reachability); document in PLAN.md per the discretion note.
-2. **Dead-mappings route: throttle or not?**
+   - Resolution: archived workspaces ARE renameable — the rename route fetches by id (never requireWorkspace), giving them reachability parity with archive/unarchive and satisfying the "no existence oracle" gate order. Decision implemented in 83-01.
+2. **Dead-mappings route: throttle or not?** — RESOLVED: NO throttle.
    - What we know: Phase 78/79 GET reads carry no throttle; the trail LIKE query is cheap with a bounded limit.
-   - Recommendation: no throttle (read precedent), bound the trail query with a limit.
-3. **Does the warning card need a zero-rows "off" line in S.ui or is full hiding enough?**
+   - Resolution: the dead-mappings route carries NO throttle (read-only read precedent); the trail query stays bounded with a limit. Decision implemented in 83-01.
+3. **Does the warning card need a zero-rows "off" line in S.ui or is full hiding enough?** — RESOLVED: full hiding, no off-line markup.
    - What we know: D-10 says hidden ENTIRELY; other D-11 sections render exactly one off-line at the LOG level, not necessarily in the UI.
-   - Recommendation: hide entirely in UI (D-10 is explicit); no off-line markup.
+   - Resolution: per D-10 the card hides entirely at zero dead items — no zero-rows "off" line in S.ui and no off-line markup. Decision implemented in 83-02.
 
 ## Environment Availability
 
