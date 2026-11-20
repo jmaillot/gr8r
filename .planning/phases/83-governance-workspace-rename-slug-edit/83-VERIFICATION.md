@@ -22,7 +22,7 @@ covered_files:
   - test/governance-rename.test.mjs
   - test/governance-client.test.mjs
   - test/i18n-toast.test.mjs
-covered_digest: "v4:sha256:05a68be9d3179aab5a05f3ad8036e1be00a45b2757aa047cc2ad6149e1e0ffa0"
+covered_digest: "v2:sha256:8593cae2da12e1b6de6bd4268c54d3f667fae420d7955d01f6c11cfaf1b092e2"
 behavior_unverified_items:
   - truth: "Each workspace row has an operator-gated Edit action opening a Name+Slug modal (D-01, D-02)"
     test: "Open /governance as operator, click Edit on a workspace row"
