@@ -249,7 +249,13 @@ export function tzCombobox() {
    revoke uses the D-90 inline-confirmation stage (S.ui.operatorRevoke carries
    the target id). Owner rows are immune (D-119) — the action is replaced by
    the honest hint; the operator's own row explains the keep-current semantics
-   (D-118: their other browsers sign out, this device survives). */
+   (D-118: their other browsers sign out, this device survives).
+
+   78-02 (WSG-06/D-78-2): is_instance_admin is multi-seat now — plain rows gain
+   a Make-operator action, operator rows gain a demote action behind its own
+   D-90 inline-confirm stage (S.ui.operatorDemote). The last-operator refusal
+   is the server's 409 (lastOperator) surfaced as a keyed toast — the row
+   still offers demote even on the signed-in self row, the guard is honest. */
 export function operatorCard() {
   const rows = S.ui.operatorUsers;
   if (!rows) return '';
@@ -261,9 +267,11 @@ export function operatorCard() {
         u.last_login_at ? ago(u.last_login_at) : '—',
         S.ui.operatorRevoke === u.id
           ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
-          : u.is_instance_admin
-            ? `<span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span>`
-            : `<button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button>`,
+          : S.ui.operatorDemote === u.id
+            ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
+            : u.is_instance_admin
+              ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
+              : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
       ),
     )
     .join('')}</div>`;

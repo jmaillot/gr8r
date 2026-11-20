@@ -2769,6 +2769,42 @@ A.operatorRevokeConfirm = async el => {
   toast(t('settings.operator.toastRevoked'));
 };
 
+/* 78-02 operator identity actions (WSG-06/D-78-2): promote is free, demote is
+   D-90 inline-confirm (S.ui.operatorDemote carries the target id). Refusals
+   flow through the same tErr pipeline as the revoke — lastOperator (the
+   server's 409 count guard) and operatorOnly render localized toasts. */
+A.operatorPromote = async el => {
+  const id = el.dataset.id;
+  const res = await api.operatorPromote(id);
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    const c = res.data?.code;
+    return toast(tErr(c, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  await refreshOperatorUsers(); // re-fetch so the list reflects the new flag
+  toast(t('settings.operator.toastPromoted'));
+};
+A.operatorDemoteAsk = el => {
+  S.ui.operatorDemote = el.dataset.id; // D-90: the inline confirmation stage carries the target id
+  render();
+};
+A.operatorDemoteCancel = () => {
+  S.ui.operatorDemote = null;
+  render();
+};
+A.operatorDemote = async el => {
+  const id = el.dataset.id;
+  const res = await api.operatorDemote(id);
+  S.ui.operatorDemote = null;
+  if (!res.ok) {
+    if (res.status === 401) return;
+    const c = res.data?.code; // lastOperator / operatorOnly / notFound — keyed
+    return toast(tErr(c, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  await refreshOperatorUsers();
+  toast(t('settings.operator.toastDemoted'));
+};
+
 /* AUD-03: the audit trail card's ground truth (D-T3, D-V1): the rows come from
    GET /api/audit-log — never synthesized client-side. The server decides the
    tier: instance operators get all rows, workspace admins get their own

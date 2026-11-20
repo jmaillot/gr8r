@@ -345,6 +345,15 @@ export const api = {
   async operatorRevokeSessions(userId) {
     return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/revoke-sessions`);
   },
+  /* 78-01 operator identity (WSG-06): promote freely, demote guarded by the
+     server's lastOperator count — the client treats every refusal as a keyed
+     toast, the server re-checks authority (client gating is cosmetic). */
+  async operatorPromote(userId) {
+    return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/promote`);
+  },
+  async operatorDemote(userId) {
+    return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/demote`);
+  },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.
      D-52-3: the caller refetches on every open; nothing is cached here. */

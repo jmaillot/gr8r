@@ -89,7 +89,35 @@ test('the await view offers no creation surface and keeps sign-out (auth.js exte
   assert.match(auth, /page\.auth\.awaitPollHint/);
 });
 
-const KEYS = ['page.auth.awaitPollHint'];
+test('operatorCard: promote on plain rows, inline-confirm demote on operator rows (WSG-06, D-90)', () => {
+  const settings = src('src/pages/settings.js');
+  assert.match(settings, /data-a="operatorPromote"/);
+  assert.match(settings, /data-a="operatorDemoteAsk"/);
+  assert.match(settings, /data-a="operatorDemote"/);
+  assert.match(settings, /data-a="operatorDemoteCancel"/);
+  assert.match(settings, /S\.ui\.operatorDemote === u\.id/);
+});
+
+test('operator actions call the 78-01 endpoints and re-render via refreshOperatorUsers', () => {
+  const actions = src('src/actions/actions.js');
+  for (const name of ['A.operatorPromote', 'A.operatorDemoteAsk', 'A.operatorDemoteCancel', 'A.operatorDemote']) {
+    assert.match(actions, new RegExp(`${name} = `), `${name} missing`);
+  }
+  assert.match(actions, /api\.operatorPromote\(id\)/);
+  assert.match(actions, /api\.operatorDemote\(id\)/);
+  // ≥3 operatorPromote/operatorDemote mentions (plan verification gate)
+  assert.ok((actions.match(/operatorPromote|operatorDemote/g) || []).length >= 3);
+  // refusals flow through the tErr toast pipeline (lastOperator 409 → localized toast)
+  assert.match(actions, /tErr\(c, null, res\.error \|\| t\('err\.serverUnreachable'\)\)/);
+});
+
+test('api client exposes operatorPromote/operatorDemote (78-01 endpoints)', () => {
+  const api = src('src/core/api.js');
+  assert.match(api, /async operatorPromote\(userId\) \{\s*return call\('POST', `\/api\/auth\/operator\/users\/\$\{encodeURIComponent\(userId\)\}\/promote`\);/);
+  assert.match(api, /async operatorDemote\(userId\) \{\s*return call\('POST', `\/api\/auth\/operator\/users\/\$\{encodeURIComponent\(userId\)\}\/demote`\);/);
+});
+
+const KEYS = ['page.auth.awaitPollHint', 'settings.operator.promote', 'settings.operator.demoteShort', 'settings.operator.demoteConfirmBody', 'settings.operator.demoteConfirm', 'settings.operator.toastPromoted', 'settings.operator.toastDemoted'];
 
 for (const key of KEYS) {
   for (const [lang, cat] of [['en', en], ['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
