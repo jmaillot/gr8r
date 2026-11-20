@@ -8,11 +8,13 @@ updated: 2026-11-20T16:10:00Z
 
 ## Current Test
 
-number: 4
-name: Refusals render keyed 5-locale messages (D-04, D-12)
+number: 5
+name: Dead-mapping warning card renders and hides at zero (D-08, D-10, D-11)
 expected: |
-  Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
+  As operator, seed a dead group_mapping + a guard-refused audit row, load /governance → card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason). Remove them and reload → card disappears entirely
 awaiting: user response
+
+Note: test 4 is blocked on the rename throttle and will be revisited after this test.
 
 ## Tests
 
@@ -30,7 +32,7 @@ result: [passed]
 
 ### 4. Refusals render keyed 5-locale messages (D-04, D-12)
 expected: Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
-result: [pending]
+result: [blocked] — throttle (tooManyAttempts) engaged during testing; keyed fr toast observed ("Trop de tentatives. Réessayez plus tard.") but target refusals not yet triggered. Retry later in session.
 
 ### 5. Dead-mapping warning card renders and hides at zero (D-08, D-10, D-11)
 expected: As operator, seed a dead group_mapping + a guard-refused audit row, load /governance → card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason). Remove them and reload → card disappears entirely
@@ -45,8 +47,8 @@ result: [pending]
 total: 6
 passed: 3
 issues: 0
-pending: 3
+pending: 2
 skipped: 0
-blocked: 0
+blocked: 1
 
 ## Gaps
