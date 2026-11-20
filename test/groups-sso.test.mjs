@@ -371,6 +371,52 @@ test('grant-path throw lands on /login?sso=error with no session and no partial 
 
 /* ------------------------------ tests ------------------------------ */
 
+/* Phase 82 Task 1 (GS-01, D-82-10): the lost-claim delete path. First login
+   grants via the live mapping; the mapping row is deleted; the second login's
+   groups claim no longer contains the GUID → exactly the group:<guid> row is
+   removed (route-shaped tx), while a separately seeded manual row in another
+   workspace survives untouched — provenance is the selection key. */
+test('lost-claim login removes ONLY the group:<guid> row — manual rows immune (GS-01)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-loss', slug: 'lossws', name: 'Loss WS' });
+      seedWorkspace(db, { id: 'ws-keep', slug: 'keepws', name: 'Keep WS' });
+      seedMapping(db, { guid: '32111111-2222-3333-4444-555555555555', workspaceId: 'ws-loss', role: 'member' });
+    });
+    const claims1 = { sub: 'sub-loss', email: 'loss@example.com', email_verified: true, groups: ['32111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims1, 'code-loss-1');
+    assert.equal(first.callback.location, '/');
+    assert.ok(sessionCookieOf(first.callback.cookies), 'login 1 minted a session');
+    // Seed the immune manual row AFTER login 1 (the user row must exist).
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('loss@example.com').id;
+      db.prepare("insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values ('ws-keep', ?, 'admin', ?, null, null, 'manual')").run(uid, `m_${uid}`);
+    });
+    // The mapping is deleted between logins; the claim no longer carries the GUID.
+    withDb(server.dbPath, db => db.prepare('delete from group_mappings where group_guid = ?').run('32111111-2222-3333-4444-555555555555'));
+    const second = await runFlow(server, { sub: 'sub-loss', email: 'loss@example.com', email_verified: true, groups: ['99999999-8888-7777-6666-555555555555'] }, 'code-loss-2');
+    assert.equal(second.callback.location, '/', 'the lost-claim login still succeeds');
+    assert.ok(sessionCookieOf(second.callback.cookies), 'login 2 minted a session');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('loss@example.com').id;
+      const rows = db.prepare('select * from memberships where user_id = ?').all(uid);
+      assert.equal(rows.length, 1, 'exactly the group-derived row was removed');
+      assert.equal(rows[0].workspace_id, 'ws-keep', 'the surviving row is the manual one');
+      assert.equal(rows[0].role, 'admin');
+      assert.equal(rows[0].provenance, 'manual');
+      assert.equal(db.prepare('select count(*) as n from team_members where workspace_id = ? and user_id = ?').get('ws-loss', uid).n, 0, 'team authority rows purged with the membership');
+      const audits = db.prepare("select * from audit_log where actor_id = ? and action like 'group_membership_removed%'").all(uid);
+      assert.equal(audits.length, 1, 'exactly one removal audit row');
+      assert.equal(audits[0].action, 'group_membership_removed:group:32111111-2222-3333-4444-555555555555:lost-claim');
+      assert.equal(audits[0].workspace_id, 'ws-loss');
+      assert.equal(audits[0].target_id, uid, 'target = the removed user');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* Phase 81 Task 1 (D-81-2/D-81-3/D-81-5): upgrade-only re-assert. A viewer row
    (provenance invite, seeded through the real DP-5 auto-accept on an unmapped
    first login) is upgraded to the mapped member role on the second login —

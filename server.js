@@ -5243,12 +5243,15 @@ async function handleApi(req, res, url) {
         }
       }
 
-      /* Phase 81 (GW-03): group grants run after DP-4/DP-5 identity resolution
-         and BEFORE the DP-5 invite reconcile — strictly after the oidc_identities
-         concurrency backstop above (grants keyed to the resolved row), inside the
-         existing try so ANY throw funnels to errorRedirect (D-81-11 fail closed).
-         Tracer-minimal slice: resolve claim → load mappings → resolve() → grant.
-         Upgrade-only pre-compare and the operator flag land in Plan 02. */
+      /* Phase 82 (D-82-10, GS-01/GS-02): the group reconcile pass runs after
+         DP-4/DP-5 identity resolution and BEFORE the DP-5 invite reconcile —
+         strictly after the oidc_identities concurrency backstop above (keyed
+         to the resolved row), inside the existing try so ANY throw funnels
+         to errorRedirect (D-81-11 fail closed). One pass per workspace over
+         the union of grant targets and existing group-derived rows: delete
+         (no mapping + group provenance, owner-guarded) / upgrade (mapped >
+         existing, Phase 81 rule) / no-op. Downgrade cells, the encoded
+         grant-trail conversion and the byte-identical gate land in Plan 02. */
       const claimState = resolveGroupsClaim(claims);
       if (claimState.state === 'unmapped') {
         /* D-81-10: ONE fixed logWarn on overage — never claim content, GUIDs,
@@ -5262,9 +5265,74 @@ async function handleApi(req, res, url) {
            Phase 80 surface and mappings can never map TO viewer (PATTERNS
            anti-pattern 5). */
         const ROLE_RANK_WITH_VIEWER = { owner: 3, admin: 2, member: 1, viewer: 0 };
+        /* Phase 82 (D-82-10, GS-01): ONE reconcile pass per workspace — the
+           target set is the union of the resolved grant targets AND the
+           workspaces already holding the user's group-derived rows (a deleted
+           mapping produces no grant, but the row still exists and must be
+           reconciled). Exactly ONE delta per workspace in place — never
+           delete-then-reinsert. The whole pass lives inside this mapped
+           else-branch: an overage/unmapped login skips grants AND removals
+           (SC5 / D-82-4). Selection key is provenance itself (`group:<guid>`
+           parsed from the stored row, never from claims — mappings can be
+           deleted between logins). The lastOperator guard (:6909) is
+           structurally unreachable from group logic — grants only increase
+           the operator count and removal-sync never touches
+           is_instance_admin (D-82-8) — deliberately not duplicated. */
+        const mappedByWs = new Map();
         for (const grant of grants) {
+          const cur = mappedByWs.get(grant.workspaceId);
+          if (!cur || ROLE_RANK_WITH_VIEWER[grant.role] > ROLE_RANK_WITH_VIEWER[cur.role]) mappedByWs.set(grant.workspaceId, grant);
+        }
+        const groupRows = await db.all("select workspace_id, role, member_id, provenance from memberships where user_id = ? and provenance like 'group:%'", [row.id]);
+        for (const wsId of new Set([...mappedByWs.keys(), ...groupRows.map(r => r.workspace_id)])) {
+          const mapped = mappedByWs.get(wsId);
+          /* Widened Phase 81 select: the delete cell needs member_id and the
+             provenance GUID, not just the role. */
+          const existing = await db.get('select role, member_id, provenance from memberships where workspace_id = ? and user_id = ?', [wsId, row.id]);
+          if (!mapped) {
+            /* GS-01 delete cell: NO mapping for this workspace. Only a
+               group-derived row is removed — manual/invite/NULL rows are
+               immune (zero writes, zero audit rows). The GUID comes from the
+               row's own provenance value (server-side), never from claims
+               (T-82-01/T-82-02). */
+            if (!existing || !String(existing.provenance || '').startsWith('group:')) continue;
+            const guid = existing.provenance.slice('group:'.length);
+            /* Archived/deleted workspace: skip the removal (a deleted
+               workspace's rows are already cascade-gone; archived rows stay
+               restorable) — the skip+audit vocabulary for these lands with
+               the full delta trail in Plan 02. */
+            const wsState = await db.get('select archived from workspaces where id = ?', [wsId]);
+            if (!wsState || wsState.archived === 1) continue;
+            /* GS-02 owner guard — count-before-write, mirroring the member
+               DELETE route (:7637): refusal is skip + loud fixed logWarn +
+               audit + continue, NEVER a throw (login still succeeds). */
+            if (existing.role === 'owner' && (await ownerCount(wsId, row.id)) === 0) {
+              logWarn('sso group removal refused — last workspace owner');
+              await db.tx(async () => {
+                await db.run(
+                  'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                  [uid(), row.id, row.id, `group_membership_removed:group:${guid}:guard-refused`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+                );
+              });
+              continue;
+            }
+            /* Mirror the member-DELETE route tx shape (:7638–7643) exactly —
+               memberships + team_members + doc stripMember — plus the encoded
+               audit row in the SAME tx (AUD-01: a forced audit failure rolls
+               back the removal). */
+            await db.tx(async () => {
+              await db.run('delete from memberships where workspace_id = ? and user_id = ?', [wsId, row.id]);
+              await db.run('delete from team_members where workspace_id = ? and user_id = ?', [wsId, row.id]);
+              await updateDoc(wsId, doc => stripMember(doc, existing.member_id, row.id));
+              await db.run(
+                'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                [uid(), row.id, row.id, `group_membership_removed:group:${guid}:lost-claim`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+              );
+            });
+            continue;
+          }
           /* D-81-8: dead/archived workspace → skip + logWarn, never fatal. */
-          const ws = await db.get('select * from workspaces where id = ?', [grant.workspaceId]);
+          const ws = await db.get('select * from workspaces where id = ?', [wsId]);
           if (!ws || ws.archived === 1) {
             logWarn('sso group grant skipped — workspace missing or archived');
             continue;
@@ -5273,14 +5341,15 @@ async function handleApi(req, res, url) {
              UNCONDITIONAL write, so pre-compare the existing row FIRST — a
              same-role or lower mapped role must write NOTHING anywhere
              (D-81-5 changes-only: no-op logins write zero rows/logs).
-             Downgrades are Phase 82. */
-          const existing = await db.get('select role from memberships where workspace_id = ? and user_id = ?', [ws.id, row.id]);
-          if (existing && !(ROLE_RANK_WITH_VIEWER[grant.role] > ROLE_RANK_WITH_VIEWER[existing.role])) continue;
-          await addMembership(ws, row, grant.role, [], 'group:' + grant.groupGuid);
+             Downgrades are Phase 82 Plan 02. */
+          if (existing && !(ROLE_RANK_WITH_VIEWER[mapped.role] > ROLE_RANK_WITH_VIEWER[existing.role])) continue;
+          await addMembership(ws, row, mapped.role, [], 'group:' + mapped.groupGuid);
           /* D-81-4/5 changes-only verbs: a genuine upgrade of an existing row
              logs sso_group_role_change, a fresh insert logs sso_group_grant,
-             a skip logs nothing. Provenance keeps the row's ORIGINAL creation
-             origin (D-81-7 — the conflict-update never touches it). */
+             a skip logs nothing. Provenance follows the GROUP writer's role
+             per D-82-7 (amends D-81-7 — the conditional conflict-update lets
+             a group-shaped value own the role it set; manual/invite writers
+             still preserve creation origin). */
           await logSecurity(row.id, existing ? 'sso_group_role_change' : 'sso_group_grant');
         }
         /* Phase 81 (GO-01/GO-02, D-81-4): operator self-grant — mirror the console
