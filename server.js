@@ -98,6 +98,12 @@ import {
   ftsSweep,
 } from './db-adapter.mjs';
 import { searchTerms, foldForSearch } from './search-terms.mjs';
+/* Phase 80 (GM-01): the group-mapping validators the save route consumes —
+   canonicalizeGuid/guidRefusal/roleTokenRefusal from the 80-01 core. Runtime
+   import of a root module → the Dockerfile COPY list and
+   test/dependencies.test.mjs must ship groups.js too (Task 3, G-75-3
+   precedent). */
+import { canonicalizeGuid, guidRefusal, roleTokenRefusal } from './groups.js';
 /* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
    snapshots READ-ONLY (never through the adapter — they are historical files,
    not the live handle). Sole direct node:sqlite use in server.js. */
@@ -7112,6 +7118,67 @@ async function handleApi(req, res, url) {
     await logSecurity(operator.id, 'member_reassigned');
     logInfo(`member reassigned (governance) from "${ws.slug}" to "${target.slug}" as ${role}: ${targetUserId} by ${operator.email}`);
     return json(res, 200, { reassigned: true, workspace: { id: target.id, slug: target.slug, role } });
+  }
+
+  /* -------------- group mapping config save (Phase 80, GM-01) --------------
+     Mappings enter the DB ONLY through this operator-gated, fully-validated
+     route — nothing invalid is ever stored (T-80-05), and the operator gate
+     runs BEFORE any target lookup so a non-operator cannot distinguish
+     bad-guid from bad-workspace (T-80-04, Pitfall 4: no existence oracle).
+     Guard order mirrors the operator family verbatim (Pitfall 22). Validation
+     rides the 80-01 groups.js funnel (guidRefusal, roleTokenRefusal on the
+     locked 3-token set — 'viewer' refuses at save) plus the two DB checks
+     shape alone cannot decide: workspace existence (a workspace id is
+     GUID-shaped too) and the (guid, workspace) duplicate pre-check. */
+  if (pathname === '/api/governance/group-mappings' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // T-80-04: the operator gate BEFORE any target lookup — an
+    // unauthenticated caller gets the generic 401, a non-operator the exact
+    // 403 operatorOnly regardless of body validity.
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const body = await readJson(req);
+    // T-80-05: allow-list validation completes BEFORE any write — validate
+    // everything, store nothing until every check passes. The codes are
+    // passed EXPLICITLY at this call site (the domains.js door precedent):
+    // the keyed refusal literal lives where the route emits it.
+    const guidR = guidRefusal(body?.groupGuid, 'groupMappingBadGuid', 'Group ID must be an Entra Object ID (GUID)');
+    if (guidR) return fail(res, 400, guidR.code, guidR.message);
+    const guid = canonicalizeGuid(body.groupGuid);
+    const roleR = roleTokenRefusal(body?.role, 'groupMappingBadRole', 'Role must be owner, admin, or member');
+    if (roleR) return fail(res, 400, roleR.code, roleR.message);
+    const workspaceId = String(body?.workspaceId || '');
+    const ws = await db.get('select id from workspaces where id = ?', [workspaceId]);
+    if (!ws) return fail(res, 400, 'groupMappingUnknownWorkspace', 'No workspace with that ID exists');
+    const dup = await db.get('select 1 from group_mappings where group_guid = ? and workspace_id = ?', [guid, ws.id]);
+    if (dup) return fail(res, 400, 'groupMappingDuplicate', 'That group is already mapped to this workspace');
+    // T-80-07 (accepted): label is opaque display-only text — never a match
+    // key, never rendered until Phase 83 (escaping happens there).
+    const label = String(body?.label || '').trim().slice(0, 200) || null;
+    const t = now();
+    const row = {
+      id: uid(),
+      group_guid: guid,
+      workspace_id: ws.id,
+      role: body.role,
+      kind: 'workspace',
+      label,
+      created_by: operator.id,
+      created_at: t,
+      updated_at: t,
+    };
+    await db.run(
+      'insert into group_mappings (id, group_guid, workspace_id, role, kind, label, created_by, created_at, updated_at) values (?,?,?,?,?,?,?,?,?)',
+      [row.id, row.group_guid, row.workspace_id, row.role, row.kind, row.label, row.created_by, row.created_at, row.updated_at],
+    );
+    // Research Open Question 3: audit the mutation cheaply now, avoid the
+    // Phase 83 retrofit (same logSecurity discipline as the operator family).
+    await logSecurity(operator.id, 'group_mapping_saved');
+    logInfo(`group mapping saved: group ${guid} → workspace ${ws.id} as ${row.role} by ${operator.email}`);
+    return json(res, 200, {
+      mapping: { id: row.id, groupGuid: row.group_guid, workspaceId: row.workspace_id, role: row.role, kind: row.kind, label: row.label },
+    });
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
