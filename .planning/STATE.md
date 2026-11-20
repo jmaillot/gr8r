@@ -5,16 +5,16 @@ milestone_name: Workspace Governance
 current_phase: 79
 current_phase_name: Governance Surface
 status: executing
-stopped_at: Completed 79-01-PLAN.md
-last_updated: "2026-11-20T06:53:41.284Z"
+stopped_at: Completed 79-02-PLAN.md
+last_updated: "2026-11-20T07:11:52.407Z"
 last_activity: 2026-11-20
 last_activity_desc: Phase 79 execution started
-state_head: ee54738595c5888e19003dfb5415ebedec74421a
+state_head: 52e20f853f50e2225c307c8c71e95c637109293b
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 50
 ---
 
@@ -31,7 +31,7 @@ before features.
 ## Current Position
 
 Phase: 79 (Governance Surface) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-11-20 — Phase 79 execution started
 
@@ -57,6 +57,7 @@ Last activity: 2026-11-20 — Phase 79 execution started
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 79 P01 | 31 min | 3 tasks | 10 files |
+| Phase 79 P79-02 | 13m | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Recent decisions affecting current work:
 - 76-02: immunity is test-only proof (zero production diffs in plan 02) — prohibition enforced
 - [Phase 79]: 79-01: governance routes fetch workspace rows by id via db.get — never requireWorkspace (unarchive stays possible); creator derived from the owner-membership LEFT JOIN, no created_by column
 - [Phase 79]: 79-01: memberAlreadyMember is a keyed 409 refusal (not silent upsert); delete content check reads the RAW doc; audit verbs workspace_archived/unarchived/deleted, member_reassigned/released — all inside the mutation db.tx
+- [Phase 79]: Orphan modal rides an additive generic 'custom' modal host (chunk-backed, assignee-picker precedent) — no governance branch in the modal switch
+- [Phase 79]: Governance Delete renders on every row — the server is the authority; unarchive skips type-to-confirm (reversible), archive/delete confirm by slug, release by member email (D-04)
 
 ### Pending Todos
 
@@ -113,6 +116,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T06:53:32.949Z
-Stopped at: Completed 79-01-PLAN.md
+Last session: 2026-11-20T07:11:52.364Z
+Stopped at: Completed 79-02-PLAN.md
 Resume file: None
