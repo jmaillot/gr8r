@@ -964,11 +964,43 @@ async function membershipOf(workspaceId, userId) {
 }
 
 async function membershipsOf(userId) {
-  return await db.all(
+  /* [2026-11-20, owner quick-task] Instance-admin super-access (server side):
+     the operator's membership list is UNIONed with every workspace in the
+     instance, so the switcher lists them all ("Governance + switcher" entry
+     decision). Real memberships keep their real role/member_id; foreign ones
+     get the same synthetic shape requireWorkspace synthesizes — owner while
+     active, viewer once archived (read-only entry, 79-D-02 preserved for
+     members). dedup by id, real membership wins.
+     NOTE the two redirect consumers (workspace delete / leave "nextSlug")
+     use membershipsOnly below — redirecting into a foreign workspace the
+     operator merely super-accesses would be surprising; they keep landing on
+     a REAL membership. */
+  const rows = await db.all(
     `select w.*, m.role, m.member_id
        from memberships m join workspaces w on w.id = m.workspace_id
       where m.user_id = ? and w.archived = 0
       order by w.created_at, w.name collate nocase`,
+    [userId],
+  );
+  const user = await db.get('select is_instance_admin from users where id = ?', [userId]);
+  if (!user || !user.is_instance_admin) return rows;
+  const all = await db.all('select * from workspaces order by created_at, name');
+  const byId = new Map(rows.map(r => [r.id, r]));
+  for (const w of all) {
+    if (!byId.has(w.id)) {
+      byId.set(w.id, { ...w, role: w.archived === 1 ? 'viewer' : 'owner', member_id: null, origin: null });
+    }
+  }
+  return [...byId.values()].sort((a, b) => a.created_at - b.created_at || a.name.localeCompare(b.name));
+}
+
+/* Real membership rows only (no super-access union) — delete/leave redirects. */
+async function membershipsOnly(userId) {
+  return await db.all(
+    `select w.*, m.role, m.member_id
+       from memberships m join workspaces w on w.id = m.workspace_id
+      where m.user_id = ? and w.archived = 0
+      order by w.created_at, w.name`,
     [userId],
   );
 }
@@ -1282,6 +1314,17 @@ function projectPermFor(p, memberId, memberTeams = [], role = null) {
  * hiddenProjectIds path (exemption on top, D-06).
  */
 async function hiddenFor(doc, membership) {
+  /* [2026-11-20, owner quick-task] Super-access: the SYNTHETIC operator
+     membership (member_id null — an instance admin entering a workspace they
+     have no membership in) reads every project, private ones included. This
+     deliberately does NOT widen real owner-rank memberships: D-50-5 keeps
+     real owners/admins blind to private projects they are not on (pinned at
+     test/privacy.test.mjs:236 and the phase-03 matrix). The
+     hiddenProjectIds(doc, null) fallback below serves caller shapes without
+     a membership row. */
+  if (membership && membership.member_id === null && ROLE_RANK[membership.role] >= ROLE_RANK.owner) {
+    return new Set();
+  }
   if (membership?.workspace_id && ROLE_RANK[membership.role] < ROLE_RANK.admin) {
     const memberId = membership.member_id || null;
     /* [2026-11-08 D-50-5] the member's LIVE team ids, resolved once per funnel
@@ -4911,7 +4954,27 @@ async function requireWorkspace(req, res, slug, minRole = 'viewer') {
   const user = await requireUser(req, res);
   if (!user) return null;
   const ws = await wsBySlug(slug);
-  const membership = ws ? await membershipOf(ws.id, user.id) : null;
+  let membership = ws ? await membershipOf(ws.id, user.id) : null;
+  /* [2026-11-20, owner quick-task] Instance-admin super-access: an operator
+     entering a workspace they hold NO membership in acts as owner inside it
+     (owner ratification: "operator = owner inside"), without a memberships
+     row — the member list stays honest (no auto-membership). The synthetic
+     membership carries member_id = null: project-lead checks (canManageProject
+     short-circuits on role, and lead===null never matches), member-scoped
+     queries skip it, and every governance-actionable mutation already logs
+     the actor's email. Archived workspaces: the operator may ENTER (79-D-02
+     blocked members only) but read-only — rank stays below admin so every
+     content write fails the role check naturally; no new gate vocabulary. */
+  const isOperator = !membership && ws && isInstanceAdmin(user);
+  if (isOperator) {
+    membership = {
+      workspace_id: ws.id,
+      user_id: user.id,
+      member_id: null,
+      role: ws.archived === 1 ? 'viewer' : 'owner',
+      origin: null, // not a real grant — never reconciled by group sync (GS-01)
+    };
+  }
   if (!ws || !membership) {
     fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     return null;
@@ -4920,8 +4983,11 @@ async function requireWorkspace(req, res, slug, minRole = 'viewer') {
      funnel — every /api/workspaces/:slug route rides this one check, no
      per-route filtering. Operators reach workspace data only through the
      governance routes (which never ride requireWorkspace — Pitfall 3), so
-     no operator bypass exists here: members simply can't enter. */
-  if (ws.archived === 1) {
+     no operator bypass exists here: members simply can't enter.
+     [2026-11-20] revised by owner decision: the instance admin MAY enter an
+     archived workspace (read-only via the synthetic viewer membership above);
+     real members still can't. */
+  if (ws.archived === 1 && !isOperator) {
     fail(res, 403, 'workspaceArchived', 'This workspace is archived');
     return null;
   }
@@ -7782,7 +7848,7 @@ async function handleApi(req, res, url) {
     });
     if (deletedLogo) fs.unlink(path.join(LOGOS_DIR, deletedLogo), () => {});
     logInfo(`workspace deleted "${ctx.ws.name}" (slug: ${ctx.ws.slug}) by ${ctx.user.email}`);
-    return json(res, 200, { deleted: true, nextSlug: (await membershipsOf(ctx.user.id))[0]?.slug || null });
+    return json(res, 200, { deleted: true, nextSlug: (await membershipsOnly(ctx.user.id))[0]?.slug || null });
   }
 
   /* ------------------------------- members ------------------------------- */
@@ -7813,7 +7879,7 @@ async function handleApi(req, res, url) {
       await updateDoc(ctx.ws.id, doc => stripMember(doc, ctx.membership.member_id, ctx.user.id));
     });
     logInfo(`member left workspace "${ctx.ws.slug}": ${ctx.user.email}`);
-    return json(res, 200, { left: true, nextSlug: (await membershipsOf(ctx.user.id))[0]?.slug || null });
+    return json(res, 200, { left: true, nextSlug: (await membershipsOnly(ctx.user.id))[0]?.slug || null });
   }
 
   const wsMemberMatch = pathname.match(/^\/api\/workspaces\/([a-z0-9-]{2,40})\/members\/([A-Za-z0-9_-]{1,64})$/);
@@ -8098,10 +8164,17 @@ async function handleApi(req, res, url) {
     normalizeProjects(doc);
     const memberTeams = await teamsOfMember(ctx.ws.id, myId, ctx.membership);
     const projects = [];
+    /* [2026-11-20, owner quick-task] Super-access: an operator without a real
+       membership (member_id null) acts as owner inside — they read every
+       project, private ones included, via the owner rank. The per-project
+       memberCanReadProject funnel is member-scoped and can never admit a
+       null member, so the owner-rank short-circuit comes first (mirrors
+       canManageProject's role check). */
+    const superOwner = ROLE_RANK[ctx.membership.role] >= ROLE_RANK.owner && ctx.membership.member_id === null; // synthetic operator membership only — D-50-5 keeps real owners blind (privacy.test.mjs:236)
     for (const p of doc?.data?.projects || []) {
       if (!p?.id) continue;
-      if (!(await memberCanReadProject(p, ctx.ws.id, myId))) continue;
-      const reason = projectAccessReason(p, myId, memberTeams) ?? 'member';
+      if (!superOwner && !(await memberCanReadProject(p, ctx.ws.id, myId))) continue;
+      const reason = superOwner ? 'member' : projectAccessReason(p, myId, memberTeams) ?? 'member';
       const entry = { id: p.id, name: p.name || p.id, reason };
       if (reason === 'team') {
         const tid = memberTeams.find(t => Array.isArray(p.teams) && p.teams.includes(t));

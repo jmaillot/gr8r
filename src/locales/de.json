@@ -2114,5 +2114,6 @@
   "toast.governanceArchived": "Workspace archiviert.",
   "toast.governanceUnarchived": "Workspace dearchiviert.",
   "toast.governanceDeleted": "Workspace gelöscht.",
-  "toast.governanceRenamed": "Workspace umbenannt."
+  "toast.governanceRenamed": "Workspace umbenannt.",
+  "page.governance.open": "Öffnen"
 }

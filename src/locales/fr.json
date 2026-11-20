@@ -2142,9 +2142,9 @@
   "page.governance.editTitle": "Modifier l’espace de travail",
   "page.governance.nameLabel": "Nom",
   "page.governance.slugLabel": "Slug (URL)",
-  "page.governance.slugTakenHint": "Ce slug est déjà pris — le serveur propose «\u00A0{slug}\u00A0».",
+  "page.governance.slugTakenHint": "Ce slug est déjà pris — le serveur propose « {slug} ».",
   "page.governance.adoptSlug": "Utiliser la suggestion",
-  "page.governance.confirmRenameTitle": "Renommer {name}\u202F?",
+  "page.governance.confirmRenameTitle": "Renommer {name} ?",
   "page.governance.confirmRenameBody": "L’ancien slug {old} cessera de fonctionner immédiatement et définitivement — les anciens liens renverront une erreur 404 sans redirection. Tapez {slug} pour confirmer.",
   "page.governance.okRename": "Renommer l’espace de travail",
   "page.governance.deadTitle": "Correspondances de groupe mortes",
@@ -2154,5 +2154,6 @@
   "toast.governanceArchived": "Espace de travail archivé.",
   "toast.governanceUnarchived": "Espace de travail désarchivé.",
   "toast.governanceDeleted": "Espace de travail supprimé.",
-  "toast.governanceRenamed": "Espace de travail renommé."
+  "toast.governanceRenamed": "Espace de travail renommé.",
+  "page.governance.open": "Ouvrir"
 }
