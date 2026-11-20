@@ -148,6 +148,47 @@ test('the operator api methods are called only from the governance path (actions
   assert.doesNotMatch(settings, /operatorUsers/, 'settings.js still touches the operator users state/fetch');
 });
 
+/* =====================================================================
+   79-03 TASK 2 — WSG-09 BEHAVIOR PINS: the governance page is the single
+   operator-management surface and the flow still works end-to-end
+   through the unchanged Phase 78 endpoints.
+   ===================================================================== */
+
+/* (a) the operator section renders ONLY when the server payload says isInstanceAdmin */
+test('the governance page renders the Operators section only for isInstanceAdmin (WSG-09, D-11/D-112)', () => {
+  const p = page();
+  assert.match(p, /api\.user\?\.isInstanceAdmin \? operatorCard\(\) : ''/, 'the operator section is not gated on the server isInstanceAdmin payload');
+  assert.match(p, /api\.user\?\.isInstanceAdmin && !S\.ui\.operatorUsers\) refreshOperatorUsers\(\)/, 'the operator users fetch is not gated on the server payload');
+  const card = p.match(/export function operatorCard\(\) \{[\s\S]*?\n\}/);
+  assert.ok(card, 'operatorCard not found in governance.js');
+  assert.match(card[0], /if \(!rows\) return '';/, 'the empty-state null guard moved');
+});
+
+/* (b) promote/demote/revoke still call the SAME Phase 78 api methods — no endpoint drift */
+test('the relocated promote/demote/revoke actions invoke the unchanged Phase 78 api methods', () => {
+  const a = actions();
+  assert.match(a, /const res = await api\.operatorPromote\(id\);/, 'promote drifted off the Phase 78 method');
+  assert.match(a, /const res = await api\.operatorDemote\(id\);/, 'demote drifted off the Phase 78 method');
+  assert.match(a, /const res = await api\.operatorRevokeSessions\(id\);/, 'revoke drifted off the Phase 78 method');
+  const api = src('src/core/api.js');
+  for (const m of ['operatorUsers\\(\\)', 'operatorPromote\\(userId\\)', 'operatorDemote\\(userId\\)', 'operatorRevokeSessions\\(userId\\)']) {
+    assert.match(api, new RegExp(m), `api method ${m} missing/renamed — endpoints must stay untouched (D-01)`);
+  }
+});
+
+/* (c) the lastOperator 409 refusal surfaces as an err toast through the EXISTING key — no new key invented */
+test('the lastOperator 409 code surfaces as an err toast using the existing err.lastOperator key in all 5 catalogues', () => {
+  for (const [lang, cat] of Object.entries({ en, fr, nl, de, es })) {
+    assert.ok(cat['err.lastOperator'], `${lang} catalogue lost err.lastOperator`);
+  }
+  const a = actions();
+  /* the demote path surfaces the server's refusal code through the tErr pipeline
+     (tErr resolves err.lastOperator for the 409 count guard) */
+  assert.match(a, /A\.operatorDemote = async el => \{[\s\S]{0,600}?const c = res\.data\?\.code;[\s\S]{0,200}?tErr\(c, null, res\.error \|\| t\('err\.serverUnreachable'\)\), \{ kind: 'err' \}/, 'the demote refusal pipeline moved');
+  // verbatim-reuse discipline: no new operator key was invented for the relocation
+  assert.equal(Object.keys(en).filter(k => k.startsWith('settings.operator.')).length, Object.keys(fr).filter(k => k.startsWith('settings.operator.')).length, 'catalogue drift on the reused operator keys');
+});
+
 /* (h) honest 403 fullstate for a non-operator deep link */
 test('a non-operator deep link renders the 403 fullstate (lock, err.code403, err.operatorOnly, home)', () => {
   const p = page();
