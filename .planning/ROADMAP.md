@@ -43,7 +43,7 @@ already reaches the client.
 - Decimal phases (78.1, …): urgent insertions (marked INSERTED)
 
 - [x] **Phase 78: Creation Gate & Instance-Owner Identity** - Boolean `WORKSPACE_CREATION=true|false` (boot-refuse on invalid, unset=false), POST gate via isInstanceAdmin, boot log, /api/config, operator console promote/demote + last-operator guard, client create-button gating + "await access" auto-poll page *(complete — 78-01 server + 78-02 client; WSG-06/10/11 delivered)*
-- [ ] **Phase 79: Governance Surface** - Operator-scoped all-workspaces listing + management page (delete/archive, member reassignment); operator promote/demote lives in the Phase 78 console, linked or relocated here
+- [x] **Phase 79: Governance Surface** - Operator-scoped all-workspaces listing + management page (delete/archive, member reassignment); operator promote/demote lives in the Phase 78 console, linked or relocated here (completed 2026-11-20)
 
 ## Phase Details
 
@@ -121,7 +121,7 @@ gate and boot log define who reaches the page; `/api/config` carries the gate va
   5. Destructive actions (delete/archive, member release) are all confirmation-gated and
      appear in the audit trail; every new refusal key ships in all 5 locale catalogues in the
      same commit as the endpoint that emits it.
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 Plans:
 **Wave 1**
 - [x] 79-01-PLAN.md — Server: archived column + migration, requireWorkspace refusal, operator /workspaces route family (list/archive/delete/reassign/release) + governance server suite (WSG-07, WSG-08)
@@ -142,4 +142,4 @@ Phases execute in numeric order: 78 → 79
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 78. Creation Gate & Instance-Owner Identity | 2/2 | Complete | 2026-11-20 |
-| 79. Governance Surface | 3/3 | In Progress|  |
+| 79. Governance Surface | 3/3 | Complete    | 2026-11-20 |

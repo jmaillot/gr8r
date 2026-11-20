@@ -71,6 +71,22 @@ workspace on the instance — no shadow workspaces.
 - [x] **WSG-11**: Every user-facing refusal added by this milestone is keyed and present in all
   5 locale catalogues (en/fr/nl/de/es) in the same commit as the gate that emits it.
 
+## Traceability
+
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| WSG-01 | 78 | done |
+| WSG-02 | 78 | done |
+| WSG-03 | 78 | done |
+| WSG-04 | 78 | done |
+| WSG-05 | 78 | done |
+| WSG-06 | 78 | done |
+| WSG-07 | 79 | done |
+| WSG-08 | 79 | done |
+| WSG-09 | 79 | done |
+| WSG-10 | 78 | done |
+| WSG-11 | 78 | done |
+
 ## Out of Scope (this milestone)
 
 - Workspace settings editing (name/slug rename by instance operators) — deferred unless trivial
