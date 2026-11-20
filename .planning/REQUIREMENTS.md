@@ -1,0 +1,73 @@
+# Milestone v3.2 Requirements — Entra Group Mapping & Governance Backlog
+
+*Defined 2026-11-20 from research SUMMARY.md + owner decisions.*
+
+## Goal
+
+Let Entra ID groups drive gr8r workspace membership and operator rights at SSO login, and finish the deferred governance/backlog work.
+
+## Owner-Ratified Decisions
+
+- **D-82-1:** Multiple groups mapping one user to one workspace → **highest role wins**.
+- **D-82-2:** Group-derived role **wins over** an existing invite/manual grant role at login (group re-asserts each login).
+- **D-82-3:** Manual operator demotion is cleared and **re-granted at next login** by a mapped group (never mid-session).
+- **D-82-4:** Group-claim overage (`_claim_names`) → user proceeds **as unmapped** (no grants, no removals), login succeeds, warning logged.
+- **D-82-5:** After a rename changes the slug, the old slug **404s with no redirect**.
+- **D-82-6:** Dead mappings (deleted Entra group or deleted workspace ID) surface as a **warning section in the operator console** (plus boot log).
+
+## Requirements
+
+### Group Mapping — Config & Ingestion (GM)
+
+- [ ] **GM-01**: Operator can enable group mapping via env config (`GROUP_MAP` triples: Entra group Object ID → workspace ID → role) parsed with the tri-state strict-token pattern (unset = off, invalid = boot-refuse, boot-frozen consts, boot log).
+- [ ] **GM-02**: Server reads the `groups` claim (Object ID GUIDs) from the SSO ID token; `_claim_names` overage is detected and treated as unmapped per D-82-4 (never as an empty list).
+- [ ] **GM-03**: Mapping config keys are validated at boot: malformed GUIDs or unknown workspace IDs are refused or warned (dead mapping) — labels are display-only, never matching keys.
+
+### Group Mapping — Grant Path (GW)
+
+- [ ] **GW-01**: At SSO login, a user whose groups map to a workspace gains membership automatically (JIT-provisioned or existing account), with role = highest mapped role (D-82-1).
+- [ ] **GW-02**: Group-derived role re-asserts over an existing invite/manual grant at each login (D-82-2), while manual grants survive removal-sync (see GS-01 provenance).
+- [ ] **GW-03**: Group mapping runs strictly after the DP-4 signup door and before DP-5 invite reconciliation — group membership can never JIT-provision a domain-refused email.
+- [ ] **GW-04**: Membership rows created by groups carry provenance `group:<guid>` (new `memberships.provenance` column via `adapterEnsureColumn`); invite/manual rows carry their own provenance and are never touched by group logic.
+
+### Group Mapping — Operator Mapping (GO)
+
+- [ ] **GO-01**: Members of an Entra group mapped to operator are granted `is_instance_admin` at login; groups grant the flag, never revoke it (demoted-then-mapped users are re-granted at next login, D-82-3).
+- [ ] **GO-02**: Group-derived operator grants are audit-logged like console promote/demote actions.
+
+### Group Mapping — Removal Sync (GS)
+
+- [ ] **GS-01**: At login, a user no longer in any group mapping a workspace loses only their group-derived (`group:<guid>`) membership; invite/manual grants are immune.
+- [ ] **GS-02**: Removal sync routes through the shared guard funnel: removal of a workspace owner or last operator is refused (count-before-write), logged loudly, and **the login still succeeds** (skip-and-audit).
+- [ ] **GS-03**: Removal sync only downgrades role when a mapped role drops below the current grant AND the current grant is group-derived; manual/invite roles are never downgraded.
+- [ ] **GS-04**: All group-driven changes (grants, role changes, removals, skips) are audit-logged with group GUID and reason.
+
+### Governance — Workspace Settings Editing (GV)
+
+- [ ] **GV-01**: Operator can edit a workspace's name and slug from the /governance page (server-side validation, collision refusal, keyed 5-locale error messages).
+- [ ] **GV-02**: Renamed slug 404s at the old address with no redirect (D-82-5); destructive rename (slug change) requires confirm.
+- [ ] **GV-03**: Operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6.
+
+### Backlog Polish (BP)
+
+- [ ] **BP-01**: Searchable token-chip pickers for member/team selection inputs.
+- [ ] **BP-02**: Fix the 56-02 e2e spec failures.
+- [ ] **BP-03**: Phase 57 mobile layout follow-ups.
+
+## Future Requirements (deferred)
+
+- Graph overage fallback (`getMemberObjects` via client-credentials) — documented recipe in STACK.md; only needed if ApplicationGroup mode proves insufficient.
+- Admin-UI mapping editor (env triples are the v3.2 config surface; documented future trigger).
+- Periodic reconcile job (snapshot-at-login is the v3.2 semantics).
+- SCIM provisioning (anti-feature at gr8r's scale).
+
+## Out of Scope
+
+- **Group names/sAMAccountNames as matching keys** — Object IDs only (names are rename-able, non-unique).
+- **OBO Graph flows** — client-credentials (if ever needed) is simpler and sufficient.
+- **Removal-sync account deactivation** — group removal touches membership/operator grants only, never the account.
+- **Redirect machinery for old slugs** — documented link death (D-82-5).
+
+## Traceability
+
+*Filled by /gsd-new-milestone roadmap step.*
