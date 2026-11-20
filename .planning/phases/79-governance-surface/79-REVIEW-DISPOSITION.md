@@ -1,10 +1,10 @@
 ---
 phase: 79-governance-surface
-generated: 2026-11-20T08:15:00Z
+generated: 2026-11-20T08:40:00Z
 review_status: issues_found
 total: 7
-open: 3
-fixed: 4
+open: 0
+fixed: 7
 skipped: 0
 severity:
   critical: 2
@@ -24,6 +24,6 @@ is preserved across runs.
 | CR-02: Stored XSS — orphan modal title interpolates a raw workspace name into modal HTML | critical | fixed | fix(79): ee9c9397 |
 | WR-01: err.memberAlreadyMember toast renders with an unresolved {name} placeholder | warning | fixed | fix(79): 7706e4a0 |
 | WR-02: Governance reassign accepts an ARCHIVED destination workspace — members land somewhere they can never enter | warning | fixed | fix(79): 53278ea3 |
-| IN-01: Dead client code — A.govReleaseAsk, api.operatorWsReassign, api.operatorWsRelease have no call sites | info | open | |
-| IN-02: Stale comment in settings.js still points at the relocated operator card | info | open | |
-| IN-03: Workspace search input reuses member-search a11y labels | info | open | |
+| IN-01: Dead client code — A.govReleaseAsk, api.operatorWsReassign, api.operatorWsRelease have no call sites | info | fixed | fix(79): 6bf55c6d |
+| IN-02: Stale comment in settings.js still points at the relocated operator card | info | fixed | fix(79): 14674145 |
+| IN-03: Workspace search input reuses member-search a11y labels | info | fixed | fix(79): c1f02722 |
