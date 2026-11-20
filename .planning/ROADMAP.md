@@ -21,6 +21,7 @@
 ## Phase Details
 
 ### Phase 80: Group Mapping Core — Parser, Resolver, Overage Detection
+
 **Goal**: The mapping configuration and claim-ingestion primitives exist as a fully-tested, inert server module — nothing about login behavior changes yet
 **Depends on**: Nothing (first phase)
 **Requirements**: GM-01, GM-02, GM-03
@@ -29,13 +30,15 @@
   2. The server reads the `groups` claim from the ID token; an `_claim_names` overage pointer is detected and resolved as UNMAPPED (never as an empty group list), proven by claim-object fixture tests on `resolveGroupsClaim` (the decoded-claims object `verifyIdToken()` hands over — full token integration lands in Phase 81)
   3. Malformed GUIDs or unknown workspace IDs in the mapping config are refused or warned as dead mappings at boot; display labels are never used as match keys
   4. With no mapping env set, the server boots and behaves byte-identically to today (all existing suites green, no behavior change)
-**Plans**: 2 plans
+
+**Plans**: 1/2 plans executed
 
 Plans:
-- [ ] 80-01-PLAN.md — groups.js core (validators, four-outcome overage detector, D-82-1 resolver) + dual-schema group_mappings table with fixture tests
+- [x] 80-01-PLAN.md — groups.js core (validators, four-outcome overage detector, D-82-1 resolver) + dual-schema group_mappings table with fixture tests
 - [ ] 80-02-PLAN.md — operator-gated save API with keyed 5-locale refusals + boot dead-mapping warning + Dockerfile/dependency-test updates
 
 ### Phase 81: Group Grant Path — Callback Wiring + Provenance
+
 **Goal**: At SSO login, mapped groups automatically grant workspace membership (with highest-role precedence) and instance-operator rights — grants only; nothing is ever removed by groups yet
 **Depends on**: Phase 80
 **Requirements**: GW-01, GW-02, GW-03, GW-04, GO-01, GO-02
@@ -45,9 +48,11 @@ Plans:
   3. Group-created membership rows carry provenance `group:<guid>` (new `memberships.provenance` column via `adapterEnsureColumn`); invite/manual rows carry their own provenance and group logic never touches them
   4. A member of the operator-mapped group gains `is_instance_admin` at login (grant-only, never revoked mid-milestone; demoted-then-mapped users are re-granted at next login per D-82-3), and every group-derived operator grant is audit-logged like a console promote
   5. With groups present but the user unmapped, login behavior is byte-identical to pre-milestone (regression gate)
+
 **Plans**: TBD
 
 ### Phase 82: Removal Sync + Guards + Audit
+
 **Goal**: Lost group membership at login removes only group-derived access, safely — owners, last operators and manual grants are protected, and every group-driven delta is audit-logged
 **Depends on**: Phase 81 (needs the `memberships.provenance` column)
 **Requirements**: GS-01, GS-02, GS-03, GS-04
@@ -57,9 +62,11 @@ Plans:
   3. Group-driven role downgrades apply only when the mapped role drops below the current grant AND the current grant is group-derived; manual/invite roles are never downgraded
   4. Every group-driven change (grant, role change, removal, skip) is audit-logged with the group GUID and reason
   5. With an `_claim_names` overage at login, the user proceeds as unmapped: no grants AND no removals, login succeeds, warning logged (D-82-4)
+
 **Plans**: TBD
 
 ### Phase 83: Governance — Workspace Rename & Slug Edit
+
 **Goal**: Operators can rename a workspace and edit its slug from the /governance page, with honest link death and dead-mapping visibility
 **Depends on**: Nothing (fully parallel with Phases 80–82; only the i18n key gate is shared)
 **Requirements**: GV-01, GV-02, GV-03
@@ -68,10 +75,12 @@ Plans:
   2. After a slug change, the old slug answers 404 with no redirect (D-82-5); the slug-change action requires an explicit confirm (destructive-action rule)
   3. The operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6, with the same condition surfaced in the boot log
   4. Non-operators cannot reach or use the rename endpoints (owner/operator scoping, no existence leak)
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 84: Backlog Polish & Ship
+
 **Goal**: The deferred backlog is cleared and the milestone ships — searchable pickers, green e2e debt, mobile follow-ups, operator docs, version bump
 **Depends on**: Phases 80–83 (ship gate)
 **Requirements**: BP-01, BP-02, BP-03
@@ -80,13 +89,14 @@ Plans:
   2. The 56-02 e2e spec failures are fixed — the full e2e suite runs green without waivers
   3. Phase 57 mobile layout follow-ups are delivered and pinned by e2e at mobile viewport
   4. DEPLOY.md documents the Entra-side prerequisites (ApplicationGroup claim config, optional overage fallback recipe, dead-mapping runbook, old-slug policy) and package.json is bumped to 3.2.0
+
 **Plans**: TBD
 
 ## Progress Table
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 80. Group Mapping Core | 0/? | Not started | - |
+| 80. Group Mapping Core | 1/2 | In Progress|  |
 | 81. Group Grant Path | 0/? | Not started | - |
 | 82. Removal Sync + Guards | 0/? | Not started | - |
 | 83. Governance Rename/Slug | 0/? | Not started | - |

@@ -2,14 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-status: roadmap_created
-last_updated: "2026-11-20T10:30:00.000Z"
+current_phase: 80
+current_phase_name: Group Mapping Core — Parser, Resolver, Overage Detection
+status: executing
+stopped_at: Completed 80-01-PLAN.md
+last_updated: "2026-11-20T10:33:18.384Z"
 last_activity: 2026-11-20
+last_activity_desc: Phase 80 execution started
+state_head: 848a13e2eebb9e2348afa9cca0f54ce7645da66c
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,16 +26,16 @@ See: .planning/PROJECT.md (updated 2026-11-20)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** v3.2 Phase 80 — Group Mapping Core (parser, resolver, overage detection)
+**Current focus:** Phase 80 — Group Mapping Core — Parser, Resolver, Overage Detection
 
 ## Current Position
 
-Phase: 80 (Group Mapping Core — not started)
-Plan: —
-Status: Roadmap created, awaiting approval → /gsd-plan-phase 80
-Last activity: 2026-11-20 — v3.2 roadmap created (5 phases, 19/19 requirements mapped)
+Phase: 80 (Group Mapping Core — Parser, Resolver, Overage Detection) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-11-20 — Phase 80 execution started
 
-Progress: [░░░░░░░░░░] 0/5 phases
+Progress: [░░░░░░░░░░] 0%
 
 ## Milestone v3.2 Phase Map
 
@@ -62,6 +67,11 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 | 84 | 0 | - | - |
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 80 P01 | 8 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -80,6 +90,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
 - D-82-1 highest role wins · D-82-2 group re-asserts over manual grants at login · D-82-3 operator
   demotion cleared then re-granted at next login · D-82-4 overage proceeds as unmapped ·
   D-82-5 old slug 404s, no redirect · D-82-6 dead mappings surface in operator console + boot log
+- [Phase 80]: group_mappings carries a kind column ('workspace'|'operator') implementing the dedicated operator-mapping row kind now, so Phase 81 passes claims without config migration
+- [Phase 80]: Non-array groups claim stays fail-closed (unmapped/shape); operatorFlag is true|null tri-state, never false
 
 ### Pending Todos
 
@@ -104,8 +116,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20
-Stopped at: v3.2 roadmap created (Phases 80–84) — awaiting orchestrator approval
+Last session: 2026-11-20T10:33:05.171Z
+Stopped at: Completed 80-01-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

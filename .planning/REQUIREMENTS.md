@@ -20,8 +20,8 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 ### Group Mapping — Config & Ingestion (GM)
 
 - [ ] **GM-01**: Operator can manage group mapping configuration in-app (DB-backed, edited from the /governance page in Phase 83); save-time validation refuses malformed GUIDs, unknown workspace IDs, and invalid role tokens with keyed errors; mappings become dead only by later deletion (warned at boot + console, D-82-6). *(Owner decision 2026-11-20: env-var config superseded by in-app DB config.)*
-- [ ] **GM-02**: Server reads the `groups` claim (Object ID GUIDs) from the SSO ID token; `_claim_names` overage is detected and treated as unmapped per D-82-4 (never as an empty list).
-- [ ] **GM-03**: Mapping config keys are validated at boot: malformed GUIDs or unknown workspace IDs are refused or warned (dead mapping) — labels are display-only, never matching keys.
+- [x] **GM-02**: Server reads the `groups` claim (Object ID GUIDs) from the SSO ID token; `_claim_names` overage is detected and treated as unmapped per D-82-4 (never as an empty list).
+- [x] **GM-03**: Mapping config keys are validated at boot: malformed GUIDs or unknown workspace IDs are refused or warned (dead mapping) — labels are display-only, never matching keys.
 
 ### Group Mapping — Grant Path (GW)
 
@@ -73,8 +73,8 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | GM-01 | Phase 80 | Pending |
-| GM-02 | Phase 80 | Pending |
-| GM-03 | Phase 80 | Pending |
+| GM-02 | Phase 80 | Complete |
+| GM-03 | Phase 80 | Complete |
 | GW-01 | Phase 81 | Pending |
 | GW-02 | Phase 81 | Pending |
 | GW-03 | Phase 81 | Pending |
