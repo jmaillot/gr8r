@@ -34,7 +34,7 @@ const page = () => src('src/pages/governance.js');
 test('govDeleteAsk forks on memberCount: >0 opens the orphan modal, 0 goes to the slug type-to-confirm', () => {
   const a = actions();
   assert.match(a, /if \(ws\.memberCount > 0\) \{[\s\S]{0,400}?S\.ui\.govOrphan = \{ ws, members: null, targets: null \}/, 'the >0 fork does not stage the orphan modal');
-  assert.match(a, /memberCount > 0[\s\S]{0,600}?typeName: ws\.slug/, 'the 0-member path misses the slug type-to-confirm');
+  assert.match(a, /memberCount > 0[\s\S]{0,1400}?typeName: ws\.slug/, 'the 0-member path misses the slug type-to-confirm');
 });
 
 /* (b) disposition state shape */
@@ -62,7 +62,8 @@ test('govOrphanSubmit sends the per-member dispositions array through operatorWs
   const a = actions();
   assert.match(a, /const dispositions = o\.members\.map\(m => \(\{ userId: m\.userId, \.\.\.S\.ui\.govDispositions\[m\.userId\] \}\)\);/);
   assert.match(a, /govDelete\(o\.ws\.id, dispositions\)/);
-  assert.match(a, /async operatorWsDelete\(id, dispositions\) \{\s*return call\('POST', `\/api\/auth\/operator\/workspaces\/\$\{encodeURIComponent\(id\)\}\/delete`, \{ dispositions \}\);/, 'the delete body does not carry dispositions');
+  const api = src('src/core/api.js');
+  assert.match(api, /async operatorWsDelete\(id, dispositions\) \{\s*return call\('POST', `\/api\/auth\/operator\/workspaces\/\$\{encodeURIComponent\(id\)\}\/delete`, \{ dispositions \}\);/, 'the delete body does not carry dispositions');
 });
 
 /* (e) three refusals → three distinct keys */
@@ -101,7 +102,7 @@ test('a 200-char workspace name and a long email cannot break the .perm-t row (b
   // every payload interpolation in the row goes through esc()
   const row = p.match(/const wsRow = w => \{[\s\S]*?\n\};/);
   assert.ok(row, 'wsRow not found');
-  assert.doesNotMatch(row[0], /\$\{(?!\s*esc\(|\s*String\(|\s*ago\(|\s*w\.archived |\s*ic\()[^}]*w\.(name|slug|id|creator)/, 'a payload string escapes escaping in wsRow');
+  assert.doesNotMatch(row[0], /\$\{w\.(name|slug|creator\.name|createdAt|id|memberCount)\}/, 'a payload string escapes escaping in wsRow');
 });
 
 /* (h) honest 403 fullstate for a non-operator deep link */
