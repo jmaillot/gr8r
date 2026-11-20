@@ -379,6 +379,58 @@ test('grant-path throw lands on /login?sso=error with no session and no partial 
 
 /* ------------------------------ tests ------------------------------ */
 
+/* Phase 82 Plan 02 Task 3 (D-82-10 byte-identical regression gate): a user
+   with NO group-derived rows and NO pending grants completes a mapped-shape
+   login (groups claim present, matching nothing they hold rows in) → ZERO
+   membership writes, ZERO group_% delta rows, ZERO security_log rows beyond
+   sso_login — the reconcile is byte-identical for the unmapped shape. */
+test('byte-identical gate: no group rows + no pending grants → zero writes, zero delta rows beyond sso_login (D-82-10)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    const { callback } = await runFlow(server, { sub: 'sub-byte-id', email: 'byteid@example.com', email_verified: true, groups: ['33111111-2222-3333-4444-555555555555'] }, 'code-byteid');
+    assert.equal(callback.location, '/', 'the mapped-shape login lands on /');
+    assert.ok(sessionCookieOf(callback.cookies), 'a session is minted as usual');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('byteid@example.com').id;
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0, 'ZERO membership writes');
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 0, 'ZERO group_% delta rows');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb != 'sso_login'").get(uid).n, 0, 'ZERO security_log rows beyond sso_login');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_login'").get(uid).n, 1, 'sso_login fires exactly once');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Phase 82 Plan 02 Task 3 step 2 (D-81-5 extended to the reconcile): a user
+   whose group row exactly matches the mapped role re-logs → zero writes,
+   zero delta audit rows. */
+test('no-op re-login pin: group row exactly matching the mapped role writes nothing on re-login (D-81-5 extended)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-noop', slug: 'noopws', name: 'Noop WS' });
+      seedMapping(db, { guid: '34111111-2222-3333-4444-555555555555', workspaceId: 'ws-noop', role: 'admin' });
+    });
+    const claims = { sub: 'sub-noop', email: 'noop@example.com', email_verified: true, groups: ['34111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-noop-1');
+    assert.equal(first.callback.location, '/');
+    const second = await runFlow(server, claims, 'code-noop-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('noop@example.com').id;
+      const rows = db.prepare('select * from memberships where user_id = ?').all(uid);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].role, 'admin');
+      assert.equal(rows[0].provenance, 'group:34111111-2222-3333-4444-555555555555');
+      const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_%'").all(uid).map(r => r.action);
+      assert.deepEqual(audits, ['group_granted:group:34111111-2222-3333-4444-555555555555'], 'exactly login 1’s grant row — the re-login added ZERO delta rows');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* Phase 82 Plan 02 Task 1 (GS-03, T-82-05): mapped-lower downgrades apply ONLY
    to group-derived rows; manual rows with the identical shape are immune.
    Part (a): group admin row + mapping lowered admin→member → downgraded with
