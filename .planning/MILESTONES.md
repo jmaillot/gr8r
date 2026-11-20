@@ -1,5 +1,18 @@
 # Milestones
 
+## v3.1 Workspace Governance (Shipped: 2026-11-20)
+
+**Phases completed:** 2 phases, 5 plans, 5 tasks
+
+**Key accomplishments:**
+- `WORKSPACE_CREATION` strict-token boot gate (unset=false fail-closed, boot-refuse on any other token) decoupled from `ALLOW_SIGNUP`, with operator-only closed-gate enforcement, `/api/config` boolean, and console-managed multi-seat operator promote/demote endpoints backed by transactional audit rows.
+- Gate-aware client — gated users lose every creation surface and get an honest await-access page with a 15 s visible-tab-only poll that soft-enters the app once membership or operator rights appear; operators manage multi-seat operator identity from the console (D-90 inline-confirm promote/demote on the 78-01 endpoints, lastOperator 409 as a keyed toast), proven end-to-end in the browser on a closed-gate throwaway server.
+- Soft-archive flag + operator-gated /api/auth/operator/workspaces route family (listing, archive/unarchive, empty-only delete with orphan dispositions, member reassign/release) behind the requireWorkspace archived funnel, proven by a 14-test RED→GREEN suite
+- Operator governance page (every-workspace table with filter/segments, slug type-to-confirm archive/delete, orphan disposition modal blocking until every member is reassigned or released) backed by 46 new locale keys × 5 catalogues and an 8-assertion TDD client suite.
+- operatorCard promote/demote/revoke UI relocated verbatim from Settings into the governance page as its Operators section — Settings stripped to zero remnants, Phase 78 endpoints untouched, full suite 1954 pass / 0 fail.
+
+---
+
 ## v3.0 Access Control & Hardening (Shipped: 2026-11-19)
 
 **Phases completed:** 3 phases, 7 plans, 10/10 requirements

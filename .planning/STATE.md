@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v3.1
 milestone_name: Workspace Governance
-current_phase: 79
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 79 complete — all phases complete
-last_updated: "2026-11-20T09:42:57.573Z"
+last_updated: "2026-11-20T09:44:21.586Z"
 last_activity: 2026-11-20
-last_activity_desc: Phase 79 complete
-state_head: 0938c8bae2cd90c0a6d28d412729257b65ec20f1
+last_activity_desc: Milestone v3.1 completed and archived
+state_head: b3b5c9004fb255439385765c9c57023fde088354
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 5
   completed_plans: 5
   percent: 100
+current_phase: 79
 ---
 
 # Project State
@@ -29,10 +29,10 @@ before features.
 
 ## Current Position
 
-Phase: 79
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-11-20 — Phase 79 complete
+Phase: Milestone v3.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-20 — Milestone v3.1 completed and archived
 
 ## Performance Metrics
 
@@ -121,3 +121,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 Last session: 2026-11-20T07:48:01.594Z
 Stopped at: Phase 79 complete — all phases complete
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
