@@ -80,7 +80,12 @@ Plans:
   3. The operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6, with the same condition surfaced in the boot log
   4. Non-operators cannot reach or use the rename endpoints (owner/operator scoping, no existence leak)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 83-01-PLAN.md — Wave 0 server test suite + operator rename route + on-read dead-mappings route + api client methods (tracer)
+- [ ] 83-02-PLAN.md — governance Edit modal + D-03 confirm fork + dead-mapping warning card + 5-locale keys + client assertions
+
 **UI hint**: yes
 
 ### Phase 84: Backlog Polish & Ship
