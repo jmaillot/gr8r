@@ -352,19 +352,19 @@ if (ws.archived === 1) {
 | A7 | Listing read route carries no throttle (mirrors Phase 78 read precedent) | Pattern 1 | Minor — an operator hammering refresh is not a threat model |
 | A8 | Listing SQL LEFT JOIN composition (creator via owner-membership) is correct as written | Code Examples | Wrong creator attribution — caught by the creator test |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should the owner-scoped `DELETE /api/workspaces/:slug` also gain the empty-only constraint?**
+1. **Should the owner-scoped `DELETE /api/workspaces/:slug` also gain the empty-only constraint?** — RESOLVED: leave untouched; plan 01 Task 1 documents the asymmetry in the route comment (owner DELETE predates this phase; D-03 scopes the refusal to the governance delete endpoint).
    - What we know: D-03 scopes the rule to "the endpoint refuses" in the governance context; the existing owner DELETE (server.js:7137) deletes any workspace with content and no decision changes it.
    - What's unclear: whether the owner retains the wider right (likely — it predates this phase and nothing in CONTEXT touches it).
    - Recommendation: leave untouched; document the asymmetry in the route comment; flag to the owner at verify if it feels wrong.
 
-2. **HTTP status for archived slug entry — 403 or 410?**
+2. **HTTP status for archived slug entry — 403 or 410?** — RESOLVED: 403 + `workspaceArchived` code per recommendation; plan 01 implements the refusal with the 403 status and keyed code.
    - What we know: D-02 says "keyed 'workspace archived' refusal"; the codebase's refusal vocabulary uses 403 for gate refusals and 404 for missing.
    - What's unclear: whether the client distinguishes "archived" from other 403s (it does — via the `code` field, like `dashboard.js:84` keys off status).
    - Recommendation: 403 + `workspaceArchived` code; consistency beats REST pedantry here.
 
-3. **Where in the sidebar the governance item sits.**
+3. **Where in the sidebar the governance item sits.** — RESOLVED: new "instance" sgroup below the Workspace group with the `isInstanceAdmin`-gated sItem; pinned by plan 02 Task 1 (wiring) and must_haves artifacts.
    - What we know: D-11 says "slot in the Phase 60 power-admin admin area"; the dashboard nav lives in the workspace group (layout.js:176), but governance is instance-scoped, not workspace-scoped.
    - What's unclear: exact nav placement/label (new "instance" group vs. beside dashboard).
    - Recommendation: planner decides under discretion; the route id, lazy import, and `isInstanceAdmin` gate are the fixed parts.
