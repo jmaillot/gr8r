@@ -354,6 +354,36 @@ export const api = {
   async operatorDemote(userId) {
     return call('POST', `/api/auth/operator/users/${encodeURIComponent(userId)}/demote`);
   },
+  /* 79-01 operator workspace governance (WSG-07/08, D-10): the route family
+     plan 01 shipped — the listing of EVERY workspace on the instance plus
+     archive/unarchive, the empty-only delete carrying orphan dispositions,
+     and the member reassign/release pair. Read routes carry no throttle;
+     every refusal surfaces as a keyed toast client-side, the server is the
+     authority (client gating is cosmetic, D-11). */
+  async operatorWorkspaces({ signal } = {}) {
+    return call('GET', '/api/auth/operator/workspaces', undefined, { signal });
+  },
+  /* 79-02 (D-05/D-08): the orphan modal's ground truth — the member list of
+     the workspace being deleted plus the reassign targets (name + member
+     count, delete target excluded). Fetched fresh at every modal open. */
+  async operatorWsMembers(id) {
+    return call('GET', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/members`);
+  },
+  async operatorWsArchive(id) {
+    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/archive`);
+  },
+  async operatorWsUnarchive(id) {
+    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/unarchive`);
+  },
+  async operatorWsDelete(id, dispositions) {
+    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/delete`, { dispositions });
+  },
+  async operatorWsReassign(id, userId, targetWorkspaceId, role) {
+    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/reassign`, { targetWorkspaceId, role });
+  },
+  async operatorWsRelease(id, userId) {
+    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/release`);
+  },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.
      D-52-3: the caller refetches on every open; nothing is cached here. */

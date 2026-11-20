@@ -4592,3 +4592,198 @@ A.onbFinish = async () => {
   go('project', { id: p.id, tab: S.prefs.defaultTab });
   toast(t('toast.welcomeTo', { name: D().ws.name }));
 };
+
+/* =====================================================================
+   79-02 GOVERNANCE (WSG-07/WSG-08 client half, D-02..D-06/D-08/D-11)
+   The operator's instance-wide workspace surface. Render-only from the
+   GET /api/auth/operator/workspaces payload (T-60-05 doctrine) — never
+   from the client document. One fill loop with a monotonic sequence +
+   in-flight abort (dashboard.js:27-46 pattern); NO auto-poll — this is
+   a low-frequency surface. Client confirm gates are UX only; the server
+   re-checks everything (D-11: the server 403/409 is the control).
+   ===================================================================== */
+let govFillSeq = 0;
+let govInflight = null;
+export async function refreshGovernanceWorkspaces() {
+  if (!api.enabled || !api.user?.isInstanceAdmin) return null;
+  const my = ++govFillSeq;
+  govInflight?.abort();
+  govInflight = new AbortController();
+  const res = await api.operatorWorkspaces({ signal: govInflight.signal });
+  if (my !== govFillSeq) return null;
+  if (res.ok) {
+    S.ui.govWs = res.data.workspaces || [];
+    S.ui.govWsErr = null;
+  } else {
+    /* D-28: the central intercept owns the 401 teardown. Any other refusal
+       surfaces through the page's honest fullstate — never a blank table. */
+    if (res.status !== 401) S.ui.govWsErr = { status: res.status };
+    return null;
+  }
+  render();
+  return S.ui.govWs;
+}
+A.govRetry = () => {
+  S.ui.govWsErr = null; // CR-01: recovery goes through the explicit retry action, never an auto re-kick
+  render();
+  refreshGovernanceWorkspaces();
+};
+IN.govQ = el => {
+  S.ui.govQ = el.value;
+  render();
+};
+A.govSeg = el => {
+  S.ui.govSegV = el.dataset.v;
+  render();
+};
+const govWsById = id => (S.ui.govWs || []).find(w => w.id === id);
+/* Pitfall 5 separation: the three delete-path refusals land on three DISTINCT
+   keyed toasts so the operator can tell exactly which list to fix. */
+const govRefusalToast = res => {
+  if (res.status === 401) return; // D-28: the central intercept owns the teardown
+  const code = res.data?.code;
+  const keyed = ['workspaceNotEmpty', 'dispositionRequired', 'memberAlreadyMember'].includes(code);
+  return toast(keyed ? t('err.' + code) : tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+};
+A.govArchiveAsk = el => {
+  const ws = govWsById(el.dataset.id);
+  if (!ws) return;
+  confirmDlg({
+    title: t('page.governance.confirmArchiveTitle', { name: ws.name }),
+    body: t('page.governance.confirmArchiveBody', { slug: `<b>${esc(ws.slug)}</b>` }),
+    ok: t('page.governance.okArchive'),
+    icon: 'archive',
+    danger: false, // amber tile — archive is reversible (D-02)
+    typeName: ws.slug, // D-04: type-to-confirm, exact match gates the OK
+    run: async () => {
+      const res = await api.operatorWsArchive(ws.id);
+      if (!res.ok) return govRefusalToast(res);
+      await refreshGovernanceWorkspaces();
+      toast(t('toast.governanceArchived'));
+    },
+  });
+};
+A.govUnarchive = el => {
+  const ws = govWsById(el.dataset.id);
+  if (!ws) return;
+  confirmDlg({
+    title: t('page.governance.confirmUnarchiveTitle', { name: ws.name }),
+    body: t('page.governance.confirmUnarchiveBody'),
+    ok: t('page.governance.okUnarchive'),
+    icon: 'archive',
+    danger: false,
+    /* D-02 discretion: unarchive is one click + confirm — NO type-to-confirm. */
+    run: async () => {
+      const res = await api.operatorWsUnarchive(ws.id);
+      if (!res.ok) return govRefusalToast(res);
+      await refreshGovernanceWorkspaces();
+      toast(t('toast.governanceUnarchived'));
+    },
+  });
+};
+A.govDeleteAsk = el => {
+  const ws = govWsById(el.dataset.id);
+  if (!ws) return;
+  /* D-05: a delete target WITH members opens the orphan disposition modal
+     first — every member is resolved (reassign or release) before the
+     delete can execute. A 0-member workspace goes straight to the slug
+     type-to-confirm. The server re-checks both regardless (T-79-02). */
+  if (ws.memberCount > 0) {
+    S.ui.govOrphan = { ws, members: null, targets: null };
+    S.ui.govDispositions = {};
+    openModal({ type: 'govOrphan' });
+    refreshGovOrphanMembers(ws.id);
+    return;
+  }
+  confirmDlg({
+    title: t('page.governance.confirmDeleteTitle', { name: ws.name }),
+    body: t('page.governance.confirmDeleteBody', { slug: `<b>${esc(ws.slug)}</b>` }),
+    ok: t('page.governance.okDelete'),
+    icon: 'trash-2',
+    danger: true, // red tile — hard delete is irreversible (D-03)
+    typeName: ws.slug,
+    run: () => govDelete(ws.id, []),
+  });
+};
+const govDelete = async (id, dispositions) => {
+  const res = await api.operatorWsDelete(id, dispositions);
+  if (!res.ok) {
+    /* D-06: the server's dispositionRequired refusal keeps the orphan modal
+       open with its own keyed toast — the operator finishes the list. */
+    if (S.ui.govOrphan && res.data?.code === 'dispositionRequired') return govRefusalToast(res);
+    S.ui.govOrphan = null;
+    closeModal();
+    return govRefusalToast(res);
+  }
+  S.ui.govOrphan = null;
+  S.ui.govDispositions = {};
+  closeModal();
+  await refreshGovernanceWorkspaces();
+  toast(t('toast.governanceDeleted'));
+};
+/* The orphan modal's ground truth: members + reassign targets come from the
+   server read (D-08: targets carry name + member count, delete target
+   excluded) — never synthesized client-side. */
+export async function refreshGovOrphanMembers(id) {
+  const res = await api.operatorWsMembers(id);
+  if (res.ok && S.ui.govOrphan?.ws?.id === id) {
+    S.ui.govOrphan.members = res.data.members || [];
+    S.ui.govOrphan.targets = res.data.targets || [];
+    render();
+  }
+}
+A.govOrphanPick = el => {
+  const uidm = el.dataset.id;
+  if (!S.ui.govDispositions) S.ui.govDispositions = {};
+  if (el.dataset.v === 'release') S.ui.govDispositions[uidm] = { type: 'release' };
+  /* D-08: the reassign default rides the first target + 'member' role; the
+     operator refines both in the same step — no multi-step wizard. */
+  else S.ui.govDispositions[uidm] = { type: 'reassign', wsId: el.dataset.ws || S.ui.govOrphan?.targets?.[0]?.id || '', role: 'member' };
+  render();
+};
+IN.govDest = el => {
+  const d = S.ui.govDispositions?.[el.dataset.id];
+  if (d?.type === 'reassign') d.wsId = el.value;
+  render();
+};
+IN.govRole = el => {
+  const d = S.ui.govDispositions?.[el.dataset.id];
+  if (d?.type === 'reassign') d.role = el.value;
+  render();
+};
+A.govOrphanCancel = () => {
+  S.ui.govOrphan = null;
+  S.ui.govDispositions = {};
+  closeModal();
+};
+A.govOrphanSubmit = async () => {
+  const o = S.ui.govOrphan;
+  if (!o?.members) return;
+  /* D-06 client half: no submit until every member carries a disposition —
+     the button is disabled in the markup; this guard is the second lock.
+     The server re-checks completeness regardless (T-79-02). */
+  const missing = o.members.some(m => !S.ui.govDispositions?.[m.userId]);
+  if (missing) return;
+  const dispositions = o.members.map(m => ({ userId: m.userId, ...S.ui.govDispositions[m.userId] }));
+  await govDelete(o.ws.id, dispositions);
+};
+/* D-04: standalone member release — type-to-confirm with the member's EMAIL
+   as the identifier ("or equivalent identifier" per D-04). Consumed by the
+   operator-management surface landing in plan 03. */
+A.govReleaseAsk = el => {
+  const email = el.dataset.email || '';
+  confirmDlg({
+    title: t('page.governance.confirmReleaseTitle', { name: el.dataset.name || email }),
+    body: t('page.governance.confirmReleaseBody', { email: `<b>${esc(email)}</b>` }),
+    ok: t('page.governance.okRelease'),
+    icon: 'trash-2',
+    danger: true,
+    typeName: email,
+    run: async () => {
+      const res = await api.operatorWsRelease(el.dataset.id, el.dataset.uid);
+      if (!res.ok) return govRefusalToast(res);
+      await refreshGovernanceWorkspaces();
+      toast(t('toast.governanceReleased', { name: el.dataset.name || email }));
+    },
+  });
+};

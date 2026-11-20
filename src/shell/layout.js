@@ -65,6 +65,9 @@ const P = {
   team: lazy(() => import('../pages/members.js'), 'pageTeam'),
   activity: lazy(() => import('../pages/activity.js'), 'pageActivity'),
   settings: lazy(() => import('../pages/settings.js'), 'pageSettings'),
+  /* 79-02 (WSG-07/D-11): the governance surface is instance-scoped and
+     operator-only — lazy-loaded like dashboard, never on the entry chunk. */
+  governance: lazy(() => import('../pages/governance.js'), 'pageGovernance'),
   system: lazy(() => import('../pages/design-system.js'), 'pageSystem'),
   states: lazy(() => import('../pages/design-system.js'), 'pageStates'),
   archive: lazy(() => import('../features/archive.js'), 'pageArchive'),
@@ -180,6 +183,12 @@ export function renderSidebar() {
         ${sItem('timeline', routeName('timeline'), 'chart-gantt')}
         ${sItem('members', routeName('members'), 'users')}
         ${sItem('activity', routeName('activity'), 'activity')}
+      </div>
+      <div class="sgroup">
+        <div class="sgroup-h">${t('common.instance')}</div>
+        ${/* 79-02 (D-11): UX gate only — the server 403 is the control (the
+           layout.js:175 doctrine applies verbatim to the instance scope). */ ''}
+        ${api.user?.isInstanceAdmin ? sItem('governance', routeName('governance'), 'scale') : ''}
       </div>
       <div class="sgroup" id="side-projects">
         <div class="sgroup-h"><span>${routeName('projects')}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newProject" data-tip="${t('a11y.newProjectTip')}" aria-label="${t('a11y.newProject')}">${ic('plus', 14)}</button></div>
