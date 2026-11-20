@@ -8,17 +8,17 @@ updated: 2026-11-20T16:10:00Z
 
 ## Current Test
 
-number: 1
-name: Open /governance as operator, click Edit on a workspace row
+number: 2
+name: Confirm fork — name-only vs slug change (D-03)
 expected: |
-  Modal opens with Name and Slug fields pre-filled, Cancel/Save footer
+  Edit a workspace changing only the name → direct save + success toast (governanceRenamed). Then edit again changing the slug → danger dialog appears with the bold esc() old slug and type-to-confirm on the old slug
 awaiting: user response
 
 ## Tests
 
 ### 1. Edit modal opens (D-01, D-02)
 expected: Open /governance as operator, click Edit on a workspace row → modal opens with Name and Slug fields pre-filled, Cancel/Save footer
-result: [pending]
+result: [passed]
 
 ### 2. Confirm fork — name-only vs slug change (D-03)
 expected: Edit a workspace changing only the name → direct save + success toast (governanceRenamed). Then edit again changing the slug → danger dialog appears with the bold esc() old slug and type-to-confirm on the old slug
@@ -43,9 +43,9 @@ result: [pending]
 ## Summary
 
 total: 6
-passed: 0
+passed: 1
 issues: 0
-pending: 6
+pending: 5
 skipped: 0
 blocked: 0
 
