@@ -184,7 +184,7 @@ export function govOrphanBody(o) {
     return `<div class="srow" data-uid="${esc(m.userId)}"><div><div class="row" style="gap:8px">${av(m.userId, 'sm', false)}<span class="t trunc">${esc(m.name || '')}</span><span class="faint trunc">${esc(m.email || '')}</span><span class="badge">${t('common.role.' + (m.role || 'member'))}</span></div>${pick}${detail}</div></div>`;
   };
   return `<div class="modal-b" style="padding-top:18px;gap:10px">
-    <h2 style="margin:0;font-size:16px">${t('page.governance.orphanTitle', { n: members.length, name: o?.ws?.name || '' })}</h2>
+    <h2 style="margin:0;font-size:16px">${t('page.governance.orphanTitle', { n: members.length, name: esc(o?.ws?.name || '') })}</h2>
     <p class="muted" style="margin:0;font-size:13px;line-height:1.55">${t('page.governance.orphanBody')}</p>
     ${members.map(row).join('')}
   </div>
