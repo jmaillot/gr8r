@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { test } from 'node:test';
-import { ADMIN, client, login, signup, startServer, withDb } from './helpers/server.mjs';
+import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
 
 const userRow = (srv, email) => withDb(srv.dbPath, db => db.prepare('select * from users where email = ?').get(email));
 const auditRows = srv => withDb(srv.dbPath, db => db.prepare('select * from audit_log order by created_at, id').all());
@@ -126,17 +126,17 @@ test('archive hides the workspace from the member listing and refuses slug entry
     assert.equal(entry.data.code, 'workspaceArchived');
 
     // hidden from the member's workspace list (membershipsOf filter)
-    const me = await owner.get('/api/me');
+    const me = await owner.get('/api/auth/me');
     assert.equal(me.status, 200);
-    assert.equal(me.data.workspaces?.find(w => w.slug === ws.slug), undefined, 'archived ws hidden from the member list');
+    assert.equal(me.data.user.workspaces?.find(w => w.slug === ws.slug), undefined, 'archived ws hidden from the member list');
 
     // unarchive restores access
     const unarchived = await operator.post(`/api/auth/operator/workspaces/${ws.id}/unarchive`);
     assert.equal(unarchived.status, 200, `unarchive must succeed, got ${unarchived.status}: ${JSON.stringify(unarchived.data)}`);
     const restored = await owner.get(`/api/workspaces/${ws.slug}`);
     assert.equal(restored.status, 200, 'slug entry restored');
-    const meAfter = await owner.get('/api/me');
-    assert.ok(meAfter.data.workspaces?.find(w => w.slug === ws.slug), 'workspace back in the member list');
+    const meAfter = await owner.get('/api/auth/me');
+    assert.ok(meAfter.data.user.workspaces?.find(w => w.slug === ws.slug), 'workspace back in the member list');
   } finally {
     await server.stop();
   }
@@ -251,8 +251,8 @@ test('standalone release: member with no other workspace ends with an empty work
     assert.equal(membershipsOfWs(server, ws.id).length, 0, 'the membership row is dropped');
 
     const member = (await login(server.base, 'solo-co-owner@test.local', 'password-1234')).client;
-    const me = await member.get('/api/me');
-    assert.deepEqual(me.data.workspaces, [], 'the released member is in the await-access state (empty list)');
+    const me = await member.get('/api/auth/me');
+    assert.deepEqual(me.data.user.workspaces, [], 'the released member is in the await-access state (empty list)');
   } finally {
     await server.stop();
   }
@@ -268,10 +268,10 @@ test('standalone reassign to a target where the member already holds a membershi
     await joined.client.post(`/api/invites/${invite.data.invites[0].url.split('/join/')[1]}/accept`, {
       name: 'Duper', email: 'duper@test.local', password: 'password-1234',
     });
-    const { ws: target } = await plainWorkspace(server.base, 'Target Co', 'target-co');
+    const { owner: targetOwner, ws: target } = await plainWorkspace(server.base, 'Target Co', 'target-co');
     const duperId = userRow(server, 'duper@test.local').id;
-    // duper joins the target workspace too (via its owner invite)
-    const tInvite = await joined.client.post(`/api/workspaces/${target.slug}/invites`, { emails: ['duper@test.local'], role: 'member' });
+    // duper joins the target workspace too (via the target workspace's owner invite)
+    const tInvite = await targetOwner.post(`/api/workspaces/${target.slug}/invites`, { emails: ['duper@test.local'], role: 'member' });
     await joined.client.post(`/api/invites/${tInvite.data.invites[0].url.split('/join/')[1]}/accept`, {
       name: 'Duper', email: 'duper@test.local', password: 'password-1234',
     });

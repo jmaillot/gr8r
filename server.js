@@ -367,7 +367,10 @@ const SCHEMA = `
     doc        text not null,
     revision   integer not null default 1,
     created_at integer not null,
-    updated_at integer not null
+    updated_at integer not null,
+    /* Phase 79 (D-02): soft-archive flag. 0 = active, 1 = archived (hidden
+       from member listing/entry, unarchivable from the governance surface). */
+    archived   integer not null default 0
   );
   create table if not exists memberships (
     workspace_id text not null references workspaces(id) on delete cascade,
@@ -626,6 +629,9 @@ async function initDb() {
   // to information_schema on pg — one branch site, pinned in the adapter.
   await adapterEnsureColumn('workspaces', 'slug', 'text');
   await adapterEnsureColumn('workspaces', 'color', 'text');
+  // Phase 79 (D-02): soft-archive flag — def byte-identical to the SCHEMA
+  // declaration (Pitfall P-B).
+  await adapterEnsureColumn('workspaces', 'archived', 'integer not null default 0');
   await adapterEnsureColumn('memberships', 'member_id', 'text');
   // P4-c fix: the team picked at invite time must survive into the profile seed.
   await adapterEnsureColumn('memberships', 'team', 'text');
@@ -930,7 +936,7 @@ async function membershipsOf(userId) {
   return await db.all(
     `select w.*, m.role, m.member_id
        from memberships m join workspaces w on w.id = m.workspace_id
-      where m.user_id = ?
+      where m.user_id = ? and w.archived = 0
       order by w.created_at, w.name collate nocase`,
     [userId],
   );
@@ -966,7 +972,9 @@ async function userPayload(user) {
 }
 
 async function firstWorkspace() {
-  return (await db.get('select * from workspaces order by created_at, name collate nocase limit 1')) || null;
+  // Phase 79 (A5/D-02): the boot fallback never lands a member in an archived
+  // workspace — they would immediately hit the workspaceArchived refusal.
+  return (await db.get('select * from workspaces where archived = 0 order by created_at, name collate nocase limit 1')) || null;
 }
 
 /* Tenancy metadata is owned by the columns; the document never overrides it. */
@@ -4868,6 +4876,15 @@ async function requireWorkspace(req, res, slug, minRole = 'viewer') {
     fail(res, 404, 'workspaceNotFound', 'Workspace not found');
     return null;
   }
+  /* Phase 79 (D-02): archived workspaces refuse member entry at the single
+     funnel — every /api/workspaces/:slug route rides this one check, no
+     per-route filtering. Operators reach workspace data only through the
+     governance routes (which never ride requireWorkspace — Pitfall 3), so
+     no operator bypass exists here: members simply can't enter. */
+  if (ws.archived === 1) {
+    fail(res, 403, 'workspaceArchived', 'This workspace is archived');
+    return null;
+  }
   if (ROLE_RANK[membership.role] < ROLE_RANK[minRole]) {
     if (minRole === 'admin') fail(res, 403, 'adminOnly', 'Only workspace admins can do that');
     else fail(res, 403, 'readOnlyAccess', 'Your account has read-only access');
@@ -6826,6 +6843,224 @@ async function handleApi(req, res, url) {
     return json(res, 200, out);
   }
 
+  /* -------------- operator workspace governance (Phase 79, WSG-07/WSG-08) --------------
+     D-10: a NEW route family under /api/auth/operator/workspaces — the user-facing
+     /api/workspaces family is NOT extended. Guard order mirrors the Phase 78
+     operator-users family verbatim (Pitfall 22: sameOrigin FIRST, before any body
+     read or throttle; then requireUser; then the operator gate BEFORE any target
+     lookup, so an unknown id stays a no-oracle exact-403 operatorOnly for
+     non-operators — D-09). Governance routes NEVER ride requireWorkspace
+     (Pitfall 3): rows are fetched by id, so an archived workspace stays
+     actionable (unarchive is possible) and a non-member operator gets real data. */
+
+  if (pathname === '/api/auth/operator/workspaces' && method === 'GET') {
+    // D-09: read route — sameOrigin → requireUser → operator gate. NO throttle
+    // (read-only, Phase 78 read precedent).
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    // WSG-07: EVERY workspace on the instance — including ones the operator holds
+    // no membership in. Creator is derived from the owner-membership join ONLY:
+    // no created_by column exists (Pitfall 1); null when the owner membership is
+    // gone. memberCount is a scalar subquery so zero-member rows survive the join.
+    const rows = await db.all(`select w.id, w.slug, w.name, w.archived, w.created_at,
+        (select count(*) from memberships m where m.workspace_id = w.id) as member_count,
+        owner_u.name as creator_name, owner_u.email as creator_email
+      from workspaces w
+      left join memberships owner_m on owner_m.workspace_id = w.id and owner_m.role = 'owner'
+      left join users owner_u on owner_u.id = owner_m.user_id
+      order by w.created_at, w.name collate nocase`);
+    return json(res, 200, {
+      workspaces: rows.map(r => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        archived: !!r.archived,
+        createdAt: r.created_at,
+        memberCount: r.member_count,
+        creator: r.creator_name ? { name: r.creator_name, email: r.creator_email } : null,
+      })),
+    });
+  }
+
+  const operatorWsFlagMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/(archive|unarchive)$/);
+  if (operatorWsFlagMatch && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // Pitfall 10: throttle keyed on the operator (never per-IP) — the single
+    // legitimate operator is never locked out; every attempt consumes a try.
+    if (tooMany(`op-ws-archive|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // T-79-07/D-09: the gate runs BEFORE any target lookup (no existence oracle).
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const ws = await db.get('select id, slug, name, archived from workspaces where id = ?', [operatorWsFlagMatch[1]]);
+    if (!ws) return fail(res, 404, 'notFound', 'Not found');
+    const archiving = operatorWsFlagMatch[2] === 'archive';
+    // D-07: archiving triggers NO orphan flow — member rows stay frozen.
+    // AUD-01/D-R3: the flag write and the audit row share ONE db.tx.
+    await db.tx(async () => {
+      await db.run('update workspaces set archived = ? where id = ?', [archiving ? 1 : 0, ws.id]);
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), operator.id, ws.id, archiving ? 'workspace_archived' : 'workspace_unarchived', 0, clientIp(req), ws.id, operator.name, operator.email, ws.name, ws.slug, now()],
+      );
+    });
+    await logSecurity(operator.id, archiving ? 'workspace_archived' : 'workspace_unarchived');
+    logInfo(`workspace ${archiving ? 'archived' : 'unarchived'} "${ws.name}" (slug: ${ws.slug}) by ${operator.email}`);
+    return json(res, 200, { workspace: { id: ws.id, slug: ws.slug, name: ws.name, archived: archiving } });
+  }
+
+  const operatorWsDeleteMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/delete$/);
+  if (operatorWsDeleteMatch && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (tooMany(`op-ws-delete|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const ws = await db.get('select * from workspaces where id = ?', [operatorWsDeleteMatch[1]]);
+    if (!ws) return fail(res, 404, 'notFound', 'Not found');
+    // D-03 FIRST (Pitfall 5 — a DIFFERENT refusal from dispositions): the
+    // empty-only check runs on the RAW stored doc; the doc IS the content store.
+    let doc = null;
+    try {
+      doc = JSON.parse(ws.doc);
+    } catch {
+      /* a corrupt doc is treated as empty — D-03 judges the raw content only */
+    }
+    const projects = Array.isArray(doc?.data?.projects) ? doc.data.projects : [];
+    const hasTasks = projects.some(p => p && Array.isArray(p.tasks) && p.tasks.length > 0);
+    if (projects.length > 0 || hasTasks) {
+      return fail(res, 409, 'workspaceNotEmpty', 'This workspace has projects and cannot be deleted. Archive it instead.');
+    }
+    // D-06: block-until-resolved — every member needs a disposition; 'release'
+    // counts as resolved. The server re-checks regardless of client state (T-79-02).
+    const body = await readJson(req);
+    const dispositions = Array.isArray(body?.dispositions) ? body.dispositions : null;
+    if (!dispositions) return fail(res, 400, 'invalidBody', 'Invalid request body');
+    const members = await membersOf(ws.id);
+    const byUser = new Map();
+    for (const d of dispositions) if (d && typeof d === 'object') byUser.set(String(d.userId || ''), d);
+    if (members.some(m => !byUser.has(m.user_id))) {
+      return fail(res, 409, 'dispositionRequired', 'Every member needs a destination or release before deleting.');
+    }
+    // T-79-02 (mass-assignment guard): role whitelisted against the D-08 domain
+    // ('owner','admin','member') — viewer excluded; target must exist and must
+    // not already hold the user (memberships PK (workspace_id,user_id), Pitfall 6).
+    const GOV_ROLES = ['owner', 'admin', 'member'];
+    const planned = [];
+    for (const m of members) {
+      const d = byUser.get(m.user_id);
+      if (d.type === 'release') {
+        planned.push({ type: 'release', userId: m.user_id });
+        continue;
+      }
+      if (d.type === 'reassign') {
+        const role = String(d.role || '');
+        if (!GOV_ROLES.includes(role)) return fail(res, 400, 'invalidRole', 'Role must be owner, admin or member');
+        const target = await db.get('select id, name, slug from workspaces where id = ?', [String(d.targetWorkspaceId || '')]);
+        if (!target) return fail(res, 404, 'notFound', 'Reassign target workspace not found');
+        const dup = await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [target.id, m.user_id]);
+        if (dup) return fail(res, 409, 'memberAlreadyMember', 'That member is already a member of the destination workspace. Pick another destination.');
+        planned.push({ type: 'reassign', userId: m.user_id, targetId: target.id, targetName: target.name, targetSlug: target.slug, role });
+        continue;
+      }
+      return fail(res, 409, 'dispositionRequired', 'Every member needs a destination or release before deleting.');
+    }
+    const reassignedN = planned.filter(p => p.type === 'reassign').length;
+    const releasedN = planned.filter(p => p.type === 'release').length;
+    /* Phase 43 (D-09): unlink the stored logo bytes alongside the row purge —
+       captured BEFORE the tx, unlinked AFTER it commits (owner DELETE precedent). */
+    const deletedLogo = docLogo(ws)?.file || null;
+    await db.tx(async () => {
+      for (const p of planned) {
+        if (p.type === 'reassign') {
+          await db.run('insert into memberships (workspace_id, user_id, role) values (?,?,?)', [p.targetId, p.userId, p.role]);
+        } else {
+          await db.run('delete from memberships where workspace_id = ? and user_id = ?', [ws.id, p.userId]);
+        }
+      }
+      await db.run('delete from memberships where workspace_id = ?', [ws.id]);
+      await db.run('delete from invites where workspace_id = ?', [ws.id]);
+      await db.run('delete from workspaces where id = ?', [ws.id]);
+      // D-04/AUD-01: the audit row rides the SAME tx — the snapshot carries the
+      // slug echo (type-to-confirm contract) and the disposition summary.
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          uid(), operator.id, ws.id, 'workspace_deleted', 0, clientIp(req), ws.id, operator.name, operator.email,
+          `${ws.name} (slug: ${ws.slug}) — dispositions: ${reassignedN} reassigned, ${releasedN} released`, ws.slug, now(),
+        ],
+      );
+      for (const p of planned) {
+        await db.run(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [
+            uid(), operator.id, p.userId, p.type === 'reassign' ? 'member_reassigned' : 'member_released', 0, clientIp(req), ws.id,
+            operator.name, operator.email, p.userId,
+            p.type === 'reassign' ? `reassigned to ${p.targetName} (slug: ${p.targetSlug}) as ${p.role}` : 'released', now(),
+          ],
+        );
+      }
+    });
+    if (deletedLogo) fs.unlink(path.join(LOGOS_DIR, deletedLogo), () => {});
+    await logSecurity(operator.id, 'workspace_deleted');
+    logInfo(`workspace deleted (governance) "${ws.name}" (slug: ${ws.slug}) by ${operator.email}`);
+    return json(res, 200, { deleted: true });
+  }
+
+  const operatorWsMemberMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/members\/([A-Za-z0-9_-]{1,64})\/(reassign|release)$/);
+  if (operatorWsMemberMatch && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (tooMany(`op-ws-member|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const [, wsId, targetUserId, verb] = operatorWsMemberMatch;
+    const ws = await db.get('select id, slug, name from workspaces where id = ?', [wsId]);
+    if (!ws) return fail(res, 404, 'notFound', 'Not found');
+    const membership = await db.get('select * from memberships where workspace_id = ? and user_id = ?', [wsId, targetUserId]);
+    if (!membership) return fail(res, 404, 'notFound', 'Not found');
+    if (verb === 'release') {
+      // D-05: release drops the membership row — a member left with no other
+      // workspace lands in the await-access state (empty workspace list).
+      await db.tx(async () => {
+        await db.run('delete from memberships where workspace_id = ? and user_id = ?', [wsId, targetUserId]);
+        await db.run(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [uid(), operator.id, targetUserId, 'member_released', 0, clientIp(req), wsId, operator.name, operator.email, targetUserId, `released from ${ws.name} (slug: ${ws.slug})`, now()],
+        );
+      });
+      await logSecurity(operator.id, 'member_released');
+      logInfo(`member released (governance) from "${ws.slug}": ${targetUserId} by ${operator.email}`);
+      return json(res, 200, { released: true });
+    }
+    // D-08: reassign carries the destination AND the role in the same step.
+    const body = await readJson(req);
+    const role = String(body?.role || '');
+    if (!['owner', 'admin', 'member'].includes(role)) return fail(res, 400, 'invalidRole', 'Role must be owner, admin or member');
+    const target = await db.get('select id, name, slug from workspaces where id = ?', [String(body?.targetWorkspaceId || '')]);
+    if (!target) return fail(res, 404, 'notFound', 'Reassign target workspace not found');
+    // Pitfall 6: the memberships PK is (workspace_id,user_id) — refuse before
+    // any write instead of tripping the UNIQUE constraint.
+    const dup = await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [target.id, targetUserId]);
+    if (dup) return fail(res, 409, 'memberAlreadyMember', 'That member is already a member of the destination workspace. Pick another destination.');
+    await db.tx(async () => {
+      await db.run('insert into memberships (workspace_id, user_id, role) values (?,?,?)', [target.id, targetUserId, role]);
+      await db.run('delete from memberships where workspace_id = ? and user_id = ?', [wsId, targetUserId]);
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), operator.id, targetUserId, 'member_reassigned', 0, clientIp(req), wsId, operator.name, operator.email, targetUserId, `reassigned to ${target.name} (slug: ${target.slug}) as ${role}`, now()],
+      );
+    });
+    await logSecurity(operator.id, 'member_reassigned');
+    logInfo(`member reassigned (governance) from "${ws.slug}" to "${target.slug}" as ${role}: ${targetUserId} by ${operator.email}`);
+    return json(res, 200, { reassigned: true, workspace: { id: target.id, slug: target.slug, role } });
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
@@ -7138,6 +7373,11 @@ async function handleApi(req, res, url) {
     const ctx = await requireWorkspace(req, res, wsMatch[1], 'owner');
     if (!ctx) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    /* Phase 79 (research Open Q1): the OWNER-scoped delete deliberately keeps
+       its any-content behavior — D-03's empty-only refusal scopes to the
+       GOVERNANCE delete endpoint (/api/auth/operator/workspaces/:id/delete)
+       only. This route predates Phase 79 and no decision changes it; the two
+       delete paths coexist by design. */
     /* Phase 43 (D-09): the workspace doc may carry a logo reference — unlink
        the stored bytes alongside the row purge, no orphaned files (A4). */
     const deletedLogo = docLogo(ctx.ws)?.file || null;

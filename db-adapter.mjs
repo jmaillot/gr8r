@@ -208,7 +208,8 @@ export const SQLITE_SCHEMA = `
     doc        text not null,
     revision   integer not null default 1,
     created_at integer not null,
-    updated_at integer not null
+    updated_at integer not null,
+    archived   integer not null default 0
   );
   create table if not exists memberships (
     workspace_id text not null references workspaces(id) on delete cascade,
