@@ -199,3 +199,109 @@ test('a non-operator deep link renders the 403 fullstate (lock, err.code403, err
     assert.ok(f[0].includes(frag), `full403 misses ${frag}`);
   }
 });
+
+/* =====================================================================
+   83-02 RENAME MODAL + DEAD-MAPPING CARD (plan 83-02 Task 2): client
+   source pins for the D-03 confirm fork, the esc() boundaries, the
+   display-only card and its zero-items hiding, and the 5-locale key
+   parity of the new vocabulary.
+   ===================================================================== */
+
+/* (83-02 a) the Edit row action rides the established data-a + esc(id) convention */
+test('the governance row carries the Edit action beside archive/delete, keyed by esc(w.id) (D-02)', () => {
+  const p = page();
+  assert.match(p, /data-a="govEditAsk" data-id="\$\{esc\(w\.id\)\}"/, 'the Edit row button is missing or unescaped');
+  const row = p.match(/const wsRow = w => \{[\s\S]*?\n\};/);
+  assert.ok(row, 'wsRow not found');
+  for (const a of ['govEditAsk', 'govDeleteAsk']) assert.match(row[0], new RegExp(`data-a="${a}"`), `${a} left the row actions`);
+});
+
+/* (83-02 b) the D-03 confirm fork: name-only saves directly; a slug change
+   wraps the same run in a danger confirmDlg gated on the old slug */
+test('govEditSave forks on slug change: name-only runs directly, slug change wraps in danger confirmDlg with typeName = old slug (D-03)', () => {
+  const a = actions();
+  assert.match(a, /const slugChanged = slug !== ws\.origSlug;/, 'the slug-change comparison against the STAGED original is missing');
+  assert.match(a, /if \(!slugChanged\) return run\(\);/, 'the name-only direct-save fork is missing');
+  assert.match(
+    a,
+    /if \(!slugChanged\) return run\(\);[\s\S]{0,900}?danger: true,[\s\S]{0,300}?typeName: ws\.origSlug,/,
+    'the slug-changed path does not wrap in a danger confirmDlg gated on the old slug',
+  );
+});
+
+/* (83-02 c) the confirm body interpolates the OLD slug bold via esc() — the
+   T-83-08 XSS boundary and the D-82-5 permanent-404 warning */
+test('the rename confirm body interpolates the old slug bold via esc() and warns the permanent 404 (D-82-5/T-83-08)', () => {
+  const a = actions();
+  assert.match(a, /t\('page\.governance\.confirmRenameBody', \{ old: `<b>\$\{esc\(ws\.origSlug\)\}<\/b>`, slug: esc\(ws\.origSlug\) \}\)/, 'the old slug is not esc()-wrapped bold in the confirm body');
+  const confirmBlock = a.match(/if \(!slugChanged\) return run\(\);[\s\S]*?\n\};/);
+  assert.ok(confirmBlock, 'the govEditSave fork block not found');
+  assert.match(confirmBlock[0], /page\.governance\.confirmRenameBody/, 'the confirm body does not use the keyed 404 warning');
+});
+
+/* (83-02 d) the slugTaken refusal keeps the modal open and offers the server
+   suggestion with one click to adopt (D-07) */
+test('a 409 slugTaken refusal surfaces the suggestion payload with a one-click adopt in the modal (D-07)', () => {
+  const a = actions();
+  assert.match(a, /res\.data\?\.code === 'slugTaken' && res\.data\?\.suggestion[\s\S]{0,200}?S\.ui\.govEditSuggest = res\.data\.suggestion;/, 'the slugTaken refusal does not stage the suggestion');
+  const p = page();
+  assert.match(p, /data-a="govEditAdopt" data-slug="\$\{esc\(suggest\)\}"/, 'the modal does not offer the suggestion with an esc()d adopt control');
+});
+
+/* (83-02 e) the dead card is display-only and escapes EVERY carried value at
+   first render — group_mappings.label is the Phase 80 XSS watch-item (T-83-07) */
+test('the dead-mapping card escapes orphan label and trail segments and carries zero mutation controls (D-11/T-83-07)', () => {
+  const p = page();
+  const card = p.match(/const govDeadCard = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(card, 'govDeadCard not found');
+  assert.match(card[0], /esc\(o\.label \|\| ''\)/, 'the orphan label is not esc()d at first render');
+  assert.match(card[0], /esc\(o\.kind \|\| ''\)/, 'the orphan kind is not esc()d');
+  assert.match(card[0], /esc\(o\.group_guid \|\| ''\)/, 'the orphan group_guid is not esc()d');
+  assert.match(card[0], /esc\(guid\)/, 'the trail guid is not esc()d');
+  assert.match(card[0], /esc\(reason\)/, 'the trail reason is not esc()d');
+  assert.doesNotMatch(card[0], /data-a=/, 'the warning card carries a mutation control (D-11 forbids them)');
+});
+
+/* (83-02 f) zero dead items → the card markup is absent entirely (D-10, GV-03/empty) */
+test('the dead-mapping card renders nothing when the payload is empty or absent (D-10 zero-rows hiding)', () => {
+  const p = page();
+  assert.match(p, /const dead = S\.ui\.govDead;\s*if \(!dead\) return '';/, 'a null payload must hide the card entirely');
+  assert.match(p, /if \(!orphans\.length && !trail\.length\) return '';/, 'zero dead items must hide the card entirely (no off-line markup)');
+  assert.match(p, /api\.user\?\.isInstanceAdmin \? govDeadCard\(\) : ''/, 'the card is not operator-gated at the mount point');
+});
+
+/* (83-02 g) the dead payload rides the operator workspaces fill loop */
+test('refreshGovernanceWorkspaces fetches operatorDeadMappings alongside the listing and stages a normalized payload', () => {
+  const a = actions();
+  assert.match(a, /const dead = await api\.operatorDeadMappings\(\);/, 'the dead-mappings read does not ride the governance fill');
+  assert.match(a, /S\.ui\.govDead = dead\.ok \? \{ orphans: dead\.data\.orphans \|\| \[\], trail: dead\.data\.trail \|\| \[\] \} : null;/, 'the payload is not normalized/honest on refusal');
+});
+
+/* (83-02 h) the new vocabulary exists with parity across all 5 catalogues */
+test('the rename + dead-card keys exist with parity in all 5 locales (D-12)', () => {
+  const KEYS = [
+    'page.governance.edit',
+    'page.governance.editTitle',
+    'page.governance.nameLabel',
+    'page.governance.slugLabel',
+    'page.governance.slugTakenHint',
+    'page.governance.adoptSlug',
+    'page.governance.confirmRenameTitle',
+    'page.governance.confirmRenameBody',
+    'page.governance.okRename',
+    'page.governance.deadTitle',
+    'page.governance.deadLead',
+    'page.governance.deadOrphans',
+    'page.governance.deadTrail',
+    'toast.governanceRenamed',
+  ];
+  for (const [lang, cat] of Object.entries({ en, fr, nl, de, es })) {
+    for (const k of KEYS) assert.ok(cat[k], `${lang} catalogue lost ${k}`);
+  }
+  /* D-04: zero new refusal vocabulary — the err.* key count is untouched by this phase */
+  const errCount = c => Object.keys(c).filter(k => k.startsWith('err.')).length;
+  assert.equal(errCount(en), errCount(fr), 'err.* drift between en and fr');
+  assert.equal(errCount(en), errCount(nl), 'err.* drift between en and nl');
+  assert.equal(errCount(en), errCount(de), 'err.* drift between en and de');
+  assert.equal(errCount(en), errCount(es), 'err.* drift between en and es');
+});
