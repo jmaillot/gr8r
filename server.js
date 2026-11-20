@@ -3584,7 +3584,7 @@ async function ensureAdmin({ quiet = false } = {}) {
     generated = true;
   }
   const user = await createUser(email, name, password);
-  await addMembership(await firstWorkspace(), user, 'owner');
+  await addMembership(await firstWorkspace(), user, 'owner', [], 'manual');
   if (!quiet) {
     logInfo(`  bootstrap account: ${email}`);
     if (generated) logInfo(`  generated password: ${password}\n  (set ADMIN_PASSWORD and recreate the volume to choose your own)`);
@@ -4713,7 +4713,7 @@ async function createWorkspace(name, slugBase, user) {
     t,
   ]);
   const ws = await db.get('select * from workspaces where id = ?', [id]);
-  await addMembership(ws, user, 'owner');
+  await addMembership(ws, user, 'owner', [], 'manual');
   return await wsBySlug(slug);
 }
 
@@ -5311,6 +5311,7 @@ async function handleApi(req, res, url) {
                   return [];
                 }
               })(),
+              'invite',
             );
             /* Same single-use clearing as the accept route: the consumed
                token plus every other pending link for that address. */
@@ -7038,7 +7039,7 @@ async function handleApi(req, res, url) {
     await db.tx(async () => {
       for (const p of planned) {
         if (p.type === 'reassign') {
-          await db.run('insert into memberships (workspace_id, user_id, role) values (?,?,?)', [p.targetId, p.userId, p.role]);
+          await db.run('insert into memberships (workspace_id, user_id, role, provenance) values (?,?,?,?)', [p.targetId, p.userId, p.role, 'manual']);
         } else {
           await db.run('delete from memberships where workspace_id = ? and user_id = ?', [ws.id, p.userId]);
         }
@@ -7139,7 +7140,7 @@ async function handleApi(req, res, url) {
     const dup = await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [target.id, targetUserId]);
     if (dup) return fail(res, 409, 'memberAlreadyMember', 'That member is already a member of the destination workspace. Pick another destination.');
     await db.tx(async () => {
-      await db.run('insert into memberships (workspace_id, user_id, role) values (?,?,?)', [target.id, targetUserId, role]);
+      await db.run('insert into memberships (workspace_id, user_id, role, provenance) values (?,?,?,?)', [target.id, targetUserId, role, 'manual']);
       await db.run('delete from memberships where workspace_id = ? and user_id = ?', [wsId, targetUserId]);
       await db.run(
         'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -8529,6 +8530,7 @@ async function handleApi(req, res, url) {
             return [];
           }
         })(),
+        'invite',
       );
     }
     /* VIS-04, hoisted (50-05 WR-01): the project-scoped grant runs for EVERY
@@ -9275,7 +9277,7 @@ async function addUserCli(args) {
   const password = process.env.USER_PASSWORD || crypto.randomBytes(9).toString('base64url');
   try {
     const user = await createUser(email, name, password);
-    await addMembership(ws, user, 'member');
+    await addMembership(ws, user, 'member', [], 'manual');
     logInfo(`created ${user.email} in ${ws.slug}`);
     if (!process.env.USER_PASSWORD) logInfo(`password: ${password}`);
   } catch (err) {
