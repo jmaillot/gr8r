@@ -62,7 +62,7 @@ workspace on the instance — no shadow workspaces.
 
 ### Client behavior (WSG)
 
-- [ ] **WSG-10**: When workspace creation is closed for the current user (gate `false` and the
+- [x] **WSG-10**: When workspace creation is closed for the current user (gate `false` and the
   user is not an instance operator), the create-workspace surface is hidden and the post-signup
   flow lands on a **standalone "await access" page stating they need to be invited to a
   workspace to get access** — no creation form, no creation redirect, no app shell. The page

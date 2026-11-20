@@ -42,7 +42,7 @@ already reaches the client.
 - Integer phases (78, 79): planned milestone work (continuous numbering from v3.0's Phase 77)
 - Decimal phases (78.1, …): urgent insertions (marked INSERTED)
 
-- [~] **Phase 78: Creation Gate & Instance-Owner Identity** - Boolean `WORKSPACE_CREATION=true|false` (boot-refuse on invalid, unset=false), POST gate via isInstanceAdmin, boot log, /api/config, operator console promote/demote + last-operator guard, client create-button gating + "await access" auto-poll page *(78-01 server plan complete — 78-02 client plan pending)*
+- [x] **Phase 78: Creation Gate & Instance-Owner Identity** - Boolean `WORKSPACE_CREATION=true|false` (boot-refuse on invalid, unset=false), POST gate via isInstanceAdmin, boot log, /api/config, operator console promote/demote + last-operator guard, client create-button gating + "await access" auto-poll page *(complete — 78-01 server + 78-02 client; WSG-06/10/11 delivered)*
 - [ ] **Phase 79: Governance Surface** - Operator-scoped all-workspaces listing + management page (delete/archive, member reassignment); operator promote/demote lives in the Phase 78 console, linked or relocated here
 
 ## Phase Details
@@ -131,5 +131,5 @@ Phases execute in numeric order: 78 → 79
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 78. Creation Gate & Instance-Owner Identity | 0/? | Not started | - |
+| 78. Creation Gate & Instance-Owner Identity | 2/2 | Complete | 2026-11-20 |
 | 79. Governance Surface | 0/? | Not started | - |

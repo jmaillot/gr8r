@@ -30,10 +30,10 @@ before features.
 
 ## Current Position
 
-Phase: 78 (Creation Gate & Instance-Owner Identity) — IN PROGRESS
-Plan: 2 of 2 (78-01 complete → 78-02 next)
-Status: Executing — 78-01 done
-Last activity: 2026-11-20 — Plan 78-01 executed (creation gate + operator identity, 6 commits)
+Phase: 78 (Creation Gate & Instance-Owner Identity) — COMPLETE
+Plan: 2 of 2 (78-01 + 78-02 complete)
+Status: Phase done — next: Phase 79 (Governance Surface) at discuss-phase
+Last activity: 2026-11-20 — Plan 78-02 executed (client gate-aware surfaces + await page + operator console, 5 commits; resumed after a mid-plan transport failure)
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Last activity: 2026-11-20 — Plan 78-01 executed (creation gate + operator iden
 | 75 | 2 | - | - |
 | 76 | 2 | - | - |
 | 77 | 2 | - | - |
+| 78 | 2 | - | - |
 
 *Updated after each plan completion*
 
@@ -105,6 +106,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T01:55:15Z
-Stopped at: Completed 78-01-PLAN.md (commits 49d2eb81..66b5d1e5; SUMMARY at .planning/phases/78-creation-gate-instance-owner-identity/78-01-SUMMARY.md)
-Resume file: .planning/phases/78-creation-gate-instance-owner-identity/78-02-PLAN.md
+Last session: 2026-11-20T03:05:00Z
+Stopped at: Completed 78-02-PLAN.md (phase 78 done; commits 1cdab4d6..763909c7; SUMMARY at .planning/phases/78-creation-gate-instance-owner-identity/78-02-SUMMARY.md)
+Resume file: None — Phase 79 not yet planned
