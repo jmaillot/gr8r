@@ -8,13 +8,11 @@ updated: 2026-11-20T16:10:00Z
 
 ## Current Test
 
-number: 5
-name: Dead-mapping warning card renders and hides at zero (D-08, D-10, D-11)
+number: 4
+name: Refusals render keyed 5-locale messages (D-04, D-12)
 expected: |
-  As operator, seed a dead group_mapping + a guard-refused audit row, load /governance → card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason). Remove them and reload → card disappears entirely
-awaiting: user response
-
-Note: test 4 is blocked on the rename throttle and will be revisited after this test.
+  Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
+awaiting: user response (throttle window has had time to clear — retry the name-required and invalid-slug refusals now)
 
 ## Tests
 
@@ -36,7 +34,7 @@ result: [blocked] — throttle (tooManyAttempts) engaged during testing; keyed f
 
 ### 5. Dead-mapping warning card renders and hides at zero (D-08, D-10, D-11)
 expected: As operator, seed a dead group_mapping + a guard-refused audit row, load /governance → card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason). Remove them and reload → card disappears entirely
-result: [pending]
+result: [passed] — seeded orphan via direct SQL (FK-off insert; mapping-editor UI deferred per D-11). Card rendered localized fr title + escaped orphan row (kind/label/guid→ws pair), trail section header present with empty list. After cleanup delete + reload, card gone entirely.
 
 ### 6. WR-01 — no stale old-slug client state after rename
 expected: After a slug rename, navigate/click any link or view referencing the workspace's old slug (workspace header, mapping editor, other pages) — client state refreshes to the new slug via the renameWorkspaceLocal reconcile (fix 1086497b, wired at actions.js:4740), no stale old-slug references or broken actions left in the session UI
@@ -45,9 +43,9 @@ result: [pending]
 ## Summary
 
 total: 6
-passed: 3
+passed: 4
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 1
 
