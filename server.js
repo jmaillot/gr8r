@@ -599,6 +599,26 @@ const SCHEMA = `
     delivered_at     integer
   );
   create index if not exists email_outbox_due on email_outbox(status, next_attempt_at);
+  /* GROUP-MAPPING (Phase 80, GM-01): operator-managed Entra group → workspace
+     role grants. The workspace reference deliberately OMITS on delete
+     cascade (D-82-6): a deleted workspace must leave the mapping row behind
+     so boot and the operator console can warn about it (dead mapping). Role
+     tokens are the locked 3-token set — owner|admin|member, no viewer (locked
+     owner decision; Pitfall 5). kind carries the dedicated operator-mapping
+     row kind beside ordinary workspace mappings — the resolver contract fixed
+     here so Phase 81 passes claims without any config migration. */
+  create table if not exists group_mappings (
+    id           text primary key,
+    group_guid   text not null,
+    workspace_id text not null,
+    role         text not null check (role in ('owner','admin','member')),
+    kind         text not null default 'workspace' check (kind in ('workspace','operator')),
+    label        text,
+    created_by   text references users(id) on delete set null,
+    created_at   integer not null,
+    updated_at   integer not null
+  );
+  create unique index if not exists group_mappings_pair on group_mappings(group_guid, workspace_id);
 `;
 
 async function initDb() {
