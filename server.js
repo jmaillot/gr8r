@@ -5283,6 +5283,24 @@ async function handleApi(req, res, url) {
           const cur = mappedByWs.get(grant.workspaceId);
           if (!cur || ROLE_RANK_WITH_VIEWER[grant.role] > ROLE_RANK_WITH_VIEWER[cur.role]) mappedByWs.set(grant.workspaceId, grant);
         }
+        /* GS-02 owner guard funnel — count-before-write (Pitfall 4), shared
+           by Plan 02's owner-downgrade arm via the same `delta` vocabulary.
+           Refusal is NEVER a throw (Pitfall 6: guard refusals are `continue`s,
+           distinct from the fail-closed catch): skip + ONE fixed logWarn (no
+           GUID, no email, no counts — D-81-10 PII posture) + ONLY a
+           guard-refused audit row (count-before-write means no delta write is
+           in flight to roll back) — then the login proceeds and mints a
+           session. `ownerCount` counts OTHER owners, so refusal fires exactly
+           when the user is the SOLE owner — the route's semantics. */
+        const guardRefuse = async (wsId, guid, delta) => {
+          logWarn('sso group removal refused — last workspace owner');
+          await db.tx(async () => {
+            await db.run(
+              'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+              [uid(), row.id, row.id, `group_${delta}:group:${guid}:guard-refused`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+            );
+          });
+        };
         const groupRows = await db.all("select workspace_id, role, member_id, provenance from memberships where user_id = ? and provenance like 'group:%'", [row.id]);
         for (const wsId of new Set([...mappedByWs.keys(), ...groupRows.map(r => r.workspace_id)])) {
           const mapped = mappedByWs.get(wsId);
@@ -5303,17 +5321,10 @@ async function handleApi(req, res, url) {
                the full delta trail in Plan 02. */
             const wsState = await db.get('select archived from workspaces where id = ?', [wsId]);
             if (!wsState || wsState.archived === 1) continue;
-            /* GS-02 owner guard — count-before-write, mirroring the member
-               DELETE route (:7637): refusal is skip + loud fixed logWarn +
-               audit + continue, NEVER a throw (login still succeeds). */
+            /* GS-02 owner guard — count-before-write through the shared
+               funnel, mirroring the member DELETE route (:7637). */
             if (existing.role === 'owner' && (await ownerCount(wsId, row.id)) === 0) {
-              logWarn('sso group removal refused — last workspace owner');
-              await db.tx(async () => {
-                await db.run(
-                  'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-                  [uid(), row.id, row.id, `group_membership_removed:group:${guid}:guard-refused`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
-                );
-              });
+              await guardRefuse(wsId, guid, 'membership_removed');
               continue;
             }
             /* Mirror the member-DELETE route tx shape (:7638–7643) exactly —

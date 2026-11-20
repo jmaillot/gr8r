@@ -371,6 +371,49 @@ test('grant-path throw lands on /login?sso=error with no session and no partial 
 
 /* ------------------------------ tests ------------------------------ */
 
+/* Phase 82 Task 2 (GS-02, D-82-8): sole-owner removal is refused
+   count-before-write — the row survives INTACT, the login still succeeds and
+   mints a session (skip-and-audit), ONE loud fixed logWarn with no GUID/email
+   leakage (D-81-10 PII posture), and exactly one guard-refused audit row. */
+test('sole-owner removal refused: row intact, login proceeds, loud PII-free warn, guard-refused audit row (GS-02)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-guard', slug: 'guardws', name: 'Guard WS' });
+      seedMapping(db, { guid: '42111111-2222-3333-4444-555555555555', workspaceId: 'ws-guard', role: 'owner' });
+    });
+    // Login 1 — the mapping grants the JIT user as OWNER with group provenance.
+    const first = await runFlow(server, { sub: 'sub-guard', email: 'guard@example.com', email_verified: true, groups: ['42111111-2222-3333-4444-555555555555'] }, 'code-guard-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const row = db.prepare('select * from memberships where workspace_id = ?').get('ws-guard');
+      assert.equal(row.role, 'owner');
+      assert.equal(row.provenance, 'group:42111111-2222-3333-4444-555555555555');
+    });
+    // Login 2 — genuinely-empty groups list (still a reconcile-bearing claim
+    // shape), the user is now the SOLE owner with no live mapping.
+    const second = await runFlow(server, { sub: 'sub-guard', email: 'guard@example.com', email_verified: true, groups: [] }, 'code-guard-2');
+    assert.equal(second.callback.location, '/', 'the refused login still lands on /');
+    assert.ok(sessionCookieOf(second.callback.cookies), 'the refused login still mints a session (GS-02 skip-and-audit)');
+    const out = server.output();
+    assert.ok(out.includes('sso group removal refused — last workspace owner'), 'the fixed loud refusal line is present');
+    assert.ok(!/42111111|guard@example/.test(out.slice(out.indexOf('removal refused'))), 'no GUID or email in the refusal line (T-82-03)');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('guard@example.com').id;
+      const row = db.prepare('select * from memberships where workspace_id = ?').get('ws-guard');
+      assert.ok(row, 'the membership row is INTACT');
+      assert.equal(row.role, 'owner', 'role untouched');
+      assert.equal(row.provenance, 'group:42111111-2222-3333-4444-555555555555', 'provenance untouched');
+      const audits = db.prepare("select * from audit_log where actor_id = ? and action like 'group_%:guard-refused'").all(uid);
+      assert.equal(audits.length, 1, 'exactly one guard-refused audit row');
+      assert.equal(audits[0].action, 'group_membership_removed:group:42111111-2222-3333-4444-555555555555:guard-refused');
+      assert.equal(audits[0].workspace_id, 'ws-guard');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
 /* Phase 82 Task 1 (GS-01, D-82-10): the lost-claim delete path. First login
    grants via the live mapping; the mapping row is deleted; the second login's
    groups claim no longer contains the GUID → exactly the group:<guid> row is
