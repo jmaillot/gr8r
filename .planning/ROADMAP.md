@@ -63,7 +63,11 @@ Plans:
   4. Every group-driven change (grant, role change, removal, skip) is audit-logged with the group GUID and reason
   5. With an `_claim_names` overage at login, the user proceeds as unmapped: no grants AND no removals, login succeeds, warning logged (D-82-4)
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 82-01-PLAN.md — core reconcile: GS-01 guarded delete path + GS-02 owner guard funnel + D-82-7 conditional provenance clause + SC5 overage-skip e2e
+- [ ] 82-02-PLAN.md — GS-03 downgrade cells + owner-downgrade guard arm + D-82-11 uniform delta trail/pin migration + byte-identical regression gate
 
 ### Phase 83: Governance — Workspace Rename & Slug Edit
 
