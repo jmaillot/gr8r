@@ -52,7 +52,7 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 
 - [x] **BP-01**: Searchable token-chip pickers for member/team selection inputs.
 - [ ] **BP-02**: Fix the 56-02 e2e spec failures.
-- [ ] **BP-03**: Phase 57 mobile layout follow-ups.
+- [x] **BP-03**: Phase 57 mobile layout follow-ups.
 
 ## Future Requirements (deferred)
 
@@ -90,4 +90,4 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | GV-03 | Phase 83 | Complete |
 | BP-01 | Phase 84 | Complete |
 | BP-02 | Phase 84 | Pending |
-| BP-03 | Phase 84 | Pending |
+| BP-03 | Phase 84 | Complete |

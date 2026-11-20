@@ -6,16 +6,16 @@ current_phase: 84
 current_phase_name: Backlog Polish & Ship
 current_plan: 4
 status: executing
-stopped_at: Completed 84-02-PLAN.md
-last_updated: "2026-11-20T18:19:34.243Z"
+stopped_at: Completed 84-03-PLAN.md
+last_updated: "2026-11-20T18:32:15.532Z"
 last_activity: 2026-11-20
 last_activity_desc: Phase 83 complete, transitioned to Phase 84
-state_head: 0102028476d172b861e65469d35eca8f02b6a54a
+state_head: d62d3f2ee1fdf63ee7e4e9dc376e2102f002f21c
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 60
 ---
 
@@ -80,6 +80,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 | Phase 83 P01 | ~35 min | 3 tasks | 4 files |
 | Phase 83 P02 | ~55 min | 2 tasks | 11 files |
 | Phase 84 P02 | 22 min | 4 tasks | 13 files |
+| Phase 84 P03 | 19 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
 - [Phase 83, 83-02]: dead-mappings payload rides refreshGovernanceWorkspaces (seq-guarded, refusal hides card only); staged edit state carries origSlug so the D-03 fork compares against ground truth; rename refusals surface via tErr over existing err.* keys (zero new vocabulary)
 - [Phase 83, 83-02]: the data-a/data-r/data-v machine-identifier pins exist in TWO suites (i18n-toast + i18n-shell) and the en catalogue size is pinned in i18n-core-features — all three bump together under D-12
 - [Phase 84]: 84-02: locale keys land in the same commit as emitting markup (Tasks 2+3 merged); keyboard hook = input-scoped keyboard.js branch cloning the tz branch; tree-wide data-a/data-v count pins bumped as D-12 same-commit pins
+- [Phase 84]: 84-03: toolbar flex-wrap already existed — hide-m label collapse alone fixed the 57-UAT truncation; sweep found zero document-level overflow (perm-t tables scroll scoped); mobile specs navigate routes directly at 390px (off-canvas sidebar pitfall)
 
 ### Pending Todos
 
@@ -134,8 +136,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T18:19:17.090Z
-Stopped at: Completed 84-02-PLAN.md
+Last session: 2026-11-20T18:32:11.394Z
+Stopped at: Completed 84-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
