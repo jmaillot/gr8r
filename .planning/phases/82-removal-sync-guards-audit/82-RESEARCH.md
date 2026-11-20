@@ -342,7 +342,12 @@ security_enforcement not disabled — included. This phase touches access contro
 | A4 | Archived-workspace removals should be skipped+audited (not removed) | Dead/archived section | Low: discretion area; both defensible |
 | A5 | Downgrades that strip the last owner also hit the guard | Code examples | Medium if missed: sole owner silently demoted — guard must wrap both write kinds |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three resolved before planning: Q1 conditional on-conflict SET → locked in
+82-01 (binding_decisions, implements D-82-7); Q2 grants-included delta trail →
+locked as D-82-11 in 82-CONTEXT.md (implemented 82-02 T2); Q3 archived-workspace
+removals → skip+audit (implemented 82-02 T2 step 3).
 
 1. **Literal vs conditional on-conflict clause (Pattern 1)** — D-82-7's wording vs Pin C. Recommendation: conditional clause (Pattern 1); raise at discuss/plan checkpoint if the literal reading is insisted on.
 2. **Audit rows for fresh grants (cell 4)** — does GS-04's "grants" add an `audit_log` delta row per new group grant, or do the existing security_log verbs suffice? Recommendation: add the encoded row (GS-04 literal, uniform Phase 83 rendering).
