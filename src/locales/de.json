@@ -2028,6 +2028,7 @@
   "common.instance": "Instanz",
   "page.governance.subtitle": "Jeder Workspace dieser Instanz. Nur du kannst diese Seite sehen.",
   "page.governance.wsTitle": "Workspaces",
+  "page.governance.searchWs": "Arbeitsbereiche durchsuchen",
   "page.governance.lead": "Alle Workspaces dieser Instanz, auch solche, in denen du kein Mitglied bist.",
   "page.governance.loading": "Workspaces werden geladen…",
   "page.governance.emptyTitle": "Keine Workspaces",

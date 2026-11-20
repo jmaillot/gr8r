@@ -2029,6 +2029,7 @@
   "common.instance": "Instance",
   "page.governance.subtitle": "Every workspace on this instance. Only you can see this page.",
   "page.governance.wsTitle": "Workspaces",
+  "page.governance.searchWs": "Search workspaces",
   "page.governance.lead": "All workspaces on this instance, including ones you are not a member of.",
   "page.governance.loading": "Loading workspaces…",
   "page.governance.emptyTitle": "No workspaces",

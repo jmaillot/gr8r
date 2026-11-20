@@ -105,7 +105,7 @@ export function pageGovernance() {
     <div class="sblock">
       <h2>${t('page.governance.wsTitle')}</h2>
       <p class="hint">${t('page.governance.lead')}</p>
-      <div class="row" style="margin-bottom:12px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-q" data-in="govQ" placeholder="${t('a11y.searchNameOrEmail')}" value="${esc(S.ui.govQ || '')}" aria-label="${t('a11y.searchMembers')}"></div>${seg}</div>
+      <div class="row" style="margin-bottom:12px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-q" data-in="govQ" placeholder="${t('page.governance.searchWs')}" value="${esc(S.ui.govQ || '')}" aria-label="${t('page.governance.searchWs')}"></div>${seg}</div>
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
     ${api.user?.isInstanceAdmin ? operatorCard() : ''}

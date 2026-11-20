@@ -2028,6 +2028,7 @@
   "common.instance": "Instantie",
   "page.governance.subtitle": "Elke workspace op deze instantie. Alleen jij kunt deze pagina zien.",
   "page.governance.wsTitle": "Workspaces",
+  "page.governance.searchWs": "Werkruimten doorzoeken",
   "page.governance.lead": "Alle workspaces op deze instantie, ook die waarvan je geen lid bent.",
   "page.governance.loading": "Workspaces laden…",
   "page.governance.emptyTitle": "Geen workspaces",

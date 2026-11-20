@@ -2028,6 +2028,7 @@
   "common.instance": "Instancia",
   "page.governance.subtitle": "Cada espacio de trabajo de esta instancia. Solo tú puedes ver esta página.",
   "page.governance.wsTitle": "Espacios de trabajo",
+  "page.governance.searchWs": "Buscar espacios de trabajo",
   "page.governance.lead": "Todos los espacios de trabajo de esta instancia, incluidos aquellos de los que no eres miembro.",
   "page.governance.loading": "Cargando espacios de trabajo…",
   "page.governance.emptyTitle": "Sin espacios de trabajo",
