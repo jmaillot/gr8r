@@ -18,31 +18,31 @@ workspace on the instance — no shadow workspaces.
 
 ### Workspace creation gate (WSG)
 
-- [ ] **WSG-01**: `WORKSPACE_CREATION` env parsed boolean at boot: `true` (any authenticated
+- [x] **WSG-01**: `WORKSPACE_CREATION` env parsed boolean at boot: `true` (any authenticated
   user may create a workspace), `false` (instance operators only). Only the exact tokens
   `true`/`false` are accepted — anything else (typo, empty string, whitespace, other casing)
   **refuses to boot** with a clear error naming the variable and valid values. Default when
   unset: `false` (fail-closed; upgrade note must call out the behavior change).
   *(Amended by D-78-1 — tri-state collapsed to boolean, owner decision 2026-11-19.)*
-- [ ] **WSG-02**: `POST /api/workspaces` enforces the gate: `true` = any user; `false` =
+- [x] **WSG-02**: `POST /api/workspaces` enforces the gate: `true` = any user; `false` =
   instance operators only (`isInstanceAdmin`, the `users.is_instance_admin` flag — workspace
   roles never pass, D-112). Rejected users get a keyed, localized refusal (never a generic
   error). The `ALLOW_SIGNUP`-derived implicit coupling (server.js:6811) is replaced —
   `ALLOW_SIGNUP` keeps governing **account** signup only.
-- [ ] **WSG-03**: The resolved mode is exposed via `/api/config` (`workspaceCreation`:
+- [x] **WSG-03**: The resolved mode is exposed via `/api/config` (`workspaceCreation`:
   `open|admins|owners`) and logged at boot alongside the existing door-matrix log so an
   operator can read the effective state from the log.
-- [ ] **WSG-04**: The creator still becomes the workspace `owner` in every allowed mode;
+- [x] **WSG-04**: The creator still becomes the workspace `owner` in every allowed mode;
   promoting members to workspace `admin` happens afterward via the existing member-management
   UI (optional, not enforced at creation).
 
 ### Instance owner identity (WSG)
 
-- [ ] **WSG-05**: Instance operators are seeded from bootstrap (the `ADMIN_EMAIL` stamp at DB
+- [x] **WSG-05**: Instance operators are seeded from bootstrap (the `ADMIN_EMAIL` stamp at DB
   bootstrap via `stampInstanceAdmin()`). Multiple operators allowed; the identity persists in
   the database (no re-derivation drift) and survives restarts. `--add-user` does not flag.
   *(Amended by D-78-1/D-78-2 — multi-operator + console management, bootstrap-stamp seeding only.)*
-- [ ] **WSG-06**: Instance operators can promote/demote other instance operators from the
+- [x] **WSG-06**: Instance operators can promote/demote other instance operators from the
   operator console (Settings) — no server-side env edit or manual DB update needed. Demoting
   the last remaining operator is refused (keyed error, same pattern as `needOwner`). The
   documented manual DB update (D-114) remains as break-glass fallback. *(Amended by D-78-2.)*
@@ -68,7 +68,7 @@ workspace on the instance — no shadow workspaces.
   workspace to get access** — no creation form, no creation redirect, no app shell. The page
   auto-polls (15 s, visible-tab only) and enters the app automatically once a membership or
   rights appear. Users WITH rights keep the existing flow.
-- [ ] **WSG-11**: Every user-facing refusal added by this milestone is keyed and present in all
+- [x] **WSG-11**: Every user-facing refusal added by this milestone is keyed and present in all
   5 locale catalogues (en/fr/nl/de/es) in the same commit as the gate that emits it.
 
 ## Out of Scope (this milestone)

@@ -30,10 +30,10 @@ before features.
 
 ## Current Position
 
-Phase: 78 (Creation Gate & Instance-Owner Identity) — READY TO EXECUTE
-Plan: —
-Status: Ready to execute
-Last activity: 2026-11-19 — Milestone v3.1 started
+Phase: 78 (Creation Gate & Instance-Owner Identity) — IN PROGRESS
+Plan: 2 of 2 (78-01 complete → 78-02 next)
+Status: Executing — 78-01 done
+Last activity: 2026-11-20 — Plan 78-01 executed (creation gate + operator identity, 6 commits)
 
 ## Performance Metrics
 
@@ -101,10 +101,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
-| *(none)* | | | | |
+| pre-existing failure | webhook-events.test.mjs "due task with subscribed hook yields exactly ONE due.reminder delivery" fails (0≠1 claim row) — reproduced on the pre-78 tree (5b4aae51 server.js); unrelated to the creation gate | open | 78-01 | v3.1 |
 
 ## Session Continuity
 
-Last session: 2026-11-19T22:06:24.059Z
-Stopped at: Phase 78 context gathered
-Resume file: .planning/phases/78-creation-gate-instance-owner-identity/78-CONTEXT.md
+Last session: 2026-11-20T01:55:15Z
+Stopped at: Completed 78-01-PLAN.md (commits 49d2eb81..66b5d1e5; SUMMARY at .planning/phases/78-creation-gate-instance-owner-identity/78-01-SUMMARY.md)
+Resume file: .planning/phases/78-creation-gate-instance-owner-identity/78-02-PLAN.md
