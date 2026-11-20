@@ -2051,6 +2051,7 @@
   "templates.favSection": "Favorieten",
   "templates.favEmptyHint": "Markeer een template in Instellingen → Templates als favoriet om die hier vast te zetten.",
   "pwa.install.cta": "App installeren",
+  "pwa.install.hint": "Installeer de app voor toegang met één tik",
   "pwa.install.iosHint": "Deel → Zet op beginscherm",
   "nav.route.governance": "Bestuur",
   "common.instance": "Instantie",

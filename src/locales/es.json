@@ -2051,6 +2051,7 @@
   "templates.favSection": "Favoritas",
   "templates.favEmptyHint": "Marca una plantilla con estrella en Ajustes → Plantillas para fijarla aquí.",
   "pwa.install.cta": "Instalar aplicación",
+  "pwa.install.hint": "Instala la aplicación para un acceso con un solo toque",
   "pwa.install.iosHint": "Compartir → Añadir a la pantalla de inicio",
   "nav.route.governance": "Gobernanza",
   "common.instance": "Instancia",

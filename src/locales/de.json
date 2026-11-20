@@ -2051,6 +2051,7 @@
   "templates.favSection": "Favoriten",
   "templates.favEmptyHint": "Markieren Sie eine Vorlage in den Einstellungen → Vorlagen mit einem Stern, um sie hier anzupinnen.",
   "pwa.install.cta": "App installieren",
+  "pwa.install.hint": "Installiere die App für Zugriff mit einem Fingertipp",
   "pwa.install.iosHint": "Teilen → Zum Home-Bildschirm",
   "nav.route.governance": "Governance",
   "common.instance": "Instanz",
