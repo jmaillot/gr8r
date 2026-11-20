@@ -25,7 +25,7 @@ covered_files:
   - test/governance.test.mjs
   - test/governance-client.test.mjs
   - test/catalogue.test.mjs
-covered_digest: "v2:459d65b4cf6eb443f731370be59d419404734bfec4487dad97e1d79b9dd1df70"
+covered_digest: "v2:sha256:0491ab364a607accba206cdf48abbcc96eea5f87574fc9af690cce7ad5292e78"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
