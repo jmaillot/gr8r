@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-current_phase: 83
-current_phase_name: Governance — Workspace Rename & Slug Edit
-status: executing
-stopped_at: Plans 83-01 and 83-02 complete — phase 83 ready for /gsd-verify-work
-last_updated: "2026-11-20T15:12:00.000Z"
+current_phase: 84
+current_phase_name: Backlog Polish & Ship
+status: planning
+stopped_at: Phase 83 complete, ready to plan Phase 84
+last_updated: "2026-11-20T16:09:20.260Z"
 last_activity: 2026-11-20
-last_activity_desc: Plan 83-02 executed (client rename modal + dead card + 5-locale keys)
-state_head: 1d674bc165119fd4567bb7c0dc4f5b5f574cb6d6
+last_activity_desc: Phase 83 complete, transitioned to Phase 84
+state_head: 948767d0b8191ea507cb6eaa0ae5f863053987bc
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 44
+  completed_plans: 8
+  percent: 60
 ---
 
 # Project State
@@ -30,12 +30,12 @@ before features.
 
 ## Current Position
 
-Phase: 83 (Governance — Workspace Rename & Slug Edit) — EXECUTING
-Plan: 2 of 2 (83-01 + 83-02 complete)
-Status: Phase 83 executed — ready for /gsd-verify-work
-Last activity: 2026-11-20 — 83-02 executed (rename modal, dead-mapping card, 5-locale keys, full suite green 2034/0)
+Phase: 84 — Backlog Polish & Ship
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-20 — Phase 83 complete, transitioned to Phase 84
 
-Progress: [████░░░░░░] 40%
+Progress: [██████░░░░] 60%
 
 ## Milestone v3.2 Phase Map
 
@@ -63,7 +63,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 | 80 | 2 | - | - |
 | 81 | 0 | - | - |
 | 82 | 2 | - | - |
-| 83 | 0 | - | - |
+| 83 | 2 | - | - |
 | 84 | 0 | - | - |
 
 *Updated after each plan completion*
@@ -131,7 +131,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-20T15:12:00.000Z
-Stopped at: Phase 83 plan 83-02 complete — SUMMARY written, full suite green
+Stopped at: Phase 83 complete, ready to plan Phase 84
 Resume file: .planning/phases/83-governance-workspace-rename-slug-edit/83-02-SUMMARY.md
 
 ## Operator Next Steps

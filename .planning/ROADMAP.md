@@ -15,7 +15,7 @@
 - [x] **Phase 80: Group Mapping Core — Parser, Resolver, Overage Detection** - Inert `groups.js` module: tri-state env parse of mapping config, GUID-keyed validation, overage detector (2026-11-20)
 - [x] **Phase 81: Group Grant Path — Callback Wiring + Provenance** - Groups grant workspace membership and operator rights at SSO login (grants only, no removals)
 - [x] **Phase 82: Removal Sync + Guards + Audit** - Removed-from-group users lose only group-derived grants at login, through the shared guard funnel (completed 2026-11-20)
-- [ ] **Phase 83: Governance — Workspace Rename & Slug Edit** - Operator edits workspace name/slug from /governance, with dead-mapping warnings
+- [x] **Phase 83: Governance — Workspace Rename & Slug Edit** - Operator edits workspace name/slug from /governance, with dead-mapping warnings (completed 2026-11-20)
 - [ ] **Phase 84: Backlog Polish & Ship** - Token-chip pickers, e2e debt, mobile follow-ups, DEPLOY.md, version bump
 
 ## Phase Details
@@ -80,14 +80,14 @@ Plans:
   3. The operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6, with the same condition surfaced in the boot log
   4. Non-operators cannot reach or use the rename endpoints (owner/operator scoping, no existence leak)
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans complete
 
 Plans:
 **Wave 1**
-- [ ] 83-01-PLAN.md — Wave 0 server test suite + operator rename route + on-read dead-mappings route + api client methods (tracer)
+- [x] 83-01-PLAN.md — Wave 0 server test suite + operator rename route + on-read dead-mappings route + api client methods (tracer)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 83-02-PLAN.md — governance Edit modal + D-03 confirm fork + dead-mapping warning card + 5-locale keys + client assertions
+- [x] 83-02-PLAN.md — governance Edit modal + D-03 confirm fork + dead-mapping warning card + 5-locale keys + client assertions
 
 **UI hint**: yes
 
@@ -111,5 +111,5 @@ Plans:
 | 80. Group Mapping Core | 2/2 | Complete    | 2026-11-20 |
 | 81. Group Grant Path | 0/? | Not started | - |
 | 82. Removal Sync + Guards | 2/2 | Complete    | 2026-11-20 |
-| 83. Governance Rename/Slug | 0/? | Not started | - |
+| 83. Governance Rename/Slug | 2/2 | Complete    | 2026-11-20 |
 | 84. Backlog Polish & Ship | 0/? | Not started | - |

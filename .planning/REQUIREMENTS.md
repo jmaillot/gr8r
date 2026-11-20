@@ -44,9 +44,9 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 
 ### Governance — Workspace Settings Editing (GV)
 
-- [ ] **GV-01**: Operator can edit a workspace's name and slug from the /governance page (server-side validation, collision refusal, keyed 5-locale error messages).
-- [ ] **GV-02**: Renamed slug 404s at the old address with no redirect (D-82-5); destructive rename (slug change) requires confirm.
-- [ ] **GV-03**: Operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6.
+- [x] **GV-01**: Operator can edit a workspace's name and slug from the /governance page (server-side validation, collision refusal, keyed 5-locale error messages).
+- [x] **GV-02**: Renamed slug 404s at the old address with no redirect (D-82-5); destructive rename (slug change) requires confirm.
+- [x] **GV-03**: Operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6.
 
 ### Backlog Polish (BP)
 
@@ -85,9 +85,9 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | GS-02 | Phase 82 | Complete |
 | GS-03 | Phase 82 | Complete |
 | GS-04 | Phase 82 | Complete |
-| GV-01 | Phase 83 | Pending |
-| GV-02 | Phase 83 | Pending |
-| GV-03 | Phase 83 | Pending |
+| GV-01 | Phase 83 | Complete |
+| GV-02 | Phase 83 | Complete |
+| GV-03 | Phase 83 | Complete |
 | BP-01 | Phase 84 | Pending |
 | BP-02 | Phase 84 | Pending |
 | BP-03 | Phase 84 | Pending |
