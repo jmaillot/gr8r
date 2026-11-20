@@ -7448,8 +7448,10 @@ async function handleApi(req, res, url) {
     const wsIds = new Set((await db.all('select id from workspaces')).map(r => r.id));
     const orphans = mappings.filter(m => !wsIds.has(m.workspace_id));
     // Query B — Phase 82 encoded guard trail (group_<delta>:group:<guid>:<reason>),
-    // bounded and newest-first (discretion bound: 100).
-    const trail = await db.all("select action, workspace_id, created_at from audit_log where action like 'group_%:group:%' order by created_at desc limit 100");
+    // bounded and newest-first (discretion bound: 100). WR-83-03: the literal
+    // `group_` prefix — `_` is ESCAPED so the LIKE cannot over-match
+    // `groupX:group:…` one-char variants.
+    const trail = await db.all("select action, workspace_id, created_at from audit_log where action like 'group\\_%:group:%' escape '\\' order by created_at desc limit 100");
     return json(res, 200, { orphans, trail });
   }
 

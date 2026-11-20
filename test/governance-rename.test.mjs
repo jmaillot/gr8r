@@ -298,11 +298,14 @@ test('trail list is ordered created_at desc', async () => {
   try {
     const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
     const base = Date.now();
-    insertTrail(server, { action: 'group_x:group:aaa:guard-refused', createdAt: base - 5000 });
-    insertTrail(server, { action: 'group_y:group:bbb:guard-refused', createdAt: base - 1000 });
+    insertTrail(server, { action: 'group_membership_removed:group:aaa:guard-refused', createdAt: base - 5000 });
+    insertTrail(server, { action: 'group_membership_removed:group:bbb:guard-refused', createdAt: base - 1000 });
+    /* WR-83-03: the trail predicate pins the literal `group_` prefix — the `_`
+       is escaped, so `groupX:group:…` must NOT match. */
+    insertTrail(server, { action: 'groupX:group:zzz:guard-refused', createdAt: base });
     const res = await operator.get('/api/auth/operator/dead-mappings');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.data.trail.map(r => r.action), ['group_y:group:bbb:guard-refused', 'group_x:group:aaa:guard-refused']);
+    assert.deepEqual(res.data.trail.map(r => r.action), ['group_membership_removed:group:bbb:guard-refused', 'group_membership_removed:group:aaa:guard-refused']);
   } finally {
     await server.stop();
   }
