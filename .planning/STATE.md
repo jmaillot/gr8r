@@ -5,17 +5,17 @@ milestone_name: Entra Group Mapping & Governance Backlog
 current_phase: 83
 current_phase_name: Governance — Workspace Rename & Slug Edit
 status: executing
-stopped_at: Phase 83 context gathered
-last_updated: "2026-11-20T14:27:07.117Z"
+stopped_at: Plan 83-01 complete; 83-02 pending
+last_updated: "2026-11-20T14:46:31.000Z"
 last_activity: 2026-11-20
-last_activity_desc: Phase 82 complete, transitioned to Phase 83
-state_head: f620d48c67a769d7acda574c3cfbfe7085f924c0
+last_activity_desc: Plan 83-01 executed (server rename + dead-mappings)
+state_head: 1d674bc165119fd4567bb7c0dc4f5b5f574cb6d6
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
-  percent: 40
+  completed_plans: 7
+  percent: 44
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-20)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 82 — Removal Sync + Guards + Audit
+**Current focus:** Phase 83 — Governance — Workspace Rename & Slug Edit
 
 ## Current Position
 
-Phase: 83 (Governance — Workspace Rename & Slug Edit) — READY TO EXECUTE
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-20 — Phase 82 complete, transitioned to Phase 83
+Phase: 83 (Governance — Workspace Rename & Slug Edit) — EXECUTING
+Plan: 1 of 2 → 2 of 2 (83-01 complete)
+Status: Executing Phase 83 — plan 83-02 next
+Last activity: 2026-11-20 — 83-01 executed (rename + dead-mappings routes, 17-test suite green)
 
 Progress: [████░░░░░░] 40%
 
