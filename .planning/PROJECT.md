@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-19 — v3.1 Workspace Governance started*
+*Last updated: 2026-11-20 — v3.1 Workspace Governance complete (Phase 79 shipped the Governance Surface; WSG-07/08/09 validated)*
 
 ## Current Milestone: v3.1 Workspace Governance
 
@@ -991,10 +991,17 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 - ✓ PWA-03 — Service-worker installability proven by the EXISTING push SW with zero code
   changes: sha256 pin, registration call-site pins, scope agreement, DEPLOY.md §18, 4/4
   real-device UAT — Phase 74 (verification 7/7 passed)
+- ✓ WSG-07, WSG-08, WSG-09 — Governance Surface: operator-only /governance page listing ALL
+  workspaces (name/slug/members/creator/created/status), filter + seg, type-to-confirm
+  archive with amber archived badge + unarchive, empty-only delete with per-member orphan
+  disposition modal (reassign destination+role / release), keyed toasts, 403 fullstate for
+  non-operators; Operators section relocated from Settings (single operator surface, D-01) —
+  Phase 79 (verification 18/18 passed; UAT walkthrough 1/1 pass)
 
 ### Active
 
-- **Next milestone:** not yet planned — start with `/gsd-new-milestone`.
+- **Next milestone:** not yet planned — v3.1 Workspace Governance is complete; start with
+  `/gsd-complete-milestone` then `/gsd-new-milestone`.
 - **Backlog:** MS Project/xlsx visual checks (first Project-equipped machine);
   UI round-3 invite follow-ups (53-VERIFICATION.md); searchable token-chip pickers;
   56-02's 9 pre-existing e2e spec failures (locale/french-overflow — dedicated plan);
