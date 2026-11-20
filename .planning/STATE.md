@@ -5,10 +5,10 @@ milestone_name: Entra Group Mapping & Governance Backlog
 current_phase: 83
 current_phase_name: Governance — Workspace Rename & Slug Edit
 status: executing
-stopped_at: Plan 83-01 complete; 83-02 pending
-last_updated: "2026-11-20T14:46:31.000Z"
+stopped_at: Plans 83-01 and 83-02 complete — phase 83 ready for /gsd-verify-work
+last_updated: "2026-11-20T15:12:00.000Z"
 last_activity: 2026-11-20
-last_activity_desc: Plan 83-01 executed (server rename + dead-mappings)
+last_activity_desc: Plan 83-02 executed (client rename modal + dead card + 5-locale keys)
 state_head: 1d674bc165119fd4567bb7c0dc4f5b5f574cb6d6
 progress:
   total_phases: 5
@@ -31,9 +31,9 @@ before features.
 ## Current Position
 
 Phase: 83 (Governance — Workspace Rename & Slug Edit) — EXECUTING
-Plan: 1 of 2 → 2 of 2 (83-01 complete)
-Status: Executing Phase 83 — plan 83-02 next
-Last activity: 2026-11-20 — 83-01 executed (rename + dead-mappings routes, 17-test suite green)
+Plan: 2 of 2 (83-01 + 83-02 complete)
+Status: Phase 83 executed — ready for /gsd-verify-work
+Last activity: 2026-11-20 — 83-02 executed (rename modal, dead-mapping card, 5-locale keys, full suite green 2034/0)
 
 Progress: [████░░░░░░] 40%
 
@@ -75,6 +75,8 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 | Phase 80 P02 | 6 min | 3 tasks | 10 files |
 | Phase 82 P01 | ~35 min | 3 tasks | 2 files |
 | Phase 82 P02 | ~40 min | 3 tasks | 2 files |
+| Phase 83 P01 | ~35 min | 3 tasks | 4 files |
+| Phase 83 P02 | ~55 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -102,6 +104,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
 - [Phase 82, 82-02]: downgrade writes go through addMembership so the D-82-7 conditional clause re-stamps the DRIVING group's provenance (role-source semantics)
 - [Phase 82, 82-02]: delta audit rows use their OWN db.tx — addMembership owns an internal tx and db.tx does not nest (no savepoints)
 - [Phase 82, 82-02]: D-82-11 uniform trail live — zero sso_group% security verbs remain; grant-side skips carry dead-workspace/archived-workspace reasons, removal-side dead-workspace stays vocabulary-only (FK cascade)
+- [Phase 83, 83-02]: dead-mappings payload rides refreshGovernanceWorkspaces (seq-guarded, refusal hides card only); staged edit state carries origSlug so the D-03 fork compares against ground truth; rename refusals surface via tErr over existing err.* keys (zero new vocabulary)
+- [Phase 83, 83-02]: the data-a/data-r/data-v machine-identifier pins exist in TWO suites (i18n-toast + i18n-shell) and the en catalogue size is pinned in i18n-core-features — all three bump together under D-12
 
 ### Pending Todos
 
@@ -126,9 +130,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T14:02:45.632Z
-Stopped at: Phase 83 context gathered
-Resume file: .planning/phases/83-governance-workspace-rename-slug-edit/83-CONTEXT.md
+Last session: 2026-11-20T15:12:00.000Z
+Stopped at: Phase 83 plan 83-02 complete — SUMMARY written, full suite green
+Resume file: .planning/phases/83-governance-workspace-rename-slug-edit/83-02-SUMMARY.md
 
 ## Operator Next Steps
 
