@@ -12,7 +12,7 @@
 
 ## Phases
 
-- [ ] **Phase 80: Group Mapping Core — Parser, Resolver, Overage Detection** - Inert `groups.js` module: tri-state env parse of mapping config, GUID-keyed validation, overage detector
+- [x] **Phase 80: Group Mapping Core — Parser, Resolver, Overage Detection** - Inert `groups.js` module: tri-state env parse of mapping config, GUID-keyed validation, overage detector (2026-11-20)
 - [ ] **Phase 81: Group Grant Path — Callback Wiring + Provenance** - Groups grant workspace membership and operator rights at SSO login (grants only, no removals)
 - [ ] **Phase 82: Removal Sync + Guards + Audit** - Removed-from-group users lose only group-derived grants at login, through the shared guard funnel
 - [ ] **Phase 83: Governance — Workspace Rename & Slug Edit** - Operator edits workspace name/slug from /governance, with dead-mapping warnings
@@ -31,11 +31,11 @@
   3. Malformed GUIDs or unknown workspace IDs in the mapping config are refused or warned as dead mappings at boot; display labels are never used as match keys
   4. With no mapping env set, the server boots and behaves byte-identically to today (all existing suites green, no behavior change)
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 - [x] 80-01-PLAN.md — groups.js core (validators, four-outcome overage detector, D-82-1 resolver) + dual-schema group_mappings table with fixture tests
-- [ ] 80-02-PLAN.md — operator-gated save API with keyed 5-locale refusals + boot dead-mapping warning + Dockerfile/dependency-test updates
+- [x] 80-02-PLAN.md — operator-gated save API with keyed 5-locale refusals + boot dead-mapping warning + Dockerfile/dependency-test updates
 
 ### Phase 81: Group Grant Path — Callback Wiring + Provenance
 

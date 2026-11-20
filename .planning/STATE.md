@@ -5,17 +5,17 @@ milestone_name: Entra Group Mapping & Governance Backlog
 current_phase: 80
 current_phase_name: Group Mapping Core — Parser, Resolver, Overage Detection
 status: executing
-stopped_at: Completed 80-01-PLAN.md
-last_updated: "2026-11-20T10:33:18.384Z"
+stopped_at: Completed 80-02-PLAN.md — Phase 80 fully executed, ready for /gsd-verify-work 80
+last_updated: "2026-11-20T10:50:00.000Z"
 last_activity: 2026-11-20
-last_activity_desc: Phase 80 execution started
-state_head: 848a13e2eebb9e2348afa9cca0f54ce7645da66c
+last_activity_desc: Phase 80 plan 80-02 executed (3 tasks, 3 commits) — phase plans 2/2 complete
+state_head: 41de3b30
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
-  percent: 0
+  completed_plans: 2
+  percent: 20
 ---
 
 # Project State
@@ -31,11 +31,11 @@ before features.
 ## Current Position
 
 Phase: 80 (Group Mapping Core — Parser, Resolver, Overage Detection) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-11-20 — Phase 80 execution started
+Plan: 2 of 2 — COMPLETE
+Status: Ready for /gsd-verify-work 80
+Last activity: 2026-11-20 — 80-02 executed (save route, boot warning, Dockerfile contract)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██........] 20%
 
 ## Milestone v3.2 Phase Map
 
@@ -60,7 +60,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 80 | 0 | - | - |
+| 80 | 2 | 14 min | 7 min |
 | 81 | 0 | - | - |
 | 82 | 0 | - | - |
 | 83 | 0 | - | - |
@@ -72,6 +72,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 80 P01 | 8 min | 3 tasks | 5 files |
+| Phase 80 P02 | 6 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
   D-82-5 old slug 404s, no redirect · D-82-6 dead mappings surface in operator console + boot log
 - [Phase 80]: group_mappings carries a kind column ('workspace'|'operator') implementing the dedicated operator-mapping row kind now, so Phase 81 passes claims without config migration
 - [Phase 80]: Non-array groups claim stays fail-closed (unmapped/shape); operatorFlag is true|null tri-state, never false
+- [Phase 80, 80-02]: Refusal-code literals passed EXPLICITLY at the server.js call site (domains.js precedent) — the error-codes reverse-parity test greps server.js source, so default codes inside a module stay invisible to it
+- [Phase 80, 80-02]: Boot group-mappings line is D-11 vocabulary (zero rows → exactly one off-line, no dead-mapping query); save route audits via logSecurity('group_mapping_saved') now to avoid the Phase 83 retrofit
 
 ### Pending Todos
 
@@ -116,8 +119,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T10:33:05.171Z
-Stopped at: Completed 80-01-PLAN.md
+Last session: 2026-11-20T10:50:00.000Z
+Stopped at: Completed 80-02-PLAN.md — Phase 80 fully executed
 Resume file: None
 
 ## Operator Next Steps
