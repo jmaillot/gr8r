@@ -5277,7 +5277,7 @@ async function handleApi(req, res, url) {
          Expired invites are filtered out here — they neither block nor
          auto-accept. */
       let ssoRedirect = '/';
-      if (!(await db.get('select 1 from memberships where user_id = ?', [row.id]))) {
+      if (!(await db.get("select 1 from memberships where user_id = ? and (provenance is null or provenance not like 'group:%')", [row.id]))) {
         /* DP-5 (Phase 76, DOM-05/SC3): refuse invites the accept door would
            refuse — the ROW's stored invite.email against the live boot-frozen
            INVITE_DOMAINS, verbatim DP-3 semantics (the SQL already matches
