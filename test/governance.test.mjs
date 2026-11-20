@@ -237,6 +237,67 @@ test('delete with full dispositions → 200; memberships moved/dropped; workspac
   }
 });
 
+/* CR-01: the orphan modal's read route — the client's refreshGovOrphanMembers
+   drives GET /:id/members; the payload carries members + reassign targets. */
+test('GET /api/auth/operator/workspaces/:id/members returns members and active reassign targets (delete target + archived excluded)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    // victim workspace with TWO members (owner + invitee)
+    const { owner, ws } = await plainWorkspace(server.base, 'Orphan Co', 'orphan-co');
+    const joined = await signup(server.base, { name: 'Orphan Member', email: 'orphan-member@test.local' });
+    const invite = await owner.post(`/api/workspaces/${ws.slug}/invites`, { emails: ['orphan-member@test.local'], role: 'member' });
+    assert.equal(invite.status, 201, `invite must be minted, got ${invite.status}: ${JSON.stringify(invite.data)}`);
+    const member = await joined.client.post(`/api/invites/${invite.data.invites[0].url.split('/join/')[1]}/accept`, {
+      name: 'Orphan Member', email: 'orphan-member@test.local', password: 'password-1234',
+    });
+    assert.ok([200, 201].includes(member.status), `invite accept must succeed: ${JSON.stringify(member.data)}`);
+
+    // two candidate destinations: one active, one archived
+    const { ws: landing } = await plainWorkspace(server.base, 'Landing Co', 'landing-co');
+    const { ws: shelved } = await plainWorkspace(server.base, 'Shelved Co', 'shelved-co');
+    const archived = await operator.post(`/api/auth/operator/workspaces/${shelved.id}/archive`);
+    assert.equal(archived.status, 200);
+
+    const res = await operator.get(`/api/auth/operator/workspaces/${ws.id}/members`);
+    assert.equal(res.status, 200, `expected 200, got ${res.status}: ${JSON.stringify(res.data)}`);
+
+    const memberEmails = res.data.members.map(m => m.email).sort();
+    assert.deepEqual(memberEmails, ['orphan-co-owner@test.local', 'orphan-member@test.local'], 'both members listed');
+    const orphanMember = res.data.members.find(m => m.email === 'orphan-member@test.local');
+    assert.ok(orphanMember.userId && orphanMember.name === 'Orphan Member' && orphanMember.role === 'member', `member payload shape: ${JSON.stringify(orphanMember)}`);
+
+    const targets = res.data.targets;
+    assert.ok(Array.isArray(targets), 'payload carries a targets array');
+    assert.ok(targets.find(t => t.id === landing.id), 'the active workspace IS a reassign target');
+    assert.equal(targets.find(t => t.id === landing.id).memberCount, 1, 'target carries its member count');
+    assert.equal(targets.find(t => t.id === landing.id).name, 'Landing Co');
+    assert.ok(!targets.find(t => t.id === ws.id), 'the delete target itself is excluded');
+    assert.ok(!targets.find(t => t.id === shelved.id), 'an archived workspace is NOT offered as a destination');
+
+    // unknown id → 404, exact guard shape
+    const missing = await operator.get('/api/auth/operator/workspaces/does-not-exist/members');
+    assert.equal(missing.status, 404);
+    assert.equal(missing.data.code, 'notFound');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('non-operator GET members → EXACT 403 operatorOnly (no workspace-existence oracle)', async () => {
+  const server = await startServer({});
+  try {
+    const { ws } = await plainWorkspace(server.base, 'Private Co', 'private-co');
+    const joined = await signup(server.base, { name: 'Plain User', email: 'plain-looker@test.local' });
+    const res = await joined.client.get(`/api/auth/operator/workspaces/${ws.id}/members`);
+    assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'operatorOnly');
+    assert.equal(res.data.error, 'Only the instance operator can do that');
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ---------- WSG-08: release / reassign member routes (D-05, D-08) ---------- */
 
 test('standalone release: member with no other workspace ends with an empty workspace list', async () => {

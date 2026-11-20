@@ -7011,6 +7011,33 @@ async function handleApi(req, res, url) {
     return json(res, 200, { deleted: true });
   }
 
+  /* 79-03 (D-05/D-08): the orphan modal's read route — the member list of the
+     workspace being deleted plus the reassign targets (name + member count).
+     Read route: NO throttle (Phase 78 read precedent); guard order mirrors the
+     family (sameOrigin → requireUser → operator gate BEFORE target lookup, D-09).
+     D-08: targets exclude the delete target itself AND archived workspaces —
+     a reassign into an archived workspace lands the member somewhere they can
+     never enter (requireWorkspace refuses archived slugs), so the server never
+     offers one (the standalone reassign refusal is the control, WR-02). */
+  const operatorWsMembersReadMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/members$/);
+  if (operatorWsMembersReadMatch && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const ws = await db.get('select id from workspaces where id = ?', [operatorWsMembersReadMatch[1]]);
+    if (!ws) return fail(res, 404, 'notFound', 'Not found');
+    const targets = (
+      await db.all(`select w.id, w.slug, w.name,
+          (select count(*) from memberships m where m.workspace_id = w.id) as member_count
+        from workspaces w where w.id is not ? and w.archived = 0`, [operatorWsMembersReadMatch[1]])
+    ).map(r => ({ id: r.id, slug: r.slug, name: r.name, memberCount: r.member_count }));
+    return json(res, 200, {
+      members: (await membersOf(ws.id)).map(m => ({ userId: m.user_id, name: m.name, email: m.email, role: m.role })),
+      targets,
+    });
+  }
+
   const operatorWsMemberMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/members\/([A-Za-z0-9_-]{1,64})\/(reassign|release)$/);
   if (operatorWsMemberMatch && method === 'POST') {
     // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
