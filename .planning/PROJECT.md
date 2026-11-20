@@ -1,8 +1,26 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-20 after v3.1 milestone*
+*Last updated: 2026-11-20 — v3.2 milestone started*
 
-## Current Milestone: v3.1 Workspace Governance
+## Current Milestone: v3.2 Entra Group Mapping & Governance Backlog
+
+**Goal:** Let Entra ID groups drive gr8r workspace membership and operator rights at SSO login, and finish the deferred governance/backlog work.
+
+**Target features:**
+- Group claim ingestion: read the `groups` claim (Entra Object IDs) from the ID token in the SSO callback; document/handle the >200-group overage case
+- Group → workspace mapping: config mapping that auto-assigns workspace membership + role at JIT-provision and login
+- Group → operator mapping: members of a mapped group are auto-promoted to instance operator
+- Sync removals at login: removed from group = membership removed/demoted at next login, with last-operator and last-owner guards still enforced
+- Workspace settings editing (rename/slug) from the /governance page (v3.1 deferral)
+- Older backlog: searchable token-chip pickers, 56-02 e2e spec failures, Phase 57 mobile layout follow-up
+
+**Key context:** zero new dependencies (no Graph SDK — claims-first design); group claims are
+snapshot-at-login (no periodic reconcile); unmapped users behave exactly as today (fail-closed);
+group match is a parallel admission concept beside the v3.0 domain door matrix, which is unchanged.
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+
+## Current Milestone: v3.1 Workspace Governance — SHIPPED (2026-11-20)
 
 **Goal:** Instance operators control who can create workspaces and can see and manage every
 workspace on the instance — no shadow workspaces.

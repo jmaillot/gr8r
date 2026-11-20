@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.1
-milestone_name: Workspace Governance
-status: Awaiting next milestone
-stopped_at: Phase 79 complete — all phases complete
-last_updated: "2026-11-20T09:44:21.586Z"
+milestone: v3.2
+milestone_name: Entra Group Mapping & Governance Backlog
+status: planning
+last_updated: "2026-11-20T09:51:54.235Z"
 last_activity: 2026-11-20
-last_activity_desc: Milestone v3.1 completed and archived
-state_head: b3b5c9004fb255439385765c9c57023fde088354
 progress:
-  total_phases: 2
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
-current_phase: 79
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -29,10 +25,10 @@ before features.
 
 ## Current Position
 
-Phase: Milestone v3.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-20 — Milestone v3.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-20 — Milestone v3.2 started
 
 ## Performance Metrics
 
