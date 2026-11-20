@@ -321,7 +321,11 @@ test('after a rename, the OLD slug URL → exact 404 with no Location header; th
     const oldRes = await owner.get('/api/workspaces/team-old');
     assert.equal(oldRes.status, 404, `old slug must 404, got ${oldRes.status}`);
     const rawOld = await fetch(`${server.base}/api/workspaces/team-old`, { headers: { cookie: owner.cookie() }, redirect: 'manual' });
-    assert.ok(!('location' in rawOld.headers) || !rawOld.headers.get('location'), `no Location header on the old slug: ${rawOld.headers.get('location')}`);
+    assert.equal(rawOld.status, 404, `old slug must 404, got ${rawOld.status}`);
+    // D-15: the exact-404 assertion form — NO 'location' key at all, not
+    // merely an empty one (a "helpful" 301/302 would silently violate D-82-5).
+    assert.ok(!('location' in rawOld.headers), `no Location header on the old slug: ${rawOld.headers.get('location')}`);
+    assert.equal(rawOld.data?.code ?? (await rawOld.json()).code, 'workspaceNotFound');
 
     const newRes = await owner.get('/api/workspaces/team-new');
     assert.equal(newRes.status, 200, `new slug must resolve, got ${newRes.status}`);
