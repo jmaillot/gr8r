@@ -566,6 +566,9 @@ const STOP_LIST = [
   // 'Admin' — the role label's French catalogue value is identical to the
   // English one (common.role.admin).
   'Admin',
+  // 'Instance' — the governance sidebar group label's French catalogue value
+  // is identical to the English one (common.instance).
+  'Instance',
   // The strings below all have identical French and English catalogue values
   // (settings vocabulary and the colour palette names — cognates that French
   // UI convention keeps as-is), so a locale-'fr' render legitimately shows
