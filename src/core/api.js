@@ -384,6 +384,18 @@ export const api = {
   async operatorWsRename(id, { name, slug }) {
     return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/rename`, { name, slug });
   },
+  /* WR-83-01: a successful GOVERNANCE rename must reconcile the operator's own
+     client state — `state.workspaces` by id, and `state.workspace` when the
+     loaded workspace IS the renamed one — or every subsequent workspace-scoped
+     call (GET /api/workspaces/:slug, invites, members, PUT doc) builds its URL
+     from the dead slug and 404s, and the sidebar/switcher links rot until a
+     full reload. Same reconcile shape as patchWorkspace (the PATCH precedent).
+     The rename bumps NO revision server-side (no doc write), so nothing else
+     needs resetting. */
+  renameWorkspaceLocal(id, { name, slug }) {
+    state.workspaces = state.workspaces.map(w => (w.id === id ? { ...w, name, slug } : w));
+    if (state.workspace?.id === id) state.workspace = { ...state.workspace, name, slug };
+  },
   /* Phase 83 (D-09): derived-on-read dead-mapping visibility — orphaned
      group_mappings plus the Phase 82 encoded guard trail. Read route: no
      throttle; the payload is raw values (escaping happens at first render). */

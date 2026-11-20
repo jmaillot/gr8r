@@ -4733,6 +4733,11 @@ A.govEditSave = async () => {
     S.ui.govEditWs = null;
     S.ui.govEditSuggest = null;
     closeModal();
+    /* WR-83-01: reconcile the operator's own client workspace state BEFORE the
+       governance refresh — the listing refresh writes only S.ui.govWs/govDead;
+       without this the loaded workspace keeps the dead slug and the next
+       workspace-scoped call 404s. */
+    api.renameWorkspaceLocal(ws.id, { name, slug });
     await refreshGovernanceWorkspaces();
     toast(t('toast.governanceRenamed'));
   };
