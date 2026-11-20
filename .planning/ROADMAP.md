@@ -123,9 +123,15 @@ gate and boot log define who reaches the page; `/api/config` carries the gate va
      same commit as the endpoint that emits it.
 **Plans**: 3 plans
 Plans:
+**Wave 1**
 - [ ] 79-01-PLAN.md — Server: archived column + migration, requireWorkspace refusal, operator /workspaces route family (list/archive/delete/reassign/release) + governance server suite (WSG-07, WSG-08)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 79-02-PLAN.md — Client: governance page, route registration, workspaces table, type-to-confirm + orphan disposition modal + client suite (WSG-07, WSG-08)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 79-03-PLAN.md — Relocate operatorCard into the governance Operators section; strip Settings remnants (D-01, costly) + WSG-09 pins (WSG-09)
+
 **UI hint**: yes
 
 ## Progress
