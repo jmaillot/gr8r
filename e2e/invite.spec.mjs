@@ -55,7 +55,13 @@ async function interactAndSurvive(page) {
   await role.selectOption({ label: 'Admin' });
   await role.selectOption({ label: 'Member' });
 
-  await page.locator('button[data-a="invTeamToggle"]').first().click();
+  /* [2026-11-20 round 4, 84-02] the chip row became chips + a searchable
+     picker opener (teamPickOpen): add one team inside the picker modal via
+     teamPickAdd, then Done (teamPickApply) — both re-render the modal. */
+  await page.locator('button[data-a="teamPickOpen"][data-surface="invite"]').click();
+  const pickModal = page.locator('div.modal[role="dialog"]').last();
+  await pickModal.locator('button[data-a="teamPickAdd"]').first().click();
+  await pickModal.locator('button[data-a="teamPickApply"]').click();
 
   /* A settle window so a background poll re-render — if one fires — has
      its chance to wipe the unbound draft. */

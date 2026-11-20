@@ -109,13 +109,29 @@ for (const lang of ['nl', 'de', 'es']) {
   test(`signup DP-1 refusal renders the ${lang} catalogue entry exactly (MAINT-02/SC2)`, async ({ browser }) => {
     const { context, page, cat } = await signInSwitchAndSignOut(browser, lang);
     try {
+      /* [2026-11-20 round 4, 78-02] the sign-out above lands on the
+         await-access card (WSG-10): the account has no workspace, so the
+         boot routes to no-workspace/await instead of the login shell. A
+         fresh navigation returns to the anonymous login page. */
+      await page.goto('/');
+      await expect(page.getByRole('button', { name: cat['page.auth.signUp'] })).toBeVisible();
       /* The signup view: the login form's own "Sign up" affordance. */
       await page.getByRole('button', { name: cat['page.auth.signUp'] }).click();
       await expect(page.getByRole('button', { name: cat['page.auth.createAccount'] })).toBeVisible();
 
       /* A genuinely out-of-domain email: the run-wide env admits only
          @e2e.local, so this submit must hit the DP-1 gate (server.js
-         signupDomainNotAllowed). */
+         signupDomainNotAllowed). [2026-11-20 round 4, 78-02] a refused
+         signup no longer returns to the form — the 6-step onboarding
+         wizard interposes (WORKSPACE_CREATION=true in the suite env). The
+         wizard's "Exit setup" (onbExit) lands on the login shell; re-open
+         signup and re-submit the same out-of-domain email — the DP-1
+         refusal then renders on the ferr('email') span, the surface under
+         test. */
+      await page.getByRole('button', { name: cat['page.auth.exitSetup'] }).click();
+      await expect(page.getByRole('button', { name: cat['page.auth.signUp'] })).toBeVisible();
+      await page.getByRole('button', { name: cat['page.auth.signUp'] }).click();
+      await expect(page.getByRole('button', { name: cat['page.auth.createAccount'] })).toBeVisible();
       await page.getByLabel(cat['common.fullName']).fill('Refusal Probe');
       await page.getByLabel(cat['page.auth.workEmail']).fill(`rejected-${run}-${lang}@forbidden.example`);
       await page.getByLabel(cat['common.password'], { exact: true }).fill(PASSWORD);
