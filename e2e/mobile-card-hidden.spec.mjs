@@ -235,3 +235,44 @@ test('at 390×844 every hideable card field follows hidden[] both ways and no-eq
     await context.close();
   }
 });
+
+/* =====================================================================
+   PHASE 84 BP-03 (D-07): phone-viewport overflow sweep — the three main
+   surfaces render without horizontal document overflow at 390×844.
+   ===================================================================== */
+
+/* Web-first overflow probe: document scrollWidth must stay ≤ innerWidth
+   (expect.poll — no sleeps). */
+async function expectNoHorizontalOverflow(page, label) {
+  await expect
+    .poll(
+      () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+      { message: `${label}: horizontal overflow at the phone viewport`, timeout: 5000 },
+    )
+    .toBeLessThanOrEqual(0);
+}
+
+/* Navigation via direct route navigation — the desktop sidebar is
+   off-canvas at 390px (its data-a='go' items are outside the viewport,
+   auto-waiting clicks never resolve) and the mobile Primary nav is an
+   overlay (french-overflow precedent: routes are navigated directly).
+   Arrival proven by the surface's h1 (nav.route.* catalogue values). */
+test('at 390×844 dashboard, members and governance render without horizontal overflow', async ({ browser }) => {
+  const { context, page } = await signIn(browser);
+  try {
+    /* Dashboard (the landing route after sign-in). */
+    await expectNoHorizontalOverflow(page, 'dashboard');
+
+    /* Members. */
+    await page.goto(`/w/${acct.slug}/members`);
+    await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'members');
+
+    /* Governance. */
+    await page.goto(`/w/${acct.slug}/governance`);
+    await expect(page.getByRole('heading', { name: 'Governance' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'governance');
+  } finally {
+    await context.close();
+  }
+});

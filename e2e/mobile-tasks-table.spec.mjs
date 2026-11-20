@@ -213,3 +213,72 @@ test('at 390px the long-task card wraps with zero overflow and the toolbar stays
     await context.close();
   }
 });
+
+/* =====================================================================
+   PHASE 84 BP-03 (D-07): 57-UAT regression + phone-viewport sweep.
+   ===================================================================== */
+
+/* Web-first overflow probe: document scrollWidth must stay ≤ innerWidth
+   (expect.poll — no sleeps). Used for the D-07 sweep and reusable for any
+   surface reached from these fixtures. */
+async function expectNoHorizontalOverflow(page, label) {
+  await expect
+    .poll(
+      () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth),
+      { message: `${label}: horizontal overflow at the phone viewport`, timeout: 5000 },
+    )
+    .toBeLessThanOrEqual(0);
+}
+
+/* The cols popover re-renders after a toggle; the popover may close, so
+   visibility is probed before every open attempt (mobile-card-hidden
+   convention). */
+async function toggleCol(page, id) {
+  const check = page.locator(`input.check[data-v="${id}"]`);
+  if (!(await check.isVisible().catch(() => false))) {
+    await page.locator('.toolbar [data-pop="cols"]').click();
+  }
+  await check.click();
+}
+
+/* 57-UAT deferred item (BP-03): at the phone band the Columns button's
+   text label is collapsed (hide-m — the truncation fix), the button itself
+   stays visible and functional (Phase 68 D-02 — never display:none), and
+   hiding/showing a column through the popover drives BOTH renderings
+   through the same hidden[] view state: the card stack field disappears/
+   returns, and the desktop table (CSS-hidden ≤900px but still in the DOM)
+   reacts in its colgroup. */
+test('at 390×844 the Columns label is collapsed and the popover drives table + card stack', async ({ browser }) => {
+  const { context, page } = await signIn(browser, acct, { width: 390, height: 844 });
+  try {
+    await openTasksTable(page, acct);
+
+    const colsBtn = page.locator('.toolbar [data-pop="cols"]');
+    await expect(colsBtn).toBeVisible();
+    /* 57-UAT fix: label collapsed at ≤900px, button still visible. */
+    await expect(colsBtn.locator('span.hide-m')).toBeHidden();
+
+    await colsBtn.click();
+    await expect(page.locator('input.check[data-v="priority"]')).toBeVisible();
+
+    /* Card stack responds: the long task carries priority High. */
+    const card = page.locator('.only-m .panel[data-id="t_mtask_long"]');
+    await expect(card).toContainText('High');
+    await page.locator('input.check[data-v="priority"]').click();
+    await expect(page.locator('.only-m .panel[data-id="t_mtask_long"]')).not.toContainText('High');
+
+    /* Desktop table responds too (same hidden[] state, in-DOM while
+       CSS-hidden at ≤900px): the priority colgroup column disappears. */
+    await expect(page.locator('.tbl col[data-col="priority"]')).toHaveCount(0);
+
+    /* Toggle back on — both renderings return. */
+    await toggleCol(page, 'priority');
+    await expect(card).toContainText('High');
+    await expect(page.locator('.tbl col[data-col="priority"]')).toHaveCount(1);
+
+    /* The tasks surface itself never overflows horizontally at 390px. */
+    await expectNoHorizontalOverflow(page, 'tasks');
+  } finally {
+    await context.close();
+  }
+});
