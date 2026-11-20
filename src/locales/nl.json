@@ -1778,6 +1778,8 @@
   "err.workspaceNotEmpty": "Deze werkruimte bevat projecten en kan niet worden verwijderd. Archiveer deze in plaats daarvan.",
   "err.dispositionRequired": "Elk lid heeft een bestemming of vrijgave nodig voordat er wordt verwijderd.",
   "err.memberAlreadyMember": "{name} is al lid van die werkruimte. Kies een andere bestemming.",
+  "err.invalidRole": "De rol moet owner, admin of member zijn.",
+  "err.invalidBody": "Ongeldige verzoekinhoud.",
   "err.ownerImmune": "Eigenaaraccounts zijn immuun voor intrekking door de operator",
   "err.workspaceNotFound": "Werkruimte niet gevonden",
   "err.workspaceCreationClosed": "Het aanmaken van werkruimten is gesloten op deze instantie. Vraag een operator om er een voor je te maken of om je uit te nodigen.",

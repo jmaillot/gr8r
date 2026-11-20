@@ -1778,6 +1778,8 @@
   "err.workspaceNotEmpty": "Este espacio de trabajo tiene proyectos y no se puede eliminar. Archívalo en su lugar.",
   "err.dispositionRequired": "Cada miembro necesita un destino o una liberación antes de eliminar.",
   "err.memberAlreadyMember": "{name} ya es miembro de ese espacio de trabajo. Elige otro destino.",
+  "err.invalidRole": "El rol debe ser owner, admin o member.",
+  "err.invalidBody": "Cuerpo de solicitud no válido.",
   "err.ownerImmune": "Las cuentas de propietario son inmunes a la revocación del operador",
   "err.workspaceNotFound": "Espacio de trabajo no encontrado",
   "err.workspaceCreationClosed": "La creación de espacios de trabajo está cerrada en esta instancia. Pide a un operador que cree uno por ti o que te invite.",

@@ -1778,6 +1778,8 @@
   "err.workspaceNotEmpty": "Dieser Arbeitsbereich enthält Projekte und kann nicht gelöscht werden. Archivieren Sie ihn stattdessen.",
   "err.dispositionRequired": "Jedes Mitglied benötigt ein Ziel oder eine Freigabe, bevor gelöscht wird.",
   "err.memberAlreadyMember": "{name} ist bereits Mitglied dieses Arbeitsbereichs. Wählen Sie ein anderes Ziel.",
+  "err.invalidRole": "Die Rolle muss owner, admin oder member sein.",
+  "err.invalidBody": "Ungültiger Anfrageinhalt.",
   "err.ownerImmune": "Eigentümer-Konten sind gegen Operator-Widerruf immun",
   "err.workspaceNotFound": "Arbeitsbereich nicht gefunden",
   "err.workspaceCreationClosed": "Die Erstellung von Arbeitsbereichen ist auf dieser Instanz geschlossen. Bitten Sie eine Betreiberin oder einen Betreiber, einen für Sie zu erstellen oder Sie einzuladen.",

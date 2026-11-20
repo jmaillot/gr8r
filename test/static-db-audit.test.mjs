@@ -41,12 +41,14 @@ test('every db.get/all/run/tx facade call is awaited or returned (D-05)', () => 
   assert.equal(offenders.length, 0, `un-awaited facade calls:\n${offenders.join('\n')}`);
 });
 
-test('collate nocase stays frozen at the seven sanctioned query sites (D-10 — no NEW nocase)', () => {
+test('collate nocase stays frozen at the eight sanctioned query sites (D-10 — no NEW nocase)', () => {
   /* The SCHEMA template literal (legacy DDL, kept verbatim for SQLite) plus
-     seven pinned query callsites are the only sanctioned homes of
+     eight pinned query callsites are the only sanctioned homes of
      `collate nocase`; the adapter's toPgSql rewrite owns the dialect. The
      count is frozen: any NEW nocase site must fail this test so the pg
-     rewrite surface never grows silently. */
+     rewrite surface never grows silently. (7 → 8 at Phase 79: the operator
+     workspace listing joins membershipsOf's `w.name collate nocase` ordering
+     shape — same collation family, one deliberate new site.) */
   const start = src.indexOf('const SCHEMA');
   assert.ok(start !== -1, 'SCHEMA constant must exist');
   const schemaEnd = src.indexOf('`;', start);
@@ -55,8 +57,8 @@ test('collate nocase stays frozen at the seven sanctioned query sites (D-10 — 
   const matches = [...tail.matchAll(/collate\s+nocase/gi)];
   assert.equal(
     matches.length,
-    7,
-    `collate nocase count drifted (expected 7 pinned query sites): lines ${matches.map(m => lineOf(schemaEnd + 2 + m.index)).join(', ')}`,
+    8,
+    `collate nocase count drifted (expected 8 pinned query sites): lines ${matches.map(m => lineOf(schemaEnd + 2 + m.index)).join(', ')}`,
   );
 });
 
