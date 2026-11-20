@@ -4617,6 +4617,11 @@ export async function refreshGovernanceWorkspaces() {
   if (res.ok) {
     S.ui.govWs = res.data.workspaces || [];
     S.ui.govWsErr = null;
+    /* 83-02 (D-09/D-10): the dead-mapping payload rides the same fill —
+       advisory only, so a refusal simply hides the warning card, never an
+       error state. Re-checked against the sequence after the await. */
+    const dead = await api.operatorDeadMappings();
+    if (my === govFillSeq) S.ui.govDead = dead.ok ? { orphans: dead.data.orphans || [], trail: dead.data.trail || [] } : null;
   } else {
     /* D-28: the central intercept owns the 401 teardown. Any other refusal
        surfaces through the page's honest fullstate — never a blank table. */
@@ -4668,6 +4673,83 @@ A.govArchiveAsk = el => {
       await refreshGovernanceWorkspaces();
       toast(t('toast.governanceArchived'));
     },
+  });
+};
+/* 83-02 (D-01/D-03/D-07, T-83-08): the rename modal — staging mirrors the
+   orphan modal (S.ui.govEditWs keeps the ORIGINAL slug alongside the live
+   edit so the D-03 confirm fork compares against ground truth); the
+   chunk-backed custom host renders the governance page's govEditBody.
+   Field edits ride data-in handlers — staged state, never the DOM. */
+A.govEditAsk = el => {
+  const ws = govWsById(el.dataset.id);
+  if (!ws) return;
+  S.ui.govEditWs = { id: ws.id, name: ws.name || '', slug: ws.slug || '', origSlug: ws.slug || '' };
+  S.ui.govEditSuggest = null;
+  import('../pages/governance.js')
+    .then(m => {
+      openModal({ type: 'custom', cls: 'sm', render: () => m.govEditBody(S.ui.govEditWs) });
+    })
+    .catch(e => {
+      console.error(e);
+      S.ui.govEditWs = null;
+      toast(t('err.serverUnreachable'), { kind: 'err' });
+    });
+};
+IN.govEditName = el => {
+  if (S.ui.govEditWs) S.ui.govEditWs.name = el.value;
+};
+IN.govEditSlug = el => {
+  if (S.ui.govEditWs) S.ui.govEditWs.slug = el.value;
+};
+/* D-07: one click adopts the server's suggested available slug. */
+A.govEditAdopt = el => {
+  if (S.ui.govEditWs) S.ui.govEditWs.slug = el.dataset.slug || '';
+  S.ui.govEditSuggest = null;
+  render();
+};
+A.govEditCancel = () => {
+  S.ui.govEditWs = null;
+  S.ui.govEditSuggest = null;
+  closeModal();
+};
+A.govEditSave = async () => {
+  const ws = S.ui.govEditWs;
+  if (!ws) return;
+  const name = String(ws.name || '').trim();
+  const slug = String(ws.slug || '').trim();
+  const slugChanged = slug !== ws.origSlug;
+  const run = async () => {
+    const res = await api.operatorWsRename(ws.id, { name, slug });
+    if (!res.ok) {
+      /* D-07: a slugTaken refusal keeps the modal open and offers the
+         server's suggestion with one click to adopt. */
+      if (res.data?.code === 'slugTaken' && res.data?.suggestion) {
+        S.ui.govEditSuggest = res.data.suggestion;
+        render();
+        return;
+      }
+      return govRefusalToast(res);
+    }
+    S.ui.govEditWs = null;
+    S.ui.govEditSuggest = null;
+    closeModal();
+    await refreshGovernanceWorkspaces();
+    toast(t('toast.governanceRenamed'));
+  };
+  /* D-03: confirm ONLY on a real slug change — a name-only edit saves
+     directly. The confirm body interpolates the OLD slug bold via esc()
+     (the 4660 archive/delete precedent) and the type-to-confirm gate
+     rides the old slug — the string the operator must own breaking
+     (D-82-5: it will 404 permanently, no redirect). */
+  if (!slugChanged) return run();
+  confirmDlg({
+    title: t('page.governance.confirmRenameTitle', { name: name || ws.origSlug }),
+    body: t('page.governance.confirmRenameBody', { old: `<b>${esc(ws.origSlug)}</b>`, slug: esc(ws.origSlug) }),
+    ok: t('page.governance.okRename'),
+    icon: 'pencil',
+    danger: true, // red tile — the old slug dies permanently (D-82-5)
+    typeName: ws.origSlug,
+    run,
   });
 };
 A.govUnarchive = el => {

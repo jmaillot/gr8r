@@ -61,7 +61,7 @@ const wsRow = w => {
     <td>${w.creator ? `<span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(w.creator.name)}</span>` : '<span class="faint">—</span>'}</td>
     <td class="faint">${esc(ago(w.createdAt))}</td>
     <td>${w.archived ? `<span class="badge amber">${t('page.governance.archivedBadge')}</span>` : `<span class="badge green">${t('page.governance.activeBadge')}</span>`}</td>
-    <td><span class="row" style="gap:8px;justify-content:flex-end">${w.archived ? `<button class="btn btn-secondary btn-sm" data-a="govUnarchive" data-id="${esc(w.id)}">${t('page.governance.unarchive')}</button>` : `<button class="btn btn-secondary btn-sm" data-a="govArchiveAsk" data-id="${esc(w.id)}">${t('page.governance.archive')}</button>`}<button class="btn btn-danger btn-sm" data-a="govDeleteAsk" data-id="${esc(w.id)}">${t('page.governance.delete')}</button></span></td>
+    <td><span class="row" style="gap:8px;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="govEditAsk" data-id="${esc(w.id)}">${t('page.governance.edit')}</button>${w.archived ? `<button class="btn btn-secondary btn-sm" data-a="govUnarchive" data-id="${esc(w.id)}">${t('page.governance.unarchive')}</button>` : `<button class="btn btn-secondary btn-sm" data-a="govArchiveAsk" data-id="${esc(w.id)}">${t('page.governance.archive')}</button>`}<button class="btn btn-danger btn-sm" data-a="govDeleteAsk" data-id="${esc(w.id)}">${t('page.governance.delete')}</button></span></td>
   </tr>`;
 };
 
@@ -102,6 +102,7 @@ export function pageGovernance() {
 
   return `<div class="page wide" style="max-width:1200px">
     <div class="ph"><div><h1>${t('nav.route.governance')}</h1><p>${t('page.governance.subtitle')}</p></div></div>
+    ${api.user?.isInstanceAdmin ? govDeadCard() : ''}
     <div class="sblock">
       <h2>${t('page.governance.wsTitle')}</h2>
       <p class="hint">${t('page.governance.lead')}</p>
@@ -161,6 +162,66 @@ export function operatorCard() {
   return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${search}<div class="panel">${list}</div></div>`;
 }
 
+/* =====================================================================
+   83-02 DEAD-MAPPING WARNING CARD (D-08/D-10/D-11, T-83-07)
+   Operator-gated, DISPLAY-ONLY: lists orphaned group_mappings rows and
+   the Phase 82 refused-guard audit trail. Rendered ONLY when the
+   dead-mappings payload carries at least one item — zero dead items →
+   the markup is absent entirely, no off-line shell (D-10). Every value
+   is esc()d at FIRST render — group_mappings.label is an opaque carried
+   value (the Phase 80 XSS watch-item) and the trail action string is
+   split on the FIRST colon only (D-08). No data-a anywhere in the card
+   (D-11: cleanup stays deferred with the mapping editor).
+   ===================================================================== */
+const govDeadCard = () => {
+  const dead = S.ui.govDead;
+  if (!dead) return '';
+  const orphans = dead.orphans || [];
+  const trail = dead.trail || [];
+  if (!orphans.length && !trail.length) return '';
+  /* FIRST-colon-only split (D-08/Pitfall 7): `group_<delta>:group:<guid>:<reason>`
+     → delta | group | guid | reason. A second first-colon split peels guid
+     from reason — a colon inside a reason never corrupts the split. */
+  const splitFirst = s => {
+    const [head, tail] = String(s ?? '').split(/:(.*)/s);
+    return [head || '', tail || ''];
+  };
+  const orphanRow = o =>
+    `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge amber">${esc(o.kind || '')}</span><span class="t trunc">${esc(o.label || '')}</span><span class="faint mono trunc">${esc(o.group_guid || '')} → ${esc(o.workspace_id || '')}</span></div></div></div>`;
+  const trailRow = r => {
+    const [delta, rest] = splitFirst(r.action);
+    const [ns, tail2] = splitFirst(rest);
+    const [guid, reason] = splitFirst(tail2);
+    return `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(delta)}</span><span class="faint">${esc(ns)}</span><span class="mono trunc">${esc(guid)}</span><span class="faint trunc">${esc(reason)}</span><span class="faint">${esc(ago(r.created_at))}</span></div></div></div>`;
+  };
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.governance.deadLead')}</p><div class="panel"><div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.deadOrphans')}</div>${orphans.map(orphanRow).join('')}</div><div><div class="label" style="margin-bottom:6px">${t('page.governance.deadTrail')}</div>${trail.map(trailRow).join('')}</div></div></div>`;
+};
+
+/* =====================================================================
+   83-02 RENAME MODAL (D-01/D-02/D-07, T-83-07) — mirrors govOrphanBody:
+   rendered through the generic custom host; state lives in S.ui.govEditWs
+   ({id, name, slug, origSlug}) staged by A.govEditAsk. A slugTaken refusal
+   keeps the modal open and offers the server's suggested slug with one
+   click to adopt (D-07). Field values ride data-in handlers — the staged
+   state, never the DOM, is the ground truth.
+   ===================================================================== */
+export function govEditBody() {
+  const ws = S.ui.govEditWs;
+  const suggest = S.ui.govEditSuggest;
+  const fields = ws
+    ? `<label class="label" style="margin:0" for="gov-edit-name">${t('page.governance.nameLabel')}</label>
+    <input class="input" id="gov-edit-name" data-in="govEditName" value="${esc(ws.name || '')}" maxlength="60" aria-label="${t('page.governance.nameLabel')}">
+    <label class="label" style="margin:0" for="gov-edit-slug">${t('page.governance.slugLabel')}</label>
+    <input class="input" id="gov-edit-slug" data-in="govEditSlug" value="${esc(ws.slug || '')}" maxlength="40" aria-label="${t('page.governance.slugLabel')}">
+    ${suggest ? `<div class="row" style="gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap"><span class="hint" style="margin:0">${t('page.governance.slugTakenHint', { slug: esc(suggest) })}</span><button class="btn btn-secondary btn-sm" data-a="govEditAdopt" data-slug="${esc(suggest)}">${t('page.governance.adoptSlug')}</button></div>` : ''}`
+    : '';
+  return `<div class="modal-b" style="padding-top:18px;gap:10px">
+    <h2 style="margin:0;font-size:16px">${t('page.governance.editTitle')}</h2>
+    ${fields}
+  </div>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="govEditCancel">${t('common.cancel')}</button><button class="btn btn-primary" data-a="govEditSave">${t('common.save')}</button></div>`;
+}
+
 /* The orphan disposition modal body (D-05/D-06/D-08) — rendered through the
    generic modal host; state lives in S.ui.govDispositions keyed by userId
    ({type:'reassign',wsId,role} | {type:'release'}). The footer's Delete
@@ -210,6 +271,11 @@ export const govOrphanTeardown = () => {
   if (S.ui.govOrphan) {
     S.ui.govOrphan = null;
     S.ui.govDispositions = {};
+  }
+  /* 83-02: the rename modal stage never survives route exit either. */
+  if (S.ui.govEditWs) {
+    S.ui.govEditWs = null;
+    S.ui.govEditSuggest = null;
   }
 };
 /* Phase 60 (D-05): the teardown registry pattern — no poll to kill here, but

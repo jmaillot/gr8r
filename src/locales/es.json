@@ -2095,7 +2095,21 @@
   "page.governance.destLabel": "Destino",
   "page.governance.roleLabel": "Rol",
   "page.governance.unresolvedHint": "Elige un destino o libera a este miembro.",
+  "page.governance.edit": "Editar",
+  "page.governance.editTitle": "Editar espacio de trabajo",
+  "page.governance.nameLabel": "Nombre",
+  "page.governance.slugLabel": "Slug (URL)",
+  "page.governance.slugTakenHint": "Ese slug ya está en uso — el servidor sugiere «{slug}».",
+  "page.governance.adoptSlug": "Usar la sugerencia",
+  "page.governance.confirmRenameTitle": "¿Renombrar {name}?",
+  "page.governance.confirmRenameBody": "El slug antiguo {old} dejará de funcionar de inmediato y de forma permanente — los enlaces antiguos darán 404 sin redirección. Escribe {slug} para confirmar.",
+  "page.governance.okRename": "Renombrar espacio de trabajo",
+  "page.governance.deadTitle": "Mapeos de grupo muertos",
+  "page.governance.deadLead": "Mapeos huérfanos y comprobaciones de guardia rechazadas de la pista de auditoría. Solo lectura — la limpieza aún no está disponible.",
+  "page.governance.deadOrphans": "Mapeos huérfanos (grupo → espacio desaparecido)",
+  "page.governance.deadTrail": "Comprobaciones de guardia rechazadas (pista reciente)",
   "toast.governanceArchived": "Espacio de trabajo archivado.",
   "toast.governanceUnarchived": "Espacio de trabajo desarchivado.",
-  "toast.governanceDeleted": "Espacio de trabajo eliminado."
+  "toast.governanceDeleted": "Espacio de trabajo eliminado.",
+  "toast.governanceRenamed": "Espacio de trabajo renombrado."
 }

@@ -2096,7 +2096,21 @@
   "page.governance.destLabel": "Destination",
   "page.governance.roleLabel": "Role",
   "page.governance.unresolvedHint": "Pick a destination or release this member.",
+  "page.governance.edit": "Edit",
+  "page.governance.editTitle": "Edit workspace",
+  "page.governance.nameLabel": "Name",
+  "page.governance.slugLabel": "Slug (URL)",
+  "page.governance.slugTakenHint": "That slug is already taken — the server suggests “{slug}”.",
+  "page.governance.adoptSlug": "Use suggestion",
+  "page.governance.confirmRenameTitle": "Rename {name}?",
+  "page.governance.confirmRenameBody": "The old slug {old} stops working immediately and permanently — old links will 404 with no redirect. Type {slug} to confirm.",
+  "page.governance.okRename": "Rename workspace",
+  "page.governance.deadTitle": "Dead group mappings",
+  "page.governance.deadLead": "Orphaned group mappings and refused guard checks from the audit trail. Display-only — cleanup is not available yet.",
+  "page.governance.deadOrphans": "Orphaned mappings (group → missing workspace)",
+  "page.governance.deadTrail": "Refused guard checks (recent trail)",
   "toast.governanceArchived": "Workspace archived.",
   "toast.governanceUnarchived": "Workspace unarchived.",
-  "toast.governanceDeleted": "Workspace deleted."
+  "toast.governanceDeleted": "Workspace deleted.",
+  "toast.governanceRenamed": "Workspace renamed."
 }

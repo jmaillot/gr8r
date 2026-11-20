@@ -2095,7 +2095,21 @@
   "page.governance.destLabel": "Ziel",
   "page.governance.roleLabel": "Rolle",
   "page.governance.unresolvedHint": "Wähle ein Ziel oder entlasse dieses Mitglied.",
+  "page.governance.edit": "Bearbeiten",
+  "page.governance.editTitle": "Workspace bearbeiten",
+  "page.governance.nameLabel": "Name",
+  "page.governance.slugLabel": "Slug (URL)",
+  "page.governance.slugTakenHint": "Dieser Slug ist bereits vergeben — der Server schlägt „{slug}“ vor.",
+  "page.governance.adoptSlug": "Vorschlag übernehmen",
+  "page.governance.confirmRenameTitle": "{name} umbenennen?",
+  "page.governance.confirmRenameBody": "Der alte Slug {old} funktioniert sofort und dauerhaft nicht mehr — alte Links liefern einen 404 ohne Weiterleitung. Tippe {slug} zum Bestätigen.",
+  "page.governance.okRename": "Workspace umbenennen",
+  "page.governance.deadTitle": "Tote Gruppenzuordnungen",
+  "page.governance.deadLead": "Verwaiste Zuordnungen und abgelehnte Guard-Prüfungen aus dem Audit-Protokoll. Nur Anzeige — Aufräumen ist noch nicht verfügbar.",
+  "page.governance.deadOrphans": "Verwaiste Zuordnungen (Gruppe → fehlender Workspace)",
+  "page.governance.deadTrail": "Abgelehnte Guard-Prüfungen (aktuelles Protokoll)",
   "toast.governanceArchived": "Workspace archiviert.",
   "toast.governanceUnarchived": "Workspace dearchiviert.",
-  "toast.governanceDeleted": "Workspace gelöscht."
+  "toast.governanceDeleted": "Workspace gelöscht.",
+  "toast.governanceRenamed": "Workspace umbenannt."
 }

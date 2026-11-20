@@ -2095,7 +2095,21 @@
   "page.governance.destLabel": "Bestemming",
   "page.governance.roleLabel": "Rol",
   "page.governance.unresolvedHint": "Kies een bestemming of geef dit lid vrij.",
+  "page.governance.edit": "Bewerken",
+  "page.governance.editTitle": "Workspace bewerken",
+  "page.governance.nameLabel": "Naam",
+  "page.governance.slugLabel": "Slug (URL)",
+  "page.governance.slugTakenHint": "Deze slug is al in gebruik — de server stelt “{slug}” voor.",
+  "page.governance.adoptSlug": "Suggestie gebruiken",
+  "page.governance.confirmRenameTitle": "{name} hernoemen?",
+  "page.governance.confirmRenameBody": "De oude slug {old} werkt direct en permanent niet meer — oude links geven een 404 zonder redirect. Typ {slug} om te bevestigen.",
+  "page.governance.okRename": "Workspace hernoemen",
+  "page.governance.deadTitle": "Dode groepskoppelingen",
+  "page.governance.deadLead": "Orfaankoppelingen en geweigerde guard-controles uit het audittrail. Alleen-lezen — opschonen is nog niet beschikbaar.",
+  "page.governance.deadOrphans": "Orfaankoppelingen (groep → ontbrekende workspace)",
+  "page.governance.deadTrail": "Geweigerde guard-controles (recente trail)",
   "toast.governanceArchived": "Workspace gearchiveerd.",
   "toast.governanceUnarchived": "Workspace gede-archiveerd.",
-  "toast.governanceDeleted": "Workspace verwijderd."
+  "toast.governanceDeleted": "Workspace verwijderd.",
+  "toast.governanceRenamed": "Workspace hernoemd."
 }
