@@ -8,11 +8,11 @@ updated: 2026-11-20T16:10:00Z
 
 ## Current Test
 
-number: 4
-name: Refusals render keyed 5-locale messages (D-04, D-12)
+number: 6
+name: WR-01 — no stale old-slug client state after rename
 expected: |
-  Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
-awaiting: user response (throttle window has had time to clear — retry the name-required and invalid-slug refusals now)
+  After a slug rename, navigate/click any link or view referencing the workspace's old slug (workspace header, mapping editor, other pages) — client state refreshes to the new slug via the renameWorkspaceLocal reconcile (fix 1086497b, wired at actions.js:4740), no stale old-slug references or broken actions left in the session UI
+awaiting: user response
 
 ## Tests
 
@@ -30,7 +30,7 @@ result: [passed]
 
 ### 4. Refusals render keyed 5-locale messages (D-04, D-12)
 expected: Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales — keyed toast text matching per locale, no raw code strings shown
-result: [blocked] — throttle (tooManyAttempts) engaged during testing; keyed fr toast observed ("Trop de tentatives. Réessayez plus tard.") but target refusals not yet triggered. Retry later in session.
+result: [passed] — name-required toast keyed fr; tooManyAttempts toast keyed fr ("Trop de tentatives. Réessayez plus tard."); reserved-slug refusal keyed fr ("Utilisez « 2 à 40 lettres minuscules, chiffres ou tirets »"). Note: "Test Espace!" folds via slugify to test-espace (valid) and saved — folding is by design (sanitizeSlug), genuinely-invalid inputs are reserved words (admin/api/login) or fold-to-empty.
 
 ### 5. Dead-mapping warning card renders and hides at zero (D-08, D-10, D-11)
 expected: As operator, seed a dead group_mapping + a guard-refused audit row, load /governance → card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason). Remove them and reload → card disappears entirely
@@ -43,10 +43,10 @@ result: [pending]
 ## Summary
 
 total: 6
-passed: 4
+passed: 5
 issues: 0
 pending: 1
 skipped: 0
-blocked: 1
+blocked: 0
 
 ## Gaps
