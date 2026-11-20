@@ -78,6 +78,18 @@ For each workspace where the user has a group-derived row (or a grant pending):
 Byte-identical regression surface: users with no group-derived rows and no
 pending grants produce zero writes, zero audit rows beyond sso_login.
 
+## D-82-11: Uniform delta trail — grants included (GS-04 literal)
+
+Phase 81's grant/upgrade paths convert from `logSecurity` verbs to encoded
+`audit_log` rows in the D-82-9 format (`group_granted:group:<guid>:` /
+`group_role_upgraded:group:<guid>:`). One uniform delta trail for ALL
+group-driven changes: grants, upgrades, downgrades, removals, guard refusals,
+skips. `logSecurity` keeps only the non-delta heartbeats (`sso_login`,
+`sso_invite_accepted`). Executor note: update the Phase 81 tests that pin
+`sso_group_grant`/`sso_group_role_change` security_log verbs — those pins move
+to audit_log assertions. Operator self-grant keeps its existing
+`operator_promoted` audit row (D-81-4 unchanged).
+
 ## Agent discretion
 
 - Exact reconcile helper shape (extend Phase 81's grant helper vs sibling
