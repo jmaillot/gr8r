@@ -345,11 +345,11 @@ await db.run('update workspaces set name = ?, slug = ?, updated_at = ? where id 
 | A5 | Adding team-pick modal to the existing lazy chunk keeps chunks under 500 kB | BP-01 | Chunk-size test would catch it; fallback is a new chunk (cheap) |
 | A6 | No slug-rename e2e pins a byte-exact `updated_at` that IN-01 would break | Ship items | One extra grep at execution time; trivial |
 
-## Open Questions
+## Open Questions (RESOLVED at planning)
 
-1. **flows 2FA trace classification** — executor must read `test-results/flows-…pending2fa-screen-en--chromium/trace.zip` before choosing hardening vs app fix (Assumption A1).
-2. **fr-locale extras policy for IN-02** — allow-list the 40 fr-only keys, or clean them up first? Owner confirm if allow-listing feels heavy.
-3. **CHANGELOG 3.0/3.1 gap** — note or backfill? Owner one-liner at planning.
+1. **flows 2FA trace classification** — RESOLVED as policy, gate kept: 84-01 Task 3 hard-gates on the trace read before hardening; if the landing page never rendered it is an app regression and 84-01 halts (owner ratified D-14, committed 3647f9ed).
+2. **fr-locale extras policy for IN-02** — RESOLVED: owner chose "Subset + fix gaps" (D-12, committed 3647f9ed) — explicit allow-list of the fr-legacy extras with documented exceptions, no full-parity backfill. Implemented in 84-02 Task 1.
+3. **CHANGELOG 3.0/3.1 gap** — RESOLVED: owner chose full backfill of 3.0.0/3.1.0 then the 3.2.0 entry (D-13, committed 3647f9ed). Implemented in 84-04 with a blocking checkpoint on entry scope/dates.
 
 ## Environment Availability
 
