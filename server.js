@@ -103,7 +103,7 @@ import { searchTerms, foldForSearch } from './search-terms.mjs';
    import of a root module → the Dockerfile COPY list and
    test/dependencies.test.mjs must ship groups.js too (Task 3, G-75-3
    precedent). */
-import { canonicalizeGuid, guidRefusal, roleTokenRefusal } from './groups.js';
+import { canonicalizeGuid, guidRefusal, resolveGroupsClaim, resolve, roleTokenRefusal } from './groups.js';
 /* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
    snapshots READ-ONLY (never through the adapter — they are historical files,
    not the live handle). Sole direct node:sqlite use in server.js. */
@@ -4634,7 +4634,7 @@ async function ensureMember(doc, user, role = 'member', workspaceId = null) {
   return id;
 }
 
-async function addMembership(ws, user, role, teams = []) {
+async function addMembership(ws, user, role, teams = [], provenance = null) {
   if (!ws) throw httpError(500, 'No workspace available', 'noWorkspaceReady');
   /* The membership row is the source of truth. The document profile is a
      mirror that the read path repairs, so joining a workspace never moves the
@@ -4658,9 +4658,9 @@ async function addMembership(ws, user, role, teams = []) {
      legacy coalescing is gone. */
   await db.tx(async () => {
     await db.run(
-      `insert into memberships (workspace_id, user_id, role, member_id, team, scope) values (?,?,?,?,?,null)
+      `insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values (?,?,?,?,?,null,?)
        on conflict(workspace_id, user_id) do update set role = excluded.role, member_id = excluded.member_id`,
-      [ws.id, user.id, role, memberId, null],
+      [ws.id, user.id, role, memberId, null, provenance],
     );
     /* TEAM-01: the teams picked at invite time land in the authority rows too —
        the scalar column is backfill-only legacy (D-04). */
@@ -5240,6 +5240,32 @@ async function handleApi(req, res, url) {
             OIDC.config.issuer,
             subject,
           ]);
+        }
+      }
+
+      /* Phase 81 (GW-03): group grants run after DP-4/DP-5 identity resolution
+         and BEFORE the DP-5 invite reconcile — strictly after the oidc_identities
+         concurrency backstop above (grants keyed to the resolved row), inside the
+         existing try so ANY throw funnels to errorRedirect (D-81-11 fail closed).
+         Tracer-minimal slice: resolve claim → load mappings → resolve() → grant.
+         Upgrade-only pre-compare and the operator flag land in Plan 02. */
+      const claimState = resolveGroupsClaim(claims);
+      if (claimState.state === 'unmapped') {
+        /* D-81-10: ONE fixed logWarn on overage — never claim content, GUIDs,
+           or counts in the message. */
+        if (claimState.reason === 'overage') logWarn('sso groups claim overage — treating as unmapped');
+      } else {
+        const mappings = await db.all('select group_guid, workspace_id, role, kind from group_mappings');
+        const { grants } = resolve(claimState.groups, mappings);
+        for (const grant of grants) {
+          /* D-81-8: dead/archived workspace → skip + logWarn, never fatal. */
+          const ws = await db.get('select * from workspaces where id = ?', [grant.workspaceId]);
+          if (!ws || ws.archived === 1) {
+            logWarn('sso group grant skipped — workspace missing or archived');
+            continue;
+          }
+          await addMembership(ws, row, grant.role, [], 'group:' + grant.groupGuid);
+          await logSecurity(row.id, 'sso_group_grant');
         }
       }
 
