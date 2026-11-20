@@ -59,6 +59,10 @@ export function modalHtml(m) {
        opener pre-loaded (actions.js); until it lands the stub renders. */
     case 'assigneePick':
       return wrap('sm', S.ui.apMod ? S.ui.apMod.assigneePickModal(m, H) : `${H(t('act.assignTo'))}${lazyStub()}`);
+    /* 84-02 BP-01: the team picker — chunk-backed like the assignee picker
+       above; S.ui.tpMod is the pre-loaded lazy module (features/team-pick.js). */
+    case 'teamPick':
+      return wrap('sm', S.ui.tpMod ? S.ui.tpMod.teamPickModal(m, H) : `${H(t('nav.route.team'))}${lazyStub()}`);
     case 'confirm':
       return wrap('sm', confirmModal(m, H));
     /* 79-02: ONE generic host for chunk-built modal bodies — the opener
@@ -92,14 +96,12 @@ export function modalHtml(m) {
          trivially: submitMemberTeams never writes scope. */
       return wrap(
         'sm',
-        `${H(t('act.editTeams'), esc(st.name || ''))}<form class="modal-b" data-submit="submitMemberTeams"><fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.team')}</legend><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
-          .map(
-            tm =>
-              `<button type="button" role="checkbox" aria-checked="${st.teams.includes(tm.id)}" class="opt ${st.teams.includes(tm.id) ? 'on' : ''}" data-a="mteamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${st.teams.includes(tm.id) ? ic('check', 13) : ''}</button>`,
-          )
-          .join(
-            '',
-          )}</div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
+        `${H(t('act.editTeams'), esc(st.name || ''))}<form class="modal-b" data-submit="submitMemberTeams"><fieldset class="field" style="border:0;padding:0;margin:0"><legend class="label" style="margin-bottom:6px">${t('nav.route.team')}</legend><div class="row" style="flex-wrap:wrap;gap:6px" role="group" aria-label="${t('nav.route.team')}">${st.teams
+          .map(id => {
+            const tm = teamsList().find(x => x.id === id);
+            return `<span class="chip">${ic('users', 12)}<b>${esc(tm?.name || id)}</b><button type="button" class="ibtn" data-a="mteamToggle" data-v="${id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></span>`;
+          })
+          .join('')}<button type="button" class="btn btn-ghost btn-sm" data-a="teamPickOpen" data-surface="member">${ic('users', 14)}${t('act.editTeams')}</button></div><span class="hint">${t('modal.memberTeamsHint')}</span></fieldset></form><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="closeModal">${t('common.cancel')}</button><button class="btn btn-primary" data-a="submitMemberTeams">${t('act.saveChanges')}</button></div>`,
       );
     }
     case 'filePreview':
@@ -491,12 +493,12 @@ export function inviteModal(m, H) {
   <form class="modal-b" data-submit="submitInvite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" data-in="inviteDraft" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
     <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role" data-in="invRole">${INVITE_ROLE_OPTIONS.map(r => `<option ${role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
-    ${guest ? projectPicker : `<div class="field"><span class="label">${t('nav.route.team')}</span><div class="tmpls" role="group" aria-label="${t('nav.route.team')}">${teamsList()
-      .map(tm => {
-        const on = (S.ui.inviteTeams || []).includes(tm.id);
-        return `<button type="button" role="checkbox" aria-checked="${on}" class="opt ${on ? 'on' : ''}" data-a="invTeamToggle" data-v="${tm.id}" style="padding:8px">${ic('users', 14)}<b style="font-size:12.5px">${esc(tm.name)}</b>${on ? ic('check', 13) : ''}</button>`;
+    ${guest ? projectPicker : `<div class="field"><span class="label">${t('nav.route.team')}</span><div class="row" style="flex-wrap:wrap;gap:6px" role="group" aria-label="${t('nav.route.team')}">${(S.ui.inviteTeams || [])
+      .map(id => {
+        const tm = teamsList().find(x => x.id === id);
+        return `<span class="chip">${ic('users', 12)}<b>${esc(tm?.name || id)}</b><button type="button" class="ibtn" data-a="invTeamToggle" data-v="${id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></span>`;
       })
-      .join('')}</div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>`}
+      .join('')}<button type="button" class="btn btn-ghost btn-sm" data-a="teamPickOpen" data-surface="invite">${ic('users', 14)}${t('act.editTeams')}</button></div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>`}
     ${
       links.length
         ? `<div class="field"><span class="label">${t('modal.inviteLinks')}</span>${links

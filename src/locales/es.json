@@ -915,6 +915,8 @@
   "modal.noMatchingMembers": "Ningún miembro coincide — introduce un correo para invitar a alguien nuevo",
   "modal.assigneeSearch": "Buscar miembros…",
   "modal.assigneeNoMatches": "Ningún miembro coincide",
+  "modal.teamSearch": "Buscar equipos…",
+  "modal.teamNoMatches": "Ningún equipo coincide",
   "modal.peopleWithAccess": "Personas con acceso",
   "modal.projectLead": "· Responsable del proyecto",
   "modal.permissionFor": "Permiso de {name}",

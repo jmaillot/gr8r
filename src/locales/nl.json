@@ -915,6 +915,8 @@
   "modal.noMatchingMembers": "Geen overeenkomende leden — voer een e-mailadres in om iemand nieuw uit te nodigen",
   "modal.assigneeSearch": "Leden zoeken…",
   "modal.assigneeNoMatches": "Geen overeenkomende leden",
+  "modal.teamSearch": "Teams zoeken…",
+  "modal.teamNoMatches": "Geen overeenkomende teams",
   "modal.peopleWithAccess": "Personen met toegang",
   "modal.projectLead": "· Projectleider",
   "modal.permissionFor": "Machtiging voor {name}",

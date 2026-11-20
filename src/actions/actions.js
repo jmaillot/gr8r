@@ -2476,6 +2476,71 @@ A.mteamToggle = el => {
   st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
   render();
 };
+/* ---------- 84-02 BP-01 team picker ---------- */
+/* The picker's open/toggle/add/apply/close group — a clone of the 55-04
+   assignee trio (draft-in-S.ui survives background re-renders, ONE array
+   write on confirm). The STORED state shapes are UNCHANGED: S.ui.inviteTeams
+   stays a plain array of team ids (submitInvite / copyInviteLink still read
+   [...new Set(S.ui.inviteTeams || [])]) and S.ui.memberTeams.teams stays the
+   member-edit draft (scope / scopeTouched untouched). S.ui.inviteDraft — the
+   typed-emails silent binding above (Pitfall 1) — is never touched here. */
+A.teamPickOpen = el => {
+  const surface = el.dataset.surface || 'invite';
+  const cur = surface === 'invite' ? S.ui.inviteTeams || [] : S.ui.memberTeams?.teams || [];
+  S.ui.teamPick = { surface, draft: [...cur], q: '', hl: 0 };
+  /* 84-02 chunk story: the picker's bytes ride features/team-pick.js —
+     loaded before the modal opens (the S.ui.tpMod cache is the modalHtml
+     case's renderer); a repeat open skips the import. */
+  if (S.ui.tpMod) openModal({ type: 'teamPick' });
+  else
+    import('../features/team-pick.js').then(m => {
+      S.ui.tpMod = m;
+      openModal({ type: 'teamPick' });
+    });
+};
+/* Chip removal (and the picker's draft chips): remove-only — the option
+   buttons add, chips remove (D-03's Backspace rides keyboard.js). */
+A.teamPickToggle = el => {
+  const st = S.ui.teamPick;
+  if (!st) return;
+  st.draft = st.draft.filter(x => x !== el.dataset.v);
+  render();
+  $('#tp-q')?.focus();
+};
+/* D-03: Enter (and the option click) selects and keeps the input open —
+   the chip accumulates, the query clears for the next search. */
+A.teamPickAdd = el => {
+  const st = S.ui.teamPick;
+  if (!st) return;
+  const id = el.dataset.v;
+  if (!st.draft.includes(id)) st.draft = [...st.draft, id];
+  st.q = '';
+  st.hl = 0;
+  render();
+  $('#tp-q')?.focus();
+};
+IN.teamPickQ = el => {
+  if (!S.ui.teamPick) return;
+  S.ui.teamPick.q = el.value;
+  S.ui.teamPick.hl = 0;
+  render();
+};
+/* Cancel — the draft is discarded, the stored arrays are untouched. */
+A.teamPickClose = () => {
+  S.ui.teamPick = null;
+  closeModal();
+};
+/* Confirm applies the whole draft as ONE array write to the surface's
+   stored array; scope / scopeTouched are never touched. */
+A.teamPickApply = () => {
+  const st = S.ui.teamPick;
+  if (!st) return;
+  const draft = [...st.draft];
+  if (st.surface === 'invite') S.ui.inviteTeams = draft;
+  else if (S.ui.memberTeams) S.ui.memberTeams.teams = draft;
+  S.ui.teamPick = null;
+  closeModal();
+};
 /* SCOPE-01 member-modal scope pickers retired 2026-11-11 (scope editor left
    the member-edit modal — teams only); invite-form scope toggles are separate
    actions (invProjToggle / invScopeTeamToggle). */

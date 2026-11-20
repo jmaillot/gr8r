@@ -63,6 +63,44 @@ document.addEventListener('keydown', e => {
       return;
     }
   }
+  // 84-02 BP-01: the team-picker modal's search input owns arrows/enter/
+  // backspace/escape while focused (the tz-combobox keyboard discipline,
+  // settings.js:226 pk._flat precedent) with D-03 semantics: Enter selects
+  // the highlighted team and KEEPS the input open (chip accumulates),
+  // Backspace removes the last chip, Escape closes.
+  if (t.matches?.('[data-in="teamPickQ"]')) {
+    const pk = S.ui.teamPick;
+    const flat = pk?._flat || [];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!pk || !flat.length) return;
+      pk.hl = (pk.hl + (e.key === 'ArrowDown' ? 1 : -1) + flat.length) % flat.length;
+      render();
+      $('.opt.hl')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const hit = flat[pk?.hl];
+      if (hit) A.teamPickAdd({ dataset: { v: hit } });
+      return;
+    }
+    if (e.key === 'Backspace') {
+      if (pk?.q) return; // typing deletion falls through untouched
+      e.preventDefault();
+      if (pk?.draft.length) {
+        pk.draft = pk.draft.slice(0, -1);
+        render();
+        $('#tp-q')?.focus();
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (pk) A.teamPickClose();
+      return;
+    }
+  }
   // Keep Tab inside whichever surface is modal right now.
   if (e.key === 'Tab') {
     const box = pl ? $('.palette') : S.ui.modals.length ? $$('.modal').pop() : S.ui.drawer && S.ui.drawerFull ? $('.drawer') : null;

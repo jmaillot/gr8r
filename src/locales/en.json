@@ -915,6 +915,8 @@
   "modal.noMatchingMembers": "No matching members — enter an email to invite someone new",
   "modal.assigneeSearch": "Search members…",
   "modal.assigneeNoMatches": "No matching members",
+  "modal.teamSearch": "Search teams…",
+  "modal.teamNoMatches": "No matching teams",
   "modal.peopleWithAccess": "People with access",
   "modal.projectLead": "· Project lead",
   "modal.permissionFor": "Permission for {name}",
