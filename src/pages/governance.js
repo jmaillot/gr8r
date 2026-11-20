@@ -98,7 +98,7 @@ export function pageGovernance() {
       ? empty('archive', t('page.governance.emptyTitle'), t('page.governance.emptyBody'), '', 'sm', 3)
       : rows.length
         ? `<table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.governance.colName')}</th><th style="text-align:left">${t('page.governance.colSlug')}</th><th>${t('page.governance.colMembers')}</th><th style="text-align:left">${t('page.governance.colCreator')}</th><th style="text-align:left">${t('page.governance.colCreated')}</th><th style="text-align:left">${t('page.governance.colStatus')}</th><th></th></tr></thead><tbody>${rows.map(wsRow).join('')}</tbody></table>`
-        : empty('search', t('page.governance.noMatchesTitle'), t('page.governance.noMatchesBody', { query: q }), '', 'sm', 3);
+        : empty('search', t('page.governance.noMatchesTitle'), t('page.governance.noMatchesBody', { query: esc(q) }), '', 'sm', 3);
 
   return `<div class="page wide" style="max-width:1200px">
     <div class="ph"><div><h1>${t('nav.route.governance')}</h1><p>${t('page.governance.subtitle')}</p></div></div>
@@ -158,7 +158,7 @@ export function operatorCard() {
           ),
         )
         .join('')
-    : empty('search', t('popover.noMatches'), t('page.governance.noMatchesOpBody', { query: q }), '', 'sm', 1);
+    : empty('search', t('popover.noMatches'), t('page.governance.noMatchesOpBody', { query: esc(q) }), '', 'sm', 1);
   return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${search}<div class="panel">${list}</div></div>`;
 }
 
