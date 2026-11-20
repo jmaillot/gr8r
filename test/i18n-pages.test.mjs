@@ -65,12 +65,13 @@ const TABLES = [
     ['page.auth.createJoin', undefined, 'Create account & join'],
     ['page.auth.haveAccount', undefined, 'Already have an account?'],
     // no workspace / sign up
-    ['page.auth.noWorkspaceTitle', undefined, "You're not in a workspace yet"],
+    ['page.auth.noWorkspaceTitle', undefined, 'Waiting for access'],
     [
       'page.auth.noWorkspaceBody',
       undefined,
-      'Ask an administrator of an existing workspace for an invitation. Once you accept it, the workspace will show up here.',
+      'You need to be invited to a workspace to get access. This page checks automatically — as soon as you are invited, the app opens.',
     ],
+    ['page.auth.awaitPollHint', undefined, 'Checking every 15 seconds while this tab is open…'],
     ['page.auth.signedInAs', undefined, 'Signed in as'],
     ['page.auth.you', undefined, 'you'],
     ['page.auth.createYourAccount', undefined, 'Create your account'],

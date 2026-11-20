@@ -129,6 +129,7 @@ export function renderAuth() {
       `<div class="auth-card${S.ui.fx.auth ? ' fx-auth' : ''}"><div style="display:flex;justify-content:center">${brandLogo(96)}</div>
     <h1>${t('page.auth.noWorkspaceTitle')}</h1><p class="sub">${t('page.auth.noWorkspaceBody')}</p>
     <div class="panel" style="padding:12px 14px;display:flex;gap:10px;align-items:center">${ic('mail', 15)}<span class="muted" style="font-size:13px">${t('page.auth.signedInAs')} ${esc(api.user?.email || S.ui.af.email || t('page.auth.you'))}</span></div>
+    <p class="hint" style="font-size:12.5px;margin:0 0 4px">${ic('refresh-cw', 13)} ${t('page.auth.awaitPollHint')}</p>
     <button class="btn btn-secondary btn-lg btn-block" data-a="signOut">${t('palette.signOut')}</button></div>`,
     );
   if (s === 'signup')

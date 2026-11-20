@@ -39,6 +39,7 @@ import './overlays/context-menu.js';
 import './overlays/palette.js';
 import './pages/auth.js';
 import './actions/actions.js';
+import { startAwaitPoll } from './actions/actions.js';
 import './actions/events.js';
 /* [73-01 Rule 3] the keyboard shortcuts ride a pre-warmed lazy chunk — the
    67-04/66-02 remedy, applied here to buy back the entry bytes the banner
@@ -403,7 +404,7 @@ async function seedLegacyLocale() {
       if (api.canCreateWorkspace) {
         S.ui.onb = 1;
         S.ui.onbData = { ...S.ui.onbData, ws: '', url: '', urlTouched: false };
-      }
+      } else startAwaitPoll(); // WSG-10: same await poll as the login path (Pitfall 10)
       render();
       return;
     }

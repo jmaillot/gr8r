@@ -3217,6 +3217,7 @@ async function adoptAccountLocale() {
   await primeLocale(api.user?.locale || negotiate());
 }
 A.signOut = async () => {
+  stopAwaitPoll(); // WSG-10: the await probe must never outlive the session
   if (api.enabled) {
     await flushPending();
     await api.logout();
@@ -3978,9 +3979,69 @@ function enterNoWorkspace() {
   if (api.canCreateWorkspace) {
     S.ui.onb = 1;
     S.ui.onbData = { ...S.ui.onbData, ws: '', url: '', urlTouched: false };
-  }
+  } else startAwaitPoll(); // WSG-10: the await-access view polls for arriving access
   S.ui.errors = {};
   render();
+}
+
+/* =====================================================================
+   WSG-10 await-access poll (78-02): a rights-less user parked on the
+   await view is auto-entered as soon as the SERVER reports access —
+   a membership appears, the user becomes an operator, or the gate flips
+   open (T-78-06: entry is decided from server-verified /api/auth/me
+   truth, never client-local state). House poll shape (pollNotifs,
+   main.js): guards-first tick, 15 s interval, visible-tab only — the
+   document.hidden guard is checked before ANY fetch (the A2 unit pin in
+   test/creation-gate-client.test.mjs), and a visibilitychange listener
+   re-ticks on return to the tab so a foregrounded wait doesn't sit out
+   a full interval. The timer + listener are torn down on entry, on
+   sign-out (A.signOut) and whenever the tick finds the view gone — no
+   leaked probe after the session ends.
+   ===================================================================== */
+let awaitTimer = null;
+let awaitVisibleHandler = null;
+export function stopAwaitPoll() {
+  if (awaitTimer) {
+    clearInterval(awaitTimer);
+    awaitTimer = null;
+  }
+  if (awaitVisibleHandler) {
+    document.removeEventListener('visibilitychange', awaitVisibleHandler);
+    awaitVisibleHandler = null;
+  }
+}
+const awaitTick = async () => {
+  if (document.hidden) return; // visible-tab only (WSG-10): skip the probe entirely
+  if (!api.user || S.ui.auth !== 'no-workspace') return stopAwaitPoll();
+  await api.me(); // refreshes workspaces + isInstanceAdmin from the server
+  const slug = api.workspaces[0]?.slug;
+  if (!slug && !api.canCreateWorkspace) return; // still rights-less: keep waiting
+  stopAwaitPoll();
+  if (slug) {
+    /* Soft-enter (finishLogin happy path; research open Q1 resolved pick). */
+    const res = await hydrateFromServer(slug);
+    if (res.ok) {
+      await hydrateNotifPrefs();
+      await hydrateViews();
+      history.replaceState(null, '', `/w/${slug}`);
+      enterApp(t('toast.welcomeTo', { name: api.workspace?.name || slug }));
+      return;
+    }
+  }
+  /* Soft path cannot resolve (no membership yet for a freshly promoted
+     operator, or hydration failed): an honest full reload re-runs boot
+     routing, which lands onboarding for creators and the await view again
+     otherwise — never a stranded surface. */
+  location.reload();
+};
+export function startAwaitPoll() {
+  if (awaitTimer) return;
+  awaitTimer = setInterval(awaitTick, 15000);
+  awaitVisibleHandler = () => {
+    if (!document.hidden) awaitTick();
+  };
+  document.addEventListener('visibilitychange', awaitVisibleHandler);
+  awaitTick(); // guard-first immediate probe: no blind 15 s wait on arrival
 }
 
 export function enterApp(msg) {

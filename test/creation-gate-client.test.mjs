@@ -59,7 +59,37 @@ test('A.newWorkspace keeps the belt-and-braces refusal (err.askAdmin toast)', ()
   assert.match(actions, /if \(!api\.canCreateWorkspace\) \{\s*return toast\(t\('err\.askAdmin'\)/);
 });
 
-const KEYS = [];
+test('the await poll exists: 15 s interval, document.hidden guard-first tick (WSG-10, A2 unit pin)', () => {
+  const actions = src('src/actions/actions.js');
+  // A2 fallback (78-VALIDATION): e2e cannot drive document.hidden, so the visible-tab
+  // guard is pinned at unit level here — the tick MUST early-return before any fetch.
+  assert.match(actions, /const awaitTick = async \(\) => \{\s*if \(document\.hidden\) return;/);
+  assert.match(actions, /setInterval\(awaitTick, 15000\)/);
+  assert.match(actions, /export function startAwaitPoll\(\)/);
+  assert.match(actions, /export function stopAwaitPoll\(\)/);
+  // no leak (fails_when: timer leaks after sign-out/entry)
+  assert.match(actions, /A\.signOut = async \(\) => \{\s*stopAwaitPoll\(\);/);
+  // visibilitychange resume listener is removed on stop (no leak)
+  assert.match(actions, /removeEventListener\('visibilitychange', awaitVisibleHandler\)/);
+});
+
+test('both routing hooks land gated users on the await state with the poll started (Pitfall 10)', () => {
+  const actions = src('src/actions/actions.js');
+  const main = src('src/main.js');
+  // enterNoWorkspace (login/signup path)
+  assert.match(actions, /S\.ui\.auth = api\.canCreateWorkspace \? 'onboarding' : 'no-workspace';\s*if \(api\.canCreateWorkspace\) \{[\s\S]{0,200}\}\s*else startAwaitPoll\(\);/);
+  // boot path (main.js)
+  assert.match(main, /startAwaitPoll/);
+});
+
+test('the await view offers no creation surface and keeps sign-out (auth.js extension)', () => {
+  const auth = src('src/pages/auth.js');
+  assert.match(auth, /s === 'no-workspace'/);
+  // the poll hint rides the same card (single surface, no new view)
+  assert.match(auth, /page\.auth\.awaitPollHint/);
+});
+
+const KEYS = ['page.auth.awaitPollHint'];
 
 for (const key of KEYS) {
   for (const [lang, cat] of [['en', en], ['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
