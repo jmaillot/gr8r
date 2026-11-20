@@ -50,7 +50,7 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 
 ### Backlog Polish (BP)
 
-- [ ] **BP-01**: Searchable token-chip pickers for member/team selection inputs.
+- [x] **BP-01**: Searchable token-chip pickers for member/team selection inputs.
 - [ ] **BP-02**: Fix the 56-02 e2e spec failures.
 - [ ] **BP-03**: Phase 57 mobile layout follow-ups.
 
@@ -88,6 +88,6 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | GV-01 | Phase 83 | Complete |
 | GV-02 | Phase 83 | Complete |
 | GV-03 | Phase 83 | Complete |
-| BP-01 | Phase 84 | Pending |
+| BP-01 | Phase 84 | Complete |
 | BP-02 | Phase 84 | Pending |
 | BP-03 | Phase 84 | Pending |

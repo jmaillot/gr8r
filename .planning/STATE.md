@@ -4,17 +4,18 @@ milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
 current_phase: 84
 current_phase_name: Backlog Polish & Ship
-status: planning
-stopped_at: Phase 83 complete, ready to plan Phase 84
-last_updated: "2026-11-20T16:09:20.260Z"
+current_plan: 4
+status: executing
+stopped_at: Completed 84-02-PLAN.md
+last_updated: "2026-11-20T18:19:34.243Z"
 last_activity: 2026-11-20
 last_activity_desc: Phase 83 complete, transitioned to Phase 84
-state_head: 948767d0b8191ea507cb6eaa0ae5f863053987bc
+state_head: 0102028476d172b861e65469d35eca8f02b6a54a
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 10
   percent: 60
 ---
 
@@ -31,9 +32,10 @@ before features.
 ## Current Position
 
 Phase: 84 — Backlog Polish & Ship
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-20 — Phase 83 complete, transitioned to Phase 84
+Current Plan: 4
+Total Plans in Phase: 4
+Status: Ready to execute
+Last activity: 2026-11-20 — 84-02 complete (team pickers + IN-02 derived i18n check)
 
 Progress: [██████░░░░] 60%
 
@@ -77,6 +79,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 | Phase 82 P02 | ~40 min | 3 tasks | 2 files |
 | Phase 83 P01 | ~35 min | 3 tasks | 4 files |
 | Phase 83 P02 | ~55 min | 2 tasks | 11 files |
+| Phase 84 P02 | 22 min | 4 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -106,6 +109,7 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
 - [Phase 82, 82-02]: D-82-11 uniform trail live — zero sso_group% security verbs remain; grant-side skips carry dead-workspace/archived-workspace reasons, removal-side dead-workspace stays vocabulary-only (FK cascade)
 - [Phase 83, 83-02]: dead-mappings payload rides refreshGovernanceWorkspaces (seq-guarded, refusal hides card only); staged edit state carries origSlug so the D-03 fork compares against ground truth; rename refusals surface via tErr over existing err.* keys (zero new vocabulary)
 - [Phase 83, 83-02]: the data-a/data-r/data-v machine-identifier pins exist in TWO suites (i18n-toast + i18n-shell) and the en catalogue size is pinned in i18n-core-features — all three bump together under D-12
+- [Phase 84]: 84-02: locale keys land in the same commit as emitting markup (Tasks 2+3 merged); keyboard hook = input-scoped keyboard.js branch cloning the tz branch; tree-wide data-a/data-v count pins bumped as D-12 same-commit pins
 
 ### Pending Todos
 
@@ -130,9 +134,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T15:12:00.000Z
-Stopped at: Phase 83 complete, ready to plan Phase 84
-Resume file: .planning/phases/83-governance-workspace-rename-slug-edit/83-02-SUMMARY.md
+Last session: 2026-11-20T18:19:17.090Z
+Stopped at: Completed 84-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

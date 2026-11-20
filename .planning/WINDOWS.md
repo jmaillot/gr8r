@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 9
 waived_count: 0
 fixed_count: 0
-total_count: 8
-last_updated: 2026-11-13T21:32:50.162Z
+total_count: 9
+last_updated: 2026-11-20T18:18:19.689Z
 ---
 
 # Broken Windows Ledger
@@ -23,6 +23,7 @@ last_updated: 2026-11-13T21:32:50.162Z
 | 6 | 31 | deviation | test/totp-rewrap.test.mjs |  | Pre-existing lint debt (13 errors) cleared by 31-03 to make the phase gate green; verified identical at pre-phase 47367c6d | open |  | 2026-11-01T21:04:05.746Z |  |
 | 7 | 61 | deviation | src/pages/dashboard.js | 36 | pre-existing Phase 60 lint error: lastRequestedWindow unused (deferred, out of 61-01 scope) | open |  | 2026-11-13T21:32:49.924Z |  |
 | 8 | 61 | deviation | test/dashboard-client.test.mjs | 17 | pre-existing Phase 60 lint error: fileURLToPath unused (deferred, out of 61-01 scope) | open |  | 2026-11-13T21:32:50.162Z |  |
+| 9 | 84 | unrun-verify | src/features/team-pick.js |  | 84-02 task 4 manual browser smoke of both picker surfaces deferred to the phase e2e/verify-work pass; automated coverage = 7 source pins + full unit suite + chunk gate | open |  | 2026-11-20T18:18:19.689Z |  |
 
 ````json
 [
@@ -129,6 +130,19 @@ last_updated: 2026-11-13T21:32:50.162Z
     "recorded_at": "2026-11-13T21:32:50.162Z",
     "resolved_at": null,
     "milestone": "v2.2"
+  },
+  {
+    "id": 9,
+    "kind": "unrun-verify",
+    "phase": "84",
+    "file": "src/features/team-pick.js",
+    "line": null,
+    "description": "84-02 task 4 manual browser smoke of both picker surfaces deferred to the phase e2e/verify-work pass; automated coverage = 7 source pins + full unit suite + chunk gate",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-20T18:18:19.689Z",
+    "resolved_at": null,
+    "milestone": "v3.2"
   }
 ]
 ````
