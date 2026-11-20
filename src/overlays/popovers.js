@@ -259,7 +259,7 @@ export function popHtml(p) {
               w =>
                 `<button class="mi" data-a="switchWs" data-v="${esc(w.slug)}">${wsLogo({ name: w.name, c: w.color }, 20)}<span class="grow trunc">${esc(w.name)}</span><span class="faint" style="font-size:11px">${esc(roleLabel(w.role))}</span>${w.slug === currentSlug() ? `<span class="ck">${ic('check', 14)}</span>` : ''}</button>`,
             )
-            .join('')}<div class="msep"></div><button class="mi" data-a="newWorkspace">${ic('plus', 15)}${tMsg('popover.createWorkspace')}</button>${actions}`
+            .join('')}<div class="msep"></div>${api.canCreateWorkspace ? `<button class="mi" data-a="newWorkspace">${ic('plus', 15)}${tMsg('popover.createWorkspace')}</button>` : ''}${actions}`
         : `<div class="mh">${esc(D().ws.name)}</div><div style="padding:0 8px 6px" class="faint trunc">${tMsg('popover.localDemo')}</div>${actions}`;
       style = 'width:260px';
       break;

@@ -152,10 +152,15 @@ export const api = {
   get memberId() {
     return state.memberId;
   },
-  /* Anyone may create a workspace when sign-ups are open; otherwise only an
-     owner or admin of an existing workspace may. */
+  /* Creation gate (WSG-03/D-112): the server's WORKSPACE_CREATION boolean is
+     the truth — creation passes when the gate is open OR the user is an
+     instance operator. The legacy workspace owner/admin clause is DEAD under
+     the closed gate: workspace roles are tenant-bound (D-112) and the server
+     would refuse with workspaceCreationClosed, so the client must not show a
+     button that 403s. Client gating is cosmetic (T-78-05); the server gate is
+     the enforcement. */
   get canCreateWorkspace() {
-    return state.creation === 'open' || state.workspaces.some(w => w.role === 'owner' || w.role === 'admin');
+    return state.creation || state.user?.isInstanceAdmin;
   },
   get url() {
     return appUrl();
@@ -172,7 +177,10 @@ export const api = {
     state.enabled = !!(r.ok && r.data?.app === 'projects');
     state.signup = !!r.data?.signup;
     state.mail = !!r.data?.mail;
-    state.creation = r.data?.workspaceCreation === 'open' ? 'open' : 'admins';
+    /* 78-01 sends the strict boolean gate value (WSG-03); `!!` tolerates the
+       boolean only — the old 'open'/'admins' string shape is dead server-side.
+       Deploy coupling (Pitfall 3): server+client ship from the same repo/commit. */
+    state.creation = !!r.data?.workspaceCreation;
     state.url = typeof r.data?.url === 'string' ? r.data.url.replace(/\/+$/, '') : '';
     state.maxUploadMb = Number(r.data?.maxUploadMb) || 25;
     state.oidcEnabled = !!r.data?.oidcEnabled;

@@ -66,6 +66,12 @@ const env = {
      fixture upload (a 1×1 PNG) far under it and the rejected 2 MB drop fast. */
   MAX_UPLOAD_MB: '1',
   ALLOW_SIGNUP: 'true',
+  /* 78-01's unset=false fail-closed gate would 403 every fixture workspace
+     creation (helpers/setup.mjs creates workspaces through the real API with
+     non-operator accounts). The suite keeps today's open behavior; the closed
+     gate is exercised by await-access.spec.mjs's own dedicated server.
+     (Mirror of test/helpers/server.mjs BASE_ENV, Pitfall 5.) */
+  WORKSPACE_CREATION: 'true',
   /* The fixture scheme in helpers/setup.mjs is per-IP throttles dodged by a
      run-unique X-Forwarded-For per account; the server only reads that header
      when TRUST_PROXY is on (production runs behind Traefik). Without it every
