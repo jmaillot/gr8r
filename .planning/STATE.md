@@ -2,18 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-current_phase: 81
-current_phase_name: Group Grant Path — Callback Wiring + Provenance
-status: planning
-stopped_at: Phase 82 context gathered
-last_updated: "2026-11-20T12:42:40.365Z"
+current_phase: 82
+current_phase_name: Removal Sync + Guards + Audit
+status: executing
+stopped_at: Phase 82 plan 01 complete (SUMMARY written)
+last_updated: "2026-11-20T14:20:00.000Z"
 last_activity: 2026-11-20
-last_activity_desc: Phase 80 complete, transitioned to Phase 81
-state_head: 62e22f18d10ae2929a7a1ce7592b1b4e38e4096b
+last_activity_desc: Phase 82 execution started
+state_head: c9cc398bba72edbf6cd5c3a3f995fb10fd791c04
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 4
+  total_plans: 6
   completed_plans: 4
   percent: 20
 ---
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-20)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 80 — Group Mapping Core — Parser, Resolver, Overage Detection
+**Current focus:** Phase 82 — Removal Sync + Guards + Audit
 
 ## Current Position
 
-Phase: 81 — Group Grant Path — Callback Wiring + Provenance
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-20 — Phase 80 complete, transitioned to Phase 81
+Phase: 82 (Removal Sync + Guards + Audit) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 82
+Last activity: 2026-11-20 — Phase 82 plan 01 executed (3 tasks, 3 commits)
 
 Progress: [██░░░░░░░░] 20%
 
@@ -62,7 +62,7 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 |-------|-------|-------|----------|
 | 80 | 2 | - | - |
 | 81 | 0 | - | - |
-| 82 | 0 | - | - |
+| 82 | 1 | - | - |
 | 83 | 0 | - | - |
 | 84 | 0 | - | - |
 
@@ -95,6 +95,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for
 - [Phase 80]: Non-array groups claim stays fail-closed (unmapped/shape); operatorFlag is true|null tri-state, never false
 - [Phase 80, 80-02]: Refusal-code literals passed EXPLICITLY at the server.js call site (domains.js precedent) — the error-codes reverse-parity test greps server.js source, so default codes inside a module stay invisible to it
 - [Phase 80, 80-02]: Boot group-mappings line is D-11 vocabulary (zero rows → exactly one off-line, no dead-mapping query); save route audits via logSecurity('group_mapping_saved') now to avoid the Phase 83 retrofit
+- [Phase 82, 82-01]: GS-02 sole-owner e2e uses groups: [] (genuinely-empty = reconcile-bearing shape) — a missing groups key skips the whole else-branch and never reaches the guard
+- [Phase 82, 82-01]: guardRefuse(wsId, guid, delta) is the shared owner-guard funnel — Plan 02's owner-downgrade arm must route through it, not fork a second guard
 
 ### Pending Todos
 
@@ -119,9 +121,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T12:42:40.324Z
-Stopped at: Phase 82 context gathered
-Resume file: .planning/phases/82-removal-sync-guards-audit/82-CONTEXT.md
+Last session: 2026-11-20T13:07:29.963Z
+Stopped at: Completed 82-01-PLAN.md — reconcile + guard funnel + conditional provenance shipped (2005 pass / 0 fail)
+Resume file: .planning/phases/82-removal-sync-guards-audit/82-02-PLAN.md
 
 ## Operator Next Steps
 
