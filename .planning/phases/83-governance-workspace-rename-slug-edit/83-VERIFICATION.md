@@ -1,6 +1,6 @@
 ---
 phase: 83-governance-workspace-rename-slug-edit
-verified: 2026-11-20T15:22:21Z
+verified: 2026-11-20T16:05:00Z
 status: human_needed
 score: 11/16 must-haves verified
 behavior_unverified: 5
@@ -22,7 +22,7 @@ covered_files:
   - test/governance-rename.test.mjs
   - test/governance-client.test.mjs
   - test/i18n-toast.test.mjs
-covered_digest: "v2:sha256:8593cae2da12e1b6de6bd4268c54d3f667fae420d7955d01f6c11cfaf1b092e2"
+covered_digest: "v2:sha256:9eb2857468b3ba5f634853223013c1553159fa2448bf645930150c00cc61c227"
 behavior_unverified_items:
   - truth: "Each workspace row has an operator-gated Edit action opening a Name+Slug modal (D-01, D-02)"
     test: "Open /governance as operator, click Edit on a workspace row"
@@ -45,21 +45,17 @@ behavior_unverified_items:
     expected: "Card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason); disappears entirely when payload is empty"
     why_human: "DOM rendering and visual escaping cannot be exercised by node:test; source assertions prove structure, not render"
 human_verification:
-  - test: "WR-01 (83-REVIEW.md, open): after a slug rename, navigate/click any link or view that references the workspace's old slug (workspace header, mapping editor, other pages)"
-    expected: "Client state refreshes to the new slug — no stale old-slug references or broken actions left in the session UI"
-    why_human: "Cross-page client state staleness after a successful rename is a runtime interaction; refreshGovernanceWorkspaces() wiring is verified, the full app-wide refresh surface is not"
+  - test: "WR-01 (fixed in code, commit 1086497b — verify the reconcile): after a slug rename, confirm the session UI shows the new slug immediately (workspace header, mapping editor, other pages) with no stale old-slug references, then navigate/click a link referencing the old slug"
+    expected: "api.renameWorkspaceLocal maps state.workspaces by id and updates state.workspace when ids match — client state refreshes to the new slug with no reload; the fixer flagged this logic for human verification"
+    why_human: "Cross-page client state reconciliation after a successful rename is runtime behavior; wiring (api.js:395, actions.js:4740 in govEditSave success path) is verified, the live reconcile is not"
 coincidental_reliance_items: []
 gaps: []
 deferred: []
 advisory:
-  - finding: "WR-02 — unescaped search query interpolation in governance empty states (open, dispositioned advisory in 83-REVIEW.md)"
-    category: security
-    reason: "Out of Phase 83 must-have scope (search empty states, not the rename modal or dead card); carried value is operator-supplied. Record for a future cleanup pass"
-    evidence_status: "present in review; not re-tested here"
-  - finding: "WR-03 — trail LIKE 'group_%:group:%' treats _ as a single-char wildcard, so rows with 'group' + one char could over-match the trail list"
+  - finding: "WR-02 and WR-03 advisories from the prior verification are now RESOLVED (commits 9f37f946, ecf6c7b1) — esc(q) at governance.js:101/161; LIKE pattern uses 'group\\_%:group:%' escape '\\' at server.js:7454 with a negative-probe test"
     category: other
-    reason: "Route returns what the pinned truth literally specifies (LIKE 'group_%:group:%', limit 100) and the test pins that exact query; operator-gated read-only. Does not fail the truth; note for a hardening pass (escape _ or tighten the pattern)"
-    evidence_status: "pattern confirmed in server.js:7452"
+    reason: "Both were dispositioned advisory hardening notes; the fix pass closed them. Recorded for the audit trail."
+    evidence_status: "fixed and re-verified this run"
   - finding: "IN-01 / IN-02 integration review notes (open, advisory)"
     category: other
     reason: "Dispositioned advisory in 83-REVIEW-DISPOSITION.md; no must-have touched"
@@ -69,154 +65,110 @@ advisory:
 # Phase 83: Governance — Workspace Rename & Slug Edit Verification Report
 
 **Phase Goal:** Operators can rename a workspace and edit its slug from the /governance page, with honest link death and dead-mapping visibility
-**Verified:** 2026-11-20T15:22:21Z
+**Verified:** 2026-11-20T16:05:00Z
 **Status:** human_needed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — after code-review fixes (WR-01/02/03) changed covered source files
 
 ## Goal Achievement
 
+### Re-verification Scope
+
+The prior verification (11/16, human_needed) passed, but the three WR fixes (1086497b, 9f37f946, ecf6c7b1) modified `server.js`, `src/pages/governance.js`, `src/actions/actions.js`, `src/core/api.js`, and `test/governance-rename.test.mjs` — stale fingerprint. This pass re-verified the fixes and regression-checked the previously passed truths.
+
+**Fix verification results:**
+
+| Fix | Commit | Evidence (code + tests) | Verdict |
+|-----|--------|------------------------|---------|
+| WR-01 client state reconcile | 1086497b | `api.renameWorkspaceLocal(id, {name, slug})` at api.js:395 (maps state.workspaces by id, updates state.workspace on id match); called in `A.govEditSave` success path at actions.js:4740 before `refreshGovernanceWorkspaces()` | ⚠️ Wired, code logic read correct — runtime reconcile routes to human verification |
+| WR-02 esc(q) in empty states | 9f37f946 | governance.js:101 `t('page.governance.noMatchesBody', { query: esc(q) })`, governance.js:161 same for noMatchesOpBody | ✓ VERIFIED |
+| WR-03 trail LIKE escape | ecf6c7b1 | server.js:7454: `where action like 'group\_%:group:%' escape '\'` — `_` pinned, comment documents intent; test updated to real encoded format + negative probe (`groupX:group:zzz:…` must NOT appear) | ✓ VERIFIED |
+
+**Regression check:** the three phase suites re-ran green in this verification — `node --test test/governance-rename.test.mjs test/governance-client.test.mjs test/i18n-toast.test.mjs` → 47 pass / 0 fail / 0 skipped. Full-suite gate (2034 pass / 0 fail / 13 pre-existing skips) ran green in the fix pass per 83-REVIEW-FIX.md.
+
 ### Observable Truths
 
-**Server half (83-01 — all behaviorally exercised by `test/governance-rename.test.mjs`, run green in this verification):**
+**Server half (83-01 — all behaviorally exercised by `test/governance-rename.test.mjs`, re-run green in this verification):**
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Operator POST {name, slug} to /api/auth/operator/workspaces/:id/rename updates the row, 200 {workspace:{id,slug,name}} | ✓ VERIFIED | server.js:7153–7188; test suite green |
-| 2 | Empty name → 400 workspaceNameRequired; bad slug → 400 invalidSlug; collision → 409 slugTaken + uniqueSlug(next, ws.id) suggestion | ✓ VERIFIED | server.js:7176–7181; test suite green |
-| 3 | Name trim+slice(0,60); slug validity solely via sanitizeSlug (SLUG_RE + RESERVED_SLUGS) | ✓ VERIFIED | server.js:7173–7178 (verbatim helpers); reserved-slug test green |
-| 4 | Own unchanged slug succeeds (self-collision excluded) | ✓ VERIFIED | server.js:7180 `next !== ws.slug &&` gate; test green |
-| 5 | Guard order verbatim Phase 79: sameOrigin first → requireUser → op-ws-rename throttle → operator gate BEFORE lookup → fetch by id (no requireWorkspace; archived renameable) | ✓ VERIFIED | server.js:7155–7169 — order read line-by-line; no-existence-oracle + cross-origin tests green |
-| 6 | After rename, old slug URL → exact 404, NO Location header (D-15/D-82-5); no redirect machinery anywhere | ✓ VERIFIED | D-15 pin test green ("exact 404 with no Location header; the NEW slug → 200") |
-| 7 | GET /api/auth/operator/dead-mappings: exact-Set-membership orphans + audit trail LIKE 'group_%:group:%' limit 100 order created_at desc, raw values | ✓ VERIFIED | server.js:7433–7454; adjacency/ordering/zero-item tests green |
-| 8 | Zero dead items → both lists empty server-side; client hides card entirely | ✓ VERIFIED (server half) | server returns `{orphans:[],trail:[]}`; client `govDeadCard` returns '' at zero (governance.js:181) |
-| 9 | Rename audit via logInfo (governance) with old→new slug, NO audit_log row | ✓ VERIFIED | server.js:7184–7186; no audit_log insert in the route block |
+| 1 | Operator POST {name, slug} to /api/auth/operator/workspaces/:id/rename updates the row, 200 {workspace:{id,slug,name}} | ✓ VERIFIED | server.js rename route; suite re-run green (regression check) |
+| 2 | Empty name → 400 workspaceNameRequired; bad slug → 400 invalidSlug; collision → 409 slugTaken + uniqueSlug(next, ws.id) suggestion | ✓ VERIFIED | refusal tests green in re-run |
+| 3 | Name trim+slice(0,60); slug validity solely via sanitizeSlug (SLUG_RE + RESERVED_SLUGS) | ✓ VERIFIED | verbatim helpers; reserved-slug test green |
+| 4 | Own unchanged slug succeeds (self-collision excluded) | ✓ VERIFIED | self-collision test green |
+| 5 | Guard order verbatim Phase 79: sameOrigin → requireUser → throttle → operator gate BEFORE lookup → fetch by id | ✓ VERIFIED | guard-order tests green |
+| 6 | After rename, old slug URL → exact 404, NO Location header (D-15/D-82-5) | ✓ VERIFIED | D-15 pin test green in re-run |
+| 7 | GET /api/auth/operator/dead-mappings: exact-Set-membership orphans + audit trail LIKE (now `_`-escaped) limit 100 order created_at desc, raw values | ✓ VERIFIED | server.js:7439–7455; WR-03 hardened predicate + negative probe test green |
+| 8 | Zero dead items → both lists empty server-side; client hides card entirely | ✓ VERIFIED (server half) | zero-item test green; client `govDeadCard` returns '' at zero |
+| 9 | Rename audit via logInfo (governance) with old→new slug, NO audit_log row | ✓ VERIFIED | route block re-read; no audit_log insert |
 
 **Client half (83-02 — wired and source-asserted; runtime rendering not exercised by any test):**
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 10 | Edit action + Name+Slug modal on every wsRow (D-01/D-02) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | governance.js:64 `data-a="govEditAsk"`; govEditBody modal (governance.js:208–223); actions.js:4683 staging. Client-source assertions green — but no DOM/behavioral test |
-| 11 | Name-only edit saves directly; slug-change opens danger confirm with bold esc() old slug + type-to-confirm (D-03) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js:4715–4754 — fork logic read and correct (`slugChanged` vs origSlug, `danger: true`, `typeName: ws.origSlug`, `<b>${esc(ws.origSlug)}</b>`) |
-| 12 | 409 slugTaken → suggestion surfaced, one-click adopt (D-07) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js:4726–4730; govEditAdopt (actions.js:4705); adopt control in governance.js:216 |
-| 13 | Refusals render keyed 5-locale messages via govRefusalToast/tErr; zero new err.* vocabulary | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js:4731 govRefusalToast; 5-locale key parity test-verified; toast runtime not exercised |
-| 14 | Dead-mapping card: operator-gated, esc() everywhere, first-colon-only trail split, hidden entirely at zero, no mutation controls (D-08/D-10/D-11) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | governance.js:176–198 — splitFirst double first-colon peel, esc() on every interpolated value, zero data-a in card, early return '' at zero; render gated `api.user?.isInstanceAdmin ? govDeadCard() : ''` (governance.js:105). Source assertions green; DOM render not exercised |
-| 15 | All new page.governance.*/toast.* keys exist in en/fr/nl/de/es in the same commit; data-a/data-r pins updated | ✓ VERIFIED | confirmRenameTitle present once in each of the 5 locale files (grepped); i18n/build-locales/error-codes suites green; catalogue pin bumped in 83-02 commits |
-| 16 | Display-only card — no mutation actions (D-11) | ✓ VERIFIED | governance.js:176–198 read — no `data-a` attribute in govDeadCard markup |
+| 10 | Edit action + Name+Slug modal on every wsRow (D-01/D-02) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | governance.js `data-a="govEditAsk"`; govEditBody modal; actions.js staging. Client-source assertions green; unchanged by fixes |
+| 11 | Name-only edit saves directly; slug-change opens danger confirm with bold esc() old slug + type-to-confirm (D-03) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js fork logic read and correct; now additionally calls `api.renameWorkspaceLocal` (WR-01) before refresh |
+| 12 | 409 slugTaken → suggestion surfaced, one-click adopt (D-07) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js adopt path + govEditAdopt control in modal; unchanged by fixes |
+| 13 | Refusals render keyed 5-locale messages via govRefusalToast/tErr; zero new err.* vocabulary | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | 5-locale key parity test green; toast runtime not exercised |
+| 14 | Dead-mapping card: operator-gated, esc() everywhere, first-colon-only trail split, hidden entirely at zero, no mutation controls (D-08/D-10/D-11) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | governance.js govDeadCard read; render gated on isInstanceAdmin; unchanged by fixes |
+| 15 | All new page.governance.*/toast.* keys exist in en/fr/nl/de/es; data-a/data-r pins updated | ✓ VERIFIED | i18n parity suites green in re-run |
+| 16 | Display-only card — no mutation actions (D-11) | ✓ VERIFIED | no `data-a` attribute in govDeadCard markup |
 
-**Score:** 11/16 truths verified (5 present, behavior-unverified)
-
-Note on score honesty: the 5 behavior-unverified client truths are fully wired with correct logic verified by direct code reading plus 8 green client-source assertions — the risk is rendering/interaction, which node:test cannot see. Per plan 83-02's own verification section, these route to manual UAT.
+**Score:** 11/16 truths verified (5 present, behavior-unverified) — unchanged from prior verification; the fix pass introduced no regressions.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| test/governance-rename.test.mjs | Wave 0 e2e rename/dead-mapping suite | ✓ VERIFIED | 22 tests pass in this run |
-| server.js rename route | POST .../:id/rename in operator family | ✓ VERIFIED | server.js:7153–7188, guard order verbatim |
-| server.js dead-mappings route | GET /api/auth/operator/dead-mappings | ✓ VERIFIED | server.js:7433–7454 |
-| src/core/api.js client methods | operatorWsRename + operatorDeadMappings | ✓ VERIFIED | api.js:384, 390 — wired via call() |
-| src/pages/governance.js | Edit button, edit modal, dead card | ✓ VERIFIED | govEditBody, govDeadCard present and rendered from pageGovernance |
-| src/actions/actions.js | govEditAsk/Adopt/Save/Cancel with D-03 fork | ✓ VERIFIED | actions.js:4683–4754 |
-| 5 locale files | 14 new keys, zero new err.* | ✓ VERIFIED | confirmRenameTitle ×1 each; parity test green |
-| test/governance-client.test.mjs | 8 new source assertions | ✓ VERIFIED | suite green (22 tests) |
-
-### Key Link Verification
-
-| From | To | Via | Status | Details |
-|------|----|----|--------|---------|
-| server.js rename route | sanitizeSlug/uniqueSlug(base, excludeId)/wsBySlug | direct calls | WIRED | server.js:7177–7181; suggestion carries excludeId=ws.id |
-| server.js dead-mappings route | group_mappings + workspaces + audit_log | SQL on read | WIRED | exact Set membership + LIKE trail query |
-| actions.js govEditSave | api.operatorWsRename | direct call | WIRED | actions.js:4722 |
-| actions.js govEditSave | refreshGovernanceWorkspaces + toast.governanceRenamed | on success | WIRED | actions.js:4736–4737 |
-| actions.js confirm body | esc(oldSlug) bold interpolation | template literal | WIRED | actions.js:4747 |
-| governance.js govDeadCard | api.operatorDeadMappings payload | S.ui.govDead fill | WIRED | actions.js:4623 fetch; governance.js:177 read |
-| governance.js card | esc(label) on orphan rows | template | WIRED | governance.js:190 |
-| governance.js Edit button | api.user?.isInstanceAdmin gating | conditional | WIRED | governance.js:105 |
-
-### Data-Flow Trace (Level 4)
-
-| Artifact | Data Variable | Source | Produces Real Data | Status |
-|----------|--------------|--------|-------------------|--------|
-| Rename route response | ws row | workspaces table (db.get by id) | Yes | ✓ FLOWING |
-| dead-mappings payload | orphans/trail | group_mappings + workspaces + audit_log live queries | Yes | ✓ FLOWING |
-| govDeadCard rows | S.ui.govDead | api.operatorDeadMappings() live fetch in refreshGovernanceWorkspaces | Yes | ✓ FLOWING |
-| govEditBody fields | S.ui.govEditWs | staged from real workspace row (govWsById) | Yes | ✓ FLOWING |
-| suggestion adopt | res.data.suggestion | server uniqueSlug(next, ws.id) | Yes | ✓ FLOWING |
-
-No static/hardcoded data paths found.
+| test/governance-rename.test.mjs | Wave 0 e2e rename/dead-mapping suite | ✓ VERIFIED | green in re-run; WR-03 negative probe added |
+| server.js rename route | POST .../:id/rename in operator family | ✓ VERIFIED | guard order verbatim |
+| server.js dead-mappings route | GET /api/auth/operator/dead-mappings | ✓ VERIFIED | hardened LIKE predicate |
+| src/core/api.js client methods | operatorWsRename + operatorDeadMappings + renameWorkspaceLocal | ✓ VERIFIED | api.js:384, 390, 395 — wired via call() / state map |
+| src/pages/governance.js | Edit button, edit modal, dead card, esc(q) empty states | ✓ VERIFIED | esc(q) at :101 and :161 |
+| src/actions/actions.js | govEditAsk/Adopt/Save/Cancel with D-03 fork + WR-01 reconcile call | ✓ VERIFIED | actions.js:4683–4754 |
+| 5 locale files | 14 new keys, zero new err.* | ✓ VERIFIED | parity test green |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
-|----------|---------|--------|--------|
-| Rename + dead-mapping + D-15 suite | `node --test test/governance-rename.test.mjs test/governance-client.test.mjs` | tests 39, pass 39, fail 0 | ✓ PASS |
-| Full workspace suite | `npm test` | tests 2047, pass 2034, fail 0, skipped 13 | ✓ PASS |
+| -------- | ------- | ------ | ------ |
+| Phase suites (rename + client + i18n) | `node --test test/governance-rename.test.mjs test/governance-client.test.mjs test/i18n-toast.test.mjs` | 47 pass / 0 fail / 0 skipped | ✓ PASS |
 
 ### Probe Execution
 
-None declared — no probe-*.sh scripts referenced in plans; SKIPPED per contract.
+None — no probes declared for this phase; deterministic coverage is the node:test suites above.
 
 ### Requirements Coverage
 
 | Requirement | Source Plan | Description | Status | Evidence |
-|-------------|------------|-------------|--------|----------|
-| GV-01 | 83-01, 83-02 | Operator edits workspace name+slug from /governance with validation, collision refusal, keyed 5-locale errors | ✓ SATISFIED (server behavior verified; UI rendering → UAT) | rename route + modal + locales, all wired and test-pinned |
-| GV-02 | 83-01, 83-02 | Old slug 404s with no redirect; slug change requires confirm | ✓ SATISFIED | D-15 pin test green; D-03 confirm fork present and source-asserted |
-| GV-03 | 83-01, 83-02 | Operator console warning section lists dead mappings | ✓ SATISFIED (server verified; card render → UAT) | dead-mappings route + govDeadCard wired, escaped, hidden at zero |
+| ----------- | ---------- | ----------- | ------ | -------- |
+| GV-01 | 83-01 | Operator rename + slug edit API with honest 404 link death | ✓ SATISFIED | server half truths 1–6, 9 all verified behaviorally |
+| GV-02 | 83-02 | Governance UI: edit modal, refusal UX, locale parity | ✓ SATISFIED | truths 10–13, 15 wired + source-asserted; DOM truths route to UAT |
+| GV-03 | 83-01/83-02 | Dead-mapping visibility (orphans + guard trail), display-only | ✓ SATISFIED | truths 7, 8, 14, 16; WR-03 hardening verified |
 
-No orphaned requirements: REQUIREMENTS.md maps exactly GV-01..03 to Phase 83; both plans declare all three. No deferred items — no later milestone phase covers the unverified UI rendering; it belongs to this phase's UAT.
+No orphaned requirement IDs — all three IDs claimed by plans and evidenced.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
-|------|------|---------|----------|--------|
-| server.js | 7452 | LIKE pattern with unescaped `_` wildcard (WR-03, advisory) | 📋 Advisory | Over-broad trail match possible; operator-gated, bounded 100 — review dispositioned open |
-| src/pages/governance.js | empty states | unescaped search query (WR-02, advisory) | 📋 Advisory | Out of phase must-have scope; review dispositioned open |
+| ---- | ---- | ------- | -------- | ------ |
+| (none) | — | — | — | — |
 
-No TBD/FIXME/XXX debt markers in any phase-modified file. No stub patterns: all data flows from live DB queries.
-
-### Review Findings Impact (83-REVIEW.md)
-
-- **WR-01** (stale client state after rename): does not falsify any must-have — the rename flow itself is correct and refreshes governance state — but the app-wide refresh surface is a real open risk. Promoted to a dedicated human-verification item above.
-- **WR-02 / WR-03 / IN-01 / IN-02**: advisory, out of must-have scope, recorded above.
+No TBD/FIXME/XXX markers or stub patterns in the phase-touched files.
 
 ### Human Verification Required
 
-### 1. Edit modal opens and renders (Truth 10)
-**Test:** Open /governance as operator, click Edit on a workspace row.
-**Expected:** Name+Slug modal, pre-filled, Cancel/Save.
-**Why human:** rendering not exercisable by node:test.
-
-### 2. D-03 confirm fork (Truth 11)
-**Test:** Edit name only → direct save + success toast; edit slug → danger confirm requiring the bold old slug typed.
-**Expected:** correct fork both ways; old slug bold in confirm body.
-**Why human:** interaction flow.
-
-### 3. slugTaken suggestion adopt (Truth 12)
-**Test:** Rename to a taken slug.
-**Expected:** modal stays open, suggestion shown, one-click adopt fills the field.
-**Why human:** live refusal UX.
-
-### 4. Refusal toasts per locale (Truth 13)
-**Test:** Trigger the three refusals; check toast text (spot-check fr at minimum).
-**Expected:** keyed err.* messages, no raw codes.
-**Why human:** runtime toast rendering.
-
-### 5. Dead-mapping card render + empty hiding (Truth 14)
-**Test:** Seed a dead mapping + guard-refused audit row → card lists escaped rows with first-colon split; clear them → card gone entirely.
-**Expected:** per D-08/D-10/D-11.
-**Why human:** DOM rendering + escaping visual check.
-
-### 6. WR-01 stale-state sweep (see frontmatter)
-**Test:** After a slug rename, click/navigate to every view referencing the workspace.
-**Expected:** no stale old-slug references.
-**Why human:** cross-page runtime state.
+1. **WR-01 client-state reconcile (fixed in code — verify the logic live):** rename a workspace, confirm the session UI shows the new slug immediately with no stale old-slug references, then exercise a link referencing the old slug.
+   - Expected: no reload needed; no 404s from stale client state. `renameWorkspaceLocal` wiring verified; live reconcile is not.
+2. **Edit modal flow (D-01/D-02/D-03):** click Edit on a workspace row; name-only save → direct save + toast; slug change → danger dialog with bold esc() old slug + type-to-confirm.
+3. **409 slugTaken adopt (D-07):** rename to a taken slug → hint + one-click Adopt fills the field.
+4. **Refusal toasts per locale (D-04/D-12):** trigger workspaceNameRequired / invalidSlug / slugTaken and check keyed text in all 5 locales.
+5. **Dead-mapping card (D-08/D-10/D-11):** seed dead mapping + guard-refused audit row as operator → card renders escaped rows with first-colon split; remove → card disappears entirely.
 
 ### Gaps Summary
 
-No gaps. Every server-side must-have is behaviorally verified by a green test run in this verification (39/39 phase tests, full suite 2034 pass / 0 fail). All client artifacts exist, are substantive, and are wired to the 83-01 routes; the 5 client truths remain ⚠️ PRESENT_BEHAVIOR_UNVERIFIED solely because modal/card/toast rendering and the interaction flows are pinned by source assertions only — they route to the manual UAT session per the phase's own verification plan. Status: human_needed, no structured gaps.
+No gaps. The three code-review warnings are fixed and verified: WR-02 and WR-03 are deterministically verified in code and tests; WR-01's `renameWorkspaceLocal` is present, wired, and logically correct but remains runtime client-state behavior — routed to human verification per fixer protocol and the client DOM truth routing. All previously verified truths regression-checked green. Fingerprint recomputed over the same covered_files set (fresh digest embedded in frontmatter).
 
 ---
 
-_Verified: 2026-11-20T15:22:21Z_
+_Verified: 2026-11-20T16:05:00Z_
 _Verifier: the agent (gsd-verifier)_
