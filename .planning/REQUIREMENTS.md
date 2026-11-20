@@ -70,4 +70,24 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 
 ## Traceability
 
-*Filled by /gsd-new-milestone roadmap step.*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| GM-01 | Phase 80 | Pending |
+| GM-02 | Phase 80 | Pending |
+| GM-03 | Phase 80 | Pending |
+| GW-01 | Phase 81 | Pending |
+| GW-02 | Phase 81 | Pending |
+| GW-03 | Phase 81 | Pending |
+| GW-04 | Phase 81 | Pending |
+| GO-01 | Phase 81 | Pending |
+| GO-02 | Phase 81 | Pending |
+| GS-01 | Phase 82 | Pending |
+| GS-02 | Phase 82 | Pending |
+| GS-03 | Phase 82 | Pending |
+| GS-04 | Phase 82 | Pending |
+| GV-01 | Phase 83 | Pending |
+| GV-02 | Phase 83 | Pending |
+| GV-03 | Phase 83 | Pending |
+| BP-01 | Phase 84 | Pending |
+| BP-02 | Phase 84 | Pending |
+| BP-03 | Phase 84 | Pending |

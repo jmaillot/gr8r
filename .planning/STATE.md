@@ -2,11 +2,11 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-status: planning
-last_updated: "2026-11-20T09:51:54.235Z"
+status: roadmap_created
+last_updated: "2026-11-20T10:30:00.000Z"
 last_activity: 2026-11-20
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,23 +17,37 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-19)
+See: .planning/PROJECT.md (updated 2026-11-20)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 79 — Governance Surface
+**Current focus:** v3.2 Phase 80 — Group Mapping Core (parser, resolver, overage detection)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 80 (Group Mapping Core — not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-11-20 — Milestone v3.2 started
+Status: Roadmap created, awaiting approval → /gsd-plan-phase 80
+Last activity: 2026-11-20 — v3.2 roadmap created (5 phases, 19/19 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0/5 phases
+
+## Milestone v3.2 Phase Map
+
+| Phase | Name | Requirements | Depends on |
+|-------|------|--------------|------------|
+| 80 | Group Mapping Core — Parser, Resolver, Overage Detection | GM-01..03 | Nothing |
+| 81 | Group Grant Path — Callback Wiring + Provenance | GW-01..04, GO-01..02 | 80 |
+| 82 | Removal Sync + Guards + Audit | GS-01..04 | 81 |
+| 83 | Governance — Workspace Rename & Slug Edit | GV-01..03 | Nothing (parallel) |
+| 84 | Backlog Polish & Ship | BP-01..03 | 80–83 |
+
+Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-mapping phases.
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed (v3.0): 0
+- Total plans completed (v3.2): 0
 - Average duration: —
 - Total execution time: —
 
@@ -41,54 +55,31 @@ Last activity: 2026-11-20 — Milestone v3.2 started
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 75 | 2 | - | - |
-| 76 | 2 | - | - |
-| 77 | 2 | - | - |
-| 78 | 2 | - | - |
-| 79 | 3 | - | - |
+| 80 | 0 | - | - |
+| 81 | 0 | - | - |
+| 82 | 0 | - | - |
+| 83 | 0 | - | - |
+| 84 | 0 | - | - |
 
 *Updated after each plan completion*
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 79 P01 | 31 min | 3 tasks | 10 files |
-| Phase 79 P79-02 | 13m | 3 tasks | 13 files |
-| Phase 79 P03 | 7 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for v3.2:
 
-- Seed SEED-261119-f3w owner-validated — door-matrix design not re-litigated; zero new dependencies
-- Exact-domain Set matching (never `endsWith` — verified bypass vector); exact `split('@')` single funnel
-- Tri-state env parse: null = unset/inherit-or-off vs empty Set = deny-all (set-but-empty semantics
-  ratified at Phase 75 planning)
-- Fail-closed accept-time re-validation (live list, never a stored snapshot); existing-account immunity
-- All refusal keys land in all 5 locale catalogues (en/fr/nl/de/es) in the same commit as the first
-  emitting gate
-- NO invite-edit route exists — seed "invite edit" maps to create-route replace-a-live-link semantics
-  (re-minting covered by DP-2); no route invented
-- Continuous phase numbering: v3.0 starts at Phase 75 (v2.7 ended at 74)
-- 76-01: logInfo is single-argument — the DP-4 refusal log interpolates the domain into the
-  message string (`sso signup domain refused — domain: X`) instead of a structured payload
-- 76-01: DP-5's literal partial-filter row is unobservable (pendingInvites keyed by row email
-  ⇒ one verdict per email); suite pins two-in-list-invites '/#invitations' branching instead
-- 76-01: Open Q1/Q2/Q3 resolved — no DP-2 change; fake IdP extracted to test/helpers/oidc-idp.mjs;
-  invites listing API confirmed un-gated
-- 76-02: TRUTH AMENDED (Option B, owner-approved) — accept-time re-validation applies to ALL admits,
-  including existing accounts; existing-account immunity covers authentication/logins only (SC2),
-  never invite acceptance. Existing out-of-list member re-invited under a tightened list gets
-  403 inviteDomainNoLonger, invite not consumed, loosening revives it
-- 76-02: immunity is test-only proof (zero production diffs in plan 02) — prohibition enforced
-- [Phase 79]: 79-01: governance routes fetch workspace rows by id via db.get — never requireWorkspace (unarchive stays possible); creator derived from the owner-membership LEFT JOIN, no created_by column
-- [Phase 79]: 79-01: memberAlreadyMember is a keyed 409 refusal (not silent upsert); delete content check reads the RAW doc; audit verbs workspace_archived/unarchived/deleted, member_reassigned/released — all inside the mutation db.tx
-- [Phase 79]: Orphan modal rides an additive generic 'custom' modal host (chunk-backed, assignee-picker precedent) — no governance branch in the modal switch
-- [Phase 79]: Governance Delete renders on every row — the server is the authority; unarchive skips type-to-confirm (reversible), archive/delete confirm by slug, release by member email (D-04)
-- [Phase 79]: settings.operator.* keys reused verbatim for the relocated Operators section (no 5-catalogue rename); markup moved verbatim — data-a baseline 572 unchanged
+- Zero new dependencies (no Graph SDK — claims-first; `test/dependencies.test.mjs` invariant pins this)
+- 5-locale keyed refusals land in the same commit as the first emitting gate (en/fr/nl/de/es)
+- Owner-scoped endpoints must not leak existence; destructive actions confirmed + audit-logged
+- Boot-frozen env consts with strict-token tri-state parse (unset = off, invalid = boot-refuse)
+- Group claims are snapshot-at-login (no periodic reconcile); unmapped users behave byte-identically
+- Group match is a parallel admission concept beside the v3.0 domain door matrix (unchanged)
+- `_claim_names` overage = UNMAPPED (never an empty list) — co-designed in 80, honored in 82
+- Continuous phase numbering: v3.2 starts at Phase 80 (v3.1 ended at 79)
+- D-82-1 highest role wins · D-82-2 group re-asserts over manual grants at login · D-82-3 operator
+  demotion cleared then re-granted at next login · D-82-4 overage proceeds as unmapped ·
+  D-82-5 old slug 404s, no redirect · D-82-6 dead mappings surface in operator console + boot log
 
 ### Pending Todos
 
@@ -96,13 +87,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 75 planning: confirm whether mcp.js can mint invites (research unconfirmed) — if yes it is a
-  sixth door-matrix cell on the shared validator
-- Phase 75 planning: ratify set-but-empty = deny-all semantics with the owner
-- Phase 76 planning: redirect-surface refusal UX + DP-5 invite-filtering e2e design; verify MCP invite
-  surface
-- Phase 77 planning: WR-01/WR-02/IN-01..05 advisory scope was not re-researched this cycle — scope at
-  discuss-phase
+- Phase 82 planning: highest combined test surface (guard composition × provenance × overage) —
+  plan-phase should be thorough; no external research needed
+- Phase 80 planning: if the Graph overage fallback were ever ratified (it is NOT — D-82-4),
+  the client-credentials contract would need live-doc verification
+- DEPLOY.md must document that group nesting semantics live tenant-side (ApplicationGroup =
+  direct-membership-only); no app-side resolution either way
 
 ## Deferred Items
 
@@ -114,10 +104,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T07:48:01.594Z
-Stopped at: Phase 79 complete — all phases complete
+Last session: 2026-11-20
+Stopped at: v3.2 roadmap created (Phases 80–84) — awaiting orchestrator approval
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Review .planning/ROADMAP.md, then start Phase 80 with /gsd-plan-phase 80
