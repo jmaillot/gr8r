@@ -10,7 +10,7 @@ covered_files:
   - .planning/phases/82-removal-sync-guards-audit/82-01-SUMMARY.md
   - .planning/phases/82-removal-sync-guards-audit/82-02-PLAN.md
   - .planning/phases/82-removal-sync-guards-audit/82-02-SUMMARY.md
-covered_digest: "v2:manual-sha256:server.js=3e4ff0aa8a479c1befd75c64bf4ff52ef865e14ef0053f3aab308ecae9a36fcc;test/groups-sso.test.mjs=f58093495e85b7af87a861ab9a0ee52d6076cb30f4ca54907412723089a5dbdf"
+covered_digest: "v2:sha256:ffe3a9d17ea7c1390cca05b84535c59e94028cfdf57553ca8ccd6c7a5fe8e216"
 behavior_unverified: 0
 overrides_applied: 0
 gaps: []
