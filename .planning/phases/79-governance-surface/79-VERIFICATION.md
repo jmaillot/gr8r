@@ -1,7 +1,7 @@
 ---
 phase: 79-governance-surface
 verified: 2026-11-20T00:00:00Z
-status: human_needed
+status: passed
 score: 18/18 must-haves verified
 covered_files:
   - .planning/phases/79-governance-surface/79-01-PLAN.md
@@ -25,6 +25,7 @@ covered_files:
   - test/governance.test.mjs
   - test/governance-client.test.mjs
   - test/catalogue.test.mjs
+
 covered_digest: "v2:sha256:0491ab364a607accba206cdf48abbcc96eea5f87574fc9af690cce7ad5292e78"
 behavior_unverified: 0
 overrides_applied: 0
