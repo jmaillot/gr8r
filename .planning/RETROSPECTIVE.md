@@ -562,14 +562,69 @@
   milestone itself; post-milestone maintenance bumped the toolchain (vite 8, eslint 10) with
   the suite held green at every step.
 
+## Milestone: v3.1 — Workspace Governance
+
+**Shipped:** 2026-11-20
+**Phases:** 2 | **Plans:** 5
+
+### What Was Built
+
+- Phase 78 — `WORKSPACE_CREATION` strict-token boot gate (unset=false fail-closed, boot-refuse
+  otherwise), operator-only closed mode, `/api/config` exposure, console-managed multi-seat
+  operator promote/demote with last-operator 409, gate-aware client with the "await access"
+  auto-poll page (WSG-01..06, 10, 11)
+- Phase 79 — Governance Surface: operator-only /governance page listing EVERY workspace with
+  filter/segments, archive/unarchive (amber badge, type-to-confirm), empty-only delete with the
+  per-member orphan disposition modal (reassign destination+role / release), keyed toasts, and
+  the Operators section relocated from Settings as the single operator surface
+  (WSG-07, 08, 09)
+
+### What Worked
+
+- Recipe continuity: the Phase 75/76 tri-state env-parse pattern cloned verbatim for the gate
+  (boot-frozen consts, strict tokens) produced zero parse bugs and an instantly familiar review.
+- Server-first waves (78-01/79-01 server suites before client phases) meant the client phases
+  wired against proven endpoints — no cross-wave endpoint churn.
+- The orphan-disposition modal's fail-closed design (Delete disabled until EVERY member carries
+  a disposition, server re-checks regardless) survived review and UAT without a rework cycle.
+
+### What Was Inefficient
+
+- The digest-staleness loop repeated a third milestone running: shared locale catalogues
+  staled BOTH phases' verifications twice (post-UAT owner polish + the operator-search
+  follow-up). Recurring cost of any commit touching en/fr/nl/de/es catalogues.
+- The verifier fabricated a `v4:` digest the fingerprint tool never emits — caught at close and
+  replaced with the tool-computed `v2:` value. Lesson (again): never hand-write or trust a
+  reported digest; recompute via `verification.fingerprint`.
+- UAT found the Active-status em-dash asymmetry (archived rows got a badge, active rows got
+  '—') — a UI-SPEC gap caught only in the browser walkthrough.
+
+### Patterns Established
+
+- Governance page as the single operator surface (D-01): one page, one fetch doctrine
+  (render only from the server listing, never the client document).
+- Operator console search + workspace filter share the govQ pattern: state in `S.ui.*`,
+  client-side filter, no server pagination.
+
+### Key Lessons
+
+- Refresh ALL phase digests immediately before close — and after ANY post-verification commit,
+  however small. The fingerprint tool is the only digest authority.
+- Fail-closed destructive flows (orphan dispositions) need zero trust in the client; the
+  enabled-button contract must mirror the server check exactly.
+
+### Cost Observations
+
+- 1 working day (2026-11-20); 69 commits; 57 files, +6286/−174
+- ~2012-key catalogues × 5 locales; governance suites: 26 server + 46 client tests new
+
 ## Cross-Milestone Trends
-
-
 
 ### Process Evolution
 
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
+| v3.1 Workspace Governance | 1 day | 2 | Verified closeout — both phases re-verified at HEAD after shared-catalogue edits staled digests twice; a verifier-fabricated `v4:` digest was caught at close and replaced with the tool-computed `v2:` value (fingerprint tool remains the only digest authority). Fail-closed orphan-disposition modal shipped with no rework. |
 | v2.7 Installable App (PWA) | 1 day | 3 | Verified closeout — all 3 phases passed at close after mechanical `verification.fingerprint` refresh (digests staled twice: once pre-UAT, once from post-ship owner polish). Verification-only phase design (hash + call-site pins) proved installability at zero risk. Recurring lesson: refresh digests immediately before close, not before ship. |
 | v2.6 Exports Verification (Test 11) | 2 days | 3 | Verified closeout with a PASSED pre-close audit (8/8 requirements, 14 surfaces, 7/7 flows). New lesson: VERIFICATION.md files without YAML frontmatter read `missing` to init.manager even when the verdict is written — the frontmatter contract is now explicit. Close also cleaned 2 stale-but-resolved artifacts (70-UAT.md, g-71-3 debug session). |
 | v2.4 Automation & Productivity | 2 days | 4 | First fully verified closeout at HEAD: parallel verifier subagents refreshed 3 stale digests after the audit-fix commit (54827ed), audit run BEFORE close let tech debt land early. Recurring lesson again: hand-written covered digests (v4:) fail closed — always recompute via verification.fingerprint. |
