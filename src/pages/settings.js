@@ -242,43 +242,8 @@ export function tzCombobox() {
     }</div>`;
 }
 
-/* The operator console (OPREV-02, phase 22): rendered ONLY for a viewer whose
-   boot/me payload says isInstanceAdmin (server ground truth — D-112; never a
-   client flag, the twoFa convention). The list comes from
-   refreshOperatorUsers() (GET /api/auth/operator/users, D-121); the per-row
-   revoke uses the D-90 inline-confirmation stage (S.ui.operatorRevoke carries
-   the target id). Owner rows are immune (D-119) — the action is replaced by
-   the honest hint; the operator's own row explains the keep-current semantics
-   (D-118: their other browsers sign out, this device survives).
-
-   78-02 (WSG-06/D-78-2): is_instance_admin is multi-seat now — plain rows gain
-   a Make-operator action, operator rows gain a demote action behind its own
-   D-90 inline-confirm stage (S.ui.operatorDemote). The last-operator refusal
-   is the server's 409 (lastOperator) surfaced as a keyed toast — the row
-   still offers demote even on the signed-in self row, the guard is honest. */
-export function operatorCard() {
-  const rows = S.ui.operatorUsers;
-  if (!rows) return '';
-  const meId = api.user?.id;
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${rows
-    .map(u =>
-      srow(
-        `<span class="row" style="gap:8px">${esc(u.name || '')}<span class="faint">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
-        u.last_login_at ? ago(u.last_login_at) : '—',
-        S.ui.operatorRevoke === u.id
-          ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
-          : S.ui.operatorDemote === u.id
-            ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
-            : u.is_instance_admin
-              ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
-              : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
-      ),
-    )
-    .join('')}</div>`;
-}
-
 /* The audit trail (AUD-03, D-T3, D-V1): tier-scoped read of the append-only
-   audit_log, mounted unconditionally beside the operator card on the sessions
+   audit_log, mounted unconditionally on the sessions
    tab — the server decides who sees what (instance operators: all rows,
    workspace admins: their own workspaces' rows, plain members: 403 → null →
    the card renders nothing). Rows render purely from snapshot columns (D-V4)
@@ -917,7 +882,7 @@ export function settingsBody(sec, title) {
           )
           .join('') +
         `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${rows.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
-      ) + (operatorCard() + auditTrailCard());
+      ) + auditTrailCard();
     }
   }
   return page404();

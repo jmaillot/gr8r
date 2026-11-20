@@ -18,10 +18,12 @@
 import { esc, ago } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { S } from '../core/store.js';
+import { api } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { av, empty } from '../ui/helpers.js';
 import { ROUTE_TEARDOWN } from '../shell/render.js';
-import { refreshGovernanceWorkspaces } from '../actions/actions.js';
+import { srow } from './settings.js';
+import { refreshGovernanceWorkspaces, refreshOperatorUsers } from '../actions/actions.js';
 
 /* The four fullstates are verbatim dashboard.js:84-87 shapes: 403 → lock
    glyph + err.code403 + route name + keyed body + home way out; other
@@ -76,6 +78,12 @@ export function pageGovernance() {
   const segV = S.ui.govSegV || 'all';
   const q = (S.ui.govQ || '').trim().toLowerCase();
   const rows = loading ? [] : govFiltered();
+  /* 79-03 (WSG-09/D-01): the Operators section mounts ONLY for an
+     isInstanceAdmin user (server payload — D-112/D-11; the endpoint 403 is
+     the control). The list's ground truth is refreshOperatorUsers()
+     (GET /api/auth/operator/users, D-121) — the in-render kick covers a
+     boot-time deep link, same pattern as the workspaces fill loop. */
+  if (api.user?.isInstanceAdmin && !S.ui.operatorUsers) refreshOperatorUsers();
   const seg = `<div class="seg" role="group" aria-label="${t('page.governance.wsTitle')}">${[
     ['all', 'page.governance.segAll'],
     ['active', 'page.governance.segActive'],
@@ -100,7 +108,44 @@ export function pageGovernance() {
       <div class="row" style="margin-bottom:12px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-q" data-in="govQ" placeholder="${t('a11y.searchNameOrEmail')}" value="${esc(S.ui.govQ || '')}" aria-label="${t('a11y.searchMembers')}"></div>${seg}</div>
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
+    ${api.user?.isInstanceAdmin ? operatorCard() : ''}
   </div>`;
+}
+
+/* =====================================================================
+   OPERATORS (79-03, WSG-09/D-01) — relocated from the Settings sessions
+   tab (Phase 78/22 operatorCard): the governance page is the SINGLE
+   operator-management surface. The markup, the D-90 inline-confirm
+   stages (S.ui.operatorRevoke / S.ui.operatorDemote) and the
+   settings.operator.* locale keys are reused verbatim; the underlying
+   Phase 78 endpoints (GET/POST /api/auth/operator/users*) are untouched.
+   Rendered ONLY for isInstanceAdmin (server ground truth — D-112); the
+   list comes from refreshOperatorUsers() — never from the document.
+   Owner rows are immune (D-119); the operator's own row explains the
+   keep-current semantics (D-118). is_instance_admin is multi-seat
+   (78-02, WSG-06/D-78-2): plain rows gain Make-operator, operator rows
+   gain the demote inline-confirm; the last-operator refusal is the
+   server's 409 (lastOperator) surfaced as a keyed err toast.
+   ===================================================================== */
+export function operatorCard() {
+  const rows = S.ui.operatorUsers;
+  if (!rows) return '';
+  const meId = api.user?.id;
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${rows
+    .map(u =>
+      srow(
+        `<span class="row" style="gap:8px">${esc(u.name || '')}<span class="faint">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
+        u.last_login_at ? ago(u.last_login_at) : '—',
+        S.ui.operatorRevoke === u.id
+          ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
+          : S.ui.operatorDemote === u.id
+            ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
+            : u.is_instance_admin
+              ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
+              : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
+      ),
+    )
+    .join('')}</div>`;
 }
 
 /* The orphan disposition modal body (D-05/D-06/D-08) — rendered through the

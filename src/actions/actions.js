@@ -359,8 +359,7 @@ A.go = el => {
     refreshSessions();
     refreshTfa(); // T-16-13: the card's on/off split re-reads the server
     if (p.sec === 'sessions') {
-      refreshOperatorUsers(); // OPREV-02: card lives only on the sessions tab (IN-02)
-      refreshAuditLog(); // AUD-03: the trail card lives beside the operator card
+      refreshAuditLog(); // AUD-03: the trail card lives on the sessions tab (the operator card relocated to governance, 79-03 D-01)
     }
     if (p.sec === 'apikeys') refreshApiKeys(); // MCP-01: the key rows re-read the server
   }
@@ -2728,10 +2727,12 @@ export async function refreshTfa() {
   return api.user;
 }
 
-/* The operator card's ground truth (OPREV-02, D-121): the users list is fetched
-   from the server on the sessions tab mount and after every revoke — never from
-   the document. A non-operator fetch simply 403s; the card renders only from
-   the api.user.isInstanceAdmin server flag, so the fetch is gated on it too. */
+/* The Operators section's ground truth (OPREV-02/D-121; relocated to the
+   governance page by 79-03 D-01): the users list is fetched from the server
+   on the governance page mount and after every promote/demote/revoke — never
+   from the document. A non-operator fetch simply 403s; the section renders
+   only from the api.user.isInstanceAdmin server flag, so the fetch is gated
+   on it too. */
 export async function refreshOperatorUsers() {
   if (!api.enabled || !api.user?.isInstanceAdmin) return null;
   const res = await api.operatorUsers();
@@ -2769,10 +2770,12 @@ A.operatorRevokeConfirm = async el => {
   toast(t('settings.operator.toastRevoked'));
 };
 
-/* 78-02 operator identity actions (WSG-06/D-78-2): promote is free, demote is
-   D-90 inline-confirm (S.ui.operatorDemote carries the target id). Refusals
-   flow through the same tErr pipeline as the revoke — lastOperator (the
-   server's 409 count guard) and operatorOnly render localized toasts. */
+/* 79-03 (WSG-09/D-01): the promote/demote/revoke actions live in the
+   governance path only — the governance page is the single operator-management
+   surface. 78-02 operator identity actions (WSG-06/D-78-2): promote is free,
+   demote is D-90 inline-confirm (S.ui.operatorDemote carries the target id).
+   Refusals flow through the same tErr pipeline as the revoke — lastOperator
+   (the server's 409 count guard) and operatorOnly render localized toasts. */
 A.operatorPromote = async el => {
   const id = el.dataset.id;
   const res = await api.operatorPromote(id);

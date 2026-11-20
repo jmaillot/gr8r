@@ -90,12 +90,13 @@ test('the await view offers no creation surface and keeps sign-out (auth.js exte
 });
 
 test('operatorCard: promote on plain rows, inline-confirm demote on operator rows (WSG-06, D-90)', () => {
-  const settings = src('src/pages/settings.js');
-  assert.match(settings, /data-a="operatorPromote"/);
-  assert.match(settings, /data-a="operatorDemoteAsk"/);
-  assert.match(settings, /data-a="operatorDemote"/);
-  assert.match(settings, /data-a="operatorDemoteCancel"/);
-  assert.match(settings, /S\.ui\.operatorDemote === u\.id/);
+  // 79-03 (D-01): the card relocated into the governance page — the pin follows it
+  const governance = src('src/pages/governance.js');
+  assert.match(governance, /data-a="operatorPromote"/);
+  assert.match(governance, /data-a="operatorDemoteAsk"/);
+  assert.match(governance, /data-a="operatorDemote"/);
+  assert.match(governance, /data-a="operatorDemoteCancel"/);
+  assert.match(governance, /S\.ui\.operatorDemote === u\.id/);
 });
 
 test('operator actions call the 78-01 endpoints and re-render via refreshOperatorUsers', () => {
