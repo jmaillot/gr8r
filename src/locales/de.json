@@ -1779,6 +1779,7 @@
   "err.dispositionRequired": "Jedes Mitglied benötigt ein Ziel oder eine Freigabe, bevor gelöscht wird.",
   "err.targetArchived": "Der Ziel-Arbeitsbereich ist archiviert. Wählen Sie ein aktives Ziel.",
   "err.memberAlreadyMember": "Dieses Mitglied ist bereits im Ziel-Arbeitsbereich. Wählen Sie ein anderes Ziel.",
+  "err.noReassignTargets": "Es ist kein Ziel-Arbeitsbereich verfügbar. Geben Sie dieses Mitglied stattdessen frei.",
   "err.invalidRole": "Die Rolle muss owner, admin oder member sein.",
   "err.invalidBody": "Ungültiger Anfrageinhalt.",
   "err.ownerImmune": "Eigentümer-Konten sind gegen Operator-Widerruf immun",

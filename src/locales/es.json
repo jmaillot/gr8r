@@ -1779,6 +1779,7 @@
   "err.dispositionRequired": "Cada miembro necesita un destino o una liberación antes de eliminar.",
   "err.targetArchived": "El espacio de trabajo de destino está archivado. Elige un destino activo.",
   "err.memberAlreadyMember": "Ese miembro ya está en el espacio de trabajo de destino. Elige otro destino.",
+  "err.noReassignTargets": "No hay ningún espacio de trabajo de destino disponible. Libera a este miembro en su lugar.",
   "err.invalidRole": "El rol debe ser owner, admin o member.",
   "err.invalidBody": "Cuerpo de solicitud no válido.",
   "err.ownerImmune": "Las cuentas de propietario son inmunes a la revocación del operador",

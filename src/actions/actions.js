@@ -4751,6 +4751,10 @@ A.govOrphanPick = el => {
   const uidm = el.dataset.id;
   if (!S.ui.govDispositions) S.ui.govDispositions = {};
   if (el.dataset.v === 'release') S.ui.govDispositions[uidm] = { type: 'release' };
+  /* IN-04: with zero reassign targets (every other workspace archived, or the
+     last workspace standing) the server would 404 the disposition — refuse
+     keyed client-side instead, leaving the member unresolved (D-06). */
+  else if (!(S.ui.govOrphan?.targets || []).length) return toast(t('err.noReassignTargets'), { kind: 'err' });
   /* D-08: the reassign default rides the first target + 'member' role; the
      operator refines both in the same step — no multi-step wizard. */
   else S.ui.govDispositions[uidm] = { type: 'reassign', wsId: el.dataset.ws || S.ui.govOrphan?.targets?.[0]?.id || '', role: 'member' };

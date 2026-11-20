@@ -1779,6 +1779,7 @@
   "err.dispositionRequired": "Elk lid heeft een bestemming of vrijgave nodig voordat er wordt verwijderd.",
   "err.targetArchived": "De bestemmingswerkruimte is gearchiveerd. Kies een actieve bestemming.",
   "err.memberAlreadyMember": "Dat lid zit al in de bestemmingswerkruimte. Kies een andere bestemming.",
+  "err.noReassignTargets": "Er is geen bestemmingswerkruimte beschikbaar. Geef dit lid in plaats daarvan vrij.",
   "err.invalidRole": "De rol moet owner, admin of member zijn.",
   "err.invalidBody": "Ongeldige verzoekinhoud.",
   "err.ownerImmune": "Eigenaaraccounts zijn immuun voor intrekking door de operator",
