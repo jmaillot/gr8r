@@ -1770,6 +1770,7 @@
   "err.ownerImmune": "Les comptes propriétaires sont immunisés contre la révocation par l’opérateur",
   "err.workspaceNotFound": "Espace de travail introuvable",
   "err.workspaceCreationClosed": "La création d’espaces de travail est fermée sur cette instance. Demandez à un opérateur de vous en créer un ou de vous inviter.",
+  "err.lastOperator": "L’instance a besoin d’au moins un opérateur",
   "err.workspaceNameRequired": "Saisissez un nom d’espace de travail",
   "err.invalidSlug": "Utilisez 2 à 40 lettres minuscules, chiffres ou tirets",
   "err.slugTaken": "Cette URL est déjà prise",

@@ -1770,6 +1770,7 @@
   "err.ownerImmune": "Eigentümer-Konten sind gegen Operator-Widerruf immun",
   "err.workspaceNotFound": "Arbeitsbereich nicht gefunden",
   "err.workspaceCreationClosed": "Die Erstellung von Arbeitsbereichen ist auf dieser Instanz geschlossen. Bitten Sie eine Betreiberin oder einen Betreiber, einen für Sie zu erstellen oder Sie einzuladen.",
+  "err.lastOperator": "Die Instanz benötigt mindestens eine Betreiberin oder einen Betreiber",
   "err.workspaceNameRequired": "Geben Sie einen Arbeitsbereich-Namen ein",
   "err.invalidSlug": "Verwenden Sie 2–40 Kleinbuchstaben, Ziffern oder Bindestriche",
   "err.slugTaken": "Diese URL ist bereits vergeben",

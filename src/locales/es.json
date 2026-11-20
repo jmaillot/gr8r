@@ -1770,6 +1770,7 @@
   "err.ownerImmune": "Las cuentas de propietario son inmunes a la revocación del operador",
   "err.workspaceNotFound": "Espacio de trabajo no encontrado",
   "err.workspaceCreationClosed": "La creación de espacios de trabajo está cerrada en esta instancia. Pide a un operador que cree uno por ti o que te invite.",
+  "err.lastOperator": "La instancia necesita al menos un operador",
   "err.workspaceNameRequired": "Introduce un nombre de espacio de trabajo",
   "err.invalidSlug": "Usa de 2 a 40 letras minúsculas, números o guiones",
   "err.slugTaken": "Esa URL ya está en uso",

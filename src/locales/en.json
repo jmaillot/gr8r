@@ -1770,6 +1770,7 @@
   "err.ownerImmune": "Owner accounts are immune to operator revocation",
   "err.workspaceNotFound": "Workspace not found",
   "err.workspaceCreationClosed": "Workspace creation is closed on this instance. Ask an operator to create one for you or invite you.",
+  "err.lastOperator": "The instance needs at least one operator",
   "err.workspaceNameRequired": "Enter a workspace name",
   "err.invalidSlug": "Use 2–40 lowercase letters, numbers, or hyphens",
   "err.slugTaken": "That URL is already taken",

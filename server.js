@@ -6771,6 +6771,61 @@ async function handleApi(req, res, url) {
     return json(res, 200, out); // live post-delete counts (Pitfall 10)
   }
 
+  /* Phase 78 (WSG-06, D-78-2): operator promote/demote — the console-managed
+     multi-seat identity. Same D-121 POST shape (Pitfall 22: sameOrigin FIRST,
+     then requireUser, then the operator gate BEFORE the target lookup so an
+     unknown id is a no-oracle 404 for non-operators too). Throttle omitted —
+     low-frequency console writes, matching the read-route precedent. */
+  const operatorFlagMatch = pathname.match(/^\/api\/auth\/operator\/users\/([A-Za-z0-9_-]{1,64})\/(promote|demote)$/);
+  if (operatorFlagMatch && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // D-112: the gate reads the DB flag only — never workspace role, never env.
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const target = await db.get('select id, name, email, is_instance_admin from users where id = ?', [operatorFlagMatch[1]]);
+    if (!target) return fail(res, 404, 'notFound', 'Not found');
+    const promoting = operatorFlagMatch[2] === 'promote';
+    // Idempotency (research Q3): an already-in-state target is a 200 no-op —
+    // the console stays honest without inventing a second error key.
+    if (target.is_instance_admin === (promoting ? 1 : 0)) {
+      return json(res, 200, { user: { id: target.id, is_instance_admin: target.is_instance_admin } });
+    }
+    // Last-operator guard (needOwner analog): count BEFORE the UPDATE — the
+    // instance always keeps at least one operator. Demote-self with other
+    // operators present is legal; this guard is the safety net.
+    if (!promoting) {
+      const count = (await db.get('select count(*) as n from users where is_instance_admin = 1')).n;
+      if (count <= 1) return fail(res, 409, 'lastOperator', 'The instance needs at least one operator');
+    }
+    // AUD-01/D-R3: the flag UPDATE and the audit row share ONE db.tx — a
+    // forced audit failure rolls back the promotion/demotion (no write ever
+    // lands un-logged).
+    const out = await db.tx(async () => {
+      await db.run('update users set is_instance_admin = ? where id = ?', [promoting ? 1 : 0, target.id]);
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          uid(),
+          operator.id,
+          target.id,
+          promoting ? 'operator_promoted' : 'operator_demoted',
+          0,
+          clientIp(req),
+          null,
+          operator.name,
+          operator.email,
+          target.name,
+          target.email,
+          now(),
+        ],
+      );
+      return { user: { id: target.id, is_instance_admin: promoting ? 1 : 0 } };
+    });
+    logInfo(`operator ${promoting ? 'promoted' : 'demoted'}: ${target.email} by ${operator.email}`);
+    return json(res, 200, out);
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
