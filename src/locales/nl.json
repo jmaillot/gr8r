@@ -1777,7 +1777,7 @@
   "err.workspaceArchived": "Deze werkruimte is gearchiveerd. Neem contact op met de instantieoperator om deze te herstellen.",
   "err.workspaceNotEmpty": "Deze werkruimte bevat projecten en kan niet worden verwijderd. Archiveer deze in plaats daarvan.",
   "err.dispositionRequired": "Elk lid heeft een bestemming of vrijgave nodig voordat er wordt verwijderd.",
-  "err.memberAlreadyMember": "{name} is al lid van die werkruimte. Kies een andere bestemming.",
+  "err.memberAlreadyMember": "Dat lid zit al in de bestemmingswerkruimte. Kies een andere bestemming.",
   "err.invalidRole": "De rol moet owner, admin of member zijn.",
   "err.invalidBody": "Ongeldige verzoekinhoud.",
   "err.ownerImmune": "Eigenaaraccounts zijn immuun voor intrekking door de operator",

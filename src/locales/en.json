@@ -1777,7 +1777,7 @@
   "err.workspaceArchived": "This workspace is archived. Contact your instance operator to have it restored.",
   "err.workspaceNotEmpty": "This workspace has projects and cannot be deleted. Archive it instead.",
   "err.dispositionRequired": "Every member needs a destination or release before deleting.",
-  "err.memberAlreadyMember": "{name} is already a member of that workspace. Pick another destination.",
+  "err.memberAlreadyMember": "That member is already in the destination workspace. Pick another destination.",
   "err.invalidRole": "Role must be owner, admin or member.",
   "err.invalidBody": "Invalid request body.",
   "err.ownerImmune": "Owner accounts are immune to operator revocation",

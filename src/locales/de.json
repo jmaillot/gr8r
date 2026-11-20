@@ -1777,7 +1777,7 @@
   "err.workspaceArchived": "Dieser Arbeitsbereich ist archiviert. Wenden Sie sich an den Instanz-Operator, um ihn wiederherzustellen.",
   "err.workspaceNotEmpty": "Dieser Arbeitsbereich enthält Projekte und kann nicht gelöscht werden. Archivieren Sie ihn stattdessen.",
   "err.dispositionRequired": "Jedes Mitglied benötigt ein Ziel oder eine Freigabe, bevor gelöscht wird.",
-  "err.memberAlreadyMember": "{name} ist bereits Mitglied dieses Arbeitsbereichs. Wählen Sie ein anderes Ziel.",
+  "err.memberAlreadyMember": "Dieses Mitglied ist bereits im Ziel-Arbeitsbereich. Wählen Sie ein anderes Ziel.",
   "err.invalidRole": "Die Rolle muss owner, admin oder member sein.",
   "err.invalidBody": "Ungültiger Anfrageinhalt.",
   "err.ownerImmune": "Eigentümer-Konten sind gegen Operator-Widerruf immun",
