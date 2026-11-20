@@ -154,6 +154,144 @@ test('empty/absent groups claim and zero mappings write nothing — login procee
 
 /* ------------------------------ tests ------------------------------ */
 
+/* Phase 81 Task 1 (D-81-2/D-81-3/D-81-5): upgrade-only re-assert. A viewer row
+   (provenance invite, seeded through the real DP-5 auto-accept on an unmapped
+   first login) is upgraded to the mapped member role on the second login —
+   provenance keeps its ORIGINAL invite origin (D-81-7), and the verb is
+   sso_group_role_change, not sso_group_grant. */
+test('viewer row is upgraded to the mapped role — provenance origin preserved, role_change verb (D-81-2/D-81-3/D-81-7)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => seedWorkspace(db, { id: 'ws-viewer-up', slug: 'viewerup', name: 'Viewer Up WS' }));
+    // Login 1 — unmapped JIT login (no invite pending; viewer invites are
+    // guests needing a project). The viewer ROW is seeded directly with
+    // invite provenance — origin preservation is a conflict-clause
+    // property, independent of how the row was created.
+    const first = await runFlow(server, { sub: 'sub-viewer-up', email: 'viewer-up@example.com', email_verified: true }, 'code-viewer-up-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('viewer-up@example.com').id;
+      db.prepare("insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values (?, ?, 'viewer', ?, null, null, 'invite')").run('ws-viewer-up', uid, `m_${uid}`);
+    });
+    // Login 2 — mapped: viewer (0) < member (1) → upgrade, origin preserved.
+    withDb(server.dbPath, db => seedMapping(db, { guid: '21111111-2222-3333-4444-555555555555', workspaceId: 'ws-viewer-up', role: 'member' }));
+    const second = await runFlow(server, { sub: 'sub-viewer-up', email: 'viewer-up@example.com', email_verified: true, groups: ['21111111-2222-3333-4444-555555555555'] }, 'code-viewer-up-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('viewer-up@example.com').id;
+      const row = db.prepare('select * from memberships where user_id = ?').get(uid);
+      assert.equal(row.role, 'member', 'the viewer row was upgraded to the mapped role');
+      assert.equal(row.provenance, 'invite', 'provenance keeps the ORIGINAL creation origin (D-81-7 — conflict-update never touches it)');
+      const verbs = db.prepare("select verb from security_log where user_id = ? and verb like 'sso_group%'").all(uid).map(r => r.verb);
+      assert.deepEqual(verbs.sort(), ['sso_group_role_change'], 'exactly one role_change verb (login 2 — login 1 was unmapped, no group verbs)');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* D-81-2/D-81-5: a same-role mapped re-login is a NO-OP — no membership write,
+   no new sso_group% security verb, no audit row. */
+test('same-role mapped re-login writes nothing — changes-only holds (D-81-2/D-81-5)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-same', slug: 'samews', name: 'Same WS' });
+      seedMapping(db, { guid: '31111111-2222-3333-4444-555555555555', workspaceId: 'ws-same', role: 'member' });
+    });
+    const claims = { sub: 'sub-same-role', email: 'same-role@example.com', email_verified: true, groups: ['31111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-same-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('same-role@example.com').id;
+      const before = db.prepare('select * from memberships where user_id = ?').all(uid);
+      const secBefore = db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n;
+      const auditBefore = db.prepare('select count(*) as n from audit_log').get().n;
+      assert.equal(secBefore, 1, 'login 1 logged exactly one sso_group_grant');
+      // Login 2 — same role: skip, zero writes anywhere.
+      return { before, secBefore, auditBefore, uid };
+    });
+    const second = await runFlow(server, claims, 'code-same-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('same-role@example.com').id;
+      const rows = db.prepare('select * from memberships where user_id = ?').all(uid);
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].role, 'member');
+      assert.equal(rows[0].provenance, 'group:31111111-2222-3333-4444-555555555555');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 1, 're-login added ZERO group verbs');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_login'").get(uid).n, 2, 'sso_login still fires (D-81-5)');
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ?").get(uid).n, 0, 'no audit rows for a no-op login');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* D-81-2: a LOWER mapped role never overwrites a higher existing row (owner
+   + mapped member → untouched, no logs). */
+test('lower mapped role does not overwrite a higher existing row (D-81-2)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspace(db, { id: 'ws-owner', slug: 'ownerws', name: 'Owner WS' });
+      seedMapping(db, { guid: '41111111-2222-3333-4444-555555555555', workspaceId: 'ws-owner', role: 'member' });
+    });
+    // JIT-create the user with an unmapped login first.
+    const first = await runFlow(server, { sub: 'sub-owner-hold', email: 'owner-hold@example.com', email_verified: true }, 'code-owner-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('owner-hold@example.com').id;
+      db.prepare("insert into memberships (workspace_id, user_id, role, member_id, team, scope, provenance) values ('ws-owner', ?, 'owner', ?, null, null, 'manual')").run(uid, `m_${uid}`);
+    });
+    const second = await runFlow(server, { sub: 'sub-owner-hold', email: 'owner-hold@example.com', email_verified: true, groups: ['41111111-2222-3333-4444-555555555555'] }, 'code-owner-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('owner-hold@example.com').id;
+      const row = db.prepare('select * from memberships where user_id = ?').get(uid);
+      assert.equal(row.role, 'owner', 'the owner row was NOT downgraded');
+      assert.equal(row.provenance, 'manual');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0, 'no group verbs on a skipped grant');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Edge probes (specless coverage): multiple mapped workspaces grant each;
+   two roles on ONE workspace → resolve() highest wins regardless of claim
+   GUID order (D-82-1); grant with no teams touches no team_members row. */
+test('edge probes: two workspaces, highest-role-wins order-stable, no team writes', async () => {
+  for (const order of [['61111111-2222-3333-4444-555555555555', '51111111-2222-3333-4444-555555555555'], ['51111111-2222-3333-4444-555555555555', '61111111-2222-3333-4444-555555555555']]) {
+    const server = await startServer({ env: oidcEnv() });
+    try {
+      withDb(server.dbPath, db => {
+        seedWorkspace(db, { id: 'ws-hi', slug: 'hiws', name: 'Hi WS' });
+        seedMapping(db, { guid: '51111111-2222-3333-4444-555555555555', workspaceId: 'ws-hi', role: 'member' });
+        seedMapping(db, { guid: '61111111-2222-3333-4444-555555555555', workspaceId: 'ws-hi', role: 'owner' });
+        seedWorkspace(db, { id: 'ws-other', slug: 'otherws', name: 'Other WS' });
+        seedMapping(db, { guid: '71111111-2222-3333-4444-555555555555', workspaceId: 'ws-other', role: 'admin' });
+      });
+      const email = `edge-${order[0].slice(0, 2)}@example.com`;
+      const { callback } = await runFlow(server, { sub: `sub-edge-${order[0].slice(0, 2)}`, email, email_verified: true, groups: [...order, '71111111-2222-3333-4444-555555555555'] }, `code-edge-${order[0].slice(0, 2)}`);
+      assert.equal(callback.location, '/');
+      withDb(server.dbPath, db => {
+        const uid = db.prepare('select id from users where email = ?').get(email).id;
+        const rows = db.prepare('select * from memberships where user_id = ? order by workspace_id').all(uid);
+        assert.equal(rows.length, 2, 'both mapped workspaces granted');
+        const hi = rows.find(r => r.workspace_id === 'ws-hi');
+        const other = rows.find(r => r.workspace_id === 'ws-other');
+        assert.equal(hi.role, 'owner', 'highest mapped role wins (D-82-1)');
+        assert.equal(other.role, 'admin');
+        assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_group_grant'").get(uid).n, 2, 'one grant verb per fresh grant');
+        assert.equal(db.prepare('select count(*) as n from team_members where user_id = ?').get(uid).n, 0, 'no-teams grant writes zero team_members rows');
+      });
+    } finally {
+      await server.stop();
+    }
+  }
+});
+
 test('tracer: a mapped groups claim grants membership end-to-end with provenance group:<guid> (GW-01/GW-03, D-81-9)', async () => {
   const server = await startServer({ env: oidcEnv() });
   try {

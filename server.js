@@ -5257,6 +5257,11 @@ async function handleApi(req, res, url) {
       } else {
         const mappings = await db.all('select group_guid, workspace_id, role, kind from group_mappings');
         const { grants } = resolve(claimState.groups, mappings);
+        /* D-81-3: viewer ranks 0 — ANY mapped role upgrades a viewer row. This
+           map is callback-local ON PURPOSE: groups.js ROLE_RANK is test-locked
+           Phase 80 surface and mappings can never map TO viewer (PATTERNS
+           anti-pattern 5). */
+        const ROLE_RANK_WITH_VIEWER = { owner: 3, admin: 2, member: 1, viewer: 0 };
         for (const grant of grants) {
           /* D-81-8: dead/archived workspace → skip + logWarn, never fatal. */
           const ws = await db.get('select * from workspaces where id = ?', [grant.workspaceId]);
@@ -5264,8 +5269,19 @@ async function handleApi(req, res, url) {
             logWarn('sso group grant skipped — workspace missing or archived');
             continue;
           }
+          /* D-81-2 upgrade-only re-assert: addMembership's on-conflict is an
+             UNCONDITIONAL write, so pre-compare the existing row FIRST — a
+             same-role or lower mapped role must write NOTHING anywhere
+             (D-81-5 changes-only: no-op logins write zero rows/logs).
+             Downgrades are Phase 82. */
+          const existing = await db.get('select role from memberships where workspace_id = ? and user_id = ?', [ws.id, row.id]);
+          if (existing && !(ROLE_RANK_WITH_VIEWER[grant.role] > ROLE_RANK_WITH_VIEWER[existing.role])) continue;
           await addMembership(ws, row, grant.role, [], 'group:' + grant.groupGuid);
-          await logSecurity(row.id, 'sso_group_grant');
+          /* D-81-4/5 changes-only verbs: a genuine upgrade of an existing row
+             logs sso_group_role_change, a fresh insert logs sso_group_grant,
+             a skip logs nothing. Provenance keeps the row's ORIGINAL creation
+             origin (D-81-7 — the conflict-update never touches it). */
+          await logSecurity(row.id, existing ? 'sso_group_role_change' : 'sso_group_grant');
         }
       }
 
