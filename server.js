@@ -5352,10 +5352,23 @@ async function handleApi(req, res, url) {
             });
             continue;
           }
-          /* D-81-8: dead/archived workspace → skip + logWarn, never fatal. */
+          /* D-81-8 + D-82-9: dead/archived workspace → skip + logWarn, never
+             fatal — now WITH its encoded audit row (reason dead-workspace for
+             a missing workspace, archived-workspace for archived = 1). The
+             GUID is the GRANT's groupGuid (grant side). Removal side: dead-
+             workspace removals are structurally unreachable (FK on delete
+             cascade pre-deletes rows of deleted workspaces) — the reason
+             stays in the vocabulary for Phase 83 rendering only. */
           const ws = await db.get('select * from workspaces where id = ?', [wsId]);
           if (!ws || ws.archived === 1) {
             logWarn('sso group grant skipped — workspace missing or archived');
+            const skipReason = ws ? 'archived-workspace' : 'dead-workspace';
+            await db.tx(async () => {
+              await db.run(
+                'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                [uid(), row.id, row.id, `group_membership_skipped:group:${mapped.groupGuid}:${skipReason}`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+              );
+            });
             continue;
           }
           if (existing) {
@@ -5398,14 +5411,22 @@ async function handleApi(req, res, url) {
             /* mappedRank > curRank → upgrade: fall through to the grant/upgrade
                write below (Phase 81 rule, D-81-2). */
           }
+          /* D-82-11 (GS-04 literal): grants AND upgrades land as encoded
+             delta rows in the D-82-9 format — reason segment omitted (the
+             fixed vocabulary applies only to skips/refusals). Each row is
+             written in its own db.tx (addMembership owns its internal tx —
+             db.tx does not nest), actor=target=self. logSecurity's
+             sso_group% verbs are GONE from the delta path — heartbeats
+             (sso_login, sso_invite_accepted) keep the helper. The
+             operator_promoted block below is UNCHANGED (D-81-4/D-82-8). */
+          const wasUpgrade = !!existing;
           await addMembership(ws, row, mapped.role, [], 'group:' + mapped.groupGuid);
-          /* D-81-4/5 changes-only verbs: a genuine upgrade of an existing row
-             logs sso_group_role_change, a fresh insert logs sso_group_grant,
-             a skip logs nothing. Provenance follows the GROUP writer's role
-             per D-82-7 (amends D-81-7 — the conditional conflict-update lets
-             a group-shaped value own the role it set; manual/invite writers
-             still preserve creation origin). */
-          await logSecurity(row.id, existing ? 'sso_group_role_change' : 'sso_group_grant');
+          await db.tx(async () => {
+            await db.run(
+              'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+              [uid(), row.id, row.id, wasUpgrade ? `group_role_upgraded:group:${mapped.groupGuid}` : `group_granted:group:${mapped.groupGuid}`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+            );
+          });
         }
         /* Phase 81 (GO-01/GO-02, D-81-4): operator self-grant — mirror the console
            promote tx EXACTLY (:6879–6898 shape) with actor = target = the granted

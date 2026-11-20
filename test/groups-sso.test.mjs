@@ -238,7 +238,7 @@ test('overage claim logs the fixed message and writes nothing (D-81-10)', async 
     withDb(server.dbPath, db => {
       const uid = db.prepare('select id from users where email = ?').get('overage@example.com').id;
       assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0, 'zero grant writes');
-      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0);
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 0, 'zero delta audit rows (D-82-11 migration of the sso_group% verb pin)');
     });
   } finally {
     await server.stop();
@@ -274,7 +274,15 @@ test('archived or missing workspace skips that grant with logWarn — other gran
       const rows = db.prepare('select * from memberships where user_id = ?').all(uid);
       assert.equal(rows.length, 1, 'only the live workspace was granted');
       assert.equal(rows[0].workspace_id, 'ws-live');
-      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_group_grant'").get(uid).n, 1, 'one grant verb — skips log nothing to security_log');
+      /* D-82-11 migration (was: one sso_group_grant verb — skips log nothing
+         to security_log): the grant is now an encoded audit row and each skip
+         carries its own skip row (archived-workspace / dead-workspace). */
+      const audits = db.prepare('select * from audit_log where actor_id = ? order by action').all(uid);
+      assert.deepEqual(audits.map(a => a.action), [
+        'group_granted:group:b1111111-2222-3333-4444-555555555555',
+        'group_membership_skipped:group:a1111111-2222-3333-4444-555555555555:archived-workspace',
+        'group_membership_skipped:group:c1111111-2222-3333-4444-555555555555:dead-workspace',
+      ]);
     });
   } finally {
     await server.stop();
@@ -321,7 +329,7 @@ test('regression pin: mapped-shape claim with no matching mapping is byte-identi
     withDb(server.dbPath, db => {
       const uid = db.prepare('select id from users where email = ?').get('regression@example.com').id;
       assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_login'").get(uid).n, 1, 'sso_login fires as today');
-      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0, 'zero group verbs');
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 0, 'zero group delta rows (D-82-11 migration of the sso_group% verb pin)');
       assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0);
     });
   } finally {
@@ -487,8 +495,11 @@ test('overage login removes nothing and grants nothing — group row survives (S
       assert.ok(row, 'the group-derived row SURVIVES the overage login');
       assert.equal(row.role, 'member', 'role untouched by the overage login');
       assert.equal(row.provenance, 'group:52111111-2222-3333-4444-555555555555', 'provenance untouched');
-      assert.equal(db.prepare('select count(*) as n from audit_log where actor_id = ?').get(uid).n, 0, 'zero delta audit rows for the overage login');
-      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 1, 'no new group verbs after login 1');
+      /* D-82-11 migration (was: 'no new group verbs after login 1'): login 1
+         wrote its one group_granted delta row; the overage login adds NONE.
+         Zero sso_group% verbs remain — the delta trail is audit_log only. */
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 1, 'exactly login 1’s grant delta row — the overage login added zero');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0, 'zero sso_group% verbs remain (D-82-11)');
     });
   } finally {
     await server.stop();
@@ -612,8 +623,12 @@ test('viewer row is upgraded to the mapped role — group writer flips provenanc
       const row = db.prepare('select * from memberships where user_id = ?').get(uid);
       assert.equal(row.role, 'member', 'the viewer row was upgraded to the mapped role');
       assert.equal(row.provenance, 'group:21111111-2222-3333-4444-555555555555', 'the GROUP writer owns the role it set — provenance flips to group:<guid> (D-82-7)');
-      const verbs = db.prepare("select verb from security_log where user_id = ? and verb like 'sso_group%'").all(uid).map(r => r.verb);
-      assert.deepEqual(verbs.sort(), ['sso_group_role_change'], 'exactly one role_change verb (login 2 — login 1 was unmapped, no group verbs)');
+      /* D-82-11 migration (was: sso_group_role_change verb pin): the upgrade
+         is now an encoded audit_log row. */
+      const audits = db.prepare("select * from audit_log where actor_id = ? and action like 'group_%'").all(uid);
+      assert.equal(audits.length, 1, 'exactly one delta row (login 2 — login 1 was unmapped)');
+      assert.equal(audits[0].action, 'group_role_upgraded:group:21111111-2222-3333-4444-555555555555');
+      assert.equal(audits[0].target_id, uid, 'actor = target = the user (self-driven delta)');
     });
   } finally {
     await server.stop();
@@ -635,11 +650,10 @@ test('same-role mapped re-login writes nothing — changes-only holds (D-81-2/D-
     withDb(server.dbPath, db => {
       const uid = db.prepare('select id from users where email = ?').get('same-role@example.com').id;
       const before = db.prepare('select * from memberships where user_id = ?').all(uid);
-      const secBefore = db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n;
-      const auditBefore = db.prepare('select count(*) as n from audit_log').get().n;
-      assert.equal(secBefore, 1, 'login 1 logged exactly one sso_group_grant');
+      const grantedBefore = db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n;
+      assert.equal(grantedBefore, 1, 'login 1 wrote exactly one group_granted delta row');
       // Login 2 — same role: skip, zero writes anywhere.
-      return { before, secBefore, auditBefore, uid };
+      return { before, grantedBefore, uid };
     });
     const second = await runFlow(server, claims, 'code-same-2');
     assert.equal(second.callback.location, '/');
@@ -649,9 +663,9 @@ test('same-role mapped re-login writes nothing — changes-only holds (D-81-2/D-
       assert.equal(rows.length, 1);
       assert.equal(rows[0].role, 'member');
       assert.equal(rows[0].provenance, 'group:31111111-2222-3333-4444-555555555555');
-      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 1, 're-login added ZERO group verbs');
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 1, 're-login added ZERO delta rows (D-82-11 migration of the group-verb pin)');
       assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_login'").get(uid).n, 2, 'sso_login still fires (D-81-5)');
-      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ?").get(uid).n, 0, 'no audit rows for a no-op login');
+      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0, 'zero sso_group% verbs remain — the delta trail is audit_log only');
     });
   } finally {
     await server.stop();
@@ -681,7 +695,7 @@ test('lower mapped role does not overwrite a higher existing row (D-81-2)', asyn
       const row = db.prepare('select * from memberships where user_id = ?').get(uid);
       assert.equal(row.role, 'owner', 'the owner row was NOT downgraded');
       assert.equal(row.provenance, 'manual');
-      assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb like 'sso_group%'").get(uid).n, 0, 'no group verbs on a skipped grant');
+      assert.equal(db.prepare("select count(*) as n from audit_log where actor_id = ? and action like 'group_%'").get(uid).n, 0, 'no delta rows on a skipped grant (D-82-11 migration of the group-verb pin)');
     });
   } finally {
     await server.stop();
@@ -713,7 +727,15 @@ test('edge probes: two workspaces, highest-role-wins order-stable, no team write
         const other = rows.find(r => r.workspace_id === 'ws-other');
         assert.equal(hi.role, 'owner', 'highest mapped role wins (D-82-1)');
         assert.equal(other.role, 'admin');
-        assert.equal(db.prepare("select count(*) as n from security_log where user_id = ? and verb = 'sso_group_grant'").get(uid).n, 2, 'one grant verb per fresh grant');
+        /* D-82-11 migration (was: two sso_group_grant verbs): the reconcile
+           applies ONE delta per workspace (D-82-10) — ws-hi gets one grant
+           row carrying the HIGHEST mapped role's guid (owner, D-82-1),
+           ws-other one row; the losing member mapping writes nothing. */
+        const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_granted:%'").all(uid).map(r => r.action).sort();
+        assert.deepEqual(audits, [
+          'group_granted:group:61111111-2222-3333-4444-555555555555',
+          'group_granted:group:71111111-2222-3333-4444-555555555555',
+        ], 'one grant delta row per workspace — highest-rank guid wins');
         assert.equal(db.prepare('select count(*) as n from team_members where user_id = ?').get(uid).n, 0, 'no-teams grant writes zero team_members rows');
       });
     } finally {
