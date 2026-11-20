@@ -4,17 +4,17 @@ milestone: v3.1
 milestone_name: Workspace Governance
 current_phase: 79
 current_phase_name: Governance Surface
-status: executing
-stopped_at: Completed 79-02-PLAN.md
-last_updated: "2026-11-20T07:11:52.407Z"
+status: verifying
+stopped_at: Completed 79-03-PLAN.md
+last_updated: "2026-11-20T07:48:01.637Z"
 last_activity: 2026-11-20
 last_activity_desc: Phase 79 execution started
-state_head: 52e20f853f50e2225c307c8c71e95c637109293b
+state_head: 902a967cdb9f63c1b351dc27a7be4035acddd03a
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 4
+  completed_plans: 5
   percent: 50
 ---
 
@@ -32,7 +32,7 @@ before features.
 
 Phase: 79 (Governance Surface) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-20 — Phase 79 execution started
 
 ## Performance Metrics
@@ -58,6 +58,7 @@ Last activity: 2026-11-20 — Phase 79 execution started
 |------|----------|-------|-------|
 | Phase 79 P01 | 31 min | 3 tasks | 10 files |
 | Phase 79 P79-02 | 13m | 3 tasks | 13 files |
+| Phase 79 P03 | 7 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Recent decisions affecting current work:
 - [Phase 79]: 79-01: memberAlreadyMember is a keyed 409 refusal (not silent upsert); delete content check reads the RAW doc; audit verbs workspace_archived/unarchived/deleted, member_reassigned/released — all inside the mutation db.tx
 - [Phase 79]: Orphan modal rides an additive generic 'custom' modal host (chunk-backed, assignee-picker precedent) — no governance branch in the modal switch
 - [Phase 79]: Governance Delete renders on every row — the server is the authority; unarchive skips type-to-confirm (reversible), archive/delete confirm by slug, release by member email (D-04)
+- [Phase 79]: settings.operator.* keys reused verbatim for the relocated Operators section (no 5-catalogue rename); markup moved verbatim — data-a baseline 572 unchanged
 
 ### Pending Todos
 
@@ -116,6 +118,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T07:11:52.364Z
-Stopped at: Completed 79-02-PLAN.md
+Last session: 2026-11-20T07:48:01.594Z
+Stopped at: Completed 79-03-PLAN.md
 Resume file: None

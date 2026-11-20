@@ -56,7 +56,7 @@ workspace on the instance — no shadow workspaces.
 - [x] **WSG-08**: From the same page, instance operators can manage workspaces they didn't
   create: delete or archive empty/shadow workspaces and reassign (or release) orphaned
   members. Destructive actions require confirmation and are audit-logged.
-- [ ] **WSG-09**: The page includes instance-operator management (WSG-06) — one governance
+- [x] **WSG-09**: The page includes instance-operator management (WSG-06) — one governance
   surface, operator-scoped. *(WSG-06's console UI ships in Phase 78; Phase 79 links or
   relocates it into the governance page — ratify shape at discuss-phase 79.)*
 
