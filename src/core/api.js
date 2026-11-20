@@ -378,6 +378,12 @@ export const api = {
   async operatorWsDelete(id, dispositions) {
     return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/delete`, { dispositions });
   },
+  /* Phase 83 (D-05/D-04): the workspace rename — guard-ordered identically to
+     archive/unarchive server-side; slug rules and refusals reuse the
+     creation-time vocabulary (invalidSlug/slugTaken+suggestion). */
+  async operatorWsRename(id, { name, slug }) {
+    return call('POST', `/api/auth/operator/workspaces/${encodeURIComponent(id)}/rename`, { name, slug });
+  },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.
      D-52-3: the caller refetches on every open; nothing is cached here. */

@@ -7150,6 +7150,43 @@ async function handleApi(req, res, url) {
     return json(res, 200, { workspace: { id: ws.id, slug: ws.slug, name: ws.name, archived: archiving } });
   }
 
+  const operatorWsRenameMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/rename$/);
+  if (operatorWsRenameMatch && method === 'POST') {
+    // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // Pitfall 10: throttle keyed on the operator (never per-IP) — the single
+    // legitimate operator is never locked out; every attempt consumes a try.
+    if (tooMany(`op-ws-rename|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // T-83-01: the gate runs BEFORE any target lookup (no existence oracle —
+    // real and fake ids answer identically).
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    // Fetched by id, NEVER requireWorkspace: archived rows stay renameable —
+    // planner decision per 83-CONTEXT discretion (same reachability as
+    // archive/unarchive).
+    const ws = await db.get('select id, slug, name, archived from workspaces where id = ?', [operatorWsRenameMatch[1]]);
+    if (!ws) return fail(res, 404, 'notFound', 'Not found');
+    const body = await readJson(req);
+    // D-04: the workspace-creation slug rules reused VERBATIM — explicit
+    // refusal literals at this call site (reverse-parity precedent).
+    const name = String(body?.name || '')
+      .trim()
+      .slice(0, 60);
+    if (!name) return fail(res, 400, 'workspaceNameRequired', 'Enter a workspace name');
+    const next = sanitizeSlug(body?.slug);
+    if (!next) return fail(res, 400, 'invalidSlug', 'Use 2–40 lowercase letters, numbers, or hyphens');
+    // Pitfall 1: self-collision excluded — the row's own unchanged slug passes.
+    if (next !== ws.slug && (await wsBySlug(next))) {
+      return fail(res, 409, 'slugTaken', 'That URL is already taken', { suggestion: await uniqueSlug(next, ws.id) });
+    }
+    await db.run('update workspaces set name = ?, slug = ? where id = ?', [name, next, ws.id]);
+    // D-06: logInfo only — NO audit_log row (the `workspace deleted
+    // (governance)` precedent). Old→new slug visible per the convention.
+    logInfo(`workspace renamed "${ws.name}" (${ws.slug}) → "${name}" (${next}) (governance) by ${operator.email}`);
+    return json(res, 200, { workspace: { id: ws.id, slug: next, name } });
+  }
+
   const operatorWsDeleteMatch = pathname.match(/^\/api\/auth\/operator\/workspaces\/([A-Za-z0-9_-]{1,64})\/delete$/);
   if (operatorWsDeleteMatch && method === 'POST') {
     // Pitfall 22 order: sameOrigin FIRST, before any body read or throttle.
