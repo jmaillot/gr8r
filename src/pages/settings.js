@@ -827,7 +827,8 @@ export function settingsBody(sec, title) {
       /* MCP-01: personal API keys for the /mcp endpoint. Ground truth is
          S.ui.apiKeys (refreshApiKeys(), server data only). The raw key of a
          fresh key (S.ui.newKey) renders exactly once — the server stores only
-         the hash. Revoke follows the operator card's inline-confirm stage. */
+         the hash. Revoke follows the governance page's operator card
+         inline-confirm stage (relocated there in 79-03). */
       if (!api.enabled) return H(t('settings.apikeys.lead')) + srow(t('settings.apikeys.off'), t('settings.apikeys.offDesc'), '');
       const rows = S.ui.apiKeys || [];
       const stage = S.ui.apiKeyStage;
