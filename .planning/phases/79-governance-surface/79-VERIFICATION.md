@@ -1,6 +1,6 @@
 ---
 phase: 79-governance-surface
-verified: 2026-11-20T12:00:00Z
+verified: 2026-11-20T13:10:00Z
 status: passed
 score: 18/18 must-haves verified
 covered_files:
@@ -24,7 +24,7 @@ covered_files:
   - src/locales/es.json
   - test/governance.test.mjs
   - test/governance-client.test.mjs
-covered_digest: "v2:sha256:ad7111f1d761c4ee9170ae5c4df3ee3804317d32493d98a46a908b2b3f45197a"
+covered_digest: "v2:sha256:5890cc8ec61d160e91dbc4dae8e8c49e7e767ed2da64882739061712e36d972b"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

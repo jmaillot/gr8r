@@ -128,24 +128,37 @@ export function pageGovernance() {
    server's 409 (lastOperator) surfaced as a keyed err toast.
    ===================================================================== */
 export function operatorCard() {
-  const rows = S.ui.operatorUsers;
-  if (!rows) return '';
+  const all = S.ui.operatorUsers;
+  if (!all) return '';
   const meId = api.user?.id;
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${rows
-    .map(u =>
-      srow(
-        `<span class="row" style="gap:8px">${esc(u.name || '')}<span class="faint">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
-        u.last_login_at ? ago(u.last_login_at) : '—',
-        S.ui.operatorRevoke === u.id
-          ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
-          : S.ui.operatorDemote === u.id
-            ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
-            : u.is_instance_admin
-              ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
-              : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
-      ),
-    )
-    .join('')}</div>`;
+  /* Client-side name/email filter — same scaling affordance and pattern as
+     the workspaces filter (govQ): state in S.ui.govOpQ, never server
+     pagination (planner assumption: small instance). The inline confirm
+     stages (revoke/demote) keep working regardless of the filter — rows
+     hidden by the filter simply don't render their stage. */
+  const q = (S.ui.govOpQ || '').trim().toLowerCase();
+  const rows = q
+    ? all.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
+    : all;
+  const search = `<div class="row" style="margin-bottom:10px;gap:8px"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-op-q" data-in="govOpQ" placeholder="${t('page.governance.searchOp')}" value="${esc(S.ui.govOpQ || '')}" aria-label="${t('page.governance.searchOp')}"></div></div>`;
+  const list = rows.length
+    ? rows
+        .map(u =>
+          srow(
+            `<span class="row" style="gap:8px">${esc(u.name || '')}<span class="faint">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
+            u.last_login_at ? ago(u.last_login_at) : '—',
+            S.ui.operatorRevoke === u.id
+              ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
+              : S.ui.operatorDemote === u.id
+                ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
+                : u.is_instance_admin
+                  ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
+                  : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
+          ),
+        )
+        .join('')
+    : empty('search', t('popover.noMatches'), t('page.governance.noMatchesOpBody', { query: q }), '', 'sm', 1);
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${search}<div class="panel">${list}</div></div>`;
 }
 
 /* The orphan disposition modal body (D-05/D-06/D-08) — rendered through the

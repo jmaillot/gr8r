@@ -4635,6 +4635,10 @@ IN.govQ = el => {
   S.ui.govQ = el.value;
   render();
 };
+IN.govOpQ = el => {
+  S.ui.govOpQ = el.value;
+  render();
+};
 A.govSeg = el => {
   S.ui.govSegV = el.dataset.v;
   render();
