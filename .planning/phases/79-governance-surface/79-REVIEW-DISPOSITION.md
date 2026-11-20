@@ -3,8 +3,8 @@ phase: 79-governance-surface
 generated: 2026-11-20T08:40:00Z
 review_status: issues_found
 total: 8
-open: 1
-fixed: 7
+open: 0
+fixed: 8
 skipped: 0
 severity:
   critical: 2
@@ -27,4 +27,4 @@ is preserved across runs.
 | IN-01: Dead client code — A.govReleaseAsk, api.operatorWsReassign, api.operatorWsRelease have no call sites | info | fixed | fix(79): 6bf55c6d |
 | IN-02: Stale comment in settings.js still points at the relocated operator card | info | fixed | fix(79): 14674145 |
 | IN-03: Workspace search input reuses member-search a11y labels | info | fixed | fix(79): c1f02722 |
-| IN-04: Orphan modal offers reassign with zero destination workspaces — generic 404 toast instead of keyed refusal (pre-existing UX nit, server refuses safely) | info | open | re-review 2026-11-20 |
+| IN-04: Orphan modal offers reassign with zero destination workspaces — generic 404 toast instead of keyed refusal (pre-existing UX nit, server refuses safely) | info | fixed | fix(79): c0b1de50, 61cf9f71 |
