@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { canonicalizeGuid, guidRefusal, roleTokenRefusal, resolveGroupsClaim } from '../groups.js';
+import { canonicalizeGuid, guidRefusal, roleTokenRefusal, resolveGroupsClaim, resolve } from '../groups.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -90,4 +90,84 @@ test('group_mappings workspace reference does NOT cascade (D-82-6) and role CHEC
   assert.ok(table, 'group_mappings table not found');
   assert.doesNotMatch(table, /workspace_id[^,]*on delete cascade/, 'workspace reference must NOT cascade (D-82-6)');
   assert.match(table, /role\s+text not null check \(role in \('owner','admin','member'\)\)/, 'role CHECK must stay the locked 3-token set');
+});
+
+/* ---- D-82-1 highest-role-wins resolver (Task 2) ----------------------- */
+
+const GUID_A = 'a1b2c3d4-e5f6-4789-9abc-def012345678';
+const GUID_B = 'b2c3d4e5-f6a7-4789-9abc-def012345679';
+const claimGroups = [GUID_A, GUID_B];
+
+const row = (group_guid, workspace_id, role, kind) => ({ group_guid, workspace_id, role, ...(kind ? { kind } : {}) });
+
+test('resolve: two mappings to one workspace with roles member+admin → single grant, role admin (D-82-1)', () => {
+  const mappings = [row(GUID_A, 'ws1', 'member'), row(GUID_B, 'ws1', 'admin')];
+  const out = resolve(claimGroups, mappings);
+  assert.deepEqual(out.grants, [{ workspaceId: 'ws1', role: 'admin', groupGuid: GUID_B }]);
+  assert.equal(out.operatorFlag, null);
+});
+
+test('resolve: member/admin/owner on one workspace → owner wins', () => {
+  const mappings = [
+    row(GUID_A, 'ws1', 'member'),
+    row(GUID_B, 'ws1', 'admin'),
+    row(GUID_A, 'ws1', 'owner'),
+  ];
+  assert.deepEqual(resolve(claimGroups, mappings).grants, [{ workspaceId: 'ws1', role: 'owner', groupGuid: GUID_A }]);
+});
+
+test('resolve: disjoint workspaces → one grant each', () => {
+  const mappings = [row(GUID_A, 'ws1', 'member'), row(GUID_B, 'ws2', 'admin')];
+  const out = resolve(claimGroups, mappings);
+  assert.equal(out.grants.length, 2);
+  assert.deepEqual(
+    out.grants.sort((a, b) => a.workspaceId.localeCompare(b.workspaceId)),
+    [
+      { workspaceId: 'ws1', role: 'member', groupGuid: GUID_A },
+      { workspaceId: 'ws2', role: 'admin', groupGuid: GUID_B },
+    ],
+  );
+});
+
+test('resolve: no matches → empty grants (NOT an unmapped outcome)', () => {
+  const out = resolve(claimGroups, [row('c3d4e5f6-a7b8-4789-9abc-def01234567a', 'ws9', 'admin')]);
+  assert.deepEqual(out, { grants: [], operatorFlag: null });
+});
+
+test('resolve: mapping to a GUID outside the claim produces no grant', () => {
+  const out = resolve([GUID_A], [row(GUID_B, 'ws1', 'owner')]);
+  assert.deepEqual(out.grants, []);
+});
+
+test('resolve: claim-side GUID variants canonicalize before matching', () => {
+  const out = resolve([`{${GUID_A.toUpperCase()}}`], [row(GUID_A.toUpperCase(), 'ws1', 'member')]);
+  assert.deepEqual(out.grants, [{ workspaceId: 'ws1', role: 'member', groupGuid: GUID_A }]);
+});
+
+test('resolve: operator mapping row matched → operatorFlag true; unmatched → null', () => {
+  const operatorRow = row(GUID_A, 'operator-flag', 'member', 'operator');
+  assert.equal(resolve(claimGroups, [operatorRow]).operatorFlag, true, 'matched operator row');
+  assert.equal(
+    resolve([GUID_B], [operatorRow]).operatorFlag,
+    null,
+    'operator row whose group is not claimed → null (no flag, never false)',
+  );
+});
+
+test('resolve: operator rows never produce workspace grants', () => {
+  const out = resolve(claimGroups, [row(GUID_A, 'operator-flag', 'member', 'operator')]);
+  assert.deepEqual(out.grants, []);
+});
+
+test('resolve: never throws on any input', () => {
+  for (const claim of [null, undefined, 'garbage', 42, {}, [null, 5, {}, 'zz-not-a-guid', GUID_A]]) {
+    for (const mappings of [null, undefined, 'garbage', 42, [null, {}, { group_guid: 7 }, { group_guid: GUID_A, workspace_id: 'ws1', role: 'Owner' }, row(GUID_A, 'ws1', 'member')]]) {
+      assert.doesNotThrow(() => resolve(claim, mappings), `resolve(${JSON.stringify(claim)}, ${JSON.stringify(mappings)}) threw`);
+    }
+  }
+});
+
+test('resolve: invalid mapping role tokens are skipped, valid ones still resolve', () => {
+  const out = resolve(claimGroups, [row(GUID_A, 'ws1', 'viewer'), row(GUID_A, 'ws1', 'admin')]);
+  assert.deepEqual(out.grants, [{ workspaceId: 'ws1', role: 'admin', groupGuid: GUID_A }]);
 });
