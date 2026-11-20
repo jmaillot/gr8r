@@ -16,7 +16,8 @@
      WORKSPACE_NAME=Projects Studio
      WORKSPACE_SLUG         optional slug for a fresh install (defaults to the name)
      APP_URL                public base URL for share/invite links
-     ALLOW_SIGNUP=false     let visitors create accounts and workspaces
+     ALLOW_SIGNUP=false     let visitors create accounts (WORKSPACE_CREATION gates workspace creation)
+     WORKSPACE_CREATION     'true'|'false' — who may create workspaces; unset = false (operators only)
      SEED_DATA=true         false = start with an empty workspace
      SESSION_DAYS=30
      INVITE_DAYS=7          invite link lifetime
@@ -133,6 +134,19 @@ const DB_URL = process.env.DB_URL
 const PORT = Number(process.env.PORT || 8080);
 const HOST = process.env.HOST || '0.0.0.0';
 const ALLOW_SIGNUP = process.env.ALLOW_SIGNUP === 'true';
+/* Phase 78 (WSG-01, D-78-1): the creation gate. Boolean tokens ONLY — exactly
+   'true' or 'false'; unset defaults to false (fail-closed); ANY other token
+   ('', whitespace, 'TRUE', 'yes', '1') boot-refuses below (after logError is
+   defined). No trim, no case folding: unset and '' are DIFFERENT (Pitfall 4). */
+const _WORKSPACE_CREATION_RAW = process.env.WORKSPACE_CREATION;
+const WORKSPACE_CREATION =
+  _WORKSPACE_CREATION_RAW === undefined
+    ? false
+    : _WORKSPACE_CREATION_RAW === 'true'
+      ? true
+      : _WORKSPACE_CREATION_RAW === 'false'
+        ? false
+        : null; // sentinel → boot-refuse
 const SEED_DATA = process.env.SEED_DATA !== 'false';
 const WORKSPACE_NAME = (process.env.WORKSPACE_NAME || 'Projects Studio').trim() || 'Projects Studio';
 const WORKSPACE_SLUG = String(process.env.WORKSPACE_SLUG || '').trim();
@@ -169,6 +183,16 @@ const logDebug = msg => logLine('debug', msg);
 const logInfo = msg => logLine('info', msg);
 const logWarn = msg => logLine('warn', msg);
 const logError = msg => logLine('error', msg);
+
+/* Phase 78 (T-78-01): boot-refuse on an invalid WORKSPACE_CREATION token — a
+   typo must never silently weaken or open the gate. Runs before listen (the
+   module top evaluates before main()), via the wired main().catch exit path. */
+if (WORKSPACE_CREATION === null) {
+  logError(
+    `WORKSPACE_CREATION: invalid value ${JSON.stringify(_WORKSPACE_CREATION_RAW)} — only 'true' or 'false' are accepted (unset defaults to false)`,
+  );
+  process.exit(1);
+}
 
 /* ---------------------- domain admission (Phase 75) --------------------- */
 /* DOM-01/DOM-02/DOM-07: the shared canonicalizing domain machinery lives in
@@ -943,10 +967,6 @@ async function userPayload(user) {
 
 async function firstWorkspace() {
   return (await db.get('select * from workspaces order by created_at, name collate nocase limit 1')) || null;
-}
-
-async function hasAdminRole(userId) {
-  return !!(await db.get("select 1 from memberships where user_id = ? and role in ('owner','admin') limit 1", [userId]));
 }
 
 /* Tenancy metadata is owned by the columns; the document never overrides it. */
@@ -5017,7 +5037,7 @@ async function handleApi(req, res, url) {
       signup: ALLOW_SIGNUP,
       mail: MAILER.enabled,
       url: appBase(req),
-      workspaceCreation: ALLOW_SIGNUP ? 'open' : 'admins',
+      workspaceCreation: WORKSPACE_CREATION,
       maxUploadMb: MAX_UPLOAD_MB,
       oidcEnabled: OIDC.enabled,
       oidcSsoOnly: OIDC.ssoOnly,
@@ -6808,8 +6828,12 @@ async function handleApi(req, res, url) {
     const user = await requireUser(req, res);
     if (!user) return;
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
-    if (!ALLOW_SIGNUP && !(await hasAdminRole(user.id))) {
-      return fail(res, 403, 'askAdminForWorkspace', 'Ask a workspace administrator to create one for you');
+    /* Phase 78 (WSG-02, T-78-02, D-112): the gate is WORKSPACE_CREATION — when
+       closed, ONLY the instance operator passes (the users.is_instance_admin
+       DB flag). Workspace owner/admin roles never pass (tenant-bound, D-112);
+       ALLOW_SIGNUP governs signup only (server.js:6758) — fully decoupled. */
+    if (!WORKSPACE_CREATION && !isInstanceAdmin(user)) {
+      return fail(res, 403, 'workspaceCreationClosed', 'Workspace creation is closed on this instance. Ask an operator to create one for you or invite you.');
     }
     const body = await readJson(req);
     const name = String(body?.name || '')
@@ -8950,6 +8974,9 @@ async function main() {
        (already inherit-resolved via ?? in domains.js). Source attribution
        stays on the two D-06 lines above, which are deliberately untouched. */
     logInfo(`domains: door matrix — signup: ${domainListLog(SIGNUP_DOMAINS)} | invite-create: ${domainListLog(INVITE_DOMAINS)} | invite-accept: ${domainListLog(INVITE_DOMAINS)} | sso-jit: ${domainListLog(SIGNUP_DOMAINS)} | sso-reconcile: ${domainListLog(INVITE_DOMAINS)}`);
+    /* Phase 78 (WSG-03, D-11 style): one grep-able line answering how the
+       creation gate resolved — docker logs answers "who can create". */
+    logInfo(`workspace creation: ${WORKSPACE_CREATION ? 'open (any authenticated user)' : 'closed (instance operators only)'}`);
   });
 
   const shutdown = signal => {

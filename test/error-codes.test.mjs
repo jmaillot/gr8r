@@ -266,6 +266,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'viewNameRequired', // toast composed by savedViewsUi when the prompt is submitted empty (57-02)
   'viewSaveFailed', // fallback when the named-view PUT answers no keyed code (57-02)
   'viewDeleteFailed', // fallback when the view DELETE answers no keyed code (57-02)
+  'askAdmin', // toast composed by A.newWorkspace when canCreateWorkspace is false (Phase 78 client)
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {

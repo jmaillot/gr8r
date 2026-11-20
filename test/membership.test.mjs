@@ -114,14 +114,14 @@ test('pending invites are listed for admins only', async () => {
   assert.deepEqual(asMember.invites, [], 'a member never receives the invite list');
 });
 
-test('ALLOW_SIGNUP=false closes signup and creation but invites still onboard', async () => {
+test('ALLOW_SIGNUP=false closes signup only — creation follows WORKSPACE_CREATION (Phase 78 decoupling)', async () => {
   const locked = await startServer({ env: { ALLOW_SIGNUP: 'false' } });
   try {
     const anonymous = client(locked.base, 'anonymous');
     const config = await anonymous.get('/api/config');
     assert.equal(config.status, 200);
     assert.equal(config.data.signup, false);
-    assert.equal(config.data.workspaceCreation, 'admins');
+    assert.equal(config.data.workspaceCreation, true, 'the gate is a boolean; BASE_ENV pins it open');
 
     const blocked = await anonymous.post('/api/auth/signup', ACCOUNT('Blocked', 'blocked@test.local'));
     assert.equal(blocked.status, 403, 'signup is closed');
@@ -134,13 +134,16 @@ test('ALLOW_SIGNUP=false closes signup and creation but invites still onboard', 
     assert.equal(joined.data.workspace.slug, 'acme');
     assert.equal((await guest.get('/api/workspaces/acme')).status, 200);
 
-    const refused = await guest.post('/api/workspaces', { name: 'Guest Co' });
-    assert.equal(refused.status, 403, 'a plain member cannot create a workspace when signup is closed');
-    assert.equal((await lockedOwner.post('/api/workspaces', { name: 'Owner Co' })).status, 201, 'an owner still can');
+    /* Phase 78: ALLOW_SIGNUP no longer governs creation — with the gate open
+       (BASE_ENV) even a plain member may create; the closed-gate refusal is
+       proven in test/creation-gate.test.mjs. */
+    const allowed = await guest.post('/api/workspaces', { name: 'Guest Co' });
+    assert.equal(allowed.status, 201, 'creation no longer rides on ALLOW_SIGNUP');
+    assert.equal(allowed.data.workspace.role, 'owner');
 
     const openConfig = await client(server.base, 'anonymous').get('/api/config');
     assert.equal(openConfig.data.signup, true);
-    assert.equal(openConfig.data.workspaceCreation, 'open');
+    assert.equal(openConfig.data.workspaceCreation, true);
   } finally {
     await locked.stop();
   }

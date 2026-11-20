@@ -1769,7 +1769,7 @@
   "err.operatorOnly": "Alleen de instantieoperator kan dat",
   "err.ownerImmune": "Eigenaaraccounts zijn immuun voor intrekking door de operator",
   "err.workspaceNotFound": "Werkruimte niet gevonden",
-  "err.askAdminForWorkspace": "Vraag een werkruimtebeheerder om er een voor je te maken",
+  "err.workspaceCreationClosed": "Het aanmaken van werkruimten is gesloten op deze instantie. Vraag een operator om er een voor je te maken of om je uit te nodigen.",
   "err.workspaceNameRequired": "Voer een naam voor de werkruimte in",
   "err.invalidSlug": "Gebruik 2–40 kleine letters, cijfers of koppeltekens",
   "err.slugTaken": "Die URL is al in gebruik",
