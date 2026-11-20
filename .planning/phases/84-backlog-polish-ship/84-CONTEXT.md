@@ -31,6 +31,9 @@ Clear the deferred backlog to ship milestone v3.2: searchable member/team picker
 - **D-09:** DEPLOY.md gains an "Entra group mapping" section covering all four: ApplicationGroup claim prerequisites, overage fallback recipe pointer (STACK), dead-mapping runbook, old-slug 404 policy (D-82-5).
 - **D-10:** Both Phase-83 advisory findings are fixed in this phase: IN-01 (workspace rename touches `updated_at`), IN-02 (unpin the hard-coded i18n catalogue size — derived check instead of `assert.equal(keys.length, 2030)`).
 - **D-11:** Version bump is the phase's final task: package.json → 3.2.0 + CHANGELOG entry, as the ship gate inside GSD.
+- **D-12:** IN-02 derived check: strict en-subset check for es/de/nl, en-vs-fr compared modulo documented exceptions, numeric 2030 pin dropped; the 3 real gaps (es/de/nl missing `pwa.install.hint`) are fixed as part of this work — NOT full 5-locale parity (fr's 40 extra keys stay).
+- **D-13:** CHANGELOG: backfill 3.0.0 and 3.1.0 entries from milestone summaries, then add the 3.2.0 entry.
+- **D-14:** flows 2FA failure: treated as spec flake — executor reads the trace first; if TOTP window race, apply the proven nextWindow/retry pattern (operator-revoke-cycle precedent) and require 3 consecutive green runs per D-06.
 
 ### the agent's Discretion
 - Exact visual treatment of the picker modal (mirrors assignee picker chrome)
