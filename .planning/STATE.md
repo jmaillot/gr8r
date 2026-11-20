@@ -5,17 +5,17 @@ milestone_name: Workspace Governance
 current_phase: 79
 current_phase_name: Governance Surface
 status: executing
-stopped_at: Phase 79 context gathered
-last_updated: "2026-11-20T05:37:22.427Z"
+stopped_at: Completed 79-01-PLAN.md
+last_updated: "2026-11-20T06:53:41.284Z"
 last_activity: 2026-11-20
-last_activity_desc: Milestone v3.1 started
-state_head: dacc5b950fa5f55a9b1e7be4687e4f6c6490f291
+last_activity_desc: Phase 79 execution started
+state_head: ee54738595c5888e19003dfb5415ebedec74421a
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
-  percent: 40
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -26,14 +26,14 @@ See: .planning/PROJECT.md (updated 2026-11-19)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Between milestones — v3.0 shipped; next milestone not started
+**Current focus:** Phase 79 — Governance Surface
 
 ## Current Position
 
-Phase: 79 (Governance Surface) — READY TO EXECUTE
-Plan: 2 of 2 (78-01 + 78-02 complete)
-Status: Phase done — next: Phase 79 (Governance Surface) at discuss-phase
-Last activity: 2026-11-20 — Plan 78-02 executed (client gate-aware surfaces + await page + operator console, 5 commits; resumed after a mid-plan transport failure)
+Phase: 79 (Governance Surface) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-11-20 — Phase 79 execution started
 
 ## Performance Metrics
 
@@ -52,6 +52,11 @@ Last activity: 2026-11-20 — Plan 78-02 executed (client gate-aware surfaces + 
 | 78 | 2 | - | - |
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 79 P01 | 31 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -81,6 +86,8 @@ Recent decisions affecting current work:
   never invite acceptance. Existing out-of-list member re-invited under a tightened list gets
   403 inviteDomainNoLonger, invite not consumed, loosening revives it
 - 76-02: immunity is test-only proof (zero production diffs in plan 02) — prohibition enforced
+- [Phase 79]: 79-01: governance routes fetch workspace rows by id via db.get — never requireWorkspace (unarchive stays possible); creator derived from the owner-membership LEFT JOIN, no created_by column
+- [Phase 79]: 79-01: memberAlreadyMember is a keyed 409 refusal (not silent upsert); delete content check reads the RAW doc; audit verbs workspace_archived/unarchived/deleted, member_reassigned/released — all inside the mutation db.tx
 
 ### Pending Todos
 
@@ -106,6 +113,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T05:04:34.677Z
-Stopped at: Phase 79 context gathered
-Resume file: .planning/phases/79-governance-surface/79-CONTEXT.md
+Last session: 2026-11-20T06:53:32.949Z
+Stopped at: Completed 79-01-PLAN.md
+Resume file: None

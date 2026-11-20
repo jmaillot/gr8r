@@ -252,3 +252,8 @@ None - no external service configuration required.
 ---
 *Phase: 79-governance-surface*
 *Completed: 2026-11-20*
+
+## Self-Check: PASSED
+- All 5 key files exist on disk; all 5 commit hashes verified in git log
+- Verification: `node --test test/governance.test.mjs` 14/14 pass; `node --test test/catalogue.test.mjs` 27/27 pass; `npm test` 1939 pass / 1 fail (STATE.md-documented webhook-events pre-existing) / 13 skip; `npm run lint` clean
+- Acceptance greps: zero `requireWorkspace` hits inside the operator route-family handlers (doctrine comment only); exactly 1 `adapterEnsureColumn('workspaces', 'archived'` hit; SCHEMA contains `archived`; wsBySlug range untouched in the diff; every new route's first guard is sameOrigin

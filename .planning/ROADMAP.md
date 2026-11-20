@@ -121,10 +121,10 @@ gate and boot log define who reaches the page; `/api/config` carries the gate va
   5. Destructive actions (delete/archive, member release) are all confirmation-gated and
      appear in the audit trail; every new refusal key ships in all 5 locale catalogues in the
      same commit as the endpoint that emits it.
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 Plans:
 **Wave 1**
-- [ ] 79-01-PLAN.md — Server: archived column + migration, requireWorkspace refusal, operator /workspaces route family (list/archive/delete/reassign/release) + governance server suite (WSG-07, WSG-08)
+- [x] 79-01-PLAN.md — Server: archived column + migration, requireWorkspace refusal, operator /workspaces route family (list/archive/delete/reassign/release) + governance server suite (WSG-07, WSG-08)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 79-02-PLAN.md — Client: governance page, route registration, workspaces table, type-to-confirm + orphan disposition modal + client suite (WSG-07, WSG-08)
@@ -142,4 +142,4 @@ Phases execute in numeric order: 78 → 79
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 78. Creation Gate & Instance-Owner Identity | 2/2 | Complete | 2026-11-20 |
-| 79. Governance Surface | 0/? | Not started | - |
+| 79. Governance Surface | 1/3 | In Progress|  |

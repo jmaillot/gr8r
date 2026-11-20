@@ -49,11 +49,11 @@ workspace on the instance — no shadow workspaces.
 
 ### Workspace management page (WSG)
 
-- [ ] **WSG-07**: A new owner-scoped page lists ALL workspaces on the instance — name, slug,
+- [x] **WSG-07**: A new owner-scoped page lists ALL workspaces on the instance — name, slug,
   member count, creator, created date — with workspace-existence invisible to non-operators
   (the listing endpoint is operator-scoped, `isInstanceAdmin`; non-operators get an
   empty/forbidden payload, never a partial leak).
-- [ ] **WSG-08**: From the same page, instance operators can manage workspaces they didn't
+- [x] **WSG-08**: From the same page, instance operators can manage workspaces they didn't
   create: delete or archive empty/shadow workspaces and reassign (or release) orphaned
   members. Destructive actions require confirmation and are audit-logged.
 - [ ] **WSG-09**: The page includes instance-operator management (WSG-06) — one governance
