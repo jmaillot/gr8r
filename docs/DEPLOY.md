@@ -150,6 +150,8 @@ WORKSPACE_SLUG=projects-studio
 PUID=1000
 PGID=1000
 ALLOW_SIGNUP=false
+# Workspace creation gate: 'true' | 'false'. Unset = false (operators only).
+WORKSPACE_CREATION=true
 # Optional admission doors (Phase 75). Comma-separated email-domain allowlists.
 ALLOW_SIGNUP_DOMAINS=
 ALLOW_INVITE_DOMAINS=
@@ -164,6 +166,15 @@ MAX_UPLOAD_MB=25
 `PUID`/`PGID` are the user and group the app runs as. Find yours with `id -u` and `id -g`.
 The entrypoint fixes ownership of `/data` at startup, so a bind-mounted directory or a
 restored database does not need manual `chown`. `PGID` defaults to `PUID` when empty.
+
+`WORKSPACE_CREATION` gates who may create workspaces (`POST /api/workspaces`). It accepts
+**exactly** `true` or `false` — no other token (`TRUE`, `yes`, `1`, an empty value) refuses
+to boot with an error naming the variable and both valid values. **Unset defaults to
+`false`**: creation is closed and restricted to instance operators. Changing it requires a
+restart (it is read once at boot). It is fully decoupled from `ALLOW_SIGNUP`, which
+continues to govern account signup only — setting `ALLOW_SIGNUP=true` no longer lets users
+create workspaces. The resolved value is logged at boot (`workspace creation: open …` /
+`closed …`) and exposed as the boolean `workspaceCreation` field of `/api/config`.
 
 `ALLOW_SIGNUP_DOMAINS` and `ALLOW_INVITE_DOMAINS` are the two admission doors (Phase 75).
 Each takes a comma-separated list of email domains and is tri-state: **unset** = door off
@@ -411,9 +422,25 @@ Every workspace has a URL of its own: `https://<PROJECTS_HOST>/w/<slug>`. The sl
 workspace keeps the slug it was migrated with, so changing `WORKSPACE_SLUG` later has no
 effect.
 
-There is one workspace after a fresh install. With `ALLOW_SIGNUP=true`, any signed-in user can
-create more from the workspace menu; with `ALLOW_SIGNUP=false`, only an owner or admin of an
-existing workspace can. The creator becomes its owner.
+There is one workspace after a fresh install. With `WORKSPACE_CREATION=true`, any signed-in
+user can create more from the workspace menu; with `WORKSPACE_CREATION=false` (the default
+when the variable is unset), only instance operators can. The creator still becomes the
+workspace owner in both modes. Instance operators are managed in the operator console
+(Settings → instance operators): an operator can promote or demote other users there, and
+demotion of the last remaining operator is refused.
+
+#### Break-glass: restoring operator access without the console
+
+The operator console is the sanctioned mechanism for promoting and demoting operators. If it
+is ever unreachable (for example, the only operator account is locked out), a manual SQLite
+update restores access — break-glass only:
+
+```sql
+sqlite3 /data/projects.db "UPDATE users SET is_instance_admin = 1 WHERE email = 'you@example.com'"
+```
+
+(Demote with `= 0` the same way, but never demote the last operator.) Restart the app
+afterwards.
 
 Data is isolated per workspace: members only ever receive the document of a workspace they
 belong to, and a request for any other slug answers `404`. Inside a workspace, a **private
@@ -457,6 +484,22 @@ Admins see **Leave workspace** but not **Delete workspace**.
 Pending address invites appear under **Members → Pending invites** for admins and owners, where
 they can be resent (a fresh link and expiry) or revoked. Revoked and expired links answer `404`
 and `410` respectively.
+
+### Upgrading to 1.2.0: workspace creation is now gated by `WORKSPACE_CREATION`
+
+**Behavior inversion — read this before upgrading.** Workspace creation no longer follows
+`ALLOW_SIGNUP`. It is decided by its own variable, `WORKSPACE_CREATION`, which is **strictly
+boolean**: exactly `true` or `false`, no other token accepted (anything else refuses to boot).
+
+- **Unset defaults to `false`** — creation is closed and restricted to instance operators.
+  This deliberately inverts the old behavior: installs that relied on `ALLOW_SIGNUP=true` to
+  let every signed-in user create workspaces now get a closed gate after upgrading unless
+  they set `WORKSPACE_CREATION=true`.
+- To restore the previous openness, add `WORKSPACE_CREATION=true` to the environment and
+  restart. Alternatively, promote the users who need to create workspaces to instance
+  operators in the operator console (Settings → instance operators).
+- No migration or backup is involved: this change is environment variable + flag only. Pull,
+  rebuild and restart as usual.
 
 ### Upgrading to 1.1.1
 
