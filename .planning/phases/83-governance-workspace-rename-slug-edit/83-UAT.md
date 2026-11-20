@@ -3,7 +3,7 @@ status: testing
 phase: 83-governance-workspace-rename-slug-edit
 source: [83-VERIFICATION.md]
 started: 2026-11-20T15:30:00Z
-updated: 2026-11-20T15:30:00Z
+updated: 2026-11-20T16:10:00Z
 ---
 
 ## Current Test
@@ -37,7 +37,7 @@ expected: As operator, seed a dead group_mapping + a guard-refused audit row, lo
 result: [pending]
 
 ### 6. WR-01 — no stale old-slug client state after rename
-expected: After a slug rename, navigate/click any link or view referencing the workspace's old slug (workspace header, mapping editor, other pages) — client state refreshes to the new slug, no stale old-slug references or broken actions left in the session UI
+expected: After a slug rename, navigate/click any link or view referencing the workspace's old slug (workspace header, mapping editor, other pages) — client state refreshes to the new slug via the renameWorkspaceLocal reconcile (fix 1086497b, wired at actions.js:4740), no stale old-slug references or broken actions left in the session UI
 result: [pending]
 
 ## Summary
