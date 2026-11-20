@@ -1,7 +1,7 @@
 ---
 phase: "84"
 status: in_progress
-tests_total: 5
+tests_total: 6
 tests_passed: 0
 tests_failed: 0
 tests_blocked: 0
@@ -59,4 +59,19 @@ created: "2026-11-20"
 
 - Test 1 is the `unrun-verify` smoke item deferred from 84-02 (no e2e covers pickers).
 - Tests 3–4 were also e2e-verified in-suite; UAT confirms visually on a real screen.
-- Test 5 is static-file verification (can be checked by the orchestrator directly if preferred).
+- Test 5 is static-file verification (verified by the orchestrator).
+- Test 6 is the post-84 owner quick-task (operator super-access, commit 6ab89e63) — HTTP-verified by test/super-access.test.mjs (7/7); UAT confirms the two UI entry points on a real screen.
+
+---
+
+### Test 6: Operator super-access — enter any workspace (owner quick-task, 6ab89e63)
+
+**Expected:** Sign in as the instance operator:
+1. The **workspace switcher** (top-bar logo popover) now lists **every workspace on the instance** — including ones you have no membership in. Foreign ones show role "Owner".
+2. Clicking a foreign workspace enters it; you can browse projects (private ones included), teams, tasks — full owner-like access.
+3. The **Members** list of that workspace does NOT show you (no fake membership row).
+4. **Governance** table: each workspace row now has an **Open** action that enters the workspace.
+5. An **archived** workspace: the operator can still enter it, but read-only (writes refused); real members stay locked out.
+6. A **non-operator** user still cannot see/enter workspaces they aren't a member of (no behavior change for regular users).
+
+**Result:** (pending)
