@@ -2127,5 +2127,22 @@
   "page.backup.emptyTitle": "Aún no hay tareas de copia de seguridad",
   "page.backup.emptyBody": "La copia de seguridad aún no está configurada. Las tareas aparecerán aquí cuando el operador de la instancia las cree.",
   "page.backup.flagBackup": "Operador de copias",
-  "page.backup.flagRestore": "Operador de restauración"
+  "page.backup.flagRestore": "Operador de restauración",
+  "page.governance.rolesTitle": "Roles de la instancia",
+  "page.governance.rolesLead": "Concede roles de operador de copias o de restauración. Los Super Admins tienen todos los roles implícitamente y nunca aparecen aquí.",
+  "page.governance.rolesGrant": "Conceder rol",
+  "page.governance.rolesColUser": "Usuario",
+  "page.governance.rolesColRole": "Rol",
+  "page.governance.rolesColGrantedBy": "Concedido por",
+  "page.governance.rolesColGranted": "Concedido el",
+  "page.governance.rolesEmptyTitle": "Aún no hay roles de instancia concedidos",
+  "page.governance.rolesEmptyBody": "Concede un rol de operador de copias o de restauración para dar acceso a la superficie de copias de seguridad.",
+  "page.governance.rolesRevoke": "Revocar",
+  "page.governance.rolesRevokeConfirm": "¿Revocar este rol?",
+  "page.governance.rolesDupBadge": "Ya lo tiene",
+  "page.governance.rolesGrantTitle": "Conceder un rol de instancia",
+  "page.governance.rolesModalHint": "Elige un usuario, selecciona un rol y confirma.",
+  "page.governance.rolesPickRole": "Rol",
+  "toast.governanceRoleGranted": "Rol concedido.",
+  "toast.governanceRoleRevoked": "Rol revocado."
 }

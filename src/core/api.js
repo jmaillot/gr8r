@@ -429,6 +429,19 @@ export const api = {
   async backupTasks({ signal } = {}) {
     return call('GET', '/api/backup/tasks', undefined, { signal });
   },
+  /* 85-02 (D-16/D-29/D-30): the Instance Roles tab's route family — one
+     listing GET (rows + recent activity), the audited grant POST and the
+     revoke DELETE. Operator-only server-side; every refusal surfaces as a
+     keyed toast, the server is the authority (client gating is cosmetic). */
+  async instanceRoles() {
+    return call('GET', '/api/auth/operator/instance-roles');
+  },
+  async instanceRoleGrant(userId, role) {
+    return call('POST', '/api/auth/operator/instance-roles', { userId, role });
+  },
+  async instanceRoleRevoke(id) {
+    return call('DELETE', `/api/auth/operator/instance-roles/${encodeURIComponent(id)}`);
+  },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.
      D-52-3: the caller refetches on every open; nothing is cached here. */
