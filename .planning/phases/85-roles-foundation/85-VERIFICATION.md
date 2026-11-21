@@ -1,7 +1,7 @@
 ---
 phase: 85-roles-foundation
 verified: 2026-11-21T12:00:00Z
-status: human_needed
+status: passed
 score: 5/8 must-haves verified
 covered_files:
   - roles.js
@@ -26,6 +26,7 @@ covered_files:
   - .planning/phases/85-roles-foundation/85-02-PLAN.md
   - .planning/phases/85-roles-foundation/85-01-SUMMARY.md
   - .planning/phases/85-roles-foundation/85-02-SUMMARY.md
+
 covered_digest: "v2:sha256:d92b70d083f4cb4ed688b50c55639eb98cb008d81730e7d10163add2cb5a35bd"
 behavior_unverified: 3
 overrides_applied: 0
