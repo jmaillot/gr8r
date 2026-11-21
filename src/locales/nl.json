@@ -2143,6 +2143,9 @@
   "page.governance.rolesGrantTitle": "Instantierol toekennen",
   "page.governance.rolesModalHint": "Kies een gebruiker, selecteer een rol en bevestig.",
   "page.governance.rolesPickRole": "Rol",
+  "page.governance.rolesRecentTitle": "Recente activiteit",
+  "page.governance.rolesVerbGranted": "Toegekend",
+  "page.governance.rolesVerbRevoked": "Ingetrokken",
   "toast.governanceRoleGranted": "Rol toegekend.",
   "toast.governanceRoleRevoked": "Rol ingetrokken."
 }

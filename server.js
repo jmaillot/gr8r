@@ -7620,6 +7620,20 @@ async function handleApi(req, res, url) {
       left join users tu on tu.id = ir.user_id
       left join users gu on gu.id = ir.granted_by
       order by ir.granted_at desc`);
+    /* D-32: the recent-activity trail rides the same GET (dead-mappings
+       {.., trail} shape) — the append-only audit_log is the single source,
+       newest first, capped at 8. Role isn't an audit column, so the trail
+       carries the action + actor + target only. */
+    const recentRows = await db.all(
+      `select action, actor_name, actor_email, target_name, target_email, created_at
+        from audit_log where action in ('instance_role_granted','instance_role_revoked')
+        order by created_at desc limit 8`);
+    const recent = recentRows.map(a => ({
+      action: a.action,
+      actorName: a.actor_name,
+      targetName: a.target_name || a.target_id,
+      createdAt: a.created_at,
+    }));
     return json(res, 200, {
       roles: rows.map(r => ({
         id: r.id,
@@ -7631,6 +7645,7 @@ async function handleApi(req, res, url) {
         userEmail: r.user_email || null,
         grantedByName: r.granted_by_name || r.granted_by, // D-33: deleted-granter fallback to raw id
       })),
+      recent, // D-32
     });
   }
 
@@ -7671,7 +7686,7 @@ async function handleApi(req, res, url) {
           uid(),
           operator.id,
           target.id,
-          'instance_role_granted',
+          'instance_role_granted:' + row.role, // role-suffixed: the audit action carries the granted role verbatim (D-32 trail)
           0,
           clientIp(req),
           null,
@@ -7713,7 +7728,7 @@ async function handleApi(req, res, url) {
           uid(),
           operator.id,
           row.user_id,
-          'instance_role_revoked',
+          'instance_role_revoked:' + row.role, // role-suffixed: the audit action carries the revoked role verbatim (D-32 trail)
           0,
           clientIp(req),
           null,

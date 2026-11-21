@@ -2143,6 +2143,9 @@
   "page.governance.rolesGrantTitle": "Instanz-Rolle vergeben",
   "page.governance.rolesModalHint": "Benutzer auswählen, Rolle wählen und bestätigen.",
   "page.governance.rolesPickRole": "Rolle",
+  "page.governance.rolesRecentTitle": "Letzte Aktivität",
+  "page.governance.rolesVerbGranted": "Vergeben",
+  "page.governance.rolesVerbRevoked": "Widerrufen",
   "toast.governanceRoleGranted": "Rolle vergeben.",
   "toast.governanceRoleRevoked": "Rolle widerrufen."
 }
