@@ -340,7 +340,7 @@ if (dup) return fail(res, 400, 'instanceRoleDuplicate', 'That user already holds
 | A2 | Audit action names `instance_role_granted`/`instance_role_revoked` (snake_case family) — discretion item, not yet fixed | Pattern 4 | Cosmetic; renaming later touches only the emit site + D-32 list filter |
 | A3 | `hasInstanceRole` server wiring signature `(userId, capability)` does an async DB all() then calls the pure `capabilitiesFor` — exact split within roles.js vs server.js is planner's call | Code Examples | None — pure/persistence split is already locked at the module level (D-13) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does the Instance Roles tab data ride a new GET route or extend an existing one?**
    - What we know: D-16 fixes only GET/POST/DELETE on `/api/auth/operator/instance-roles`; the GET must also return the D-32 recent-audit section and resolved granted_by display names (D-33).
