@@ -65,7 +65,7 @@ export const ROUTE_ICONS = {
   states: 'layers',
   archive: 'archive',
   governance: 'scale',
-  backup: 'database-backup',
+  backup: 'hard-drive',
 };
 
 /* Phase 60 (D-05): per-route teardown registry. A lazy page with a running
