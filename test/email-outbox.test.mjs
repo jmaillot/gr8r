@@ -302,9 +302,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const serverSource = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 
-test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest claim sites', () => {
+test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest + backup-alert claim sites', () => {
   const enqueueCalls = serverSource.match(/insert or ignore into email_outbox/g) || [];
-  assert.equal(enqueueCalls.length, 2, 'exactly two claim sites: notif (queueNotifEmails) + digest');
+  assert.equal(enqueueCalls.length, 3, 'exactly three claim sites: notif (queueNotifEmails) + digest + backup_alert (87-03 D-17)');
   const enclosing = (src, idx) => {
     const re = /\n(?:async )?function ([A-Za-z_]\w*)/g;
     let last = null;
@@ -314,8 +314,10 @@ test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest cla
   };
   const first = serverSource.indexOf('insert or ignore into email_outbox');
   const second = serverSource.indexOf('insert or ignore into email_outbox', first + 1);
+  const third = serverSource.indexOf('insert or ignore into email_outbox', second + 1);
   assert.equal(enclosing(serverSource, first), 'queueNotifEmails', 'claim site 1 lives in queueNotifEmails (notif path)');
   assert.equal(enclosing(serverSource, second), 'runReminderPass', 'claim site 2 lives in the reminder/digest pass');
+  assert.equal(enclosing(serverSource, third), 'handleBackupTaskOutcome', 'claim site 3 lives in the backup outcome transition hook (87-03)');
 });
 
 test('D-04 boundary: sendInvite and sendSecurityAlert remain direct fire-and-forget', () => {
