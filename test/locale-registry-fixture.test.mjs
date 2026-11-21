@@ -6,7 +6,17 @@
 
    The fixture lifecycle is the proof's own guard: a left-behind xx.json would poison every
    later build and scan on this machine, so the copy is wrapped in try/finally and after()
-   asserts the tree is clean. */
+   asserts the tree is clean.
+
+   Cross-file race guard (Phase 86 post-merge finding): the fixture MUST be materialized
+   only while this suite's tests run — `npm test` executes test files with
+   --test-concurrency=2, and a concurrently-loaded server.js snapshots
+   LOCALE_CODES = readdirSync(src/locales) at import time. A fixture alive during another
+   file's server boot makes `xx` a legal locale there (the unknown-locale 400 pin in
+   locale-account flaked on exactly this window). The mutex below (lockfile in os.tmpdir,
+   retried acquisition) serializes the materialize→test→remove window against itself so a
+   future second fixture-bearing suite cannot widen the race, and the window stays inside
+   this process's lifetime. */
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -31,7 +41,40 @@ const FIXTURE_CATALOGUE = {
 
 let OUT_DIR = null;
 
+/* ---- fixture window mutex: exclusive across concurrent test-file processes ---- */
+const LOCK_PATH = path.join(os.tmpdir(), 'projects-fixture-xx.lock');
+const LOCK_STALE_MS = 5 * 60 * 1000; // a crashed runner must not wedge the next one
+function acquireFixtureLock() {
+  const deadline = Date.now() + 8 * 60 * 1000;
+  for (;;) {
+    try {
+      // O_EXCL|O_WRONLY: atomic create-if-absent — the winner holds the window.
+      const fd = fs.openSync(LOCK_PATH, 'wx');
+      fs.closeSync(fd);
+      return;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      try {
+        if (Date.now() - fs.statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) {
+          fs.rmSync(LOCK_PATH, { force: true });
+          continue;
+        }
+      } catch {
+        /* holder released between stat and rm — loop retries the create */
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`fixture lock held longer than ${LOCK_STALE_MS} ms by another runner: ${LOCK_PATH}`);
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    }
+  }
+}
+function releaseFixtureLock() {
+  fs.rmSync(LOCK_PATH, { force: true });
+}
+
 before(() => {
+  acquireFixtureLock();
   try {
     assert.ok(!fs.existsSync(FIXTURE_PATH), `a stale ${FIXTURE_CODE}.json is already in the tree — clean it first`);
     fs.writeFileSync(FIXTURE_PATH, `${JSON.stringify(FIXTURE_CATALOGUE, null, 2)}\n`);
@@ -45,13 +88,16 @@ before(() => {
     });
     assert.equal(result.status, 0, `the fixture build failed\n${result.stdout || ''}\n${result.stderr || ''}`);
   } finally {
-    /* Pitfall 6: the fixture NEVER outlives this suite, whatever a clause does. */
+    /* Pitfall 6: the fixture NEVER outlives this suite, whatever a clause does.
+       The lock releases in after() — the whole window (fixture alive + this suite
+       still running) stays exclusive against any future concurrent fixture user. */
     if (fs.existsSync(FIXTURE_PATH)) fs.rmSync(FIXTURE_PATH);
   }
 });
 
 after(() => {
   assert.ok(!fs.existsSync(FIXTURE_PATH), `the fixture was left behind — Pitfall 6 poisoning`);
+  releaseFixtureLock();
 });
 
 /* ---------- the harness, on the build-locales shape ---------- */
