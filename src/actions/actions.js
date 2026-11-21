@@ -4741,6 +4741,111 @@ A.backupRetry = () => {
   render();
   refreshBackupTasks();
 };
+
+/* =====================================================================
+   85-02 INSTANCE ROLES (D-29..D-31, BKROLE-01) — the governance tab's
+   grant/revoke client half. Render-only from the single GET fetch
+   (rows + recent activity, dead-mappings shape). Grant reuses the
+   operator user list as its pool (D-07) through the Phase 84 picker
+   pattern (staged state, searchable, confirm-to-apply, D-30); the
+   duplicate refusal (D-08) closes the modal, surfaces the keyed toast
+   and highlights the existing row; revoke rides the D-90 inline-confirm
+   stage. Every refusal is a keyed err toast — the server is the
+   authority (T-78-05 doctrine).
+   ===================================================================== */
+let govRolesFillSeq = 0;
+let govRolesInflight = null;
+export async function refreshInstanceRoles() {
+  if (!api.enabled || !api.user?.isInstanceAdmin) return null;
+  const my = ++govRolesFillSeq;
+  govRolesInflight?.abort();
+  govRolesInflight = new AbortController();
+  const res = await api.instanceRoles();
+  if (my !== govRolesFillSeq) return null;
+  if (res.ok) {
+    S.ui.govRoles = res.data.roles || [];
+    S.ui.govRolesRecent = res.data.recent || [];
+  } else {
+    /* D-28: the central intercept owns the 401 teardown. Any other refusal
+       leaves the tab empty — the operator gate IS the honest answer. */
+    if (res.status !== 401) S.ui.govRoles = null;
+    return null;
+  }
+  render();
+  return S.ui.govRoles;
+}
+A.govRoleGrantAsk = async () => {
+  if (!S.ui.operatorUsers) await refreshOperatorUsers(); // D-07: the picker's pool
+  S.ui.govRoleMod = { userId: null, role: 'backup_operator', q: '' };
+  import('../pages/governance.js')
+    .then(m => {
+      openModal({ type: 'custom', cls: 'sm', render: () => m.govRoleBody() });
+    })
+    .catch(e => {
+      console.error(e);
+      S.ui.govRoleMod = null;
+      toast(t('err.serverUnreachable'), { kind: 'err' });
+    });
+};
+IN.govRoleQ = el => {
+  if (S.ui.govRoleMod) S.ui.govRoleMod.q = el.value;
+};
+IN.govRoleSel = el => {
+  if (S.ui.govRoleMod) S.ui.govRoleMod.role = el.value;
+};
+A.govRolePick = el => {
+  if (S.ui.govRoleMod) S.ui.govRoleMod.userId = el.dataset.id;
+  render();
+};
+A.govRoleGrantCancel = () => {
+  S.ui.govRoleMod = null;
+  closeModal();
+};
+A.govRoleGrantConfirm = async () => {
+  const st = S.ui.govRoleMod;
+  if (!st?.userId) return;
+  const res = await api.instanceRoleGrant(st.userId, st.role);
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    const code = res.data?.code;
+    /* D-08: the duplicate refusal closes the modal, toasts the keyed copy and
+       highlights the existing row until the refresh clears the stage. */
+    if (code === 'instanceRoleDuplicate') {
+      S.ui.govRoleMod = null;
+      S.ui.govRoleDup = st.userId;
+      closeModal();
+      render();
+      toast(t('err.instanceRoleDuplicate'), { kind: 'err' });
+      await refreshInstanceRoles(); // the amber highlight persists on the existing row until the next mutation or route exit
+      return;
+    }
+    return toast(tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.govRoleMod = null;
+  closeModal();
+  await refreshInstanceRoles();
+  toast(t('toast.governanceRoleGranted'));
+};
+A.govRoleRevokeAsk = el => {
+  S.ui.govRoleRevoke = el.dataset.id; // D-90: the inline confirmation stage carries the row id
+  render();
+};
+A.govRoleRevokeCancel = () => {
+  S.ui.govRoleRevoke = null;
+  render();
+};
+A.govRoleRevokeConfirm = async el => {
+  const id = el.dataset.id;
+  const res = await api.instanceRoleRevoke(id);
+  S.ui.govRoleRevoke = null;
+  if (!res.ok) {
+    if (res.status === 401) return;
+    const code = res.data?.code; // operatorOnly / notFound / tooManyAttempts — keyed
+    return toast(tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  await refreshInstanceRoles();
+  toast(t('toast.governanceRoleRevoked'));
+};
 IN.govQ = el => {
   S.ui.govQ = el.value;
   render();

@@ -2127,5 +2127,22 @@
   "page.backup.emptyTitle": "No backup tasks yet",
   "page.backup.emptyBody": "Backup isn't configured yet. Backup tasks will appear here once your instance operator creates them.",
   "page.backup.flagBackup": "Backup operator",
-  "page.backup.flagRestore": "Restore operator"
+  "page.backup.flagRestore": "Restore operator",
+  "page.governance.rolesTitle": "Instance roles",
+  "page.governance.rolesLead": "Grant Backup or Restore Operator roles. Super Admins hold every role implicitly and never appear here.",
+  "page.governance.rolesGrant": "Grant role",
+  "page.governance.rolesColUser": "User",
+  "page.governance.rolesColRole": "Role",
+  "page.governance.rolesColGrantedBy": "Granted by",
+  "page.governance.rolesColGranted": "Granted",
+  "page.governance.rolesEmptyTitle": "No instance roles granted yet",
+  "page.governance.rolesEmptyBody": "Grant a Backup or Restore Operator role to give a user access to the backup surface.",
+  "page.governance.rolesRevoke": "Revoke",
+  "page.governance.rolesRevokeConfirm": "Revoke this role?",
+  "page.governance.rolesDupBadge": "Already holds",
+  "page.governance.rolesGrantTitle": "Grant an instance role",
+  "page.governance.rolesModalHint": "Pick a user, choose a role, then confirm.",
+  "page.governance.rolesPickRole": "Role",
+  "toast.governanceRoleGranted": "Role granted.",
+  "toast.governanceRoleRevoked": "Role revoked."
 }

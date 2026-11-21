@@ -2127,5 +2127,22 @@
   "page.backup.emptyTitle": "Noch keine Backup-Aufgaben",
   "page.backup.emptyBody": "Backup ist noch nicht konfiguriert. Backup-Aufgaben erscheinen hier, sobald der Instanz-Operator sie anlegt.",
   "page.backup.flagBackup": "Backup-Operator",
-  "page.backup.flagRestore": "Restore-Operator"
+  "page.backup.flagRestore": "Restore-Operator",
+  "page.governance.rolesTitle": "Instanz-Rollen",
+  "page.governance.rolesLead": "Vergib Backup- oder Restore-Operator-Rollen. Super Admins besitzen alle Rollen implizit und erscheinen hier nie.",
+  "page.governance.rolesGrant": "Rolle vergeben",
+  "page.governance.rolesColUser": "Benutzer",
+  "page.governance.rolesColRole": "Rolle",
+  "page.governance.rolesColGrantedBy": "Vergeben von",
+  "page.governance.rolesColGranted": "Vergeben am",
+  "page.governance.rolesEmptyTitle": "Noch keine Instanz-Rollen vergeben",
+  "page.governance.rolesEmptyBody": "Vergib eine Backup- oder Restore-Operator-Rolle, um einem Benutzer Zugriff auf die Backup-Fläche zu geben.",
+  "page.governance.rolesRevoke": "Widerrufen",
+  "page.governance.rolesRevokeConfirm": "Diese Rolle widerrufen?",
+  "page.governance.rolesDupBadge": "Bereits vorhanden",
+  "page.governance.rolesGrantTitle": "Instanz-Rolle vergeben",
+  "page.governance.rolesModalHint": "Benutzer auswählen, Rolle wählen und bestätigen.",
+  "page.governance.rolesPickRole": "Rolle",
+  "toast.governanceRoleGranted": "Rolle vergeben.",
+  "toast.governanceRoleRevoked": "Rolle widerrufen."
 }

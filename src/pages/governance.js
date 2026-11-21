@@ -23,7 +23,7 @@ import { t } from '../core/i18n.js';
 import { av, empty } from '../ui/helpers.js';
 import { ROUTE_TEARDOWN } from '../shell/render.js';
 import { srow } from './settings.js';
-import { refreshGovernanceWorkspaces, refreshOperatorUsers } from '../actions/actions.js';
+import { refreshGovernanceWorkspaces, refreshInstanceRoles, refreshOperatorUsers } from '../actions/actions.js';
 
 /* The four fullstates are verbatim dashboard.js:84-87 shapes: 403 → lock
    glyph + err.code403 + route name + keyed body + home way out; other
@@ -84,6 +84,10 @@ export function pageGovernance() {
      (GET /api/auth/operator/users, D-121) — the in-render kick covers a
      boot-time deep link, same pattern as the workspaces fill loop. */
   if (api.user?.isInstanceAdmin && !S.ui.operatorUsers) refreshOperatorUsers();
+  /* 85-02 (D-29/D-32): the Instance Roles tab's ground truth — one GET
+     (rows + recent activity, the dead-mappings {orphans, trail} shape), the
+     in-render kick covers a boot-time deep link, same pattern as above. */
+  if (api.user?.isInstanceAdmin && !S.ui.govRoles) refreshInstanceRoles();
   const seg = `<div class="seg" role="group" aria-label="${t('page.governance.wsTitle')}">${[
     ['all', 'page.governance.segAll'],
     ['active', 'page.governance.segActive'],
@@ -110,6 +114,7 @@ export function pageGovernance() {
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
     ${api.user?.isInstanceAdmin ? operatorCard() : ''}
+    ${api.user?.isInstanceAdmin ? rolesCard() : ''}
   </div>`;
 }
 
@@ -160,6 +165,77 @@ export function operatorCard() {
         .join('')
     : empty('search', t('popover.noMatches'), t('page.governance.noMatchesOpBody', { query: esc(q) }), '', 'sm', 1);
   return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${search}<div class="panel">${list}</div></div>`;
+}
+
+/* =====================================================================
+   85-02 INSTANCE ROLES (D-29..D-31/D-34) — the grant/revoke surface for
+   Backup Operator / Restore Operator roles (BKROLE-01). Rendered ONLY
+   from the single GET /api/auth/operator/instance-roles fetch
+   (refreshInstanceRoles — rows + recent activity, dead-mappings shape);
+   granted_by arrives resolved server-side (D-33, raw-id fallback), times
+   render via ago(). Revoke rides the D-90 inline-confirm stage
+   (S.ui.govRoleRevoke) + keyed toast, no separate dialog (D-31). A
+   duplicate-grant refusal (D-08) highlights the existing row
+   (S.ui.govRoleDup, amber). The grant modal reuses the operator user
+   list as its target pool (D-07) and the Phase 84 picker pattern
+   (searchable, staged state, confirm-to-apply, D-30). Role names surface
+   via the i18n labels only (D-15 — no client role vocabulary). Super
+   Admins never appear here: the server refuses those grants (D-05) and
+   the short-circuit holds their capabilities implicitly (D-12) — no
+   client-side filtering.
+   ===================================================================== */
+const roleBadge = role =>
+  `<span class="badge ${role === 'backup_operator' ? 'green' : ''}">${t(role === 'backup_operator' ? 'page.backup.flagBackup' : 'page.backup.flagRestore')}</span>`;
+export function rolesCard() {
+  const rows = S.ui.govRoles;
+  if (!rows) return '';
+  const dupUid = S.ui.govRoleDup;
+  /* D-08 highlight: the refused duplicate's existing row carries an amber
+     wash + the "already holds" badge until the next refresh. */
+  const row = r =>
+    `<tr${dupUid === r.userId ? ' style="background:var(--amber-soft)"' : ''}>
+    <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(r.userName)}</span>${r.userEmail ? `<span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(r.userEmail)}</span>` : ''}${dupUid === r.userId ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</span></td>
+    <td>${roleBadge(r.role)}</td>
+    <td>${r.grantedByName ? `<span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(r.grantedByName)}</span>` : '<span class="faint">—</span>'}</td>
+    <td class="faint">${esc(ago(r.grantedAt))}</td>
+    <td>${S.ui.govRoleRevoke === r.id
+      ? `<span class="row" style="gap:8px;justify-content:flex-end"><span class="hint">${t('page.governance.rolesRevokeConfirm')}</span><button class="btn btn-danger btn-sm" data-a="govRoleRevokeConfirm" data-id="${esc(r.id)}">${t('page.governance.rolesRevoke')}</button><button class="btn btn-secondary btn-sm" data-a="govRoleRevokeCancel">${t('common.cancel')}</button></span>`
+      : `<span class="row" style="gap:8px;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="govRoleRevokeAsk" data-id="${esc(r.id)}">${t('page.governance.rolesRevoke')}</button></span>`}</td>
+  </tr>`;
+  const grantBtn = `<button class="btn btn-primary btn-sm" data-a="govRoleGrantAsk">${ic('plus', 13)}${t('page.governance.rolesGrant')}</button>`;
+  const body = rows.length
+    ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColRole')}</th><th style="text-align:left">${t('page.governance.rolesColGrantedBy')}</th><th style="text-align:left">${t('page.governance.rolesColGranted')}</th><th></th></tr></thead><tbody>${rows.map(row).join('')}</tbody></table>`
+    : /* D-34: the standard governance empty box — the Grant button front and center. */
+      empty('users', t('page.governance.rolesEmptyTitle'), t('page.governance.rolesEmptyBody'), `<div class="row" style="justify-content:center;margin-top:10px">${grantBtn}</div>`, 'sm', 3);
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.rolesTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.governance.rolesLead')}</p>${rows.length ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div></div>`;
+}
+
+/* =====================================================================
+   85-02 GRANT MODAL (D-30, Phase 84 picker pattern) — rendered through
+   the generic custom host; staged state lives in S.ui.govRoleMod
+   ({userId, role, q}), never the DOM. The candidate pool is the operator
+   user list (D-07) minus Super Admins — the server refuses those grants
+   (D-05), so the picker never offers a target that must fail.
+   ===================================================================== */
+export function govRoleBody() {
+  const st = S.ui.govRoleMod || { userId: null, role: 'backup_operator', q: '' };
+  const q = (st.q || '').trim().toLowerCase();
+  const users = (S.ui.operatorUsers || []).filter(u => !u.is_instance_admin && (!q || (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)));
+  const held = new Set((S.ui.govRoles || []).filter(r => r.role === st.role).map(r => r.userId));
+  const pick = u =>
+    `<div class="srow" data-a="govRolePick" data-id="${esc(u.id)}" style="${st.userId === u.id ? 'outline:2px solid var(--accent)' : ''}"><div><div class="row" style="gap:8px">${esc(u.name || '')}<span class="faint trunc">${esc(u.email || '')}</span>${held.has(u.id) ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</div></div></div>`;
+  const list = users.length
+    ? users.map(pick).join('')
+    : `<p class="hint" style="margin:6px 0 0">${t('popover.noMatches')}</p>`;
+  const roleSel = `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><label class="label" style="margin:0" for="gov-role-sel">${t('page.governance.rolesPickRole')}</label><select class="input" id="gov-role-sel" data-in="govRoleSel">${['backup_operator', 'restore_operator'].map(r => `<option value="${r}" ${st.role === r ? 'selected' : ''}>${t(r === 'backup_operator' ? 'page.backup.flagBackup' : 'page.backup.flagRestore')}</option>`).join('')}</select></div>`;
+  return `<div class="modal-b" style="padding-top:18px;gap:10px">
+    <h2 style="margin:0;font-size:16px">${t('page.governance.rolesGrantTitle')}</h2>
+    <p class="hint" style="margin:0">${t('page.governance.rolesModalHint')}</p>
+    <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-role-q" data-in="govRoleQ" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" aria-label="${t('page.governance.searchOp')}"></div>
+    ${roleSel}
+    <div style="max-height:220px;overflow-y:auto">${list}</div>
+  </div>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="govRoleGrantCancel">${t('common.cancel')}</button><button class="btn btn-primary" data-a="govRoleGrantConfirm" ${st.userId ? '' : 'disabled'}>${t('page.governance.rolesGrant')}</button></div>`;
 }
 
 /* =====================================================================
@@ -277,6 +353,11 @@ export const govOrphanTeardown = () => {
     S.ui.govEditWs = null;
     S.ui.govEditSuggest = null;
   }
+  /* 85-02: the grant-modal stage, the duplicate-highlight and the revoke
+     inline-confirm stage never survive route exit either. */
+  if (S.ui.govRoleMod) S.ui.govRoleMod = null;
+  if (S.ui.govRoleDup) S.ui.govRoleDup = null;
+  if (S.ui.govRoleRevoke) S.ui.govRoleRevoke = null;
 };
 /* Phase 60 (D-05): the teardown registry pattern — no poll to kill here, but
    a stale orphan-disposition stage must never survive route exit. */

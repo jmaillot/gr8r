@@ -2127,5 +2127,22 @@
   "page.backup.emptyTitle": "Nog geen back-uptaken",
   "page.backup.emptyBody": "Back-up is nog niet geconfigureerd. Back-uptaken verschijnen hier zodra de instantiebeheerder ze aanmaakt.",
   "page.backup.flagBackup": "Backupoperator",
-  "page.backup.flagRestore": "Hersteloperator"
+  "page.backup.flagRestore": "Hersteloperator",
+  "page.governance.rolesTitle": "Instantierollen",
+  "page.governance.rolesLead": "Ken back-up- of hersteloperatorrollen toe. Super Admins hebben alle rollen impliciet en verschijnen hier nooit.",
+  "page.governance.rolesGrant": "Rol toekennen",
+  "page.governance.rolesColUser": "Gebruiker",
+  "page.governance.rolesColRole": "Rol",
+  "page.governance.rolesColGrantedBy": "Toegekend door",
+  "page.governance.rolesColGranted": "Toegekend op",
+  "page.governance.rolesEmptyTitle": "Nog geen instantierollen toegekend",
+  "page.governance.rolesEmptyBody": "Ken een back-up- of hersteloperatorrol toe om een gebruiker toegang tot het back-upoppervlak te geven.",
+  "page.governance.rolesRevoke": "Intrekken",
+  "page.governance.rolesRevokeConfirm": "Deze rol intrekken?",
+  "page.governance.rolesDupBadge": "Heeft al",
+  "page.governance.rolesGrantTitle": "Instantierol toekennen",
+  "page.governance.rolesModalHint": "Kies een gebruiker, selecteer een rol en bevestig.",
+  "page.governance.rolesPickRole": "Rol",
+  "toast.governanceRoleGranted": "Rol toegekend.",
+  "toast.governanceRoleRevoked": "Rol ingetrokken."
 }

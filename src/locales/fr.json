@@ -2167,5 +2167,22 @@
   "page.backup.emptyTitle": "Aucune tâche de sauvegarde",
   "page.backup.emptyBody": "La sauvegarde n'est pas encore configurée. Les tâches de sauvegarde apparaîtront ici dès que l'opérateur de l'instance les aura créées.",
   "page.backup.flagBackup": "Opérateur de sauvegarde",
-  "page.backup.flagRestore": "Opérateur de restauration"
+  "page.backup.flagRestore": "Opérateur de restauration",
+  "page.governance.rolesTitle": "Rôles de l’instance",
+  "page.governance.rolesLead": "Attribuez les rôles d’opérateur de sauvegarde ou de restauration. Les Super Admins détiennent tous les rôles implicitement et n’apparaissent jamais ici.",
+  "page.governance.rolesGrant": "Attribuer un rôle",
+  "page.governance.rolesColUser": "Utilisateur",
+  "page.governance.rolesColRole": "Rôle",
+  "page.governance.rolesColGrantedBy": "Attribué par",
+  "page.governance.rolesColGranted": "Attribué le",
+  "page.governance.rolesEmptyTitle": "Aucun rôle d’instance attribué",
+  "page.governance.rolesEmptyBody": "Attribuez un rôle d’opérateur de sauvegarde ou de restauration pour donner accès à la surface de sauvegarde.",
+  "page.governance.rolesRevoke": "Révoquer",
+  "page.governance.rolesRevokeConfirm": "Révoquer ce rôle ?",
+  "page.governance.rolesDupBadge": "Détient déjà",
+  "page.governance.rolesGrantTitle": "Attribuer un rôle d’instance",
+  "page.governance.rolesModalHint": "Choisissez un utilisateur, sélectionnez un rôle, puis confirmez.",
+  "page.governance.rolesPickRole": "Rôle",
+  "toast.governanceRoleGranted": "Rôle attribué.",
+  "toast.governanceRoleRevoked": "Rôle révoqué."
 }
