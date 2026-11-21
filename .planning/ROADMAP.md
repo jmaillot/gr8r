@@ -16,7 +16,7 @@
 - [x] **Phase 81: Group Grant Path — Callback Wiring + Provenance** - Groups grant workspace membership and operator rights at SSO login (grants only, no removals)
 - [x] **Phase 82: Removal Sync + Guards + Audit** - Removed-from-group users lose only group-derived grants at login, through the shared guard funnel (completed 2026-11-20)
 - [x] **Phase 83: Governance — Workspace Rename & Slug Edit** - Operator edits workspace name/slug from /governance, with dead-mapping warnings (completed 2026-11-20)
-- [ ] **Phase 84: Backlog Polish & Ship** - Token-chip pickers, e2e debt, mobile follow-ups, DEPLOY.md, version bump
+- [x] **Phase 84: Backlog Polish & Ship** - Token-chip pickers, e2e debt, mobile follow-ups, DEPLOY.md, version bump (completed 2026-11-21)
 
 ## Phase Details
 
@@ -102,13 +102,13 @@ Plans:
   3. Phase 57 mobile layout follow-ups are delivered and pinned by e2e at mobile viewport
   4. DEPLOY.md documents the Entra-side prerequisites (ApplicationGroup claim config, optional overage fallback recipe, dead-mapping runbook, old-slug policy) and package.json is bumped to 3.2.0
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 - [x] 84-01-PLAN.md — BP-02 e2e red-set repair (tracer: nav-step swap, STOP_LIST, flows 2FA hardening, D-06 triple-green)
 - [x] 84-02-PLAN.md — BP-01 searchable team pickers (invite + member-edit, 5 locales, chunk gate)
 - [x] 84-03-PLAN.md — BP-03 mobile columns-button fix + phone-viewport sweep + IN-01/IN-02 strays
-- [ ] 84-04-PLAN.md — DEPLOY.md Entra group-mapping docs + CHANGELOG backfill + 3.2.0 bump (ship gate, last per D-11)
+- [x] 84-04-PLAN.md — DEPLOY.md Entra group-mapping docs + CHANGELOG backfill + 3.2.0 bump (ship gate, last per D-11)
 
 ## Progress Table
 
@@ -118,4 +118,4 @@ Plans:
 | 81. Group Grant Path | 0/? | Not started | - |
 | 82. Removal Sync + Guards | 2/2 | Complete    | 2026-11-20 |
 | 83. Governance Rename/Slug | 2/2 | Complete    | 2026-11-20 |
-| 84. Backlog Polish & Ship | 3/4 | In Progress|  |
+| 84. Backlog Polish & Ship | 4/4 | Complete    | 2026-11-21 |
