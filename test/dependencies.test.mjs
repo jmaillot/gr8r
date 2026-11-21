@@ -98,9 +98,10 @@ test('the Dockerfile runtime stage stays bare node + su-exec with exactly the pi
   // Phase 67 (G-67-1): server.js imports webhook-ssrf.js / webhook-retry.js / webhook-formats.js at runtime — ship them too (boot crash without them).
   // Phase 75 (UAT G-75-3): server.js and mcp.js import domains.js at runtime — ship it too (boot crash without it).
   // Phase 80 (GM-01): server.js imports groups.js at runtime (group-mapping save route) — ship it too (boot crash without it).
+  // Phase 85 (85c2f06e): server.js imports roles.js at runtime (role guard chain) — ship it too (boot crash without it).
   assert.deepEqual(
     copyTargets.sort(),
-    ['db-adapter.mjs', 'dist', 'domains.js', 'export', 'groups.js', 'mailer.js', 'mcp.js', 'node_modules', 'oidc.js', 'search-terms.mjs', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js', 'webhook-formats.js', 'webhook-retry.js', 'webhook-ssrf.js'],
+    ['db-adapter.mjs', 'dist', 'domains.js', 'export', 'groups.js', 'mailer.js', 'mcp.js', 'node_modules', 'oidc.js', 'roles.js', 'search-terms.mjs', 'seed.json', 'server.js', 'src', 'totp.js', 'tz.js', 'webhook-formats.js', 'webhook-retry.js', 'webhook-ssrf.js'],
     `the runtime stage must copy exactly server.js, totp.js, oidc.js, mailer.js, tz.js, mcp.js, domains.js, groups.js, db-adapter.mjs, search-terms.mjs, webhook-ssrf.js, webhook-retry.js, webhook-formats.js, node_modules, seed.json, src, export and dist — found: ${copyTargets.join(' | ')} (D-12 as amended by Phase 45 D-03 + Phase 46 + Phase 54 + Phase 58 D-13 + Phase 67 G-67-1 + Phase 75 G-75-3 + Phase 80 GM-01)`,
   );
 });

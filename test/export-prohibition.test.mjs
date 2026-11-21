@@ -123,7 +123,7 @@ test('every module under export/ imports only node builtins, writer subpaths and
     'module', 'os', 'path', 'stream', 'string_decoder', 'timers', 'tty', 'url',
     'util', 'zlib', 'node:assert', 'node:buffer', 'node:child_process', 'node:crypto',
     'node:events', 'node:fs', 'node:http', 'node:https', 'node:module', 'node:os',
-    'node:path', 'node:stream', 'node:string_decoder', 'node:timers', 'node:tty',
+    'node:path', 'node:sqlite', 'node:stream', 'node:stream/promises', 'node:string_decoder', 'node:timers', 'node:tty',
     'node:url', 'node:util', 'node:zlib',
   ]);
   for (const file of walk(EXPORT)) {
@@ -133,11 +133,14 @@ test('every module under export/ imports only node builtins, writer subpaths and
     for (const spec of specifiers) {
       let ok = spec.startsWith('@office-kit/xlsx/') || NODE_BUILTINS.has(spec);
       if (!ok && spec.startsWith('.')) {
-        /* a relative import must resolve back into src/ (shared model)
-           or stay inside export/ — never anywhere else in the tree */
+        /* a relative import must resolve back into src/ (shared model),
+           stay inside export/, or hit db-adapter.mjs at the repo root —
+           the same server-only DB funnel server.js imports (Phase 86: the
+           export pipeline reads rows through the adapter, never raw handles) —
+           never anywhere else in the tree */
         const resolved = path.resolve(path.dirname(file), spec);
         const relToRoot = path.relative(REPO_ROOT, resolved);
-        ok = relToRoot.startsWith('src/') || relToRoot.startsWith('export/');
+        ok = relToRoot.startsWith('src/') || relToRoot.startsWith('export/') || relToRoot === 'db-adapter.mjs';
       }
       assert.ok(
         ok,
