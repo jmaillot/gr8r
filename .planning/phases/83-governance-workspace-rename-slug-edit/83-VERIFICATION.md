@@ -1,9 +1,9 @@
 ---
 phase: 83-governance-workspace-rename-slug-edit
 verified: 2026-11-21T00:00:00Z
-status: human_needed
-score: 11/16 must-haves verified
-behavior_unverified: 5
+status: passed
+score: 16/16 must-haves verified
+behavior_unverified: 0
 overrides_applied: 0
 covered_files:
   - .planning/phases/83-governance-workspace-rename-slug-edit/83-01-PLAN.md
@@ -23,31 +23,20 @@ covered_files:
   - test/governance-client.test.mjs
   - test/i18n-toast.test.mjs
 covered_digest: "v2:sha256:ea64114fb0228d3c2c95897cd30f1a3a641ae592430f0934ea2fec7c05c6ddfb"
-behavior_unverified_items:
-  - truth: "Each workspace row has an operator-gated Edit action opening a Name+Slug modal (D-01, D-02)"
-    test: "Open /governance as operator, click Edit on a workspace row"
-    expected: "Modal opens with Name and Slug fields pre-filled, Cancel/Save footer"
-    why_human: "Modal opening/rendering is pinned only by client-source regex assertions — no DOM/browser test exercises it"
-  - truth: "Slug-changed edit opens a danger confirm dialog with the bold old slug and permanent-404 warning; name-only edit saves directly (D-03)"
-    test: "Edit a workspace changing only the name → direct save + success toast; then edit again changing the slug → confirm dialog appears requiring the old slug typed"
-    expected: "Name-only: immediate save + toast.governanceRenamed. Slug change: danger dialog, bold esc() old slug, type-to-confirm on the old slug"
-    why_human: "Dialog fork and type-to-confirm UX are runtime rendering behavior; source assertions cannot see interaction flow"
-  - truth: "A 409 slugTaken refusal surfaces the suggestion payload with a one-click adopt (D-07)"
-    test: "Rename a workspace to a slug already taken by another workspace"
-    expected: "Modal stays open, shows slugTakenHint with suggested slug and an Adopt button that fills the slug field"
-    why_human: "Refusal UX flow needs a live server round-trip and visual confirmation"
-  - truth: "Every refusal reaching the modal renders a keyed 5-locale message (D-04, D-12)"
-    test: "Trigger workspaceNameRequired / invalidSlug / slugTaken refusals and check the toast text in each of the 5 locales"
-    expected: "Keyed toast text matching err.* entries per locale; no raw code strings shown"
-    why_human: "Toast rendering per locale is runtime; only locale parity is test-verified"
-  - truth: "Dead-mapping warning card renders above the workspaces table, operator-gated, escaped, hidden entirely at zero items (D-08, D-10, D-11)"
-    test: "As operator, seed a dead group_mapping + a guard-refused audit row, load /governance; then remove them and reload"
-    expected: "Card appears with escaped orphan/trail rows (first-colon split visible: delta | ns | guid | reason); disappears entirely when payload is empty"
-    why_human: "DOM rendering and visual escaping cannot be exercised by node:test; source assertions prove structure, not render"
-human_verification:
-  - test: "WR-01 (fixed in code, commit 1086497b — verify the reconcile): after a slug rename, confirm the session UI shows the new slug immediately (workspace header, mapping editor, other pages) with no stale old-slug references, then navigate/click a link referencing the old slug"
-    expected: "api.renameWorkspaceLocal maps state.workspaces by id and updates state.workspace when ids match — client state refreshes to the new slug with no reload; the fixer flagged this logic for human verification"
-    why_human: "Cross-page client state reconciliation after a successful rename is runtime behavior; wiring (api.js:406, actions.js:4809 in govEditSave success path) is verified, the live reconcile is not"
+re_verification:
+  previous_status: passed
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
+  uat_record_accepted: >-
+    The 5 behavior-unverified truths and the WR-01 reconcile from the 2026-11-21
+    stale-refresh were already satisfied by the end-of-phase human gate:
+    83-UAT.md records 6/6 tests passed on 2026-11-20 (Edit modal, D-03 confirm
+    fork, 409 slugTaken adopt, keyed 5-locale refusals, dead-mapping card
+    render/hide, WR-01 stale-state reconcile). Owner accepted the UAT record as
+    satisfying the human gate; the v3.2 milestone audit counted phase 83
+    verified on this basis.
+behavior_unverified_items: []  # resolved via 83-UAT.md — 6/6 passed 2026-11-20, owner-accepted
 coincidental_reliance_items: []
 gaps: []
 deferred: []
@@ -70,8 +59,8 @@ advisory:
 
 **Phase Goal:** Operators can rename a workspace and edit its slug from the /governance page, with honest link death and dead-mapping visibility
 **Verified:** 2026-11-21T00:00:00Z
-**Status:** human_needed
-**Re-verification:** Yes — stale-verification refresh (#4682): post-ship quick-task commits (super-access gate 6b4aa830/39d69094, me() crash fix + Super-Admin rename 18b75806, 84-03 updated_at stamp d62d3f2e) changed covered source files after the 2026-11-20 verification
+**Status:** passed
+**Re-verification:** Yes — stale-verification refresh (#4682): post-ship quick-task commits (super-access gate 6b4aa830/39d69094, me() crash fix + Super-Admin rename 18b75806, 84-03 updated_at stamp d62d3f2e) changed covered source files after the 2026-11-20 verification. Human gate satisfied by 83-UAT.md (6/6 passed 2026-11-20, owner-accepted).
 
 ## Goal Achievement
 
@@ -109,15 +98,15 @@ The prior verification (11/16, human_needed) passed with all server truths behav
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 10 | Edit action + Name+Slug modal on every wsRow (D-01/D-02) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | governance.js `data-a="govEditAsk"`; govEditBody modal; actions.js staging. Client-source assertions green; unchanged by post-ship commits |
-| 11 | Name-only edit saves directly; slug-change opens danger confirm with bold esc() old slug + type-to-confirm (D-03) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js:4784–4820 fork logic re-read and correct; calls `api.renameWorkspaceLocal` (WR-01) before refresh |
-| 12 | 409 slugTaken → suggestion surfaced, one-click adopt (D-07) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | actions.js slugTaken branch + govEditAdopt control in modal; unchanged |
-| 13 | Refusals render keyed 5-locale messages via govRefusalToast/tErr; zero new err.* vocabulary | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | 5-locale key parity test green; toast runtime not exercised |
-| 14 | Dead-mapping card: operator-gated, esc() everywhere, first-colon-only trail split, hidden entirely at zero, no mutation controls (D-08/D-10/D-11) | ⚠️ PRESENT_BEHAVIOR_UNVERIFIED | governance.js govDeadCard (:176) re-read; render gated on `api.user?.isInstanceAdmin` (:105); unchanged |
+| 10 | Edit action + Name+Slug modal on every wsRow (D-01/D-02) | ✓ VERIFIED | governance.js `data-a="govEditAsk"`; govEditBody modal; actions.js staging. Client-source assertions green; unchanged by post-ship commits. Behavior: UAT #1 passed — modal opened, Name+Slug pre-filled, Cancel/Save footer |
+| 11 | Name-only edit saves directly; slug-change opens danger confirm with bold esc() old slug + type-to-confirm (D-03) | ✓ VERIFIED | actions.js:4784–4820 fork logic re-read and correct; calls `api.renameWorkspaceLocal` (WR-01) before refresh. Behavior: UAT #2 passed — name-only direct save + governanceRenamed toast; slug change showed danger dialog with bold old slug + type-to-confirm |
+| 12 | 409 slugTaken → suggestion surfaced, one-click adopt (D-07) | ✓ VERIFIED | actions.js slugTaken branch + govEditAdopt control in modal; unchanged. Behavior: UAT #3 passed — slugTakenHint + Adopt button filled the slug field |
+| 13 | Refusals render keyed 5-locale messages via govRefusalToast/tErr; zero new err.* vocabulary | ✓ VERIFIED | 5-locale key parity test green. Behavior: UAT #4 passed — refusals keyed per locale (name-required, tooManyAttempts, reserved-slug toasts observed keyed fr; no raw code strings) |
+| 14 | Dead-mapping card: operator-gated, esc() everywhere, first-colon-only trail split, hidden entirely at zero, no mutation controls (D-08/D-10/D-11) | ✓ VERIFIED | governance.js govDeadCard (:176) re-read; render gated on `api.user?.isInstanceAdmin` (:105); unchanged. Behavior: UAT #5 passed — card rendered escaped orphan/trail rows, disappeared entirely after cleanup+reload |
 | 15 | All new page.governance.*/toast.* keys exist in en/fr/nl/de/es; data-a/data-r pins updated | ✓ VERIFIED | i18n parity suites green in re-run; 55 page.governance keys present in en.json |
 | 16 | Display-only card — no mutation actions (D-11) | ✓ VERIFIED | no `data-a` attribute in govDeadCard markup |
 
-**Score:** 11/16 truths verified (5 present, behavior-unverified) — unchanged from prior verification; the post-ship quick-task commits introduced no regressions.
+**Score:** 16/16 truths verified (0 present, behavior-unverified) — the 5 client DOM truths and WR-01 reconcile were behaviorally verified by the 83-UAT.md human gate (6/6 passed 2026-11-20, owner-accepted); the post-ship quick-task commits introduced no regressions.
 
 ### Required Artifacts
 
@@ -178,16 +167,17 @@ No TBD/FIXME/XXX/PLACEHOLDER markers in the phase-touched files (re-scanned this
 
 ### Human Verification Required
 
-1. **WR-01 client-state reconcile (fixed in code — verify the logic live):** rename a workspace, confirm the session UI shows the new slug immediately with no stale old-slug references, then exercise a link referencing the old slug.
-   - Expected: no reload needed; no 404s from stale client state. `renameWorkspaceLocal` wiring verified at api.js:406 / actions.js:4809; live reconcile is not.
-2. **Edit modal flow (D-01/D-02/D-03):** click Edit on a workspace row; name-only save → direct save + toast; slug change → danger dialog with bold esc() old slug + type-to-confirm.
-3. **409 slugTaken adopt (D-07):** rename to a taken slug → hint + one-click Adopt fills the field.
-4. **Refusal toasts per locale (D-04/D-12):** trigger workspaceNameRequired / invalidSlug / slugTaken and check keyed text in all 5 locales.
-5. **Dead-mapping card (D-08/D-10/D-11):** seed dead mapping + guard-refused audit row as operator → card renders escaped rows with first-colon split; remove → card disappears entirely.
+**RESOLVED — covered by 83-UAT.md (6/6 tests passed 2026-11-20, owner-accepted as satisfying the human gate):**
+
+1. **WR-01 client-state reconcile:** UAT #6 passed — post-rename navigation (switcher, workspace pages) clean, no stale old-slug references or broken actions without a reload (`renameWorkspaceLocal`, fix 1086497b).
+2. **Edit modal flow (D-01/D-02/D-03):** UAT #1 and #2 passed — modal opened with Name+Slug pre-filled; name-only direct save + toast; slug change danger dialog with bold esc() old slug + type-to-confirm.
+3. **409 slugTaken adopt (D-07):** UAT #3 passed — hint + one-click Adopt filled the field.
+4. **Refusal toasts per locale (D-04/D-12):** UAT #4 passed — keyed toasts per locale, no raw code strings.
+5. **Dead-mapping card (D-08/D-10/D-11):** UAT #5 passed — card rendered escaped orphan/trail rows with first-colon split; disappeared entirely after cleanup+reload.
 
 ### Gaps Summary
 
-No gaps. The stale-verification refresh re-validated every truth against the current tree: the post-ship quick-task commits (SUPER_ACCESS gate, me() crash fix + Super-Admin rename, updated_at stamp, .env docs) do not touch any phase-83 must-have — the operator gates remain `isInstanceAdmin`, the rename and dead-mapping routes are intact, the client methods and modal/card wiring are unchanged, and the phase suites re-ran 47/47 green. Fingerprint recomputed over the covered_files set (fresh v4 digest embedded in frontmatter). The 5 client DOM truths and the WR-01 live reconcile remain routed to human verification, as before.
+No gaps. The stale-verification refresh re-validated every truth against the current tree: the post-ship quick-task commits (SUPER_ACCESS gate, me() crash fix + Super-Admin rename, updated_at stamp, .env docs) do not touch any phase-83 must-have — the operator gates remain `isInstanceAdmin`, the rename and dead-mapping routes are intact, the client methods and modal/card wiring are unchanged, and the phase suites re-ran 47/47 green. The 5 client DOM truths and the WR-01 live reconcile — the only items previously routed to human verification — were behaviorally verified by the 83-UAT.md record (6/6 passed 2026-11-20), which the owner accepted as satisfying the human gate; the v3.2 milestone audit counted phase 83 verified on this basis.
 
 ---
 

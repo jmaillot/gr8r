@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-current_phase: 84
+current_phase: 83
 current_plan: Not started
 status: completed
-stopped_at: Phase 84 complete — all phases complete
-last_updated: "2026-11-21T12:59:55.841Z"
+stopped_at: Phase 83 complete — all phases complete
+last_updated: "2026-11-21T13:03:16.767Z"
 last_activity: 2026-11-21
-last_activity_desc: Phase 84 complete
-state_head: b4f4748ab6e5c5a8c6d206d26e8e4261118872f0
+last_activity_desc: Phase 83 complete
+state_head: 910cbe99e6f7c04a06ae85a68ce7aecc236a1f2a
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
   completed_plans: 12
   percent: 80
@@ -30,11 +30,11 @@ before features.
 
 ## Current Position
 
-Phase: 84
+Phase: 83
 Current Plan: Not started
 Total Plans in Phase: 4
 Status: All phases complete
-Last activity: 2026-11-21 — Phase 84 complete
+Last activity: 2026-11-21 — Phase 83 complete
 
 Progress: [████████░░] 80%
 
@@ -136,7 +136,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-20T18:32:11.394Z
-Stopped at: Phase 84 complete — all phases complete
+Stopped at: Phase 83 complete — all phases complete
 Resume file: None
 
 ## Operator Next Steps
