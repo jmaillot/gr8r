@@ -32,6 +32,16 @@ type: feature
 2. **Search:** typing searches **all users**; non-admin matches render as
    selectable candidates whose action is "Make Super Admin" (promote).
    Non-matching / empty state keeps the keyed `noMatchesOpBody` copy.
+   *(Owner additions, 2026-11-21 session — v3.2 closeout):*
+   - **Match on name AND email** (case-insensitive substring on both fields —
+     the existing client filter behavior, now pinned as a requirement).
+   - **Result cap / pagination:** the candidate list must not grow unbounded —
+     cap the rendered matches (e.g. 10 + an "afficher plus"/show-more
+     control, or incremental reveal). Exact cap decided at discuss-phase.
+   - **Post-promotion feedback:** on a successful promote — keyed success
+     toast, the candidate disappears from the search results immediately, and
+     the promoted user appears in the roster without a full page reload
+     (same client-state reconcile discipline as WR-01 in v3.2 phase 83).
 
 ## Design notes / constraints (from v3.2 standing rules)
 
