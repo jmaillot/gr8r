@@ -28,7 +28,7 @@ import { ROOT } from './helpers/server.mjs';
 
 const VITE_BIN = path.join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
 const FIXTURE_CODE = 'xx';
-const FIXTURE_PATH = path.join(ROOT, 'src', 'locales', `${FIXTURE_CODE}.json`);
+const FIXTURE_PATH = path.join(ROOT, 'src', 'locales', `${FIXTURE_CODE}.json`); // real-tree sentinel — must never exist (after() asserts)
 
 /* A minimal catalogue mirroring en.json's structure plus a display-name entry. The
    translated string is unique to the fixture, so a marker can only be satisfied by the
@@ -41,63 +41,42 @@ const FIXTURE_CATALOGUE = {
 
 let OUT_DIR = null;
 
-/* ---- fixture window mutex: exclusive across concurrent test-file processes ---- */
-const LOCK_PATH = path.join(os.tmpdir(), 'projects-fixture-xx.lock');
-const LOCK_STALE_MS = 5 * 60 * 1000; // a crashed runner must not wedge the next one
-function acquireFixtureLock() {
-  const deadline = Date.now() + 8 * 60 * 1000;
-  for (;;) {
-    try {
-      // O_EXCL|O_WRONLY: atomic create-if-absent — the winner holds the window.
-      const fd = fs.openSync(LOCK_PATH, 'wx');
-      fs.closeSync(fd);
-      return;
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
-      try {
-        if (Date.now() - fs.statSync(LOCK_PATH).mtimeMs > LOCK_STALE_MS) {
-          fs.rmSync(LOCK_PATH, { force: true });
-          continue;
-        }
-      } catch {
-        /* holder released between stat and rm — loop retries the create */
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`fixture lock held longer than ${LOCK_STALE_MS} ms by another runner: ${LOCK_PATH}`);
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
-    }
-  }
-}
-function releaseFixtureLock() {
-  fs.rmSync(LOCK_PATH, { force: true });
-}
+/* ---- isolated fixture tree (replaces the tmpdir lockfile — see before()) ---- */
+let FIXTURE_TREE = null;
 
 before(() => {
-  acquireFixtureLock();
-  try {
-    assert.ok(!fs.existsSync(FIXTURE_PATH), `a stale ${FIXTURE_CODE}.json is already in the tree — clean it first`);
-    fs.writeFileSync(FIXTURE_PATH, `${JSON.stringify(FIXTURE_CATALOGUE, null, 2)}\n`);
-    OUT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-fixture-build-'));
-    /* The default build: NO LOCALES env. The build must derive its locale set from
-       src/locales/ itself — the fixture ships because it exists, not because a list named it. */
-    const result = spawnSync(process.execPath, [VITE_BIN, 'build', '--outDir', OUT_DIR, '--emptyOutDir'], {
-      cwd: ROOT,
-      env: { ...process.env, LOCALES: undefined },
-      encoding: 'utf8',
-    });
-    assert.equal(result.status, 0, `the fixture build failed\n${result.stdout || ''}\n${result.stderr || ''}`);
-  } finally {
-    /* Pitfall 6: the fixture NEVER outlives this suite, whatever a clause does.
-       The lock releases in after() — the whole window (fixture alive + this suite
-       still running) stays exclusive against any future concurrent fixture user. */
-    if (fs.existsSync(FIXTURE_PATH)) fs.rmSync(FIXTURE_PATH);
+  /* Isolated-tree fixture build (closes the cross-file race for real):
+     the xx.json fixture is materialized inside a THROWAWAY COPY of the repo
+     (node_modules symlinked back, .git/data/dist excluded), and vite runs there.
+     The real src/locales/ is never touched — a concurrently-booting server.js in
+     another test file can no longer observe the fixture in its LOCALE_CODES
+     readdir snapshot (the race that flaked locale-account's unknown-locale 400
+     pin; the previous tmpdir-lockfile mutex only serialized cooperating fixture
+     suites, not the other ~130 test files). The build is byte-equivalent: same
+     vite config resolved from the copy, same relative glob over src/locales. */
+  FIXTURE_TREE = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-fixture-tree-'));
+  for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
+    if (['node_modules', '.git', 'data', 'dist', 'coverage'].includes(entry.name)) continue;
+    fs.cpSync(path.join(ROOT, entry.name), path.join(FIXTURE_TREE, entry.name), { recursive: true });
   }
+  fs.symlinkSync(path.join(ROOT, 'node_modules'), path.join(FIXTURE_TREE, 'node_modules'), 'dir');
+  const TREE_FIXTURE_PATH = path.join(FIXTURE_TREE, 'src', 'locales', `${FIXTURE_CODE}.json`);
+  assert.ok(!fs.existsSync(TREE_FIXTURE_PATH), `a stale ${FIXTURE_CODE}.json is already in the fixture copy`);
+  fs.writeFileSync(TREE_FIXTURE_PATH, `${JSON.stringify(FIXTURE_CATALOGUE, null, 2)}\n`);
+  OUT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-fixture-build-'));
+  /* The default build: NO LOCALES env. The build must derive its locale set from
+     src/locales/ itself — the fixture ships because it exists, not because a list named it. */
+  const result = spawnSync(process.execPath, [VITE_BIN, 'build', '--outDir', OUT_DIR, '--emptyOutDir'], {
+    cwd: FIXTURE_TREE,
+    env: { ...process.env, LOCALES: undefined },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, `the fixture build failed\n${result.stdout || ''}\n${result.stderr || ''}`);
 });
 
 after(() => {
-  assert.ok(!fs.existsSync(FIXTURE_PATH), `the fixture was left behind — Pitfall 6 poisoning`);
-  releaseFixtureLock();
+  if (FIXTURE_TREE) fs.rmSync(FIXTURE_TREE, { recursive: true, force: true });
+  assert.ok(!fs.existsSync(path.join(ROOT, 'src', 'locales', `${FIXTURE_CODE}.json`)), `the fixture leaked into the real tree — Pitfall 6 poisoning`);
 });
 
 /* ---------- the harness, on the build-locales shape ---------- */
