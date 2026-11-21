@@ -161,6 +161,73 @@ test('instance scope walks DATA_DIR (files + logos)', () => {
   })();
 });
 
+/* ---- CR-01: a DATA_DIR-root entry with a reserved tar name is recorded
+   and skipped — manifest.json stays tar entry 0, never duplicated ---- */
+test('instance export refuses reserved root entry names (skip + flag, no colliding tar entry)', () => {
+  return (async () => {
+    const reservedManifest = path.join(DATA_DIR, 'manifest.json');
+    const reservedTable = path.join(DATA_DIR, 'audit_log.ndjson');
+    fs.writeFileSync(reservedManifest, 'operator residue — must not collide\n');
+    fs.writeFileSync(reservedTable, 'operator residue — must not collide\n');
+    try {
+      const run = await backup.runExport({ kind: 'instance' });
+      assert.equal(run.ok, true, 'reserved-name residue does not fail the run — skip + flag');
+      const entries = listArchive(archivePath(run));
+      assert.equal(entries.filter(e => e === 'manifest.json').length, 1, 'exactly ONE manifest.json tar entry');
+      assert.equal(entries[0], 'manifest.json', 'manifest.json stays entry 0');
+      assert.equal(entries.filter(e => e === 'audit_log.ndjson').length, 1, 'no duplicate table-name entry');
+      const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-reserved');
+      extractArchive(archivePath(run), into);
+      const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
+      assert.equal(manifest.files.find(f => f.path === 'manifest.json')?.nameReserved, true);
+      assert.equal(manifest.files.find(f => f.path === 'audit_log.ndjson')?.nameReserved, true);
+      assert.ok(!manifest.files.find(f => f.path === 'manifest.json')?.sha256, 'reserved entry carries no hash');
+      fs.rmSync(into, { recursive: true, force: true });
+    } finally {
+      fs.rmSync(reservedManifest, { force: true });
+      fs.rmSync(reservedTable, { force: true });
+    }
+  })();
+});
+
+/* ---- WR-01: instance-scope symlinks are never followed and never silently
+   dropped — escapes flagged pathEscaped, in-tree flagged symlinkSkipped ---- */
+test('instance scope flags symlink entries instead of silently skipping them', () => {
+  return (async () => {
+    const secret = path.join(os.tmpdir(), 'gr8r-backup-instance-secret.txt');
+    fs.writeFileSync(secret, 'INSTANCE TOP SECRET\n');
+    const outLink = path.join(DATA_DIR, 'escape-link');
+    const inLink = path.join(DATA_DIR, 'inside-link');
+    fs.writeFileSync(path.join(DATA_DIR, 'inside-target.txt'), 'in-tree\n');
+    fs.symlinkSync(secret, outLink);
+    fs.symlinkSync(path.join(DATA_DIR, 'inside-target.txt'), inLink);
+    try {
+      const run = await backup.runExport({ kind: 'instance' });
+      assert.equal(run.ok, true, 'symlinks do not fail the run — record + flag');
+      const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-symlink');
+      extractArchive(archivePath(run), into);
+      const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
+      const escaped = manifest.files.find(f => f.path === 'escape-link');
+      const inside = manifest.files.find(f => f.path === 'inside-link');
+      assert.ok(escaped, 'escape symlink is recorded in the manifest');
+      assert.equal(escaped.pathEscaped, true);
+      assert.ok(!escaped.sha256, 'escape symlink carries no hash — never collected');
+      assert.ok(inside, 'in-tree symlink is recorded too (no silent omission)');
+      assert.equal(inside.symlinkSkipped, true);
+      const entries = listArchive(archivePath(run));
+      assert.ok(!entries.includes('escape-link'), 'escape symlink never enters the archive');
+      assert.ok(!entries.includes('inside-link'), 'symlinks are never followed into the archive');
+      assert.equal(fs.readFileSync(secret, 'utf8'), 'INSTANCE TOP SECRET\n', 'secret never read');
+      fs.rmSync(into, { recursive: true, force: true });
+    } finally {
+      fs.rmSync(secret, { force: true });
+      fs.rmSync(outLink, { force: true });
+      fs.rmSync(inLink, { force: true });
+      fs.rmSync(path.join(DATA_DIR, 'inside-target.txt'), { force: true });
+    }
+  })();
+});
+
 test('unknown scope kind fails the run closed', () => {
   return (async () => {
     const run = await backup.runExport({ kind: 'galaxy', id: 'x' });

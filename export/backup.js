@@ -412,10 +412,38 @@ function collectLogo(logoFile, dirs, stagingDir, logosRootReal) {
 
 /* Instance scope (D-01): full DATA_DIR walk minus tmp/ and backups/ —
    per-path realpath containment against DATA_DIR; archive path keeps
-   the DATA_DIR-relative location. */
+   the DATA_DIR-relative location.
+
+   CR-01 (frozen entry-0 contract): a DATA_DIR-root entry named
+   `manifest.json` or `<table>.ndjson` would emit a SECOND tar entry
+   colliding with the reserved namespace — tarFileEntry never dedupes and
+   verifyStagedBackup only re-hashes staged bytes, so the corruption would
+   be silent. Consistent with D-06's skip-and-flag contract, the entry is
+   RECORDED in the manifest with `nameReserved: true` and never staged,
+   hashed, or tarred — the run completes honestly with the anomaly visible.
+
+   WR-01 (D-06 parity): symlink dirents fall through neither isDirectory()
+   nor isFile() — without an explicit branch they were dropped with no
+   manifest flag, a silent omission the doc-file/logo collectors do not
+   commit. Symlinks are never followed: escapes carry `pathEscaped`,
+   in-tree symlinks carry `symlinkSkipped` (their target is already
+   collected by its real path — copying would duplicate bytes). */
+const RESERVED_ROOT_ENTRIES = Object.freeze(
+  new Set(['manifest.json', ...TABLES.map(t => `${t.name}.ndjson`)]),
+);
+
 function collectInstanceFiles(dirs, stagingDir, files) {
   const rootReal = fs.realpathSync(dirs.dataDir);
   const skip = new Set(['tmp', 'backups']);
+  const record = (rel, real, flags) => files.push({
+    id: rel,
+    name: path.basename(rel),
+    ext: path.extname(rel).slice(1) || null,
+    project: null,
+    task: null,
+    path: rel,
+    ...flags,
+  });
   const walk = dir => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
@@ -425,7 +453,14 @@ function collectInstanceFiles(dirs, stagingDir, files) {
       } catch {
         continue; // vanished mid-walk — treat as missing, never follow
       }
-      if (!contained(real, rootReal)) continue; // D-06: symlink escape — skip silently from collection
+      if (entry.isSymbolicLink()) {
+        // WR-01: never follow — detect, record, and flag (D-06 parity)
+        const rel = path.relative(dirs.dataDir, full);
+        if (!contained(real, rootReal)) record(rel, real, { pathEscaped: true });
+        else record(rel, real, { symlinkSkipped: true });
+        continue;
+      }
+      if (!contained(real, rootReal)) continue; // D-06: escape — skip (non-symlink cannot escape here, belt-and-braces)
       if (entry.isDirectory()) {
         if (dir === dirs.dataDir && skip.has(entry.name)) continue;
         walk(real);
@@ -433,10 +468,15 @@ function collectInstanceFiles(dirs, stagingDir, files) {
       }
       if (!entry.isFile()) continue;
       const rel = path.relative(dirs.dataDir, real);
+      if (RESERVED_ROOT_ENTRIES.has(rel)) {
+        // CR-01: refuse the reserved tar namespace — record + skip, never emit a colliding entry
+        record(rel, real, { nameReserved: true });
+        continue;
+      }
       const staged = path.join(stagingDir, rel);
       fs.mkdirSync(path.dirname(staged), { recursive: true });
       fs.copyFileSync(real, staged);
-      files.push({ id: rel, name: path.basename(rel), ext: path.extname(rel).slice(1) || null, project: null, task: null, path: rel });
+      record(rel, real, {});
     }
   };
   walk(dirs.dataDir);
@@ -512,9 +552,9 @@ export async function runExport(scope) {
       throw new Error(`backup: unknown scope kind ${scope.kind}`);
     }
 
-    /* Hash staged files that were copied (D-04/D-06 entries carry no hash) */
+    /* Hash staged files that were copied (D-04/D-06/CR-01 entries carry no hash) */
     for (const file of files) {
-      if (file.missingBlob || file.pathEscaped) continue;
+      if (file.missingBlob || file.pathEscaped || file.nameReserved || file.symlinkSkipped) continue;
       const { sha256, size } = await sha256AndSize(path.join(stagingDir, file.path));
       file.sha256 = sha256;
       file.size = size;
@@ -545,7 +585,7 @@ export async function runExport(scope) {
         await tarFileEntry(gzip, table.path, path.join(stagingDir, table.path), startedAt);
       }
       for (const file of files) {
-        if (file.missingBlob || file.pathEscaped) continue;
+        if (file.missingBlob || file.pathEscaped || file.nameReserved || file.symlinkSkipped) continue;
         await tarFileEntry(gzip, file.path, path.join(stagingDir, file.path), startedAt);
       }
       await writeChunk(gzip, Buffer.alloc(1024)); // end-of-archive: two zero blocks
