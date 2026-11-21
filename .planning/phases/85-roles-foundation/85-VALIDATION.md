@@ -19,10 +19,10 @@ created: "2026-11-21"
 
 | Property | Value |
 |----------|-------|
-| **Framework** | Per project test infra (see RESEARCH.md / CLAUDE.md — the gr8r test setup used by prior phases) |
-| **Config file** | none — Wave 0 confirms |
-| **Quick run command** | Per prior-phase verify commands (planner: copy from proven prior plans) |
-| **Full suite command** | Per prior-phase verify commands |
+| **Framework** | node:test + node:assert/strict (glob runner — see RESEARCH.md Validation Architecture) |
+| **Config file** | none — glob runner |
+| **Quick run command** | `node --test test/roles-core.test.mjs test/db-adapter.test.mjs test/instance-roles-api.test.mjs` |
+| **Full suite command** | `npm test` |
 | **Estimated runtime** | ~30 seconds |
 
 *The planner MUST fill the exact commands from the nearest prior phase's proven `<automated>` verify commands before execution.*
@@ -42,9 +42,12 @@ created: "2026-11-21"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 85-01-01 | 01 | 1 | BKROLE-01 | T-85-* | role grant/revoke gated + audited | unit/integration | (planner fills) | ❌ W0 | ⬜ pending |
-| 85-01-02 | 01 | 1 | BKROLE-02 | T-85-* | keyed localized refusal for restore on task-edit | integration | (planner fills) | ❌ W0 | ⬜ pending |
-| 85-01-03 | 01 | 1 | BKROLE-03 | T-85-* | Super-Admin implicit membership, not demotable | unit/integration | (planner fills) | ❌ W0 | ⬜ pending |
+| 85-01-01 | 01 | 1 | BKROLE-01 | T-85-01/02/03/04/05 | grant route gated + audited; payload flags | e2e | `node --test test/instance-roles-api.test.mjs` | ❌ W0 | ⬜ pending |
+| 85-01-02 | 01 | 1 | BKROLE-02 | T-85-01/06 | capability pins (ARCHIVE_READ ungranted); DDL CHECK/UNIQUE/CASCADE | unit/pin | `node --test test/roles-core.test.mjs test/db-adapter.test.mjs` | ❌ W0 | ⬜ pending |
+| 85-01-03 | 01 | 1 | BKROLE-03 | T-85-05 | same-tx audit row; rollback probe | e2e | `node --test test/instance-roles-api.test.mjs` | ❌ W0 | ⬜ pending |
+| 85-02-01 | 02 | 2 | BKROLE-01 | T-85-07 | Backup surface chunk/nav discipline | suite | `node --test test/client-surfaces.test.mjs test/build-chunk-size.test.mjs` | ✅ | ⬜ pending |
+| 85-02-02 | 02 | 2 | BKROLE-01/02 | T-85-08 | governance tab render discipline | suite | `node --test test/client-surfaces.test.mjs` | ✅ | ⬜ pending |
+| 85-02-03 | 02 | 2 | BKROLE-01 | T-85-09 | locale completeness ×5 | suite | `npm test` | ✅ | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
