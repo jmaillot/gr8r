@@ -89,5 +89,5 @@ Let Entra ID groups drive gr8r workspace membership and operator rights at SSO l
 | GV-02 | Phase 83 | Complete |
 | GV-03 | Phase 83 | Complete |
 | BP-01 | Phase 84 | Complete |
-| BP-02 | Phase 84 | Pending |
+| BP-02 | Phase 84 | Complete |
 | BP-03 | Phase 84 | Complete |
