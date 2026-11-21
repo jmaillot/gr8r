@@ -168,6 +168,33 @@ test('non-holder POST → 403 backupManageRequired + audit row; non-holder GET �
 
 /* ---------- the refusal matrix (D-10/D-17/D-20) ---------- */
 
+test('claim race pinned: two immediate POSTs yield exactly ONE started run — the other refused 409 (D-10)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-backup-routes-'));
+  plantData(dataDir); // ~3 MB tree → the winner's export stays active while the loser's handler reaches the check
+  const server = await startServer({ dataDir });
+  try {
+    const holder = await makeBackupOp(server, 'op-race@test.local');
+    const [a, b] = await Promise.all([
+      holder.post('/api/backup/runs', { scope: { kind: 'instance' } }),
+      holder.post('/api/backup/runs', { scope: { kind: 'instance' } }),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    assert.deepEqual(statuses, [200, 409], `exactly one trigger wins: ${a.status}/${b.status} — ${JSON.stringify(a.data)} ${JSON.stringify(b.data)}`);
+    const refused = a.status === 409 ? a : b;
+    assert.equal(refused.data.code, 'backupRunInProgress');
+    const startedId = (a.status === 200 ? a : b).data.runId;
+    assert.match(startedId, UUID_RE);
+
+    const audits = backupAuditRows(server);
+    assert.equal(audits.filter(x => x.action === 'backup_run_started:instance').length, 1, 'exactly one started run');
+    assert.ok(audits.some(x => x.action === 'backup_run_refused:backupRunInProgress'), 'the lost race is audited (D-20)');
+    await pollCurrent(holder, { until: p => p.stage === 'done' || p.stage === 'failed' });
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('bad scope matrix: unknown kind / missing id / spurious instance id / nonexistent ids → keyed 400 scopeNotFound + audit row each (D-17/D-20)', async () => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-backup-routes-'));
   const server = await startServer({ dataDir });
