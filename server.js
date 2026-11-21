@@ -7933,8 +7933,8 @@ async function handleApi(req, res, url) {
     }
     const scope = body?.scope && typeof body.scope === 'object' && !Array.isArray(body.scope) ? body.scope : null;
     if (!scope || !(await backupScopeOk(scope))) {
-      await auditBackupTask(user, 'backup_task_refused:invalidScope');
-      return fail(res, 400, 'invalidScope', 'That backup scope does not exist');
+      await auditBackupTask(user, 'backup_task_refused:backupInvalidScope');
+      return fail(res, 400, 'backupInvalidScope', 'That backup scope does not exist');
     }
     const retention = backupRetentionFrom(body?.retention);
     if (!retention) {
@@ -7971,6 +7971,130 @@ async function handleApi(req, res, url) {
     await auditBackupTask(user, 'backup_task_created', task.id, task.name);
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
     return json(res, 200, { task: backupTaskShape(task) });
+  }
+
+  const backupTaskMatch = pathname.match(/^\/api\/backup\/tasks\/([A-Za-z0-9_-]{1,64})$/);
+  if (backupTaskMatch && (method === 'PUT' || method === 'DELETE')) {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    // D-21 shape: operator-keyed throttle AFTER sameOrigin+requireUser and
+    // BEFORE the gate checks — a refused attempt consumes a try (T-86-08).
+    if (tooMany(`backuptask|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'backup_task_refused:backupManageRequired');
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can edit backup tasks');
+    }
+    const id = backupTaskMatch[1];
+    const row = await db.get('select * from backup_tasks where id = ?', [id]);
+    if (!row) {
+      await auditBackupTask(user, 'backup_task_refused:taskNotFound', id);
+      return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
+    }
+
+    if (method === 'DELETE') {
+      /* History never cascades (D-11): run rows persist with their task_id;
+         only the task definition goes. */
+      await db.run('delete from backup_tasks where id = ?', [id]);
+      await auditBackupTask(user, 'backup_task_deleted', id, row.name);
+      logInfo(`backup task deleted: ${row.name} (${id})`);
+      return json(res, 200, { deleted: id });
+    }
+
+    /* PUT — partial edit: name/scope/cron/tz/retention/enabled, all optional.
+       Schedule or tz changes recompute next_run_at from NOW in the same
+       write; enabled=0 stores NULL next_run_at; enabled=1 (freshly enabled
+       or after any schedule change) recomputes from now — a disabled-while-
+       down task must never fire from a stale value (D-07). */
+    const body = await readJson(req);
+    let name = row.name;
+    if (body?.name !== undefined) {
+      name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name || name.length > 120) {
+        await auditBackupTask(user, 'backup_task_refused:taskNameRequired', id);
+        return fail(res, 400, 'taskNameRequired', 'Give the backup task a name');
+      }
+    }
+    let cron = row.cron;
+    if (body?.cron !== undefined) {
+      cron = typeof body.cron === 'string' ? body.cron.trim() : '';
+      if (!cron || !parseCron(cron)) {
+        await auditBackupTask(user, 'backup_task_refused:invalidSchedule', id);
+        return fail(res, 400, 'invalidSchedule', 'Invalid schedule — use a 5-field cron expression');
+      }
+    }
+    let tz = row.tz;
+    if (body?.tz !== undefined) {
+      const tzIn = typeof body.tz === 'string' ? body.tz.trim() : '';
+      tz = 'Europe/Paris';
+      if (tzIn) {
+        try {
+          tz = new Intl.DateTimeFormat('en-CA', { timeZone: tzIn }).resolvedOptions().timeZone || 'Europe/Paris';
+        } catch {
+          await auditBackupTask(user, 'backup_task_refused:invalidTimezone', id);
+          return fail(res, 400, 'invalidTimezone', 'Invalid timezone');
+        }
+      }
+    }
+    let scopeJson = row.scope;
+    if (body?.scope !== undefined) {
+      const scope = body.scope && typeof body.scope === 'object' && !Array.isArray(body.scope) ? body.scope : null;
+      if (!scope || !(await backupScopeOk(scope))) {
+        await auditBackupTask(user, 'backup_task_refused:backupInvalidScope', id);
+        return fail(res, 400, 'backupInvalidScope', 'That backup scope does not exist');
+      }
+      scopeJson = JSON.stringify(scope);
+    }
+    let retention = {
+      daily: row.retention_daily,
+      weekly: row.retention_weekly,
+      monthly: row.retention_monthly,
+      yearly: row.retention_yearly,
+    };
+    if (body?.retention !== undefined) {
+      const parsed = backupRetentionFrom(body.retention);
+      if (!parsed) {
+        await auditBackupTask(user, 'backup_task_refused:invalidRetention', id);
+        return fail(res, 400, 'invalidRetention', 'Retention must be small non-negative integers');
+      }
+      retention = parsed;
+    }
+    const cronChanged = cron !== row.cron;
+    const tzChanged = tz !== row.tz;
+    const wasEnabled = row.enabled === 1;
+    /* Explicit enabled flag wins; absent flag keeps the stored value. */
+    const willEnable = body?.enabled === undefined ? wasEnabled : body.enabled === true || body.enabled === 1;
+    let nextRun = row.next_run_at;
+    if (!willEnable) {
+      nextRun = null; // D-07: disabled tasks hold no cached schedule
+    } else if (cronChanged || tzChanged || !wasEnabled) {
+      nextRun = nextRunAt(cron, tz, now()); // recomputed from now, same write
+      if (!Number.isInteger(nextRun)) {
+        await auditBackupTask(user, 'backup_task_refused:invalidSchedule', id);
+        return fail(res, 400, 'invalidSchedule', 'Invalid schedule — use a 5-field cron expression');
+      }
+    }
+    const updated = {
+      ...row,
+      name,
+      scope: scopeJson,
+      cron,
+      tz,
+      enabled: willEnable ? 1 : 0,
+      retention_daily: retention.daily,
+      retention_weekly: retention.weekly,
+      retention_monthly: retention.monthly,
+      retention_yearly: retention.yearly,
+      next_run_at: nextRun,
+      updated_at: now(),
+    };
+    await db.run(
+      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, updated_at = ? where id = ?',
+      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.updated_at, id],
+    );
+    await auditBackupTask(user, 'backup_task_updated', id, updated.name);
+    logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
+    return json(res, 200, { task: backupTaskShape(updated) });
   }
 
   /* -------------- backup run endpoints (Phase 86, 86-02, BKBCK-01/D-16) --------------

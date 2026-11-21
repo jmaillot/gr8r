@@ -277,7 +277,7 @@ test('revoke: DELETE removes the row and writes the instance_role_revoked audit 
   }
 });
 
-test('POST /api/backup/tasks: Restore Operator gets the keyed backupManageRequired refusal; holder gets the stub 400 (D-19)', async () => {
+test('POST /api/backup/tasks: Restore Operator gets the keyed backupManageRequired refusal; holder creates a task (D-19, live since 87-01)', async () => {
   const server = await startServer({});
   try {
     await makeUser(server, 'Restore Op', 'restoreop@test.local');
@@ -292,9 +292,13 @@ test('POST /api/backup/tasks: Restore Operator gets the keyed backupManageRequir
     assert.equal(refused.data.code, 'backupManageRequired', 'the task-edit refusal path is REAL (BKROLE-02, D-19)');
 
     const backupOp = (await login(server.base, 'backupop@test.local', 'password-1234')).client;
-    const stub = await backupOp.post('/api/backup/tasks', { name: 'nightly' });
-    assert.equal(stub.status, 400, 'the holder reaches the stub — a plain 400 until Phase 87 owns the contract');
-    assert.equal(stub.data.code, 'backupNotConfigured');
+    /* Superseded by 87-01: the holder path creates a real task now (the old
+       backupNotConfigured stub pin is inverted — see test/backup-routes.test.mjs).
+       An invalid body still refuses keyed, proving the refusal path stays
+       real without leaking role existence. */
+    const invalid = await backupOp.post('/api/backup/tasks', { name: 'nightly' });
+    assert.equal(invalid.status, 400, 'the holder reaches the real task validation');
+    assert.equal(invalid.data.code, 'invalidSchedule', 'missing cron → keyed invalidSchedule (87-01)');
     assert.equal(roleRows(server).length, 2, 'no task logic ran — no side effects');
   } finally {
     await server.stop();

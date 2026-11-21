@@ -91,10 +91,191 @@ test('POST /api/backup/tasks stores the raw cron string (D-04) and a computed ne
   }
 });
 
+/* ---------- keyed refusal matrix (T-87-02/T-87-03) ---------- */
+
+test('non-operator POST → 403 backupManageRequired, audited, before any body probing', async () => {
+  const server = await startServer({});
+  try {
+    const plain = (await signup(server.base, { name: 'Nobody', email: 'plain-tasks@test.local' })).client;
+    const refused = await plain.post('/api/backup/tasks', {});
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'backupManageRequired');
+    const audited = taskAuditRows(server).filter(r => r.action === 'backup_task_refused:backupManageRequired');
+    assert.equal(audited.length, 1, 'refusal audited');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('invalid cron → 400 invalidSchedule (audited)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-badcron@test.local');
+    for (const bad of ['61 * * * *', '* 24 * * *', 'a b c d e', '* * * *', 'not a cron']) {
+      const refused = await op.post('/api/backup/tasks', { name: 'X', scope: { kind: 'instance' }, cron: bad });
+      assert.equal(refused.status, 400, bad);
+      assert.equal(refused.data.code, 'invalidSchedule', bad);
+    }
+    const audited = taskAuditRows(server).filter(r => r.action === 'backup_task_refused:invalidSchedule');
+    assert.equal(audited.length, 5, 'every invalid cron refusal audited');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('invalid retention → 400 invalidRetention; omitted retention → D-09 defaults', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-retention@test.local');
+    const refused = await op.post('/api/backup/tasks', {
+      name: 'X', scope: { kind: 'instance' }, cron: '30 2 * * *', retention: { daily: -1 },
+    });
+    assert.equal(refused.status, 400);
+    assert.equal(refused.data.code, 'invalidRetention');
+    const ok = await op.post('/api/backup/tasks', { name: 'Defaults', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    assert.equal(ok.status, 200);
+    const row = taskRow(server, ok.data.task.id);
+    assert.deepEqual(
+      { d: row.retention_daily, w: row.retention_weekly, m: row.retention_monthly, y: row.retention_yearly },
+      { d: 7, w: 4, m: 12, y: 5 },
+      'omitted buckets land on the D-09 defaults',
+    );
+  } finally {
+    await server.stop();
+  }
+});
+
+test('invalid scope → 400 backupInvalidScope; invalid tz → 400 invalidTimezone (both audited, one key per field kind)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-scope-tz@test.local');
+    const badScope = await op.post('/api/backup/tasks', { name: 'X', scope: { kind: 'workspace', id: 'nope' }, cron: '30 2 * * *' });
+    assert.equal(badScope.status, 400);
+    /* backupInvalidScope, NOT the pre-existing err.invalidScope (project-perms
+       "Scope must be read or write") — the keyed refusal contract needs a
+       distinct code, else the client renders the perms message (87-01 fix). */
+    assert.equal(badScope.data.code, 'backupInvalidScope');
+    const badTz = await op.post('/api/backup/tasks', { name: 'X', scope: { kind: 'instance' }, cron: '30 2 * * *', tz: 'Mars/Olympus' });
+    assert.equal(badTz.status, 400);
+    assert.equal(badTz.data.code, 'invalidTimezone');
+    const auditActions = taskAuditRows(server).map(r => r.action);
+    assert.ok(auditActions.includes('backup_task_refused:backupInvalidScope'));
+    assert.ok(auditActions.includes('backup_task_refused:invalidTimezone'));
+  } finally {
+    await server.stop();
+  }
+});
+
+test('missing name → 400 taskNameRequired (audited; the pre-existing generic key, no duplicate added)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-name@test.local');
+    const refused = await op.post('/api/backup/tasks', { name: '   ', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+    assert.equal(refused.status, 400);
+    assert.equal(refused.data.code, 'taskNameRequired');
+    assert.ok(taskAuditRows(server).some(r => r.action === 'backup_task_refused:taskNameRequired'));
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- PUT: recompute semantics (D-07 / roadmap schema decision) ---------- */
+
+test('PUT re-schedule recomputes next_run_at from now in the same write (expected value computed via nextRunAt)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-put@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Nightly', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+    const id = created.data.task.id;
+    const before = Date.now();
+    const updated = await op.put(`/api/backup/tasks/${id}`, { cron: '15 3 * * *' });
+    assert.equal(updated.status, 200, `PUT: ${JSON.stringify(updated.data)}`);
+    const row = taskRow(server, id);
+    assert.equal(row.cron, '15 3 * * *', 'raw string replaced verbatim');
+    const expected = [nextRunAt('15 3 * * *', 'Europe/Paris', before), nextRunAt('15 3 * * *', 'Europe/Paris', Date.now())];
+    assert.ok(expected.includes(row.next_run_at), `recomputed ${row.next_run_at} ∈ ${JSON.stringify(expected)}`);
+    assert.ok(taskAuditRows(server).some(r => r.action === 'backup_task_updated'));
+  } finally {
+    await server.stop();
+  }
+});
+
+test('disable → next_run_at NULL; re-enable → recomputed from now, never a stale value (D-07)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-toggle@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Hourly', scope: { kind: 'instance' }, cron: '15 * * * *' });
+    const id = created.data.task.id;
+    assert.ok(taskRow(server, id).next_run_at !== null, 'created enabled → next_run_at set');
+
+    const disabled = await op.put(`/api/backup/tasks/${id}`, { enabled: false });
+    assert.equal(disabled.status, 200);
+    const afterDisable = taskRow(server, id);
+    assert.equal(afterDisable.enabled, 0);
+    assert.equal(afterDisable.next_run_at, null, 'disable stores NULL next_run_at (D-07)');
+
+    const beforeEnable = Date.now();
+    const enabled = await op.put(`/api/backup/tasks/${id}`, { enabled: true });
+    assert.equal(enabled.status, 200);
+    const afterEnable = taskRow(server, id);
+    assert.equal(afterEnable.enabled, 1);
+    assert.ok(afterEnable.next_run_at !== null, 're-enable recomputes — never leaves NULL/stale');
+    const expected = [nextRunAt('15 * * * *', 'Europe/Paris', beforeEnable), nextRunAt('15 * * * *', 'Europe/Paris', Date.now())];
+    assert.ok(expected.includes(afterEnable.next_run_at), `re-enabled value ${afterEnable.next_run_at} ∈ ${JSON.stringify(expected)}`);
+    assert.ok(afterEnable.next_run_at > beforeEnable - 60_000, 'strictly a fresh future instant, not a stale past one');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PUT on an unknown id → 404 taskNotFound (audited)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-put404@test.local');
+    const refused = await op.put('/api/backup/tasks/does-not-exist', { name: 'Renamed' });
+    assert.equal(refused.status, 404);
+    assert.equal(refused.data.code, 'taskNotFound');
+    assert.ok(taskAuditRows(server).some(r => r.action === 'backup_task_refused:taskNotFound'));
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- DELETE: history persists (D-11) ---------- */
+
+test('DELETE removes the task row while its backup_runs rows persist as history', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-delete@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Doomed', scope: { kind: 'instance' }, cron: '0 4 * * *' });
+    const id = created.data.task.id;
+    /* Plant a run row directly — history is written by later plans; the pin
+       is that DELETE cascades NOTHING. */
+    withDb(server.dbPath, db =>
+      db.prepare(
+        "insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values ('run-hist-1', ?, '{}', 'scheduled', 'succeeded', 111, 111)",
+      ).run(id),
+    );
+
+    const deleted = await op.del(`/api/backup/tasks/${id}`);
+    assert.equal(deleted.status, 200, `DELETE: ${JSON.stringify(deleted.data)}`);
+    assert.equal(taskRow(server, id), undefined, 'task row gone');
+    const runs = withDb(server.dbPath, db => db.prepare('select * from backup_runs where task_id = ?').all(id));
+    assert.equal(runs.length, 1, 'run row persists as history (no cascade)');
+    assert.ok(taskAuditRows(server).some(r => r.action === 'backup_task_deleted'));
+
+    const gone = await op.del(`/api/backup/tasks/${id}`);
+    assert.equal(gone.status, 404);
+    assert.equal(gone.data.code, 'taskNotFound');
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ---------- 5-locale refusal catalogue (T-86-06 house rule) ---------- */
 
-test('every 87-01 refusal key emitted by POST exists in all five locale catalogues', () => {
-  const keys = ['invalidSchedule', 'invalidTimezone', 'invalidScope', 'invalidRetention', 'taskNameRequired'];
+test('every 87-01 refusal key exists in all five locale catalogues (no duplicate keys introduced)', () => {
+  const keys = ['invalidSchedule', 'invalidTimezone', 'backupInvalidScope', 'invalidRetention', 'taskNameRequired', 'taskNotFound'];
   for (const loc of LOCALES) {
     const cat = readLocale(loc);
     for (const key of keys) {

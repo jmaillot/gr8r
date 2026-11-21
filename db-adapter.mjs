@@ -412,11 +412,13 @@ export const SQLITE_SCHEMA = `
   );
   create unique index if not exists instance_roles_pair on instance_roles(user_id, role);
   /* BACKUP TASKS (Phase 87, 87-01, BKBCK-02/BKBCK-03): pg twin of server.js
-     SCHEMA — mirror-sync pinned by test/db-adapter.test.mjs. cron is the raw
-     5-field string (D-04 one-way, ratified 2026-11-21); next_run_at is a
-     persisted cache (never re-parsed at tick, D-07 NULL-while-disabled);
-     tz defaults Europe/Paris (no users.tz column — 87-01 checkpoint);
-     retention defaults 7/4/12/5 (D-09). next_run_at/started_at/finished_at
+     SCHEMA — mirror-sync pinned by test/db-adapter.test.mjs — runSchema
+     splits statements on ';-newline', so comments here never end a line
+     with a semicolon. cron is the raw 5-field string (D-04 one-way,
+     ratified 2026-11-21) — next_run_at is a persisted cache (never
+     re-parsed at tick, D-07 NULL while disabled) — tz defaults
+     Europe/Paris (no users.tz column, 87-01 checkpoint) — retention
+     defaults 7/4/12/5 (D-09). next_run_at/started_at/finished_at are
      registered in PG_EPOCH_COLUMNS below. */
   create table if not exists backup_tasks (
     id                  text primary key,
