@@ -27,6 +27,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import os from 'node:os';
 import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
 
 const BACKUP_TOKEN = 'scheduler-test-token';
@@ -147,6 +148,176 @@ test('the scheduler-pass route 404s without the test token (fail-closed like the
   try {
     const res = await fetch(`${server.base}/api/internal/backup-scheduler-pass`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     assert.equal(res.status, 404, 'unset BACKUP_TEST_TOKEN → 404 like any unknown route');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- semantics matrix (87-02 semantics task, D-05/D-06/D-07/T-87-04) ---------- */
+
+test('a sweep fire during an active run records skipped_overlap and never starts a second export (D-06, 86-D-10)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-overlap@test.local');
+    /* A large incompressible blob holds the manual export open long enough
+       to observe the overlap deterministically (no sleeps-as-logic). */
+    fs.writeFileSync(path.join(server.dataDir, 'blob.bin'), (await import('node:crypto')).randomBytes(48 * 1024 * 1024));
+
+    const started = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });
+    assert.equal(started.status, 200, `run now: ${JSON.stringify(started.data)}`);
+
+    /* Wait until the run reaches an active stage, then trigger the sweep. */
+    let active = false;
+    for (let i = 0; i < 200 && !active; i++) {
+      const cur = await op.get('/api/backup/runs/current');
+      if (['collecting', 'archiving', 'verifying'].includes(cur.data.stage)) active = true;
+      else if (cur.data.stage === 'done' || cur.data.stage === 'failed') break;
+      else await sleep(25);
+    }
+    assert.ok(active, 'manual run reached an active stage before the sweep fired');
+
+    const created = await op.post('/api/backup/tasks', { name: 'Overlapped', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    const id = created.data.task.id;
+    const nowMs = Date.now();
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(nowMs - 60_000, id));
+
+    await schedulerPass(server, nowMs);
+
+    const rows = runRows(server, id);
+    assert.equal(rows.length, 1, 'exactly one row for the refused fire');
+    assert.equal(rows[0].status, 'skipped_overlap', 'overlap attempt recorded — never silent (D-06)');
+    assert.equal(rows[0].trigger, 'scheduled');
+    /* The in-memory single-run invariant held: only the manual run produced
+       an archive (no second export started). */
+    const current = await waitRunFinished(server, op);
+    assert.equal(current.stage, 'done');
+
+    /* D-06: next_run_at is STILL recomputed despite the skip. */
+    const after = taskRow(server, id);
+    assert.ok(Number.isInteger(after.next_run_at) && after.next_run_at > nowMs, 'next_run_at recomputed past now');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('next_run_at three windows in the past fires exactly ONCE — no per-window loop (D-05)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-catchup@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Daily', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    const id = created.data.task.id;
+    const nowMs = Date.now();
+    /* Three daily windows missed while "the server was down". */
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(nowMs - 3 * 86_400_000, id));
+
+    await schedulerPass(server, nowMs);
+
+    const rows = runRows(server, id);
+    assert.equal(rows.length, 1, 'exactly ONE new run row — missed windows collapse into one firing');
+    assert.equal(rows[0].status, 'succeeded');
+    assert.ok(!rows.some(r => r.status === 'skipped_overlap'), 'no spurious overlap rows either');
+    const after = taskRow(server, id);
+    assert.ok(Number.isInteger(after.next_run_at) && after.next_run_at > nowMs, 'recomputed from NOW, never per-window');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('a disabled task with a stale past next_run_at fires nothing (D-07)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-disabled@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Paused', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    const id = created.data.task.id;
+    const disabled = await op.put(`/api/backup/tasks/${id}`, { enabled: false });
+    assert.equal(disabled.status, 200);
+    /* Stale past cache while disabled (as if it were disabled while down). */
+    const nowMs = Date.now();
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set enabled = 0, next_run_at = ? where id = ?').run(nowMs - 86_400_000, id));
+
+    const pass = await schedulerPass(server, nowMs);
+    assert.equal(pass.fired, 0, 'enabled=1 filter excludes the task');
+    assert.equal(runRows(server, id).length, 0, 'disabled tasks never fire and never catch up (D-07)');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('re-enable recomputes next_run_at from now in the same write — never the stale value (D-07)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-reenable@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Hourly', scope: { kind: 'instance' }, cron: '15 * * * *' });
+    const id = created.data.task.id;
+    await op.put(`/api/backup/tasks/${id}`, { enabled: false });
+    /* Plant a STALE past value while disabled — the surprise-catch-up trap
+       (research Pitfall 2). */
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(Date.now() - 7 * 3_600_000, id));
+
+    const beforeEnable = Date.now();
+    const enabled = await op.put(`/api/backup/tasks/${id}`, { enabled: true });
+    assert.equal(enabled.status, 200);
+    const row = taskRow(server, id);
+    assert.equal(row.enabled, 1);
+    assert.ok(row.next_run_at > beforeEnable, `re-enabled value ${row.next_run_at} is a fresh future instant, not the stale past one`);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('boot marks stale status=running run rows interrupted (BKBCK-03)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'backup-boot-'));
+  const server1 = await startServer({ dataDir: dir });
+  try {
+    withDb(server1.dbPath, db =>
+      db.prepare(
+        "insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values ('run-boot-1', null, '{}', 'scheduled', 'running', ?, ?)",
+      ).run(Date.now(), Date.now()),
+    );
+    const before = withDb(server1.dbPath, db => db.prepare('select status from backup_runs where id = ?').get('run-boot-1'));
+    assert.equal(before.status, 'running');
+  } finally {
+    await server1.stop(); // owned=false — the dataDir survives for the reboot
+  }
+
+  const server2 = await startServer({ dataDir: dir });
+  try {
+    const row = withDb(server2.dbPath, db => db.prepare('select status from backup_runs where id = ?').get('run-boot-1'));
+    assert.equal(row.status, 'interrupted', 'boot sweep turns stale running rows into interrupted');
+  } finally {
+    await server2.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a malformed stored cron logs, clears its cache, and never starves the other tasks in the same tick (T-87-04)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-badtas@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Healthy', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    const healthyId = created.data.task.id;
+    const nowMs = Date.now();
+    /* The malformed row bypasses the API's write-time validation (a direct
+       write, as a corrupted row would be) — the sweep must survive it. */
+    withDb(server.dbPath, db =>
+      db.prepare(
+        "insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, last_notified_state, created_at, updated_at) values ('task-bad','Corrupted','{\"kind\":\"instance\"}','not a cron !!','Europe/Paris',1,7,4,12,5,?,null,?,?)",
+      ).run(nowMs - 60_000, nowMs, nowMs),
+    );
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(nowMs - 60_000, healthyId));
+
+    const pass = await schedulerPass(server, nowMs);
+    assert.equal(pass.fired, 2, 'both due tasks were seen');
+
+    const healthyRows = runRows(server, healthyId);
+    assert.equal(healthyRows.length, 1, 'the healthy task still fired — one bad task never starves the others');
+    assert.equal(healthyRows[0].status, 'succeeded');
+    const badRow = taskRow(server, 'task-bad');
+    assert.equal(badRow.next_run_at, null, 'malformed cron → cache cleared honestly, no fire');
+    assert.equal(runRows(server, 'task-bad').length, 0, 'the malformed task fired nothing');
+
+    const listed = await op.get('/api/backup/tasks');
+    assert.equal(listed.status, 200, 'server alive after the malformed task (no process kill)');
   } finally {
     await server.stop();
   }
