@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.2
-milestone_name: Entra Group Mapping & Governance Backlog
-status: Awaiting next milestone
-stopped_at: Phase 83 complete — all phases complete
-last_updated: "2026-11-21T13:04:25.097Z"
+milestone: v3.3
+milestone_name: Instance Operations — Backup, Restore & Roles
+status: planning
+last_updated: "2026-11-21T13:49:19.108Z"
 last_activity: 2026-11-21
-last_activity_desc: Milestone v3.2 completed and archived
-state_head: cbf76c2b688460e339cb8f3f7add5b5c8b9f8f19
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
-current_phase: 83
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -29,10 +25,10 @@ before features.
 
 ## Current Position
 
-Phase: Milestone v3.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-21 — Milestone v3.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-21 — Milestone v3.3 started
 
 ## Milestone v3.2 Phase Map
 
