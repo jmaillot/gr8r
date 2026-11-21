@@ -4836,6 +4836,125 @@ IN.backupScopeId = el => {
 };
 
 /* =====================================================================
+   87-04 BACKUP TASK BUILDER (BKBCK-02, D-01/D-03/D-04) — the Backup
+   page task console's client half. Render-only + staged state: the form
+   lives in S.ui.backupTaskForm (never the DOM); the builder serializes
+   preset + per-field dropdown selections into the RAW 5-field cron
+   string (D-04 — one source of truth the server stores verbatim and
+   re-validates via export/cron.js). There is NO free-text cron input
+   (D-01) and NO client cron evaluation (Pitfall 6) — the schedule is
+   only ever a summary TEXT, and every refusal (taskNameRequired /
+   invalidSchedule / invalidTimezone / backupInvalidScope /
+   invalidRetention / backupManageRequired) surfaces as a keyed toast
+   through call()'s central handling.
+   ===================================================================== */
+const BACKUP_TASK_FIELD_DEFAULTS = { minute: '0', hour: '3', dom: '1', mon: '*', dow: '1' };
+const backupTaskFormDefaults = () => ({
+  editing: null, // null = create; a task id = partial edit
+  name: '',
+  scopeKind: 'instance',
+  scopeId: null,
+  preset: 'daily',
+  fields: { ...BACKUP_TASK_FIELD_DEFAULTS },
+  tz: '', // '' → the server's resolveTz(null) default (Europe/Paris, D-02)
+  tzDirty: false,
+  cronDirty: false, // edit mode: an untouched schedule is NOT re-sent (server keeps the stored cron)
+});
+/* Preset + fields → the raw 5-field cron string (D-04 serialization).
+   Custom sends all five fields verbatim — including `*` — so a Custom
+   save is always well-formed. Never evaluates anything (Pitfall 6). */
+const cronFromForm = form => {
+  const f = form.fields;
+  const { minute, hour, dom, mon, dow } = f;
+  if (form.preset === 'daily') return `${minute} ${hour} * * *`;
+  if (form.preset === 'weekly') return `${minute} ${hour} * * ${dow}`;
+  if (form.preset === 'monthly') return `${minute} ${hour} ${dom} * *`;
+  return `${minute} ${hour} ${dom} ${mon} ${dow}`; // custom
+};
+export { cronFromForm, backupTaskFormDefaults };
+
+IN.backupTaskName = el => {
+  if (S.ui.backupTaskForm) S.ui.backupTaskForm.name = el.value;
+};
+IN.backupTaskScopeKind = el => {
+  if (S.ui.backupTaskForm) {
+    S.ui.backupTaskForm.scopeKind = el.value;
+    S.ui.backupTaskForm.scopeId = null;
+  }
+  render();
+};
+IN.backupTaskScopeId = el => {
+  if (S.ui.backupTaskForm) S.ui.backupTaskForm.scopeId = el.value;
+};
+IN.backupTaskPreset = el => {
+  const form = S.ui.backupTaskForm;
+  if (!form) return;
+  form.preset = el.value;
+  form.cronDirty = true;
+  render();
+};
+IN.backupTaskField = el => {
+  const form = S.ui.backupTaskForm;
+  if (!form) return;
+  form.fields[el.dataset.f] = el.value;
+  form.cronDirty = true;
+  render();
+};
+A.backupTaskNew = () => {
+  S.ui.backupTaskForm = backupTaskFormDefaults();
+  render();
+};
+A.backupTaskEdit = el => {
+  const task = (S.ui.backupTasks?.tasks || []).find(x => x?.id === el.dataset.id);
+  if (!task) return;
+  let scope = task.scope || { kind: 'instance', id: null };
+  S.ui.backupTaskForm = {
+    ...backupTaskFormDefaults(),
+    editing: task.id,
+    name: task.name || '',
+    scopeKind: scope.kind || 'instance',
+    scopeId: scope.id || null,
+    /* Edit mode: preset starts on Custom with an untouched schedule — the
+       stored cron is re-sent ONLY if the operator touches a dropdown
+       (cronDirty), so a name/tz-only edit cannot silently rewrite the
+       schedule (D-04: the stored string is the source of truth). */
+    preset: 'custom',
+    fields: { ...BACKUP_TASK_FIELD_DEFAULTS },
+    tz: task.tz || '',
+    tzDirty: false,
+    cronDirty: false,
+  };
+  render();
+};
+A.backupTaskCancel = () => {
+  S.ui.backupTaskForm = null;
+  render();
+};
+A.backupTaskSave = async () => {
+  const form = S.ui.backupTaskForm;
+  if (!form) return;
+  const name = form.name.trim();
+  if (!name) return toast(t('err.taskNameRequired'), { kind: 'err' });
+  if (form.scopeKind === 'project' && !form.scopeId) return toast(t('err.backupPickProject'), { kind: 'err' });
+  const scope = form.scopeKind === 'instance' ? { kind: 'instance' } : { kind: form.scopeKind, id: form.scopeId };
+  /* D-04: the serialized raw string rides the write ONLY when the operator
+     touched the builder — the server keeps the stored cron otherwise. */
+  const cron = form.cronDirty ? cronFromForm(form) : undefined;
+  if (form.cronDirty && !cron) return toast(t('err.invalidSchedule'), { kind: 'err' });
+  const body = { name, scope };
+  if (cron !== undefined) body.cron = cron;
+  const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.backupTaskForm = null;
+  toast(t(form.editing ? 'page.backup.taskUpdated' : 'page.backup.taskSaved'), { ms: 1500 });
+  render();
+  await refreshBackupTasks();
+};
+
+/* =====================================================================
    85-02 INSTANCE ROLES (D-29..D-31, BKROLE-01) — the governance tab's
    grant/revoke client half. Render-only from the single GET fetch
    (rows + recent activity, dead-mappings shape). Grant reuses the

@@ -439,6 +439,31 @@ export const api = {
   async backupRunCurrent({ signal } = {}) {
     return call('GET', '/api/backup/runs/current', undefined, { signal });
   },
+  /* 87-04 (BKBCK-02/BKBCK-04, D-01/D-03/D-14): the task-builder + history
+     client surface. Every refusal the task routes can emit — taskNameRequired /
+     invalidSchedule / invalidTimezone / backupInvalidScope / invalidRetention /
+     taskNotFound / backupManageRequired / tooManyAttempts — flows through
+     call()'s central keyed handling; no bespoke error parsing here. The toggle
+     is a partial PUT: the server recomputes next_run_at in the SAME write
+     (D-07) and the client only refills — no client-side cron math anywhere
+     (the builder serializes preset+fields into the raw 5-field string, D-04). */
+  async backupTaskCreate(body, { signal } = {}) {
+    return call('POST', '/api/backup/tasks', body, { signal });
+  },
+  async backupTaskUpdate(id, body, { signal } = {}) {
+    return call('PUT', `/api/backup/tasks/${encodeURIComponent(id)}`, body, { signal });
+  },
+  async backupTaskToggle(id, enabled, { signal } = {}) {
+    return this.backupTaskUpdate(id, { enabled }, { signal });
+  },
+  async backupTaskDelete(id, { signal } = {}) {
+    return call('DELETE', `/api/backup/tasks/${encodeURIComponent(id)}`, undefined, { signal });
+  },
+  /* History read (D-14): newest-first, capped 50 server-side; taskId=manual
+     lists the D-11 manual archives. taskNotFound only after the gate (T-86-06). */
+  async backupRuns({ taskId, signal } = {}) {
+    return call('GET', `/api/backup/runs?taskId=${encodeURIComponent(taskId)}`, undefined, { signal });
+  },
   /* 85-02 (D-16/D-29/D-30): the Instance Roles tab's route family — one
      listing GET (rows + recent activity), the audited grant POST and the
      revoke DELETE. Operator-only server-side; every refusal surfaces as a
