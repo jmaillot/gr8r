@@ -38,8 +38,15 @@ export default defineConfig({
        suite's account scheme) keeps signing up normally, while any other
        domain hits the DP-1 refusal the locale-refusal spec drives. Playwright
        merges this over process.env, so e2e/server.mjs's passthrough semantics
-       are unchanged. */
-    env: { ALLOW_SIGNUP_DOMAINS: 'e2e.local' },
+       are unchanged.
+       SUPER_ACCESS=false (2026-11-21, milestone-close decision): the
+       super-access quick task (6ab89e63) defaults operators into synthetic
+       workspace access; the suite encodes the pre-super-access tenancy
+       semantics (foreign-slug redirect, promoted-operator onboarding, switcher
+       membership list). Gating super-access off in the e2e env keeps those
+       specs testing the membership-only door without touching app behavior
+       for real deployments. */
+    env: { ALLOW_SIGNUP_DOMAINS: 'e2e.local', SUPER_ACCESS: 'false' },
     reuseExistingServer: process.env.E2E_REUSE_SERVER === 'true',
     timeout: 120_000,
     /* Without this Playwright SIGKILLs the group, skipping the wrapper's temp-dir cleanup. */

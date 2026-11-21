@@ -90,6 +90,12 @@ async function startClosedServer() {
         WORKSPACE_NAME: 'Acme',
         WORKSPACE_SLUG: 'acme',
         MAX_UPLOAD_MB: '1',
+        /* SUPER_ACCESS deliberately 'false' — the spec encodes the pre-super-
+           access tenancy semantics (promoted-operator onboarding). The shared
+           server gates it off the same way (milestone-close decision,
+           2026-11-21); the dedicated server must match or its process.env
+           passthrough would re-open the door. */
+        SUPER_ACCESS: 'false',
         /* WORKSPACE_CREATION deliberately unset — the fail-closed gate. */
       },
       stdio: 'inherit',
