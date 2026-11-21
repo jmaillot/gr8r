@@ -396,6 +396,14 @@ export const SQLITE_SCHEMA = `
     updated_at   integer not null
   );
   create unique index if not exists group_mappings_pair on group_mappings(group_guid, workspace_id);
+  create table if not exists instance_roles (
+    id           text primary key,
+    user_id      text not null references users(id) on delete cascade,
+    role         text not null check (role in ('backup_operator','restore_operator')),
+    granted_by   text not null references users(id) on delete set null,
+    granted_at   integer not null
+  );
+  create unique index if not exists instance_roles_pair on instance_roles(user_id, role);
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);

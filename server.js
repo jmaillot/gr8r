@@ -107,6 +107,7 @@ import { searchTerms, foldForSearch } from './search-terms.mjs';
    test/dependencies.test.mjs must ship groups.js too (Task 3, G-75-3
    precedent). */
 import { canonicalizeGuid, guidRefusal, resolveGroupsClaim, resolve, roleTokenRefusal } from './groups.js';
+import { CAP, capabilitiesFor, roleTokenRefusal as instanceRoleTokenRefusal } from './roles.js';
 /* D-50-6: the reverse-sweep provenance reader opens the pre-sweep backup
    snapshots READ-ONLY (never through the adapter — they are historical files,
    not the live handle). Sole direct node:sqlite use in server.js. */
@@ -654,6 +655,25 @@ const SCHEMA = `
     updated_at   integer not null
   );
   create unique index if not exists group_mappings_pair on group_mappings(group_guid, workspace_id);
+  /* INSTANCE-ROLES (Phase 85, BKROLE-01, D-01..D-04): explicit Backup /
+     Restore Operator grants. role is a CHECK-constrained enum (D-01) — a
+     typo can never become a silent no-op; widening later rides the
+     invites rebuild-migration precedent (server.js:717). user_id FK is ON
+     DELETE CASCADE (D-04 — rows vanish with the deleted account, unlike
+     the group_mappings set-null choice above); granted_by is set null so
+     a deleted granter's rows survive (D-33 renders the fallback id).
+     granted_by is a plain users reference with no uniqueness interplay.
+     One row per (user_id, role) (D-02) — a user may hold both roles as
+     two rows; revoke deletes the row. No pg variant entry (Pattern 2/A1):
+     pgSchemaVariant derives the pg DDL from this verbatim. */
+  create table if not exists instance_roles (
+    id           text primary key,
+    user_id      text not null references users(id) on delete cascade,
+    role         text not null check (role in ('backup_operator','restore_operator')),
+    granted_by   text not null references users(id) on delete set null,
+    granted_at   integer not null
+  );
+  create unique index if not exists instance_roles_pair on instance_roles(user_id, role);
 `;
 
 async function initDb() {
@@ -1050,6 +1070,10 @@ function workspacePayload(row, membership = null) {
 }
 
 async function userPayload(user) {
+  /* Phase 85 (D-23/D-25): capability flags recomputed per load via the
+     hasInstanceRole funnel — render-only for the client, never client-side
+     role logic; revocation drops the flag on the next payload load. */
+  const caps = await userCapabilities(user);
   return {
     id: user.id,
     email: user.email,
@@ -1057,6 +1081,8 @@ async function userPayload(user) {
     locale: user.locale ?? null,
     twoFa: !!user.two_fa_enabled, // server ground truth for the settings 2FA card (16-03, T-16-13)
     isInstanceAdmin: !!user.is_instance_admin, // server ground truth for the operator card (D-112: DB flag only)
+    canBackup: caps.includes(CAP.BACKUP_MANAGE), // D-23: backup-surface visibility (D-21)
+    canRestore: caps.includes(CAP.RESTORE_USE), // D-23: restore actions visibility (D-22)
     workspaces: (await membershipsOf(user.id)).map(row => workspacePayload(row, row)),
   };
 }
@@ -4976,6 +5002,25 @@ function isInstanceAdmin(user) {
   return user?.is_instance_admin === 1;
 }
 
+/* -------------- instance roles funnel (Phase 85, BKROLE-01, D-09/D-12/D-14) --------------
+
+   The ONE capability gate behind every instance-role route and payload
+   flag. The pure half (the D-12 short-circuit + the D-11 map) lives in
+   roles.js; this wiring does the two DB reads per call — DIRECT, no
+   caching (D-14): a revocation applies on the very next load, so the
+   in-memory throttle map is the only state between a revoke and its
+   effect. Callers pass a CAP constant, never a role slug (D-09). */
+async function userCapabilities(user) {
+  const rows = await db.all('select role from instance_roles where user_id = ?', [user.id]);
+  return capabilitiesFor(isInstanceAdmin(user), rows.map(r => r.role));
+}
+
+async function hasInstanceRole(userId, capability) {
+  const user = await db.get('select id, is_instance_admin from users where id = ?', [userId]);
+  if (!user) return false; // unknown/deleted account holds nothing
+  return (await userCapabilities(user)).includes(capability);
+}
+
 /* Resolve a workspace by slug and enforce a minimum role. Unknown slugs 404. */
 async function requireWorkspace(req, res, slug, minRole = 'viewer') {
   const user = await requireUser(req, res);
@@ -7547,6 +7592,176 @@ async function handleApi(req, res, url) {
     // `groupX:group:…` one-char variants.
     const trail = await db.all("select action, workspace_id, created_at from audit_log where action like 'group\\_%:group:%' escape '\\' order by created_at desc limit 100");
     return json(res, 200, { orphans, trail });
+  }
+
+  /* -------------- instance roles (Phase 85, BKROLE-01..03, D-16/D-17/D-18) --------------
+     The Super-Admin-only grant/revoke/list family. Guard order is the
+     Phase 83 D-05 ladder VERBATIM (Pitfall 22: sameOrigin FIRST, before any
+     body read or throttle; then requireUser; then the operator-keyed
+     throttle consuming a try even on 403; then the isInstanceAdmin gate
+     BEFORE any target lookup — a non-operator gets the exact 403
+     operatorOnly regardless of body validity, no 403-vs-400 existence
+     oracle (T-85-02/T-80-04)). Grant and revoke write the instance_roles
+     row and the audit_log row inside ONE db.tx (BKROLE-03, D-18): a forced
+     audit failure rolls the whole mutation back — no write ever lands
+     un-logged (T-85-05). */
+  if (pathname === '/api/auth/operator/instance-roles' && method === 'GET') {
+    // D-16 list route — sameOrigin → requireUser → operator gate. NO throttle
+    // (read-only, Phase 78 read precedent). granted_by resolves server-side
+    // for the tab render (D-33); null granter name falls back to the raw id.
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const rows = await db.all(`select ir.id, ir.user_id, ir.role, ir.granted_by, ir.granted_at,
+        tu.name as user_name, tu.email as user_email,
+        gu.name as granted_by_name, gu.email as granted_by_email
+      from instance_roles ir
+      left join users tu on tu.id = ir.user_id
+      left join users gu on gu.id = ir.granted_by
+      order by ir.granted_at desc`);
+    return json(res, 200, {
+      roles: rows.map(r => ({
+        id: r.id,
+        userId: r.user_id,
+        role: r.role,
+        grantedBy: r.granted_by,
+        grantedAt: r.granted_at,
+        userName: r.user_name || r.user_id,
+        userEmail: r.user_email || null,
+        grantedByName: r.granted_by_name || r.granted_by, // D-33: deleted-granter fallback to raw id
+      })),
+    });
+  }
+
+  if (pathname === '/api/auth/operator/instance-roles' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // T-85-04: keyed on the caller; every attempt — including 403 refusals —
+    // consumes a try (tooMany increments before any gate decision).
+    if (tooMany(`instance-role-grant|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // T-85-02: the operator gate BEFORE any target lookup (D-16/T-80-04).
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const body = await readJson(req);
+    // D-01: the role token allow-list rides the roles.js funnel, code passed
+    // EXPLICITLY at the call site (domains.js door precedent).
+    const roleR = instanceRoleTokenRefusal(body?.role, 'instanceRoleBadRole', 'Role must be backup_operator or restore_operator');
+    if (roleR) return fail(res, 400, roleR.code, roleR.message);
+    // D-05: granting to a Super Admin is refused BEFORE the duplicate check —
+    // they hold everything implicitly and a row would wrongly surface them in
+    // (and make them demotable from) the membership list.
+    const target = await db.get('select id, name, email, is_instance_admin from users where id = ?', [String(body?.userId || '')]);
+    if (!target) return fail(res, 404, 'notFound', 'Not found');
+    if (target.is_instance_admin) return fail(res, 400, 'instanceRoleAdminImplicit', 'Super Admins already hold every role implicitly');
+    // D-08: duplicate grant refuses keyed; the OTHER role stays grantable
+    // (two rows per user, D-02).
+    const dup = await db.get('select 1 from instance_roles where user_id = ? and role = ?', [target.id, body.role]);
+    if (dup) return fail(res, 400, 'instanceRoleDuplicate', 'That user already holds this role');
+    const row = { id: uid(), user_id: target.id, role: body.role, granted_by: operator.id, granted_at: now() };
+    // BKROLE-03/D-18/T-85-05: grant + audit share ONE db.tx.
+    await db.tx(async () => {
+      await db.run(
+        'insert into instance_roles (id, user_id, role, granted_by, granted_at) values (?,?,?,?,?)',
+        [row.id, row.user_id, row.role, row.granted_by, row.granted_at],
+      );
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          uid(),
+          operator.id,
+          target.id,
+          'instance_role_granted',
+          0,
+          clientIp(req),
+          null,
+          operator.name,
+          operator.email,
+          target.name,
+          target.email,
+          now(),
+        ],
+      );
+    });
+    logInfo(`instance role granted: ${target.email} as ${row.role} by ${operator.email}`);
+    return json(res, 200, { role: { id: row.id, userId: row.user_id, role: row.role, grantedBy: row.granted_by, grantedAt: row.granted_at } });
+  }
+
+  const instanceRoleRevokeMatch = pathname.match(/^\/api\/auth\/operator\/instance-roles\/([A-Za-z0-9_-]{1,64})$/);
+  if (instanceRoleRevokeMatch && method === 'DELETE') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    // T-85-04: same keyed throttle discipline as the grant route.
+    if (tooMany(`instance-role-revoke|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // T-85-02: the operator gate BEFORE any row lookup (D-16/D-17 — Backup/
+    // Restore Operators can never revoke, and a non-operator cannot probe
+    // which ids exist).
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const row = await db.get(
+      'select ir.id, ir.user_id, ir.role, tu.name as user_name, tu.email as user_email from instance_roles ir left join users tu on tu.id = ir.user_id where ir.id = ?',
+      [instanceRoleRevokeMatch[1]],
+    );
+    if (!row) return fail(res, 404, 'notFound', 'Not found');
+    // BKROLE-03/D-18/T-85-05: revoke + audit share ONE db.tx — a forced audit
+    // failure rolls the DELETE back (the row survives un-logged removal).
+    await db.tx(async () => {
+      await db.run('delete from instance_roles where id = ?', [row.id]);
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [
+          uid(),
+          operator.id,
+          row.user_id,
+          'instance_role_revoked',
+          0,
+          clientIp(req),
+          null,
+          operator.name,
+          operator.email,
+          row.user_name || row.user_id,
+          row.user_email || '',
+          now(),
+        ],
+      );
+    });
+    logInfo(`instance role revoked: ${row.user_email || row.user_id} ${row.role} by ${operator.email}`);
+    return json(res, 200, { revoked: row.id });
+  }
+
+  /* -------------- backup stub endpoints (Phase 85, BKROLE-02, D-19/D-24/D-26) --------------
+     Real endpoints behind the real gates — the refusal path is live before
+     any task logic exists (Phases 86/87 own the contract). Every request
+     re-checks server-side via hasInstanceRole (D-23/T-85-06): the payload
+     flags are render-only, never authority. */
+  if (pathname === '/api/backup/tasks' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    // D-19/D-26: a non-holder deep-linking gets the keyed 403 refusal, not a
+    // silent redirect or an existence oracle.
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      return fail(res, 403, 'backupRoleRequired', 'You need a backup role to see that');
+    }
+    // D-24: the stub response carries the capability flags beside the empty
+    // list so Phase 86/87 renders role-aware actions from the same contract.
+    const canBackup = await hasInstanceRole(user.id, CAP.BACKUP_MANAGE);
+    const canRestore = await hasInstanceRole(user.id, CAP.RESTORE_USE);
+    return json(res, 200, { tasks: [], canBackup, canRestore });
+  }
+
+  if (pathname === '/api/backup/tasks' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    // D-19 (open-question 2): task editing is BACKUP_MANAGE-only — a Restore
+    // Operator holds RESTORE_USE, reaches the endpoint, and gets the keyed
+    // localized refusal. The holder path is a stub 400 until Phase 87.
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can edit backup tasks');
+    }
+    await readJson(req);
+    return fail(res, 400, 'backupNotConfigured', 'Backup tasks are not configured yet');
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {
