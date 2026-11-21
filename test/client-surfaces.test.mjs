@@ -210,3 +210,97 @@ test('D-51-4: applyDoc records the visibility epoch — vanished projects are de
   assert.equal(ok2, true);
   assert.equal(store.S.ui.lostProjects, null, 'a clean hydrate with no loss clears the epoch state');
 });
+
+/* =====================================================================
+   86-02 BACKUP RUN SURFACE (D-07/D-09/D-23 render-only doctrine): static
+   client-source assertions per the governance-client precedent (no DOM
+   harness → source assertions). Pins: the Run now card renders the scope
+   picker from payload-driven lists with esc() on every payload string;
+   the stage markup comes ONLY from the polled payload (never derived
+   client-side); the poll loop stops on done|failed; refusals surface as
+   keyed toasts through call(); no download action exists (Phase 90);
+   the new page vocabulary ships with 5-locale parity (D-12).
+   ===================================================================== */
+import { readFileSync as readFileSync86 } from 'node:fs';
+import { fileURLToPath as fileURLToPath86 } from 'node:url';
+import { test as test86 } from 'node:test';
+import nl86 from '../src/locales/nl.json' with { type: 'json' };
+import de86 from '../src/locales/de.json' with { type: 'json' };
+import es86 from '../src/locales/es.json' with { type: 'json' };
+import en86 from '../src/locales/en.json' with { type: 'json' };
+import fr86 from '../src/locales/fr.json' with { type: 'json' };
+
+const ROOT86 = fileURLToPath86(new URL('..', import.meta.url));
+const src86 = rel => readFileSync86(`${ROOT86}/${rel}`, 'utf8');
+
+test86('the Run now card renders the scope picker from payload-driven lists with esc() on every payload string (D-09/T-79-10)', () => {
+  const p = src86('src/pages/backup.js');
+  assert.match(p, /data-in="backupScopeKind"/, 'the scope kind select is missing');
+  assert.match(p, /data-in="backupScopeId"/, 'the scope id select is missing');
+  /* the project list rides the doc payload, never local assumptions */
+  assert.match(p, /S\.data\?\.projects/, 'the project picker does not read the payload-driven project list');
+  assert.match(p, /api\.workspace\?\.id/, 'the workspace scope does not read the loaded api.workspace payload');
+  const card = p.match(/const runNowCard = \w+ => \{[\s\S]*?\n\};/);
+  assert.ok(card, 'runNowCard not found');
+  assert.match(card[0], /esc\(p\.id\)/, 'the project option id is not esc()d');
+  assert.match(card[0], /esc\(p\.name \|\| p\.id\)/, 'the project option name is not esc()d');
+  assert.match(card[0], /esc\(api\.workspace\.name \|\| api\.workspace\.id\)/, 'the workspace option is not esc()d');
+});
+
+test86('the stage markup renders verbatim from the polled payload — no client-side stage derivation (85 D-23)', () => {
+  const p = src86('src/pages/backup.js');
+  const prog = p.match(/const runProgress = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(prog, 'runProgress not found');
+  assert.match(prog[0], /esc\(run\.stage\)/, 'the stage is not rendered verbatim through esc()');
+  /* the page never hardcodes stage names — the payload is the only source */
+  assert.doesNotMatch(p, /collecting|archiving|verifying/, 'a hardcoded stage name leaked into the page');
+  /* on done the archive filename + sha256 render as text; no download action */
+  assert.match(prog[0], /esc\(run\.filename \|\| ''\)/, 'the archive filename is not esc()d');
+  assert.match(prog[0], /esc\(run\.sha256 \|\| ''\)/, 'the sha256 is not esc()d');
+  assert.doesNotMatch(p, /data-a="backupDownload"/, 'a download action leaked into the page (Phase 90 prohibition)');
+});
+
+test86('the poll loop rides the seq + AbortController anti-stale pattern and stops on done|failed (D-07)', () => {
+  const a = src86('src/actions/actions.js');
+  assert.match(a, /let backupPollSeq = 0;/, 'the poll seq is missing');
+  assert.match(a, /backupPollInflight\?\.abort\(\);/, 'the in-flight abort is missing');
+  assert.match(a, /api\.backupRunCurrent\(\{ signal: backupPollInflight\.signal \}\)/, 'the poll does not ride the abort signal');
+  assert.match(a, /clearInterval\(backupPollTimer\)/, 'the interval stop is missing');
+  /* the trigger goes through api.backupRun (call()) and toasts keyed refusals */
+  assert.match(a, /api\.backupRun\(scope\)/, 'the trigger does not ride api.backupRun');
+  assert.match(a, /tErr\(code, null, res\.error \|\| t\('err\.serverUnreachable'\)\), \{ kind: 'err' \}/, 'the keyed refusal toast pipeline moved');
+  /* the trigger never derives authority client-side — no canBackup pre-gate before the call */
+  const runNow = a.match(/A\.backupRunNow = async \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(runNow, 'A.backupRunNow not found');
+  assert.doesNotMatch(runNow[0], /canBackup/, 'the trigger pre-gates authority client-side (render-only violation — the server is the authority)');
+});
+
+test86('the run api methods keep the frozen call() shapes (D-16)', () => {
+  const api = src86('src/core/api.js');
+  assert.match(api, /async backupRun\(scope, \{ signal \} = \{\}\) \{\s*return call\('POST', '\/api\/backup\/runs', \{ scope \}, \{ signal \}\);/, 'backupRun drifted off the frozen shape');
+  assert.match(api, /async backupRunCurrent\(\{ signal \} = \{\}\) \{\s*return call\('GET', '\/api\/backup\/runs\/current', undefined, \{ signal \}\);/, 'backupRunCurrent drifted off the frozen shape');
+});
+
+test86('the run-surface vocabulary ships with parity across all 5 catalogues (D-12)', () => {
+  const KEYS = [
+    'page.backup.runNowTitle',
+    'page.backup.runNowLead',
+    'page.backup.scopeLabel',
+    'page.backup.scopeInstance',
+    'page.backup.scopeWorkspace',
+    'page.backup.scopeProject',
+    'page.backup.projectLabel',
+    'page.backup.workspaceLabel',
+    'page.backup.runAction',
+    'page.backup.stageLabel',
+    'page.backup.archiveLabel',
+    'page.backup.pending',
+    'page.backup.runFailed',
+    'err.backupRunInProgress',
+    'err.scopeNotFound',
+  ];
+  for (const [lang, cat] of Object.entries({ en: en86, fr: fr86, nl: nl86, de: de86, es: es86 })) {
+    for (const k of KEYS) assert.ok(cat[k], `${lang} catalogue lost ${k}`);
+  }
+});
+

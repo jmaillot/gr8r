@@ -4743,6 +4743,84 @@ A.backupRetry = () => {
 };
 
 /* =====================================================================
+   86-02 BACKUP RUN (D-07/D-09/D-10/D-18) — the Run now card's client
+   half. Render-only from the GET /api/backup/runs/current payload (85
+   D-23): the stage is written verbatim into S.ui.backupRun, never
+   derived client-side. The poll loop rides the same monotonic seq +
+   in-flight abort pattern as refreshBackupTasks above; the interval
+   runs ONLY while a run is active and stops on done|failed (D-07) —
+   no download action exists in v1 (Phase 90). Every trigger refusal
+   (backupManageRequired / backupRunInProgress / scopeNotFound / 429)
+   surfaces as a keyed toast through call()'s central handling — the
+   server is the authority, the card never pre-validates authority.
+   ===================================================================== */
+let backupPollSeq = 0;
+let backupPollInflight = null;
+let backupPollTimer = null;
+const BACKUP_ACTIVE_STAGES = ['collecting', 'archiving', 'verifying'];
+
+export async function backupPollTick() {
+  if (!api.enabled) return null;
+  const my = ++backupPollSeq;
+  backupPollInflight?.abort();
+  backupPollInflight = new AbortController();
+  const res = await api.backupRunCurrent({ signal: backupPollInflight.signal });
+  if (my !== backupPollSeq) return null;
+  if (res.ok) {
+    S.ui.backupRun = res.data;
+    S.ui.backupPending = false;
+    /* D-07: the interval runs only while a run is active — done|failed|idle stops it. */
+    if (!BACKUP_ACTIVE_STAGES.includes(res.data?.stage)) backupStopPolling();
+  } else {
+    /* D-28: the central intercept owns the 401 teardown. A role loss (403)
+       stops the loop — a non-holder must never spin against the keyed refusal. */
+    if (res.status === 401) return null;
+    backupStopPolling();
+    S.ui.backupRun = null;
+  }
+  render();
+  return S.ui.backupRun;
+}
+
+function backupStartPolling() {
+  if (backupPollTimer) return;
+  backupPollTimer = setInterval(() => backupPollTick(), 1000);
+}
+
+function backupStopPolling() {
+  clearInterval(backupPollTimer);
+  backupPollTimer = null;
+}
+
+A.backupRunNow = async () => {
+  const scope = S.ui.backupScope;
+  if (!scope) return;
+  if (scope.kind === 'project' && !scope.id) return toast(t('err.backupPickProject'), { kind: 'err' });
+  const res = await api.backupRun(scope);
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    const code = res.data?.code; // backupManageRequired / backupRunInProgress / scopeNotFound / tooManyAttempts — keyed
+    return toast(tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  /* Render-only: no stage is fabricated client-side — the pending flag only
+     says "trigger accepted, first poll has not landed yet"; the first tick
+     writes the real D-19 payload. */
+  S.ui.backupPending = true;
+  backupStartPolling();
+  render();
+};
+
+/* Staged scope selection (Pitfall: never read the DOM back) — the picker
+   stages into S.ui.backupScope; the server re-validates kind + id (D-17). */
+IN.backupScopeKind = el => {
+  S.ui.backupScope = { kind: el.value, id: null };
+  render();
+};
+IN.backupScopeId = el => {
+  if (S.ui.backupScope) S.ui.backupScope.id = el.value;
+};
+
+/* =====================================================================
    85-02 INSTANCE ROLES (D-29..D-31, BKROLE-01) — the governance tab's
    grant/revoke client half. Render-only from the single GET fetch
    (rows + recent activity, dead-mappings shape). Grant reuses the

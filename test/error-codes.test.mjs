@@ -191,6 +191,7 @@ test('inviteForOtherEmail carries its email in the payload on the join flow', as
    source; a catalogued code absent from server.js AND absent here fails the suite. */
 const CLIENT_ONLY_ERR_CODES = [
   'codeRequired', // field guard in the tfa disable form (16-03) — no server code
+  'backupPickProject', // 86-02 guard toast in actions.js before the run call — client-side validation, not a server code
   'changeRole', // toast composed in actions.js after a successful PATCH
   'changeTeam', // toast composed in actions.js/teams.js after a failed PUT teams (28-02)
   'changeScope', // toast composed in actions.js after a failed PUT scope (29-04)
