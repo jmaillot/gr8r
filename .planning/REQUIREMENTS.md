@@ -62,8 +62,18 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 
 ## Traceability
 
-*Filled by roadmap: requirement → phase mapping.*
-
 | Req | Phase | Status |
 |-----|-------|--------|
-| (pending roadmap) | | |
+| BKROLE-01 | Phase 85 | Pending |
+| BKROLE-02 | Phase 85 | Pending |
+| BKROLE-03 | Phase 85 | Pending |
+| BKBCK-01 | Phase 86 | Pending |
+| BKBCK-02 | Phase 87 | Pending |
+| BKBCK-03 | Phase 87 | Pending |
+| BKBCK-04 | Phase 87 | Pending |
+| BKBCK-05 | Phase 88 | Pending |
+| BKRST-01 | Phase 89 | Pending |
+| BKRST-02 | Phase 89 | Pending |
+| BKRST-03 | Phase 89 | Pending |
+| BKRST-04 | Phase 89 | Pending |
+| SACON-01 | Phase 90 | Pending |
