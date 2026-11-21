@@ -1794,6 +1794,8 @@
   "err.backupRoleRequired": "Je hebt een back-uprol nodig om dat te zien",
   "err.backupManageRequired": "Alleen een back-upoperator kan back-uptaken bewerken",
   "err.backupNotConfigured": "Back-uptaken zijn nog niet geconfigureerd",
+  "err.backupRunInProgress": "Er loopt al een back-up",
+  "err.scopeNotFound": "Dat back-upbereik bestaat niet",
   "err.groupMappingBadGuid": "Groeps-ID moet een Entra Object ID (GUID) zijn",
   "err.groupMappingUnknownWorkspace": "Er bestaat geen werkruimte met die ID",
   "err.groupMappingBadRole": "De rol moet owner, admin of member zijn",

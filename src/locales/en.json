@@ -1794,6 +1794,8 @@
   "err.backupRoleRequired": "You need a backup role to see that",
   "err.backupManageRequired": "Only a Backup Operator can edit backup tasks",
   "err.backupNotConfigured": "Backup tasks are not configured yet",
+  "err.backupRunInProgress": "A backup is already running",
+  "err.scopeNotFound": "That backup scope does not exist",
   "err.groupMappingBadGuid": "Group ID must be an Entra Object ID (GUID)",
   "err.groupMappingUnknownWorkspace": "No workspace with that ID exists",
   "err.groupMappingBadRole": "Role must be owner, admin, or member",

@@ -81,6 +81,9 @@ import { buildExportModel } from './src/export/model.js';
 import { toCsv } from './src/export/csv.js';
 import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
+/* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
+   routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
+import { runExport, getRunState, sweepStaleBackupStaging } from './export/backup.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -7779,6 +7782,130 @@ async function handleApi(req, res, url) {
     return fail(res, 400, 'backupNotConfigured', 'Backup tasks are not configured yet');
   }
 
+  /* -------------- backup run endpoints (Phase 86, 86-02, BKBCK-01/D-16) --------------
+     The frozen /api/backup/runs surface Phases 87/88 build on: POST triggers a
+     background export (86-01 pipeline) and returns the D-18 UUID immediately;
+     GET current polls the D-19 status payload. Guard chain order is copied
+     verbatim from the Phase 85 stub family (never reordered — sameOrigin before
+     body read AND throttle, house rule server.js signup comment):
+       sameOrigin → requireUser → throttle → capability gate → scope checks →
+       concurrency → claim → fire-and-forget export.
+     Every refusal is keyed AND audited (D-20); the POST throttle is
+     operator-keyed and consumes a try even on refusal (D-21). No download
+     endpoint and no MCP mirror exist in v1 (D-23/Phase 90 deferral). */
+  if (pathname === '/api/backup/runs' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    /* D-21: operator-keyed throttle placed AFTER sameOrigin+requireUser and
+       BEFORE the gate checks — a refused attempt consumes a try, exactly like
+       the grant/revoke routes (T-86-08). */
+    if (tooMany(`backuprun|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    /* T-86-07: the capability gate BEFORE any body/scope probing — a non-holder
+       gets the same keyed refusal for a valid and an invalid body (no oracle). */
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      /* D-20: refused trigger attempts land on the trail. */
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), user.id, user.id, 'backup_run_refused:backupManageRequired', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+      );
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can run backups');
+    }
+    /* D-17: body + scope validation — kind allow-list, id presence per kind,
+       then DB existence. Every failure is the SAME keyed refusal (T-86-06: no
+       which-part-was-wrong oracle) and lands on the trail (D-20). */
+    const auditRefusedScope = async () => {
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), user.id, user.id, 'backup_run_refused:scopeNotFound', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+      );
+    };
+    const body = await readJson(req);
+    const scope = body?.scope;
+    const kind = scope?.kind;
+    const scopeId = typeof scope?.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(scope.id) ? scope.id : null;
+    let scopeExists = false;
+    if ((kind === 'project' || kind === 'workspace') && scopeId) {
+      /* Existence reads stay fail-closed: workspace ids are table rows; project
+         ids live in the workspace doc's data.projects (the same doc source the
+         86-01 collector scans). */
+      if (kind === 'workspace') {
+        scopeExists = !!(await db.get('select id from workspaces where id = ?', [scopeId]));
+      } else {
+        for (const ws of await db.all('select doc from workspaces')) {
+          let doc;
+          try { doc = JSON.parse(ws.doc)?.data ?? {}; } catch { continue; }
+          if ((Array.isArray(doc.projects) ? doc.projects : []).some(p => p?.id === scopeId)) {
+            scopeExists = true;
+            break;
+          }
+        }
+      }
+    } else if (kind === 'instance' && scope?.id === undefined) {
+      scopeExists = true; // the instance always exists — id must be OMITTED (D-17)
+    }
+    if (!['project', 'workspace', 'instance'].includes(kind) || !scopeExists) {
+      await auditRefusedScope();
+      return fail(res, 400, 'scopeNotFound', 'That backup scope does not exist');
+    }
+    /* D-10: one export at a time. The check sits immediately before the claim
+       with NO await between — the claim inside runExport is synchronous before
+       its first await (Pitfall 5), so the check→claim segment is atomic on the
+       single-process model and a simultaneous trigger is refused, never doubled. */
+    const active = getRunState();
+    if (active && (active.stage === 'collecting' || active.stage === 'archiving' || active.stage === 'verifying')) {
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), user.id, user.id, 'backup_run_refused:backupRunInProgress', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+      );
+      return fail(res, 409, 'backupRunInProgress', 'A backup is already running');
+    }
+    /* Fire-and-forget: runExport claims SYNCHRONOUSLY on the call itself, so
+       the run id is readable from the state holder before the response leaves. */
+    const started = runExport(scope);
+    const runId = getRunState()?.runId;
+    if (!started || !runId) {
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), user.id, user.id, 'backup_run_refused:backupRunInProgress', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+      );
+      return fail(res, 409, 'backupRunInProgress', 'A backup is already running');
+    }
+    /* D-20: the STARTED attempt is on the trail too. */
+    await db.run(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [uid(), user.id, user.id, `backup_run_started:${kind}`, 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+    );
+    started.catch(err => logWarn(`backup run ${runId}: ${err?.message || err}`)); // runExport resolves by design — belt-and-braces only
+    logInfo(`backup run started: ${runId} (${kind}) by ${user.email}`);
+    return json(res, 200, { runId });
+  }
+
+  if (pathname === '/api/backup/runs/current' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    /* D-22: status is a BACKUP_MANAGE read — a non-holder (including a Restore
+       Operator) gets the keyed backupRoleRequired 403, never a free oracle. */
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      return fail(res, 403, 'backupRoleRequired', 'You need a backup role to see that');
+    }
+    /* D-19 frozen payload: scope, stage, startedAt — plus on completion the
+       archive filename + whole-archive sha256. No run → { stage: 'idle' }. */
+    const rs = getRunState();
+    if (!rs) return json(res, 200, { stage: 'idle' });
+    const payload = {
+      scope: { kind: rs.scope.kind, id: rs.scope.id ?? null },
+      stage: rs.stage,
+      startedAt: new Date(rs.startedAt).toISOString(),
+    };
+    if (rs.stage === 'done') {
+      payload.filename = rs.filename;
+      payload.sha256 = rs.sha256;
+    }
+    return json(res, 200, payload);
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
@@ -9905,6 +10032,10 @@ async function main() {
   }
 
   await bootstrap();
+  /* D-13 (86-02): crash hygiene — boot sweeps DATA_DIR/tmp/backup-* staging
+     orphans left by a SIGTERM/crash (the sweep is from the 86-01 pipeline). */
+  const sweptBackupStaging = sweepStaleBackupStaging();
+  if (sweptBackupStaging) logInfo(`backup staging sweep: removed ${sweptBackupStaging} orphan(s)`);
   /* PUSH-05: VAPID custody runs after the migrations so DATA_DIR is settled —
      env → persisted file → generate-once ladder (feature absent on failure). */
   await initPushCustody();
@@ -10025,6 +10156,17 @@ async function main() {
 
   const shutdown = signal => {
     logInfo(`${signal} received, shutting down`);
+    /* D-13 (86-02): an active export run is marked failed and its staging is
+       best-effort removed here — the boot sweep is the backstop for a hard
+       crash that never reaches this handler. */
+    const activeRun = getRunState();
+    if (activeRun && (activeRun.stage === 'collecting' || activeRun.stage === 'archiving' || activeRun.stage === 'verifying')) {
+      activeRun.stage = 'failed';
+      activeRun.error = 'server shutdown';
+      try {
+        fs.rmSync(path.join(DATA_DIR, 'tmp', `backup-${activeRun.runId}`), { recursive: true, force: true });
+      } catch { /* best-effort (D-15) — the boot sweep catches stragglers */ }
+    }
     server.close(async () => {
       await db.close(); // Phase 45: adapter close (pool.end on pg)
       process.exit(0);

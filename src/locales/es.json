@@ -1794,6 +1794,8 @@
   "err.backupRoleRequired": "Necesitas un rol de copia de seguridad para ver eso",
   "err.backupManageRequired": "Solo un operador de copia de seguridad puede editar tareas de copia",
   "err.backupNotConfigured": "Las tareas de copia de seguridad aún no están configuradas",
+  "err.backupRunInProgress": "Ya se está ejecutando una copia de seguridad",
+  "err.scopeNotFound": "Ese alcance de copia de seguridad no existe",
   "err.groupMappingBadGuid": "El ID del grupo debe ser un Object ID de Entra (GUID)",
   "err.groupMappingUnknownWorkspace": "No existe ningún espacio de trabajo con ese ID",
   "err.groupMappingBadRole": "El rol debe ser owner, admin o member",

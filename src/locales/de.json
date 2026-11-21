@@ -1794,6 +1794,8 @@
   "err.backupRoleRequired": "Du benötigst eine Backup-Rolle, um das zu sehen",
   "err.backupManageRequired": "Nur ein Backup-Operator kann Backup-Aufgaben bearbeiten",
   "err.backupNotConfigured": "Backup-Aufgaben sind noch nicht konfiguriert",
+  "err.backupRunInProgress": "Es läuft bereits eine Sicherung",
+  "err.scopeNotFound": "Dieser Sicherungsbereich existiert nicht",
   "err.groupMappingBadGuid": "Die Gruppen-ID muss eine Entra Object ID (GUID) sein",
   "err.groupMappingUnknownWorkspace": "Es existiert kein Arbeitsbereich mit dieser ID",
   "err.groupMappingBadRole": "Die Rolle muss owner, admin oder member sein",

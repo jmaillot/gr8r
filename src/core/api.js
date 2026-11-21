@@ -429,6 +429,16 @@ export const api = {
   async backupTasks({ signal } = {}) {
     return call('GET', '/api/backup/tasks', undefined, { signal });
   },
+  /* 86-02 (D-16/D-18/D-19): the frozen run surface — trigger returns the D-18
+     UUID immediately, current polls the D-19 status payload. Every refusal
+     (backupManageRequired / backupRunInProgress / scopeNotFound / 429) flows
+     through call()'s central handling — no bespoke error parsing here. */
+  async backupRun(scope, { signal } = {}) {
+    return call('POST', '/api/backup/runs', { scope }, { signal });
+  },
+  async backupRunCurrent({ signal } = {}) {
+    return call('GET', '/api/backup/runs/current', undefined, { signal });
+  },
   /* 85-02 (D-16/D-29/D-30): the Instance Roles tab's route family — one
      listing GET (rows + recent activity), the audited grant POST and the
      revoke DELETE. Operator-only server-side; every refusal surfaces as a
