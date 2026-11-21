@@ -1,8 +1,21 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-21 — v3.2 milestone shipped*
+*Last updated: 2026-11-21 — v3.3 milestone started*
 
-## Current State: v3.2 Entra Group Mapping & Governance Backlog — SHIPPED (2026-11-21)
+## Current Milestone: v3.3 Instance Operations — Backup, Restore & Roles
+
+**Goal:** Déléguer l'exploitation d'instance à des rôles Backup/Restore Operator — sauvegardes programmées multi-scopes avec rotation, restauration sélective sûre — et finaliser la console Super Admin.
+
+**Target features:**
+- Backup (Instance > Backup): tâches multiples (scope projet/workspace/instance, cron, rotation GFS par échelle), export logique unique (rows + fichiers, SQLite/Postgres v1), destinations local + S3 (SMB/FTP v2), historique des runs + notification d'échec + Run now + checksum
+- Restore (Instance > Restore): restauration sélective (instance/workspace/projet) depuis les backups disponibles ; import « à côté » par défaut (suffixe -restored), overwrite en option avec type-to-confirm + snapshot pré-restore
+- Rôles: table instance_roles extensible, Super Admins auto-membres, tab « Instance Roles » dans Instance > Governance ; Backup Operators = gestion complète des tâches
+- Backlog: Super Admin console role-first listing (roster + recherche nom/email pour promouvoir, cap résultats, feedback post-promotion)
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+
+<details>
+<summary>Milestone v3.2 Entra Group Mapping & Governance Backlog — SHIPPED (2026-11-21)</summary>
 
 **Shipped:** 5 phases (80–84), 12 plans, 19/19 requirements traced, all phases verified
 (closeout: verified_closeout; ship gate e2e 157/157 green, unit 2050/0).
@@ -27,7 +40,7 @@
 MILESTONES.md); Super Admin console role-first listing captured as a seed for the next
 milestone (`.planning/seeds/super-admin-console-role-first-listing.md`).
 
-<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+</details>
 
 <details>
 <summary>Milestone v3.2 (in-progress record, archived 2026-11-21)</summary>
