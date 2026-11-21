@@ -155,6 +155,19 @@ test('instance scope walks DATA_DIR (files + logos)', () => {
     assert.ok(entries.includes('files/f1') && entries.includes('files/f3'));
     assert.ok(entries.includes('logos/lg1') && entries.includes('logos/lg2'));
     assert.ok(entries.includes('manifest.json'));
+    // D-01 exclusions: staging home and the backups destination never enter the archive
+    assert.ok(!entries.some(e => e.startsWith('tmp/')), 'tmp/ excluded');
+    assert.ok(!entries.some(e => e.startsWith('backups/')), 'backups/ excluded');
+  })();
+});
+
+test('unknown scope kind fails the run closed', () => {
+  return (async () => {
+    const run = await backup.runExport({ kind: 'galaxy', id: 'x' });
+    assert.equal(run.ok, false);
+    assert.match(run.error, /unknown scope kind/);
+    assert.equal(backup.getRunState().stage, 'failed');
+    assert.equal(fs.readdirSync(TMP_DIR).filter(d => d.startsWith('backup-')).length, 0, 'D-15: staging removed');
   })();
 });
 
