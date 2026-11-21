@@ -3643,7 +3643,7 @@ A.delWorkspace = () => {
   });
 };
 A.avColor = el => {
-  me().c = el.dataset.v;
+  me()?.c && (me().c = el.dataset.v);
   save();
   render();
 };
@@ -3661,8 +3661,12 @@ A.saveProfile = () => {
       mutate(() => {
         S.prefs.name = n;
         S.prefs.title = tt;
-        me().name = n;
-        me().title = tt;
+        /* Super-access: the operator has no member row in a foreign workspace —
+           the profile write lands on S.prefs and the server; no local me() row. */
+        if (me()) {
+          me().name = n;
+          me().title = tt;
+        }
       })
     )
       toast(t('toast.profileUpdated'));

@@ -47,7 +47,7 @@ export function pageMembers() {
     m => (role === 'all' || m.role === role) && (!q || foldForSearch(m.name).text.includes(q) || foldForSearch(m.email).text.includes(q)),
   );
   const isAdmin = isMemberAdmin();
-  const isOwner = me().role === 'Owner';
+  const isOwner = me()?.role === 'Owner';
   const canManage = m => isAdmin && m.id !== D().me && (isOwner || (m.role !== 'Owner' && m.role !== 'Admin'));
   const pending = api.enabled ? u.pendingInvites || [] : [];
   const pendingCount = api.enabled ? pending.length : D().members.filter(m => m.status === 'invited').length;

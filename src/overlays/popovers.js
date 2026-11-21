@@ -265,7 +265,7 @@ export function popHtml(p) {
       break;
     }
     case 'user':
-      inner = `<div class="row" style="padding:8px 8px 10px;gap:10px">${av(D().me, 'lg', false)}<div style="min-width:0"><div style="font-weight:600">${esc(S.prefs.name)}</div><div class="faint trunc" style="font-size:12px">${esc(me().email)}</div></div></div><div class="msep"></div>
+      inner = `<div class="row" style="padding:8px 8px 10px;gap:10px">${av(D().me, 'lg', false)}<div style="min-width:0"><div style="font-weight:600">${esc(S.prefs.name)}</div><div class="faint trunc" style="font-size:12px">${esc(me()?.email || '')}</div></div></div><div class="msep"></div>
       <button class="mi" data-a="go" data-r="member" data-id="${D().me}">${ic('user', 15)}${tMsg('act.viewProfile')}</button><button class="mi" data-a="go" data-r="settings" data-sec="profile">${ic('settings', 15)}${tMsg('popover.accountSettings')}</button>
       <div class="msep"></div><div class="mh">${tMsg('popover.theme')}</div><div style="padding:2px 6px 6px"><div class="seg" style="width:100%">${[
         ['light', 'sun', tMsg('popover.themeLight')],
