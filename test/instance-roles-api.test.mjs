@@ -240,7 +240,69 @@ test('GET /api/backup/tasks: Super Admin holds both flags implicitly with ZERO r
   }
 });
 
+/* ---------- revoke + the task-edit stub refusal (D-17/D-18/D-19) ---------- */
+
+test('revoke: DELETE removes the row and writes the instance_role_revoked audit row (BKROLE-03)', async () => {
+  const server = await startServer({});
+  try {
+    await makeUser(server, 'Grantee', 'grantee@test.local');
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const granteeId = userIdByEmail(server, 'grantee@test.local');
+    assert.equal((await operator.post('/api/auth/operator/instance-roles', { userId: granteeId, role: 'restore_operator' })).status, 200);
+    const row = roleRows(server).find(r => r.user_id === granteeId);
+    assert.ok(row, 'the grantee row exists');
+
+    // revoke is Super-Admin-only: a Backup Operator cannot revoke (D-17).
+    await makeUser(server, 'Backup Op', 'backupop@test.local');
+    await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, 'backupop@test.local'), role: 'backup_operator' });
+    const backupOp = (await login(server.base, 'backupop@test.local', 'password-1234')).client;
+    const denied = await backupOp.del(`/api/auth/operator/instance-roles/${row.id}`);
+    assert.equal(denied.status, 403);
+    assert.equal(denied.data.code, 'operatorOnly', 'Backup Operators can never grant or revoke roles (D-17)');
+
+    const del = await operator.del(`/api/auth/operator/instance-roles/${row.id}`);
+    assert.equal(del.status, 200, JSON.stringify(del.data));
+    const remaining = roleRows(server);
+    assert.equal(remaining.length, 1, 'only the revoked row is gone (the backup-op grant stays)');
+    assert.equal(remaining[0].user_id, userIdByEmail(server, 'backupop@test.local'));
+    const audits = auditRows(server);
+    assert.equal(audits.length, 3, 'two grants + one revoke audit row');
+    assert.equal(audits[2].action, 'instance_role_revoked');
+    assert.equal(audits[2].target_id, granteeId);
+
+    const gone = await operator.del(`/api/auth/operator/instance-roles/${row.id}`);
+    assert.equal(gone.status, 404, 'revoking an already-revoked id is a plain 404');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('POST /api/backup/tasks: Restore Operator gets the keyed backupManageRequired refusal; holder gets the stub 400 (D-19)', async () => {
+  const server = await startServer({});
+  try {
+    await makeUser(server, 'Restore Op', 'restoreop@test.local');
+    await makeUser(server, 'Backup Op', 'backupop@test.local');
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, 'restoreop@test.local'), role: 'restore_operator' });
+    await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, 'backupop@test.local'), role: 'backup_operator' });
+
+    const restoreOp = (await login(server.base, 'restoreop@test.local', 'password-1234')).client;
+    const refused = await restoreOp.post('/api/backup/tasks', { name: 'nightly' });
+    assert.equal(refused.status, 403, `expected 403, got ${refused.status}: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupManageRequired', 'the task-edit refusal path is REAL (BKROLE-02, D-19)');
+
+    const backupOp = (await login(server.base, 'backupop@test.local', 'password-1234')).client;
+    const stub = await backupOp.post('/api/backup/tasks', { name: 'nightly' });
+    assert.equal(stub.status, 400, 'the holder reaches the stub — a plain 400 until Phase 87 owns the contract');
+    assert.equal(stub.data.code, 'backupNotConfigured');
+    assert.equal(roleRows(server).length, 2, 'no task logic ran — no side effects');
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ---------- the payload capability flags (D-23/D-25) ---------- */
+
 
 test('userPayload carries canBackup/canRestore computed per load (D-23); revocation drops the flag on next load (D-25)', async () => {
   const server = await startServer({});
