@@ -2,15 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
+current_phase: 85
+current_phase_name: first of 6
 status: planning
-last_updated: "2026-11-21T14:10:00.000Z"
+stopped_at: Phase 85 context gathered
+last_updated: "2026-11-21T14:44:02.845Z"
 last_activity: 2026-11-21
+last_activity_desc: v3.3 roadmap written (Phases 85-90)
+state_head: 02940290d89207a8a5eaad9c8bc84fb35b3c4029
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -119,9 +123,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21 — v3.3 roadmap created
-Stopped at: Roadmap written (Phases 85-90), awaiting orchestrator approval gate
-Resume file: None
+Last session: 2026-11-21T14:44:02.819Z
+Stopped at: Phase 85 context gathered
+Resume file: .planning/phases/85-roles-foundation/85-CONTEXT.md
 
 ## Operator Next Steps
 
