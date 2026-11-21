@@ -72,6 +72,13 @@ const env = {
      gate is exercised by await-access.spec.mjs's own dedicated server.
      (Mirror of test/helpers/server.mjs BASE_ENV, Pitfall 5.) */
   WORKSPACE_CREATION: 'true',
+  /* Milestone-close decision (2026-11-21): the suite encodes the pre-super-
+     access tenancy semantics (foreign-slug redirect, promoted-operator
+     onboarding, membership-only switcher). SUPER_ACCESS is strict-token tri-
+     state in server.js — 'false' here closes the synthetic-operator-access
+     door for the whole run, so the specs keep testing the membership-only
+     behavior real deployments get with the default. */
+  SUPER_ACCESS: 'false',
   /* The fixture scheme in helpers/setup.mjs is per-IP throttles dodged by a
      run-unique X-Forwarded-For per account; the server only reads that header
      when TRUST_PROXY is on (production runs behind Traefik). Without it every

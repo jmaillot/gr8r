@@ -121,17 +121,14 @@ for (const lang of ['nl', 'de', 'es']) {
 
       /* A genuinely out-of-domain email: the run-wide env admits only
          @e2e.local, so this submit must hit the DP-1 gate (server.js
-         signupDomainNotAllowed). [2026-11-20 round 4, 78-02] a refused
-         signup no longer returns to the form — the 6-step onboarding
-         wizard interposes (WORKSPACE_CREATION=true in the suite env). The
-         wizard's "Exit setup" (onbExit) lands on the login shell; re-open
-         signup and re-submit the same out-of-domain email — the DP-1
-         refusal then renders on the ferr('email') span, the surface under
-         test. */
-      await page.getByRole('button', { name: cat['page.auth.exitSetup'] }).click();
-      await expect(page.getByRole('button', { name: cat['page.auth.signUp'] })).toBeVisible();
-      await page.getByRole('button', { name: cat['page.auth.signUp'] }).click();
-      await expect(page.getByRole('button', { name: cat['page.auth.createAccount'] })).toBeVisible();
+         signupDomainNotAllowed). [2026-11-21 milestone-close fix] submit
+         directly from the signup form: the client renders a refused
+         signup as the keyed inline ferr('email') span on the SAME form
+         (A.doSignup → S.ui.errors.email → #email-err) — no wizard
+         interposes on a refusal (the wizard is the SUCCESS path:
+         enterNoWorkspace after a created account with no workspace). The
+         84-01 repair's exitSetup detour clicked a button the signup form
+         never renders, hanging 30s per locale. */
       await page.getByLabel(cat['common.fullName']).fill('Refusal Probe');
       await page.getByLabel(cat['page.auth.workEmail']).fill(`rejected-${run}-${lang}@forbidden.example`);
       await page.getByLabel(cat['common.password'], { exact: true }).fill(PASSWORD);
