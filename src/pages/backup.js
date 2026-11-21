@@ -56,7 +56,7 @@ export function pageBackup() {
      the task list once tasks exist (render-only role gating, D-22). */
   const body = tasks.length
     ? `<div class="panel-b faint">${t('page.governance.loading')}</div>`
-    : empty('database-backup', t('page.backup.emptyTitle'), t('page.backup.emptyBody'), '', 'sm', 3);
+    : empty('hard-drive', t('page.backup.emptyTitle'), t('page.backup.emptyBody'), '', 'sm', 3);
 
   return `<div class="page wide">
     <div class="ph"><div><h1>${t('nav.route.backup')}</h1><p>${t('page.backup.subtitle')}</p></div></div>

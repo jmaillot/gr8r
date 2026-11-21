@@ -180,7 +180,7 @@ export function renderSidebar() {
            the instance group (Backup Operators are regular users, not
            operators). UX gate only — the server 403 is the control
            (layout.js:178 doctrine applies verbatim). */ ''}
-      ${api.user?.canBackup || api.user?.canRestore ? sItem('backup', routeName('backup'), 'database-backup') : ''}
+      ${api.user?.canBackup || api.user?.canRestore ? sItem('backup', routeName('backup'), 'hard-drive') : ''}
       <div class="sgroup">
         <div class="sgroup-h">${t('common.workspace')}</div>
         ${sItem('overview', routeName('overview'), 'layout-dashboard')}

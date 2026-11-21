@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 85
-current_phase_name: first of 6
-status: planning
+current_phase_name: Roles Foundation
+status: executing
 stopped_at: Phase 85 context gathered
-last_updated: "2026-11-21T14:44:02.845Z"
+last_updated: "2026-11-21T15:01:53.135Z"
 last_activity: 2026-11-21
-last_activity_desc: v3.3 roadmap written (Phases 85-90)
-state_head: 02940290d89207a8a5eaad9c8bc84fb35b3c4029
+last_activity_desc: Phase 85 execution started
+state_head: aa5a50103c4b5cffee190f4abb25ae0ca4099775
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
+  total_plans: 2
   completed_plans: 0
 ---
 
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 85 — Roles Foundation (not started; roadmap just ratified-in-progress)
+**Current focus:** Phase 85 — Roles Foundation
 
 ## Current Position
 
-Phase: 85 (first of 6)
-Plan: —
-Status: Roadmap created, awaiting approval → /gsd-plan-phase 85
-Last activity: 2026-11-21 — v3.3 roadmap written (Phases 85-90)
+Phase: 85 (Roles Foundation) — EXECUTING
+Plan: 1 of 2
+Status: Executing Phase 85
+Last activity: 2026-11-21 — Phase 85 execution started
 
 ## Milestone v3.3 Phase Map
 
