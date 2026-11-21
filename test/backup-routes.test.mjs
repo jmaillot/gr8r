@@ -15,8 +15,8 @@
      consumes a try even on refusal (D-21); non-holder poll 403 (D-22);
    - the D-13 hygiene wiring: boot sweep clears planted tmp/backup-*
      orphans;
-   - the Phase 85 POST /api/backup/tasks stub still refuses
-     backupNotConfigured (prohibition pin — Phase 87 owns tasks).
+   - the Phase 85 POST /api/backup/tasks stub superseded by Phase 87 (the
+     old backupNotConfigured pin inverted — tasks live since 87-01).
    Pattern: test/instance-roles-api.test.mjs — startServer-per-case with
    the shared harness, withDb for direct row inspection.
    ===================================================================== */
@@ -276,15 +276,19 @@ test('throttle is operator-keyed and consumes a try even on refusal: 5 refused a
   }
 });
 
-/* ---------- the Phase 85 stub prohibition pin ---------- */
+/* ---------- the Phase 85 prohibition pin, superseded by 87-01 ----------
+   Phase 87 owns tasks now: the stub refusal is gone and the same POST
+   creates a real task (pinned end-to-end by test/backup-tasks-api.test.mjs).
+   This cell pins the supersession itself — the old keyed refusal must no
+   longer appear for a valid holder POST. */
 
-test('POST /api/backup/tasks still refuses backupNotConfigured — the run surface did not make tasks live (prohibition)', async () => {
+test('POST /api/backup/tasks no longer refuses backupNotConfigured — Phase 87 made tasks live (supersession)', async () => {
   const server = await startServer({});
   try {
     const holder = await makeBackupOp(server, 'op-stub@test.local');
-    const stub = await holder.post('/api/backup/tasks', { name: 'nightly' });
-    assert.equal(stub.status, 400);
-    assert.equal(stub.data.code, 'backupNotConfigured');
+    const created = await holder.post('/api/backup/tasks', { name: 'nightly', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+    assert.equal(created.status, 200, `expected the 87-01 create path: ${JSON.stringify(created.data)}`);
+    assert.ok(created.data.task?.id);
   } finally {
     await server.stop();
   }

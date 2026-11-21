@@ -411,6 +411,50 @@ export const SQLITE_SCHEMA = `
     granted_at   integer not null
   );
   create unique index if not exists instance_roles_pair on instance_roles(user_id, role);
+  /* BACKUP TASKS (Phase 87, 87-01, BKBCK-02/BKBCK-03): pg twin of server.js
+     SCHEMA — mirror-sync pinned by test/db-adapter.test.mjs. cron is the raw
+     5-field string (D-04 one-way, ratified 2026-11-21); next_run_at is a
+     persisted cache (never re-parsed at tick, D-07 NULL-while-disabled);
+     tz defaults Europe/Paris (no users.tz column — 87-01 checkpoint);
+     retention defaults 7/4/12/5 (D-09). next_run_at/started_at/finished_at
+     registered in PG_EPOCH_COLUMNS below. */
+  create table if not exists backup_tasks (
+    id                  text primary key,
+    name                text not null,
+    scope               text not null default '{}',
+    cron                text not null,
+    tz                  text not null default 'Europe/Paris',
+    enabled             integer not null default 1,
+    retention_daily     integer not null default 7,
+    retention_weekly    integer not null default 4,
+    retention_monthly   integer not null default 12,
+    retention_yearly    integer not null default 5,
+    next_run_at         integer,
+    last_notified_state text,
+    created_at          integer not null,
+    updated_at          integer not null
+  );
+  create index if not exists backup_tasks_name on backup_tasks(name);
+  /* BACKUP RUNS (Phase 87, 87-01): pg twin — task_id NULL = manual Run-now
+     archive outside rotation (D-11, ratified 2026-11-21); CHECK-constrained
+     trigger/status enums; run rows are history and never cascade on task
+     delete ('deleted' status marks rotation-removed rows). */
+  create table if not exists backup_runs (
+    id           text primary key,
+    task_id      text,
+    scope        text not null default '{}',
+    trigger      text not null check (trigger in ('manual','scheduled')),
+    status       text not null check (status in ('running','succeeded','failed','interrupted','skipped_overlap','deleted')),
+    started_at   integer not null,
+    finished_at  integer,
+    duration_ms  integer,
+    size_bytes   integer,
+    sha256       text,
+    filename     text,
+    error        text,
+    created_at   integer not null
+  );
+  create index if not exists backup_runs_task on backup_runs(task_id, created_at);
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);
@@ -429,6 +473,9 @@ const PG_EPOCH_COLUMNS = new Set([
   'used_at',
   'next_attempt_at',
   'delivered_at',
+  'next_run_at',
+  'started_at',
+  'finished_at',
 ]);
 
 export function pgSchemaVariant(schema = SQLITE_SCHEMA) {

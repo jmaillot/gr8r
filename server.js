@@ -84,6 +84,7 @@ import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging } from './export/backup.js';
+import { parseCron, nextRunAt } from './export/cron.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -677,6 +678,67 @@ const SCHEMA = `
     granted_at   integer not null
   );
   create unique index if not exists instance_roles_pair on instance_roles(user_id, role);
+  /* BACKUP TASKS (Phase 87, 87-01, BKBCK-02/BKBCK-03): scheduled backup task
+     definitions. cron is the RAW 5-field string — D-04 (one-way, ratified by
+     the owner at execute-phase 2026-11-21): the stored string is the single
+     source of truth (scheduler, catch-up and future task-config export all
+     parse it); changing representation later requires a data migration.
+     next_run_at is a PERSISTED CACHE computed once per write by
+     export/cron.js nextRunAt() — never re-parsed, never recomputed at tick
+     (roadmap schema decision); NULL while disabled (D-07: a disabled-while-
+     down task must never fire from a stale value — re-enable recomputes from
+     now in the same write). tz defaults to Europe/Paris via resolveTz(null)
+     — the users table has no tz column (verified 87-01 checkpoint); the
+     operator picks explicitly through the form combobox (D-02). Retention
+     columns default 7/4/12/5 (D-09). last_notified_state backs the D-15
+     failure/recovery email transitions. scope is the JSON-serialized
+     {kind, id?} shape the 86-02 runs route already validates.
+     pg twin: db-adapter.mjs SQLITE_SCHEMA (pgSchemaVariant derives the pg
+     DDL — next_run_at/started_at/finished_at are registered in
+     PG_EPOCH_COLUMNS; created_at/updated_at already were). */
+  create table if not exists backup_tasks (
+    id                  text primary key,
+    name                text not null,
+    scope               text not null default '{}',
+    cron                text not null,
+    tz                  text not null default 'Europe/Paris',
+    enabled             integer not null default 1,
+    retention_daily     integer not null default 7,
+    retention_weekly    integer not null default 4,
+    retention_monthly   integer not null default 12,
+    retention_yearly    integer not null default 5,
+    next_run_at         integer,
+    last_notified_state text,
+    created_at          integer not null,
+    updated_at          integer not null
+  );
+  create index if not exists backup_tasks_name on backup_tasks(name);
+  /* BACKUP RUNS (Phase 87, 87-01): per-run history rows — the surface the
+     scheduler, run history and rotation (D-10/D-11/D-12) all build on.
+     task_id NULL = a manual Run-now archive (D-11, ratified 2026-11-21):
+     manual runs stay OUTSIDE rotation; scheduled runs are task-scoped and
+     their filenames carry the task id (backup-task-<taskId>-<ts>.tar.gz,
+     greppable on disk) while manual filenames stay frozen per 86-D-14.
+     status is CHECK-constrained (instance_roles precedent) so a typo can
+     never become a silent state; 'skipped_overlap' records the D-10
+     single-run invariant refusal; 'deleted' marks rotation-removed rows —
+     run rows are history and NEVER cascade on task delete. */
+  create table if not exists backup_runs (
+    id           text primary key,
+    task_id      text,
+    scope        text not null default '{}',
+    trigger      text not null check (trigger in ('manual','scheduled')),
+    status       text not null check (status in ('running','succeeded','failed','interrupted','skipped_overlap','deleted')),
+    started_at   integer not null,
+    finished_at  integer,
+    duration_ms  integer,
+    size_bytes   integer,
+    sha256       text,
+    filename     text,
+    error        text,
+    created_at   integer not null
+  );
+  create index if not exists backup_runs_task on backup_runs(task_id, created_at);
 `;
 
 async function initDb() {
@@ -7752,34 +7814,163 @@ async function handleApi(req, res, url) {
      any task logic exists (Phases 86/87 own the contract). Every request
      re-checks server-side via hasInstanceRole (D-23/T-85-06): the payload
      flags are render-only, never authority. */
+  /* -------------- backup task endpoints (Phase 87, 87-01, BKBCK-02/BKBCK-03) --------------
+     Real task CRUD replacing the Phase 85 stub family. The guard-chain order
+     is copied verbatim from the Phase 86 runs route (never reordered —
+     sameOrigin before body read AND throttle, house rule):
+       sameOrigin → requireUser → throttle → capability gate → body/scope checks.
+     The capability gate sits BEFORE any body probing (T-86-07/T-87-02: no
+     403-vs-400 oracle — a non-holder gets the same keyed refusal for a valid
+     and an invalid body); every mutation and every refusal is keyed AND
+     audited (D-20 funnel shape). Refusals carry the 87-01 keyed vocabulary:
+     backupManageRequired / invalidSchedule / invalidTimezone / invalidScope /
+     invalidRetention / taskNameRequired (+ taskNotFound with PUT/DELETE).
+     POST persists the RAW 5-field cron string (D-04, owner-ratified
+     2026-11-21) and a next_run_at computed by export/cron.js nextRunAt() in
+     the same write. GET keeps the D-24 capability flags beside the list so
+     the client renders role-aware actions from one contract. */
+  const auditBackupTask = async (user, action, targetId, targetName) => {
+    await db.run(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [uid(), user.id, targetId ?? user.id, action, 0, clientIp(req), null, user.name, user.email, targetName ?? user.name, user.email, now()],
+    );
+  };
+  /* D-09: retention buckets are small non-negative ints; omitted → the
+     frozen defaults 7/4/12/5. Anything else refuses keyed invalidRetention. */
+  const BACKUP_RETENTION_DEFAULTS = { daily: 7, weekly: 4, monthly: 12, yearly: 5 };
+  const backupRetentionFrom = value => {
+    const src = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const out = {};
+    for (const key of ['daily', 'weekly', 'monthly', 'yearly']) {
+      const n = src[key];
+      if (n === undefined || n === null) {
+        out[key] = BACKUP_RETENTION_DEFAULTS[key];
+        continue;
+      }
+      if (!Number.isInteger(n) || n < 0 || n > 999) return null;
+      out[key] = n;
+    }
+    return out;
+  };
+  /* T-87-02 scope validation — the same allow-list + existence probe the
+     Phase 86 runs route uses; every failure is ONE keyed refusal. */
+  const backupScopeOk = async scope => {
+    const kind = scope?.kind;
+    const id = typeof scope?.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(scope.id) ? scope.id : null;
+    if (kind === 'instance') return scope?.id === undefined; // the instance always exists — id OMITTED (D-17)
+    if ((kind === 'project' || kind === 'workspace') && id) {
+      if (kind === 'workspace') return !!(await db.get('select id from workspaces where id = ?', [id]));
+      for (const ws of await db.all('select doc from workspaces')) {
+        let doc;
+        try { doc = JSON.parse(ws.doc)?.data ?? {}; } catch { continue; }
+        if ((Array.isArray(doc.projects) ? doc.projects : []).some(p => p?.id === id)) return true;
+      }
+      return false;
+    }
+    return false;
+  };
+  /* A stored task row → API shape (scope parsed back to the object form). */
+  const backupTaskShape = row => {
+    let scope;
+    try { scope = JSON.parse(row.scope); } catch { scope = {}; }
+    return { ...row, scope };
+  };
   if (pathname === '/api/backup/tasks' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = await requireUser(req, res);
     if (!user) return;
     // D-19/D-26: a non-holder deep-linking gets the keyed 403 refusal, not a
-    // silent redirect or an existence oracle.
+    // silent redirect or an existence oracle. Both roles may read.
     if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
       return fail(res, 403, 'backupRoleRequired', 'You need a backup role to see that');
     }
-    // D-24: the stub response carries the capability flags beside the empty
-    // list so Phase 86/87 renders role-aware actions from the same contract.
+    // D-24: the capability flags ride beside the list so Phase 87 renders
+    // role-aware actions from the same contract.
     const canBackup = await hasInstanceRole(user.id, CAP.BACKUP_MANAGE);
     const canRestore = await hasInstanceRole(user.id, CAP.RESTORE_USE);
-    return json(res, 200, { tasks: [], canBackup, canRestore });
+    const rows = await db.all('select * from backup_tasks order by created_at, id');
+    return json(res, 200, { tasks: rows.map(backupTaskShape), canBackup, canRestore });
   }
 
   if (pathname === '/api/backup/tasks' && method === 'POST') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = await requireUser(req, res);
     if (!user) return;
-    // D-19 (open-question 2): task editing is BACKUP_MANAGE-only — a Restore
-    // Operator holds RESTORE_USE, reaches the endpoint, and gets the keyed
-    // localized refusal. The holder path is a stub 400 until Phase 87.
+    // D-21 shape: operator-keyed throttle AFTER sameOrigin+requireUser and
+    // BEFORE the gate checks — a refused attempt consumes a try (T-86-08).
+    if (tooMany(`backuptask|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // D-19: task editing is BACKUP_MANAGE-only — a Restore Operator reaches
+    // the endpoint and gets the keyed localized refusal, audited (D-20).
     if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'backup_task_refused:backupManageRequired');
       return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can edit backup tasks');
     }
-    await readJson(req);
-    return fail(res, 400, 'backupNotConfigured', 'Backup tasks are not configured yet');
+    const body = await readJson(req);
+    /* Body validation — cron/tz/scope/retention each keyed, each refusal
+       audited. Order inside the body checks does not leak (same refusal
+       vocabulary; one key per field kind). */
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 120) {
+      await auditBackupTask(user, 'backup_task_refused:taskNameRequired');
+      return fail(res, 400, 'taskNameRequired', 'Give the backup task a name');
+    }
+    const cron = typeof body?.cron === 'string' ? body.cron.trim() : '';
+    if (!cron || !parseCron(cron)) {
+      await auditBackupTask(user, 'backup_task_refused:invalidSchedule');
+      return fail(res, 400, 'invalidSchedule', 'Invalid schedule — use a 5-field cron expression');
+    }
+    // D-02 (ratified): absent tz → resolveTz(null) → Europe/Paris; a provided
+    // label must resolve through Intl (the same funnel tz.js uses).
+    const tzIn = typeof body?.tz === 'string' ? body.tz.trim() : '';
+    let tz = 'Europe/Paris';
+    if (tzIn) {
+      try {
+        tz = new Intl.DateTimeFormat('en-CA', { timeZone: tzIn }).resolvedOptions().timeZone || 'Europe/Paris';
+      } catch {
+        await auditBackupTask(user, 'backup_task_refused:invalidTimezone');
+        return fail(res, 400, 'invalidTimezone', 'Invalid timezone');
+      }
+    }
+    const scope = body?.scope && typeof body.scope === 'object' && !Array.isArray(body.scope) ? body.scope : null;
+    if (!scope || !(await backupScopeOk(scope))) {
+      await auditBackupTask(user, 'backup_task_refused:invalidScope');
+      return fail(res, 400, 'invalidScope', 'That backup scope does not exist');
+    }
+    const retention = backupRetentionFrom(body?.retention);
+    if (!retention) {
+      await auditBackupTask(user, 'backup_task_refused:invalidRetention');
+      return fail(res, 400, 'invalidRetention', 'Retention must be small non-negative integers');
+    }
+    /* D-04: the raw string is stored verbatim; next_run_at is the persisted
+       cache computed in the SAME write (never re-parsed at tick). */
+    const nextRun = nextRunAt(cron, tz, now());
+    if (!Number.isInteger(nextRun)) {
+      await auditBackupTask(user, 'backup_task_refused:invalidSchedule');
+      return fail(res, 400, 'invalidSchedule', 'Invalid schedule — use a 5-field cron expression');
+    }
+    const task = {
+      id: uid(),
+      name,
+      scope: JSON.stringify(scope),
+      cron,
+      tz,
+      enabled: 1,
+      retention_daily: retention.daily,
+      retention_weekly: retention.weekly,
+      retention_monthly: retention.monthly,
+      retention_yearly: retention.yearly,
+      next_run_at: nextRun,
+      last_notified_state: null,
+      created_at: now(),
+      updated_at: now(),
+    };
+    await db.run(
+      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.last_notified_state, task.created_at, task.updated_at],
+    );
+    await auditBackupTask(user, 'backup_task_created', task.id, task.name);
+    logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
+    return json(res, 200, { task: backupTaskShape(task) });
   }
 
   /* -------------- backup run endpoints (Phase 86, 86-02, BKBCK-01/D-16) --------------
