@@ -5,17 +5,16 @@ milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 87
 current_phase_name: Scheduler, Tasks, Run History & Rotation
 status: planning
-stopped_at: Phase 86 complete, ready to plan Phase 87
-last_updated: "2026-11-21T19:33:17.669Z"
+stopped_at: Phase 87 context gathered
+last_updated: "2026-11-21T19:48:42.745Z"
 last_activity: 2026-11-21
 last_activity_desc: Phase 86 complete, transitioned to Phase 87
-state_head: 264764c6a55291e73035ebd87171df84d68fd476
+state_head: 7eb7ec44f13bf642c06e6c0c3323c500581480d6
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 4
   completed_plans: 4
-  percent: 33
 ---
 
 # Project State
@@ -134,9 +133,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T18:50:08.099Z
-Stopped at: Phase 86 complete, ready to plan Phase 87
-Resume file: None
+Last session: 2026-11-21T19:48:42.620Z
+Stopped at: Phase 87 context gathered
+Resume file: .planning/phases/87-scheduler-tasks-run-history-rotation/87-CONTEXT.md
 
 ## Operator Next Steps
 
