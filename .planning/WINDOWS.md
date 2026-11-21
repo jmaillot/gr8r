@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 9
+open_count: 11
 waived_count: 0
 fixed_count: 0
-total_count: 9
-last_updated: 2026-11-20T18:18:19.689Z
+total_count: 11
+last_updated: 2026-11-21T23:43:30.746Z
 ---
 
 # Broken Windows Ledger
@@ -24,6 +24,8 @@ last_updated: 2026-11-20T18:18:19.689Z
 | 7 | 61 | deviation | src/pages/dashboard.js | 36 | pre-existing Phase 60 lint error: lastRequestedWindow unused (deferred, out of 61-01 scope) | open |  | 2026-11-13T21:32:49.924Z |  |
 | 8 | 61 | deviation | test/dashboard-client.test.mjs | 17 | pre-existing Phase 60 lint error: fileURLToPath unused (deferred, out of 61-01 scope) | open |  | 2026-11-13T21:32:50.162Z |  |
 | 9 | 84 | unrun-verify | src/features/team-pick.js |  | 84-02 task 4 manual browser smoke of both picker surfaces deferred to the phase e2e/verify-work pass; automated coverage = 7 source pins + full unit suite + chunk gate | open |  | 2026-11-20T18:18:19.689Z |  |
+| 10 | 87 | deviation | test/backup-rotation.test.mjs |  | D-16 recovery test asserts via delivery-kick log (test-process DB read-visibility quirk after export snapshot fence; see 87-03-SUMMARY deviations) | open |  | 2026-11-21T23:43:30.530Z |  |
+| 11 | 87 | unrun-verify | test/webhook-events.test.mjs |  | pre-existing due.reminder claim failure (out of 87-03 scope), recorded in deferred-items.md | open |  | 2026-11-21T23:43:30.746Z |  |
 
 ````json
 [
@@ -143,6 +145,32 @@ last_updated: 2026-11-20T18:18:19.689Z
     "recorded_at": "2026-11-20T18:18:19.689Z",
     "resolved_at": null,
     "milestone": "v3.2"
+  },
+  {
+    "id": 10,
+    "kind": "deviation",
+    "phase": "87",
+    "file": "test/backup-rotation.test.mjs",
+    "line": null,
+    "description": "D-16 recovery test asserts via delivery-kick log (test-process DB read-visibility quirk after export snapshot fence; see 87-03-SUMMARY deviations)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-21T23:43:30.530Z",
+    "resolved_at": null,
+    "milestone": "v3.3"
+  },
+  {
+    "id": 11,
+    "kind": "unrun-verify",
+    "phase": "87",
+    "file": "test/webhook-events.test.mjs",
+    "line": null,
+    "description": "pre-existing due.reminder claim failure (out of 87-03 scope), recorded in deferred-items.md",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-21T23:43:30.746Z",
+    "resolved_at": null,
+    "milestone": "v3.3"
   }
 ]
 ````
