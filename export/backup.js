@@ -341,26 +341,34 @@ async function dumpTable(name, read, stagingDir) {
   const hash = crypto.createHash('sha256');
   let rows = 0;
   let cursor = null;
-  for (;;) {
-    const page = cursor === null
-      ? await read(`select * from ${name} order by ${order} limit ?`, [PAGE_SIZE])
-      : await read(
-        `select * from ${name} where (${cols.join(',')}) > (${cols.map(() => '?').join(',')}) order by ${order} limit ?`,
-        [...cursor, PAGE_SIZE],
-      );
-    for (const row of page) {
-      const line = Buffer.from(JSON.stringify(row) + '\n');
-      hash.update(line);
-      await writeChunk(write, line);
-      rows += 1;
-      cursor = cols.map(c => row[c]);
+  // WR-04: the fence can throw mid-pagination (pg client error, rollback,
+  // SQLite snapshot error) — without this guard the write-stream fd leaks
+  // and a later async write error becomes an unhandled 'error' event.
+  try {
+    for (;;) {
+      const page = cursor === null
+        ? await read(`select * from ${name} order by ${order} limit ?`, [PAGE_SIZE])
+        : await read(
+          `select * from ${name} where (${cols.join(',')}) > (${cols.map(() => '?').join(',')}) order by ${order} limit ?`,
+          [...cursor, PAGE_SIZE],
+        );
+      for (const row of page) {
+        const line = Buffer.from(JSON.stringify(row) + '\n');
+        hash.update(line);
+        await writeChunk(write, line);
+        rows += 1;
+        cursor = cols.map(c => row[c]);
+      }
+      if (page.length < PAGE_SIZE) break;
     }
-    if (page.length < PAGE_SIZE) break;
+    await new Promise((resolve, reject) => {
+      write.on('error', reject);
+      write.end(resolve);
+    });
+  } catch (err) {
+    write.destroy();
+    throw err;
   }
-  await new Promise((resolve, reject) => {
-    write.on('error', reject);
-    write.end(resolve);
-  });
   return { path: `${name}.ndjson`, rows, sha256: hash.digest('hex') };
 }
 
