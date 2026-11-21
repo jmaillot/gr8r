@@ -289,3 +289,88 @@ maybe('pg matrix: login_challenges round-trip — facade-level insert/read, no e
     await srv.stop();
   }
 });
+
+/* ==================== Phase 86 (86-01): backup export parity ==================== */
+
+/* BKBCK-01 dual-mirror pin: the SAME deterministic fixture seeded on both
+   engines must produce byte-identical NDJSON dumps — same manifest row
+   counts and per-table sha256 (one row-read code path, only the fence
+   differs: SQLite wal_checkpoint+VACUUM INTO vs pg checked-out client on
+   REPEATABLE READ READ ONLY). Opt-in: skipped, exit 0, without
+   POSTGRES_TEST_URL. Secret hygiene: never prints DB_URL / DSN values. */
+maybe('pg matrix: backup export parity — identical manifest row counts + per-table sha256 across engines', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const backupDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-pg-backup-'));
+  process.env.DATA_DIR = backupDataDir;
+  fs.mkdirSync(path.join(backupDataDir, 'files'), { recursive: true });
+  fs.mkdirSync(path.join(backupDataDir, 'logos'), { recursive: true });
+  fs.writeFileSync(path.join(backupDataDir, 'files', 'bf1'), 'parity blob\n');
+  fs.writeFileSync(path.join(backupDataDir, 'logos', 'bl1'), 'parity logo\n');
+
+  const db = await import('../db-adapter.mjs');
+  const backup = await import('../export/backup.js');
+
+  const NOW = 1700000000000;
+  const DOC = JSON.stringify({
+    data: { files: [{ id: 'bf1', project: 'pb1', name: 'a.txt', ext: 'txt' }], logo: 'bl1' },
+  });
+
+  async function seed() {
+    await db.run(
+      'insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)',
+      ['pu1', 'parity@test.local', 'Parity User', 'x'.repeat(60), NOW],
+    );
+    await db.run(
+      'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)',
+      ['pw1', 'pw1', 'Parity', '#abcdef', DOC, 1, NOW, NOW, 0],
+    );
+    await db.run(
+      'insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)',
+      ['pw1', 'pu1', 'owner', null, 'manual'],
+    );
+  }
+
+  function extractManifest(tarPath) {
+    const into = path.join(backupDataDir, `extract-${path.basename(tarPath, '.tar.gz')}`);
+    fs.mkdirSync(into, { recursive: true });
+    execFileSync('tar', ['xzf', tarPath, '-C', into]);
+    return JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
+  }
+
+  try {
+    // --- pg run ---
+    await dropPgSchema(url);
+    await db.close();
+    await db.connectDb({ dbUrl: url });
+    await db.runSchema(db.SQLITE_SCHEMA);
+    await seed();
+    const pgRun = await backup.runExport({ kind: 'project', id: 'pb1' });
+    assert.equal(pgRun.ok, true, `pg runExport failed: ${pgRun.error}`);
+    const manifestPg = extractManifest(path.join(backupDataDir, 'backups', pgRun.filename));
+    await db.close();
+
+    // --- sqlite run: identical fixture ---
+    await db.connectDb({ dbPath: path.join(backupDataDir, 'sqlite-fixture.db') });
+    await db.runSchema(db.SQLITE_SCHEMA);
+    await seed();
+    const sqRun = await backup.runExport({ kind: 'project', id: 'pb1' });
+    assert.equal(sqRun.ok, true, `sqlite runExport failed: ${sqRun.error}`);
+    const manifestSq = extractManifest(path.join(backupDataDir, 'backups', sqRun.filename));
+    await db.close();
+
+    // --- parity assertions: row counts AND per-table sha256 identical ---
+    assert.deepEqual(
+      manifestSq.tables.map(t => ({ name: t.name, classification: t.classification, rows: t.rows, sha256: t.sha256 })),
+      manifestPg.tables.map(t => ({ name: t.name, classification: t.classification, rows: t.rows, sha256: t.sha256 })),
+      'NDJSON dumps must be byte-identical across engines (row counts + per-table sha256)',
+    );
+    assert.deepEqual(
+      manifestSq.files.map(f => ({ id: f.id, sha256: f.sha256 })),
+      manifestPg.files.map(f => ({ id: f.id, sha256: f.sha256 })),
+    );
+    assert.equal(manifestSq.tables.find(t => t.name === 'memberships').rows, 1, 'composite-keyset table paginated correctly');
+  } finally {
+    await db.close().catch(() => {});
+    fs.rmSync(backupDataDir, { recursive: true, force: true });
+  }
+});

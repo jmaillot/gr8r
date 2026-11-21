@@ -385,8 +385,7 @@ function collectDocFile(record, dirs, stagingDir, filesRootReal) {
   try {
     real = fs.realpathSync(blob);
   } catch (err) {
-    if (err.code === 'ENOENT') return { ...entry, missingBlob: true }; // D-04: record + continue
-    return { ...entry, missingBlob: true };
+    return { ...entry, missingBlob: true }; // D-04: record + continue
   }
   if (!contained(real, filesRootReal)) return { ...entry, pathEscaped: true }; // D-06: skip, never follow
   const staged = path.join(stagingDir, 'files', record.id);
@@ -469,17 +468,20 @@ export async function runExport(scope) {
     fs.mkdirSync(dirs.filesDir, { recursive: true });
     fs.mkdirSync(dirs.logosDir, { recursive: true });
 
-    /* PASS 1 — fence + collect (stage: collecting) */
+    /* PASS 1 — fence + collect (stage: collecting).
+       Rows (incl. doc JSON resolution) run INSIDE the snapshot fence;
+       blob copies run AFTER the fence is released (Pitfall 4: pg snapshot
+       xmin must never be held across filesystem streaming). */
     const tables = [];
+    const candidates = [];
     let files = [];
+    const dirsSnapshot = dirs;
     await withSnapshotReads(stagingDir, async ({ read }) => {
       for (const { name, classification } of TABLES) {
         const dump = await dumpTable(name, read, stagingDir);
         tables.push({ name, classification, ...dump });
       }
       if (scope.kind === 'project' || scope.kind === 'workspace') {
-        const filesRootReal = fs.realpathSync(dirs.filesDir);
-        const logosRootReal = fs.realpathSync(dirs.logosDir);
         for (const ws of await read('select * from workspaces', [])) {
           let doc;
           try { doc = JSON.parse(ws.doc)?.data ?? {}; } catch { continue; }
@@ -488,18 +490,27 @@ export async function runExport(scope) {
           for (const record of doc.files ?? []) {
             if (scope.kind === 'project' && record?.project !== scope.id) continue;
             if (!record?.id) continue;
-            files.push(collectDocFile(record, dirs, stagingDir, filesRootReal));
+            candidates.push({ type: 'file', record });
           }
           if (scope.kind === 'workspace' && doc.logo) {
-            files.push(collectLogo(String(doc.logo), dirs, stagingDir, logosRootReal));
+            candidates.push({ type: 'logo', file: String(doc.logo) });
           }
         }
-      } else if (scope.kind === 'instance') {
-        collectInstanceFiles(dirs, stagingDir, files);
-      } else {
-        throw new Error(`backup: unknown scope kind ${scope.kind}`);
       }
     });
+    // post-fence: blob copies + scope walk (never inside the fence)
+    if (scope.kind === 'instance') {
+      collectInstanceFiles(dirsSnapshot, stagingDir, files);
+    } else if (scope.kind === 'project' || scope.kind === 'workspace') {
+      const filesRootReal = fs.realpathSync(dirs.filesDir);
+      const logosRootReal = fs.realpathSync(dirs.logosDir);
+      for (const candidate of candidates) {
+        if (candidate.type === 'file') files.push(collectDocFile(candidate.record, dirs, stagingDir, filesRootReal));
+        else files.push(collectLogo(candidate.file, dirs, stagingDir, logosRootReal));
+      }
+    } else {
+      throw new Error(`backup: unknown scope kind ${scope.kind}`);
+    }
 
     /* Hash staged files that were copied (D-04/D-06 entries carry no hash) */
     for (const file of files) {
