@@ -5,16 +5,16 @@ milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 87
 current_plan: 3
 status: executing
-stopped_at: Completed 87-01-PLAN.md
-last_updated: "2026-11-21T22:14:58.728Z"
+stopped_at: Completed 87-02-PLAN.md
+last_updated: "2026-11-21T22:35:06.429Z"
 last_activity: 2026-11-21
 last_activity_desc: Phase 87 execution resumed (wave continue)
-state_head: 39ad471b04856e7e28a6c6e2be9482f0f51dc08b
+state_head: 7ef53af58512f08c7acaf7a77a3bd12f6b0f97e3
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -30,7 +30,7 @@ before features.
 ## Current Position
 
 Phase: 87 — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 4
 Status: Ready to execute plan 87-02 (87-01 complete)
 Last activity: 2026-11-21 — 87-01 complete (DDL + cron evaluator + task CRUD)
@@ -89,6 +89,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 86 P86-01 | 22 min | 3 tasks | 4 files |
 | Phase 86 P02 | ~50m | 3 tasks | 15 files |
 | Phase 87 P87-01 | 30m | 4 tasks | 12 files |
+| Phase 87 P87-02 | 38m | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 87]: D-04 one-way raw 5-field cron storage ratified by owner (87-01 checkpoint, 2026-11-21); next_run_at is a persisted cache, never re-parsed at tick
 - [Phase 87]: Backup task identity: backup_runs.task_id NULL = manual Run-now archive outside rotation (D-11); default task tz Europe/Paris via resolveTz(null) — users has no tz column
 - [Phase 87]: 87-01 keyed-refusal collisions resolved: scope refusal is backupInvalidScope (perms key untouched), name refusal reuses generic taskNameRequired, dead backupNotConfigured removed x5
+- [Phase 87]: 87-02 overlap detection maps runExport's synchronous claim refusal (code backupRunInProgress) — the claim is the atomicity point; refused fire records skipped_overlap and never starts a second export
+- [Phase 87]: 87-02 next_run_at recomputes from NOW BEFORE the awaited fire — structural at-most-once catch-up (D-05), concurrent passes/crashes cannot double-fire a window
+- [Phase 87]: 87-02 persisted-run writer seam (setBackupRunWriter) covers both triggers from one seam — manual POST and scheduled fires share the backup_runs lifecycle; history cap = 50 (D-14)
 
 ### Pending Todos
 
@@ -138,8 +142,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T22:14:48.459Z
-Stopped at: Completed 87-01-PLAN.md
+Last session: 2026-11-21T22:34:56.485Z
+Stopped at: Completed 87-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
