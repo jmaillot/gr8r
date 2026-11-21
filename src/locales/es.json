@@ -2062,6 +2062,7 @@
   "pwa.install.hint": "Instala la aplicación para un acceso con un solo toque",
   "pwa.install.iosHint": "Compartir → Añadir a la pantalla de inicio",
   "nav.route.governance": "Gobernanza",
+  "nav.route.backup": "Copia de seguridad",
   "common.instance": "Instancia",
   "page.governance.subtitle": "Cada espacio de trabajo de esta instancia. Solo tú puedes ver esta página.",
   "page.governance.wsTitle": "Espacios de trabajo",
@@ -2121,5 +2122,10 @@
   "toast.governanceUnarchived": "Espacio de trabajo desarchivado.",
   "toast.governanceDeleted": "Espacio de trabajo eliminado.",
   "toast.governanceRenamed": "Espacio de trabajo renombrado.",
-  "page.governance.open": "Abrir"
+  "page.governance.open": "Abrir",
+  "page.backup.subtitle": "Copias de seguridad y restauraciones de la instancia.",
+  "page.backup.emptyTitle": "Aún no hay tareas de copia de seguridad",
+  "page.backup.emptyBody": "La copia de seguridad aún no está configurada. Las tareas aparecerán aquí cuando el operador de la instancia las cree.",
+  "page.backup.flagBackup": "Operador de copias",
+  "page.backup.flagRestore": "Operador de restauración"
 }

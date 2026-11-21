@@ -2062,6 +2062,7 @@
   "pwa.install.hint": "Installeer de app voor toegang met één tik",
   "pwa.install.iosHint": "Deel → Zet op beginscherm",
   "nav.route.governance": "Bestuur",
+  "nav.route.backup": "Back-up",
   "common.instance": "Instantie",
   "page.governance.subtitle": "Elke workspace op deze instantie. Alleen jij kunt deze pagina zien.",
   "page.governance.wsTitle": "Workspaces",
@@ -2121,5 +2122,10 @@
   "toast.governanceUnarchived": "Workspace gede-archiveerd.",
   "toast.governanceDeleted": "Workspace verwijderd.",
   "toast.governanceRenamed": "Workspace hernoemd.",
-  "page.governance.open": "Openen"
+  "page.governance.open": "Openen",
+  "page.backup.subtitle": "Back-ups en herstel voor de instantie.",
+  "page.backup.emptyTitle": "Nog geen back-uptaken",
+  "page.backup.emptyBody": "Back-up is nog niet geconfigureerd. Back-uptaken verschijnen hier zodra de instantiebeheerder ze aanmaakt.",
+  "page.backup.flagBackup": "Backupoperator",
+  "page.backup.flagRestore": "Hersteloperator"
 }

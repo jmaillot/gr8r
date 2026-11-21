@@ -2062,6 +2062,7 @@
   "pwa.install.hint": "Install the app for one-tap access",
   "pwa.install.iosHint": "Share → Add to Home Screen",
   "nav.route.governance": "Governance",
+  "nav.route.backup": "Backup",
   "common.instance": "Instance",
   "page.governance.subtitle": "Every workspace on this instance. Only you can see this page.",
   "page.governance.wsTitle": "Workspaces",
@@ -2121,5 +2122,10 @@
   "toast.governanceUnarchived": "Workspace unarchived.",
   "toast.governanceDeleted": "Workspace deleted.",
   "toast.governanceRenamed": "Workspace renamed.",
-  "page.governance.open": "Open"
+  "page.governance.open": "Open",
+  "page.backup.subtitle": "Instance backups and restores.",
+  "page.backup.emptyTitle": "No backup tasks yet",
+  "page.backup.emptyBody": "Backup isn't configured yet. Backup tasks will appear here once your instance operator creates them.",
+  "page.backup.flagBackup": "Backup operator",
+  "page.backup.flagRestore": "Restore operator"
 }
