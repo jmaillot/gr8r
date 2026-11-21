@@ -63,9 +63,10 @@ Plans:
 4. Memory stays bounded (~65 MiB) regardless of archive size via the staged temp-file streaming pipeline, with atomic rename on completion.
 5. Research flags to resolve at plan time (not here): ustar size math confirmation; file-id→workspace/project mapping existence; SIGTERM/crash hygiene sweep of DATA_DIR/tmp/backup-*.
 
-**Plans**: 2 plans
-- [ ] 86-01-PLAN.md — Export pipeline core: ustar writer, two-pass staged pipeline, scope containment, manifest + self-verify, dual-engine fences
+**Plans**: 1/2 plans executed
+- [x] 86-01-PLAN.md — Export pipeline core: ustar writer, two-pass staged pipeline, scope containment, manifest + self-verify, dual-engine fences
 - [ ] 86-02-PLAN.md — /api/backup/runs route pair + Backup page Run now card/progress (frozen API surface, refusals, audit, throttle)
+
 **Cross-phase decisions that freeze here**: archive format ("gr8r backup v1" container, manifest entry 0), manifest schema + entity addressability, table classification (data vs operational), checksum canonical statement (sha256 of final destination bytes, computed once at export).
 **UI hint**: yes
 
@@ -137,7 +138,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 85. Roles Foundation | 2/2 | Complete    | 2026-11-21 |
-| 86. Export Core ("gr8r backup v1") | 0/? | Not started | - |
+| 86. Export Core ("gr8r backup v1") | 1/2 | In Progress|  |
 | 87. Scheduler, Tasks, Run History & Rotation | 0/? | Not started | - |
 | 88. S3 Destination | 0/? | Not started | - |
 | 89. Restore | 0/? | Not started | - |

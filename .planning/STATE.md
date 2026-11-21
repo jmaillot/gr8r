@@ -4,17 +4,17 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 86
 current_phase_name: "Export Core (\"gr8r backup v1\")"
-status: planning
-stopped_at: Phase 86 context gathered
-last_updated: "2026-11-21T16:52:56.945Z"
+status: executing
+stopped_at: Completed 86-01-PLAN.md
+last_updated: "2026-11-21T17:31:49.513Z"
 last_activity: 2026-11-21
-last_activity_desc: Phase 85 complete, transitioned to Phase 86
-state_head: 1dc7ac9dd88495f1bab531c5765f43f902b71a9f
+last_activity_desc: Phase 86 execution started
+state_head: 4c2add5c9b703bb6dc89cc7465f24002d0286f93
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 85 — Roles Foundation
+**Current focus:** Phase 86 — Export Core ("gr8r backup v1")
 
 ## Current Position
 
-Phase: 86 — Export Core ("gr8r backup v1")
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-21 — Phase 85 complete, transitioned to Phase 86
+Phase: 86 (Export Core ("gr8r backup v1")) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-11-21 — Phase 86 execution started
 
 ## Milestone v3.3 Phase Map
 
@@ -81,6 +81,11 @@ Research flags carried into planning (do not resolve at roadmap level):
 | 90 | 0 | - | - |
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 86 P86-01 | 22 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -102,6 +107,8 @@ Owner-ratified 2026-11-21 (REQUIREMENTS.md D-33-1..12, binding):
 - D-33-12 anti-features out of scope: incremental/dedup, encryption at rest, per-item restore UI, dry-run, success emails, multi-destination tasks, SMB/FTP, live-restore browse
 
 Cross-phase decisions that freeze in Phase 86: archive format, manifest schema + entity addressability, data-vs-operational table classification, checksum canonical statement (sha256 of final destination bytes, computed once at export).
+- [Phase 86]: gr8r backup v1 export pipeline frozen: manifest formatVersion 1 entry 0, 22 classification-tagged tables, flat files/<id> archive paths, whole-archive sha256 in status payload + .sha256 sidecar (86-01) — Freezes the archive format consumed by Phases 87/88/89; ratified plan-time decisions (ship-all tables, flat paths, checksum canonical statement)
+- [Phase 86]: db-adapter pgPoolRef() added as the sanctioned read-only pool seam for the export fence; blob copies run after fence release (Pitfall 4) — pg fence needs a checked-out client without exposing the pool; snapshot xmin must never span filesystem streaming
 
 ### Pending Todos
 
@@ -123,9 +130,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T16:52:56.902Z
-Stopped at: Phase 86 context gathered
-Resume file: .planning/phases/86-export-core-gr8r-backup-v1/86-CONTEXT.md
+Last session: 2026-11-21T17:31:40.867Z
+Stopped at: Completed 86-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
