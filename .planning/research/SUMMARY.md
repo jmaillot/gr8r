@@ -54,7 +54,7 @@ Reuse the v3.0/v3.2 house recipe verbatim — nothing new needed except the arch
 **Major components:**
 1. **`backup.js` (NEW pure fence, root, sibling of groups.js)** — cron math, GFS rotation math, manifest schema + row→NDJSON serializer, restore-plan resolver, import-as-new naming, all refusal funnels. No fs/network/env/db — injected deps, zero-boot unit-testable. **`s3-dest.js`** separate fence (signing math testable without fs).
 2. **server.js additions** — dual-mirror schema (instance_roles, instance_role_members, backup_tasks, backup_runs, backup_run_claims + PG_EPOCH_COLUMNS + pin test copied from groups-core), 60 s reconcile-from-DB scheduler tick (house interval rules: try/catch + .catch + .unref), claim ledger (`reminders_sent` pattern) for exactly-once, per-task overlap mutex, role-gated `/api/governance/*` route family.
-3. **UI** — Instance Roles tab in governance.js; new lazy chunks `src/pages/backup.js` and `src/pages/restore.js` under the 500 kB gate; 5-locale keys same-commit; Lucide icons.
+3. **UI** — Instance Roles tab in governance.js; new lazy chunks for the Backup and Restore pages (future files, created in later phases — not research artifacts) under the 500 kB gate; 5-locale keys same-commit; Lucide icons.
 
 **Restore data-flow doctrine:** reuse creation paths, never hand-rolled reinsertion — import-as-new goes through the existing workspace-creation path and `mergeClientDoc` doc-splice; overwrite = one `begin immediate` transaction after the pre-restore snapshot (which rides the SAME `buildArchive()` core, `trigger='pre_restore'`). The existing `--backup` CLI stays as a distinct dialect-bound feature, documented as such.
 
