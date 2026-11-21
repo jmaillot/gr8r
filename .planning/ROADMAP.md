@@ -82,8 +82,13 @@ Plans:
 4. Every run (manual or scheduled) is recorded with status, trigger, duration, size, error and checksum in a history the Backup Operator can consult, with a Run now action per task.
 5. A failure email is sent only on failure-state transitions (last_notified_state on the task row) to Super Admins + Backup Operators via email_outbox — never per-run success emails.
 
-**Plans**: TBD
-**Gaps for discuss-phase**: GFS namespace semantics (per-task prefix vs shared — recommend per-task; confirm at plan).
+**Plans**: 4 plans
+
+Plans:
+- [ ] 87-01-PLAN.md — Schema + cron evaluator + task CRUD API (D-04 one-way checkpoint, keyed refusals, Wave-0 tests)
+- [ ] 87-02-PLAN.md — Scheduler sweep: at-most-once catch-up, skipped_overlap, boot stale-row sweep, run-writer seam, history endpoint
+- [ ] 87-03-PLAN.md — GFS rotation (exactly-one-bucket, newest-ID exclusion, refuse-to-empty, audited deletes) + failure/recovery transition emails
+- [ ] 87-04-PLAN.md — Backup page UI: schedule builder + tz combobox + history card + task actions (render-only, 5-locale parity)
 **Schema decisions landing here**: `tz` column, `last_notified_state`, `next_run_at` persisted (never re-parsed at tick), destination_cfg = config-not-credentials.
 **UI hint**: yes
 
