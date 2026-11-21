@@ -9768,6 +9768,9 @@ async function main() {
     /* Phase 78 (WSG-03, D-11 style): one grep-able line answering how the
        creation gate resolved — docker logs answers "who can create". */
     logInfo(`workspace creation: ${WORKSPACE_CREATION ? 'open (any authenticated user)' : 'closed (instance operators only)'}`);
+    /* [2026-11-21] one grep-able line for the super-access gate — same
+       WSG-03 rationale: docker logs answers "can the admin enter spaces". */
+    logInfo(`super access: ${SUPER_ACCESS ? 'on (admin enters any workspace owner-like)' : 'off (governance actions only)'}`);
     /* Phase 80 (GM-01, D-82-6 boot half): one grep-able line answering how
        much group-mapping config exists — docker logs answers "is group
        mapping in use". Zero rows → exactly this ONE line and no
