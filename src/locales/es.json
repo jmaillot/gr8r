@@ -2143,6 +2143,9 @@
   "page.governance.rolesGrantTitle": "Conceder un rol de instancia",
   "page.governance.rolesModalHint": "Elige un usuario, selecciona un rol y confirma.",
   "page.governance.rolesPickRole": "Rol",
+  "page.governance.rolesRecentTitle": "Actividad reciente",
+  "page.governance.rolesVerbGranted": "Concedido",
+  "page.governance.rolesVerbRevoked": "Revocado",
   "toast.governanceRoleGranted": "Rol concedido.",
   "toast.governanceRoleRevoked": "Rol revocado."
 }

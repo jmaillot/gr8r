@@ -157,7 +157,7 @@ test('grant writes the instance_roles row (granted_by/granted_at) and the audit_
 
     const audits = auditRows(server);
     assert.equal(audits.length, 1, 'exactly one audit row for the grant (BKROLE-03)');
-    assert.equal(audits[0].action, 'instance_role_granted');
+    assert.equal(audits[0].action, 'instance_role_granted:restore_operator');
     assert.equal(audits[0].actor_id, userIdByEmail(server, ADMIN.email));
     assert.equal(audits[0].target_id, granteeId);
     assert.equal(audits[0].target_email, 'grantee@test.local');
@@ -267,7 +267,7 @@ test('revoke: DELETE removes the row and writes the instance_role_revoked audit 
     assert.equal(remaining[0].user_id, userIdByEmail(server, 'backupop@test.local'));
     const audits = auditRows(server);
     assert.equal(audits.length, 3, 'two grants + one revoke audit row');
-    assert.equal(audits[2].action, 'instance_role_revoked');
+    assert.equal(audits[2].action, 'instance_role_revoked:restore_operator');
     assert.equal(audits[2].target_id, granteeId);
 
     const gone = await operator.del(`/api/auth/operator/instance-roles/${row.id}`);

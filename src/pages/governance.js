@@ -207,7 +207,23 @@ export function rolesCard() {
     ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColRole')}</th><th style="text-align:left">${t('page.governance.rolesColGrantedBy')}</th><th style="text-align:left">${t('page.governance.rolesColGranted')}</th><th></th></tr></thead><tbody>${rows.map(row).join('')}</tbody></table>`
     : /* D-34: the standard governance empty box — the Grant button front and center. */
       empty('users', t('page.governance.rolesEmptyTitle'), t('page.governance.rolesEmptyBody'), `<div class="row" style="justify-content:center;margin-top:10px">${grantBtn}</div>`, 'sm', 3);
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.rolesTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.governance.rolesLead')}</p>${rows.length ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div></div>`;
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.rolesTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.governance.rolesLead')}</p>${rows.length ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div>${recentHtml(rows.length)}</div>`;
+}
+
+/* D-32: the recent-activity trail — rendered ONLY from the server-supplied
+   `recent` payload (the append-only audit_log, newest first, capped at 8),
+   never reconstructed client-side. Bounded like the dead-mappings trail
+   (govDeadCard): 8 entries max, no pagination. A missing trail renders
+   nothing — no skeleton, no fake rows (honest nulls, D-34 doctrine). */
+const roleVerb = a => t(a === 'instance_role_granted' ? 'page.governance.rolesVerbGranted' : 'page.governance.rolesVerbRevoked');
+function recentHtml(hasRows) {
+  const recent = S.ui.govRolesRecent;
+  if (!hasRows || !Array.isArray(recent) || !recent.length) return '';
+  return `<div style="margin-top:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesRecentTitle')}</div>${recent
+    .map(
+      a => `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(roleVerb(a.action))}</span><span class="trunc">${esc(a.targetName || '—')}</span><span class="faint trunc">${esc(a.actorName || '—')}</span><span class="faint">${esc(ago(a.createdAt))}</span></div></div></div>`,
+    )
+    .join('')}</div>`;
 }
 
 /* =====================================================================

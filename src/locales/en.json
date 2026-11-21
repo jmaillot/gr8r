@@ -2143,6 +2143,9 @@
   "page.governance.rolesGrantTitle": "Grant an instance role",
   "page.governance.rolesModalHint": "Pick a user, choose a role, then confirm.",
   "page.governance.rolesPickRole": "Role",
+  "page.governance.rolesRecentTitle": "Recent activity",
+  "page.governance.rolesVerbGranted": "Granted",
+  "page.governance.rolesVerbRevoked": "Revoked",
   "toast.governanceRoleGranted": "Role granted.",
   "toast.governanceRoleRevoked": "Role revoked."
 }
