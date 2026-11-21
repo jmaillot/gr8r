@@ -32,6 +32,13 @@ function logLine(level, msg) {
 export let backendKind = null; // 'sqlite' | 'pg' once connectDb has run (live binding)
 let sqlite = null; // raw DatabaseSync handle (SQLite backend)
 let pool = null; // pg Pool (pg backend)
+/* Phase 86 (BKBCK-01): the backup exporter's snapshot fence checks out a
+   dedicated REPEATABLE READ READ ONLY client (db-adapter.mjs pgTx pattern,
+   never pool.query('BEGIN')). The pool itself stays module-private; this
+   accessor is the sanctioned read-only seam. Null until pg connects. */
+export function pgPoolRef() {
+  return pool;
+}
 
 /* ---- SQL rewrite layer (D-10) — pure, literal-aware, unit-pinned ------
    Every rewrite is a mechanical SQL-TEXT transform of an already
