@@ -50,6 +50,9 @@ import { closePop, openPop, tgt } from '../overlays/popovers.js';
 import { palServerSearch } from '../overlays/palette.js'; // Phase 58 D-01: debounced server search behind the palette input
 import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
+/* 87-04 (D-03): the task form's tz default resolves through the SHARED
+   settings.js tzPreselect — one timezone defaulting rule, never a second. */
+import { tzPreselect } from '../pages/settings.js';
 /* [Phase 57-03 Rule 3] buildExportModel lives in a LAZY chunk (DELIV-02
    index gate): A.exportOpen loads it before the modal opens and stashes the
    module on S.ui.expMod; the submit path awaits the same import. */
@@ -3548,6 +3551,17 @@ IN.langSel = async el => {
    ===================================================================== */
 IN.tzSel = el => {
   if (el.dataset.v) {
+    /* 87-04 (D-03): when the Backup task form is staged, the combobox on
+       screen is the FORM's (routes are exclusive — one tz picker rendered at
+       a time), so a selection stages into form.tz instead of the member
+       profile. The picker itself is the reused Phase 34 component. */
+    if (S.ui.backupTaskForm) {
+      S.ui.backupTaskForm.tz = el.dataset.v;
+      S.ui.backupTaskForm.tzDirty = true;
+      S.ui.tzPick = { q: '', hl: 0, v: el.dataset.v, open: false };
+      render();
+      return;
+    }
     const m = me();
     if (!m || !S.data.members.some(x => x.id === m.id)) return;
     m.tz = el.dataset.v;
@@ -4937,21 +4951,75 @@ A.backupTaskSave = async () => {
   if (!name) return toast(t('err.taskNameRequired'), { kind: 'err' });
   if (form.scopeKind === 'project' && !form.scopeId) return toast(t('err.backupPickProject'), { kind: 'err' });
   const scope = form.scopeKind === 'instance' ? { kind: 'instance' } : { kind: form.scopeKind, id: form.scopeId };
-  /* D-04: the serialized raw string rides the write ONLY when the operator
-     touched the builder — the server keeps the stored cron otherwise. */
-  const cron = form.cronDirty ? cronFromForm(form) : undefined;
-  if (form.cronDirty && !cron) return toast(t('err.invalidSchedule'), { kind: 'err' });
+  /* D-04: on CREATE the serialized raw string always rides the write (there
+     is no stored cron to keep); on EDIT only when the operator touched the
+     builder — the server keeps the stored cron otherwise. */
+  const cron = form.editing && !form.cronDirty ? undefined : cronFromForm(form);
+  if (cron === '') return toast(t('err.invalidSchedule'), { kind: 'err' });
   const body = { name, scope };
   if (cron !== undefined) body.cron = cron;
+  /* D-02: tz always resolved client-side through the shared tzPreselect
+     (browser/list default), so the displayed combobox value and the stored
+     tz can never diverge. */
+  body.tz = form.tz || tzPreselect(form.tz);
   const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
     return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
   }
   S.ui.backupTaskForm = null;
+  S.ui.tzPick = null;
   toast(t(form.editing ? 'page.backup.taskUpdated' : 'page.backup.taskSaved'), { ms: 1500 });
   render();
   await refreshBackupTasks();
+};
+/* Toggle (D-07): the server recomputes next_run_at in the SAME write — the
+   client only refills. No client cron math. */
+A.backupTaskToggle = async el => {
+  const task = (S.ui.backupTasks?.tasks || []).find(x => x?.id === el.dataset.id);
+  if (!task) return;
+  const res = await api.backupTaskToggle(task.id, !task.enabled);
+  if (!res.ok) {
+    if (res.status === 401) return;
+    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  await refreshBackupTasks();
+};
+A.backupTaskDelete = el => {
+  const task = (S.ui.backupTasks?.tasks || []).find(x => x?.id === el.dataset.id);
+  if (!task) return;
+  confirmDlg({
+    title: t('page.backup.taskDelete'),
+    body: `<b>${esc(task.name)}</b> — ${t('page.backup.taskDeleteBody')}`,
+    ok: t('page.backup.taskDelete'),
+    danger: true,
+    run: async () => {
+      const res = await api.backupTaskDelete(task.id);
+      if (!res.ok) {
+        if (res.status === 401) return;
+        return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+      }
+      toast(t('page.backup.taskDeleted'), { ms: 1500 });
+      if (S.ui.backupTaskForm?.editing === task.id) S.ui.backupTaskForm = null;
+      render();
+      await refreshBackupTasks();
+    },
+  });
+};
+/* Run now for a task: the EXISTING Phase 86 run endpoint (POST /api/backup/
+   runs) with the task's own scope — manual trigger semantics, same refusal
+   toasts (backupRunInProgress / backupManageRequired / tooManyAttempts). */
+A.backupTaskRunNow = async el => {
+  const task = (S.ui.backupTasks?.tasks || []).find(x => x?.id === el.dataset.id);
+  if (!task || !task.scope) return;
+  const res = await api.backupRun(task.scope);
+  if (!res.ok) {
+    if (res.status === 401) return;
+    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.backupPending = true;
+  backupStartPolling();
+  render();
 };
 
 /* =====================================================================

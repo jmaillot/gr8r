@@ -209,10 +209,13 @@ export function tzPreselect(stored) {
   return browser && TIMEZONES.some(z => z.id === browser) ? browser : 'Europe/Paris';
 }
 
-export function tzCombobox() {
+export function tzCombobox(storedOverride) {
   /* D-09: the stored value read here is the member profile's tz (me()), with
-     the legacy blob pref (P.tz) as a degrade-without-loss fallback. */
-  const stored = me()?.tz || S.prefs.tz || '';
+     the legacy blob pref (P.tz) as a degrade-without-loss fallback. 87-04
+     (D-03): the Backup task form embeds THIS combobox — never a second
+     picker — passing the staged form tz as an optional override so the
+     preselect mirrors the task being edited (empty/omitted → profile). */
+  const stored = typeof storedOverride === 'string' && storedOverride.trim() ? storedOverride : me()?.tz || S.prefs.tz || '';
   const sel = tzPreselect(stored);
   /* The option list only exists while the picker is open (UAT follow-up:
      after a validated selection the list stays closed, so the page below it

@@ -37,7 +37,7 @@ test('the task card renders payload fields through esc() — render-only, no cli
   assert.match(pagesSrc, /esc\(task\.name\)/);
   assert.match(pagesSrc, /esc\(task\.cron\)/, 'the stored cron renders as TEXT (payload verbatim)');
   assert.match(pagesSrc, /esc\(task\.tz\)/);
-  assert.match(pagesSrc, /const taskCard = task =>/, 'the task card exists');
+  assert.match(pagesSrc, /const taskCard = \(task, manage\) =>/, 'the task card exists');
   /* Pitfall 6 / no-second-parser: the page never evaluates cron client-side. */
   assert.ok(!/\bnextRunAt\b/.test(pagesSrc), 'no nextRunAt call under the page (client cron math forbidden)');
   assert.ok(!/\bparseCron\b/.test(pagesSrc), 'no parseCron call under the page');
@@ -63,4 +63,27 @@ test('D-01: no free-text cron input exists in the page source (pinned from the t
   for (const f of ['minute', 'hour', 'dom', 'mon', 'dow']) {
     assert.match(pagesSrc, new RegExp(`fieldSel\\(form, '${f}'`), `the ${f} per-field dropdown is wired through fieldSel`);
   }
+});
+
+test('D-03: the tz picker is the reused settings combobox — never a second picker', () => {
+  assert.match(pagesSrc, /import \{ tzCombobox, tzPreselect \} from '\.\/settings\.js';/, 'backup.js imports the Phase 34 combobox');
+  assert.match(pagesSrc, /tzCombobox\(form\.tz\)/, 'the form embeds the shared component');
+  /* The selection stages into the form (backup context branch) — the member
+     profile save path only runs when the backup form is NOT staged. */
+  assert.match(actionsSrc, /if \(S\.ui\.backupTaskForm\) \{[\s\S]*?backupTaskForm\.tz = el\.dataset\.v/, 'IN.tzSel routes form-context selections into S.ui.backupTaskForm.tz');
+  assert.match(actionsSrc, /import \{ tzPreselect \} from '\.\.\/pages\/settings\.js';/, 'actions.js resolves the tz default through the shared tzPreselect');
+  /* The settings combobox takes the override parameter (backward compatible). */
+  const settingsSrc = read('src/pages/settings.js');
+  assert.match(settingsSrc, /export function tzCombobox\(storedOverride\)/, 'tzCombobox accepts the staged-form override');
+});
+
+test('toggle / delete / Run-now handlers exist and refill through the fill loop', () => {
+  for (const name of ['backupTaskToggle', 'backupTaskDelete', 'backupTaskRunNow']) {
+    assert.match(actionsSrc, new RegExp(`A\\.${name} =`), `A.${name} exists`);
+  }
+  assert.match(actionsSrc, /api\.backupTaskToggle\(/, 'toggle rides the partial-PUT api method');
+  assert.match(actionsSrc, /api\.backupTaskDelete\(/, 'delete rides the DELETE api method');
+  assert.match(actionsSrc, /api\.backupRun\(task\.scope\)/, 'per-task Run now reuses the existing Phase 86 run endpoint with the task scope');
+  const toggleBody = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskToggle ='));
+  assert.ok(toggleBody.slice(0, 700).includes('refreshBackupTasks'), 'toggle refills via refreshBackupTasks (server owns next_run_at)');
 });

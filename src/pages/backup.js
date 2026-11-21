@@ -31,9 +31,10 @@
 import { ic } from '../core/icons.js';
 import { api } from '../core/api.js';
 import { S } from '../core/store.js';
-import { t } from '../core/i18n.js';
+import { t, getLocale } from '../core/i18n.js';
 import { esc, fmtDate } from '../core/utils.js';
 import { empty } from '../ui/helpers.js';
+import { tzCombobox, tzPreselect } from './settings.js';
 import { refreshBackupTasks, backupPollTick, backupPollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
@@ -106,8 +107,10 @@ const runNowCard = flags => {
    from the selections, never a computed timestamp preview (Pitfall 6). */
 
 /* Per-task card: the payload row verbatim (name, scope, enabled, schedule,
-   tz, retention, next_run_at) — esc() on every interpolated payload field. */
-const taskCard = task => {
+   tz, retention, next_run_at) — esc() on every interpolated payload field.
+   Operator actions (toggle / delete / Run now) render only when the payload's
+   canBackup flag is true — verbatim chrome, never recomputed client-side. */
+const taskCard = (task, manage) => {
   const scope = task.scope && typeof task.scope === 'object' ? task.scope : {};
   const scopeLabel = scope.kind === 'project' ? t('page.backup.scopeProject') : scope.kind === 'workspace' ? t('page.backup.scopeWorkspace') : t('page.backup.scopeInstance');
   const scopeName =
@@ -118,6 +121,13 @@ const taskCard = task => {
         : '';
   const nextRunMs = Number(task.next_run_at);
   const nextRun = Number.isFinite(nextRunMs) && nextRunMs > 0 ? fmtDate(new Date(nextRunMs).toISOString()) : '—';
+  const actions = manage
+    ? `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" data-a="backupTaskToggle" data-id="${esc(task.id)}">${task.enabled ? t('page.backup.taskDisable') : t('page.backup.taskEnable')}</button>
+        <button class="btn btn-sm" data-a="backupTaskRunNow" data-id="${esc(task.id)}">${ic('play', 13)}${t('page.backup.taskRunNow')}</button>
+        <button class="btn btn-sm btn-danger" data-a="backupTaskDelete" data-id="${esc(task.id)}">${ic('trash', 13)}${t('page.backup.taskDelete')}</button>
+      </div>`
+    : '';
   return `<div class="panel" style="margin-top:12px"><div class="panel-b">
     <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
       <strong>${esc(task.name)}</strong>
@@ -130,6 +140,7 @@ const taskCard = task => {
       <span class="faint">${t('page.backup.retentionLabel')}: <span class="mono">${esc(String(task.retention_daily))}/${esc(String(task.retention_weekly))}/${esc(String(task.retention_monthly))}/${esc(String(task.retention_yearly))}</span></span>
       <span class="faint">${t('page.backup.nextRunLabel')}: <span class="mono">${esc(nextRun)}</span></span>
     </div>
+    ${actions}
   </div></div>`;
 };
 
@@ -150,6 +161,19 @@ const taskFormCard = () => {
   const form = S.ui.backupTaskForm;
   if (!form) return '';
   const projects = Array.isArray(S.data.projects) ? S.data.projects : [];
+  const pad2 = n => String(n).padStart(2, '0');
+  const time = `${pad2(form.fields.hour)}:${pad2(form.fields.minute)}`;
+  /* Human-readable schedule summary — TEXT derived from the selections only
+     (no computed timestamp preview, Pitfall 6; no client cron evaluation). */
+  const dayName = dow => { try { return new Intl.DateTimeFormat(getLocale(), { weekday: 'long' }).format(new Date(2024, 0, 7 + Number(dow) % 7)); } catch { return dow; } };
+  const summary =
+    form.preset === 'daily'
+      ? t('page.backup.summaryDaily', { time: time })
+      : form.preset === 'weekly'
+        ? t('page.backup.summaryWeekly', { day: dayName(form.fields.dow), time: time })
+        : form.preset === 'monthly'
+          ? t('page.backup.summaryMonthly', { dom: form.fields.dom, time: time })
+          : t('page.backup.summaryCustom', { cron: `${form.fields.minute} ${form.fields.hour} ${form.fields.dom} ${form.fields.mon} ${form.fields.dow}` });
   const presetOpt = (value, label) => `<option value="${value}"${form.preset === value ? ' selected' : ''}>${t(label)}</option>`;
   /* Which per-field dropdowns the current preset reveals (D-01). */
   const show = {
@@ -185,6 +209,10 @@ const taskFormCard = () => {
       ${show.mon ? `<div class="field"><label class="label">${t('page.backup.fieldMonth')}</label>${fieldSel(form, 'mon', 'page.backup.fieldMonth', 1, 12, true)}</div>` : ''}
       ${show.dow ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfWeek')}</label>${fieldSel(form, 'dow', 'page.backup.fieldDayOfWeek', 0, 6, true)}</div>` : ''}
     </div>
+    <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
+      <div class="field" style="min-width:260px;max-width:340px"><label class="label">${t('page.backup.tzLabel')}</label>${tzCombobox(form.tz)}</div>
+    </div>
+    <div class="hint" style="margin-top:8px">${t('page.backup.scheduleSummaryPrefix')}: ${esc(summary)}</div>
     <div class="row" style="gap:8px;margin-top:10px">
       <button class="btn btn-primary" data-a="backupTaskSave">${ic('check', 14)}${t('page.backup.taskSaveAction')}</button>
       <button class="btn" data-a="backupTaskCancel">${t('page.backup.taskCancelAction')}</button>
@@ -220,7 +248,7 @@ export function pageBackup() {
   /* 87-04: the Phase 87 task console — the task list (payload rows verbatim)
      beside the 86-02 Run now card, with the builder form when staged open. */
   const body = tasks.length
-    ? tasks.map(taskCard).join('')
+    ? tasks.map(task => taskCard(task, flags.canBackup)).join('')
     : empty('hard-drive', t('page.backup.emptyTitle'), t('page.backup.emptyBody'), '', 'sm', 3);
 
   return `<div class="page wide">
