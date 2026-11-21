@@ -83,7 +83,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, sweepStaleBackupStaging } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging } from './export/backup.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -10156,16 +10156,14 @@ async function main() {
 
   const shutdown = signal => {
     logInfo(`${signal} received, shutting down`);
-    /* D-13 (86-02): an active export run is marked failed and its staging is
-       best-effort removed here — the boot sweep is the backstop for a hard
+    /* D-13 (86-02) + WR-03: an active export run is CANCELLED via the
+       token — the exporter's own catch path then marks it failed and owns
+       staging removal (no rmSync-while-streaming, no state flip back to
+       done mid-shutdown). The boot sweep remains the backstop for a hard
        crash that never reaches this handler. */
     const activeRun = getRunState();
     if (activeRun && (activeRun.stage === 'collecting' || activeRun.stage === 'archiving' || activeRun.stage === 'verifying')) {
-      activeRun.stage = 'failed';
-      activeRun.error = 'server shutdown';
-      try {
-        fs.rmSync(path.join(DATA_DIR, 'tmp', `backup-${activeRun.runId}`), { recursive: true, force: true });
-      } catch { /* best-effort (D-15) — the boot sweep catches stragglers */ }
+      cancelRun();
     }
     server.close(async () => {
       await db.close(); // Phase 45: adapter close (pool.end on pg)

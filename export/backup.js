@@ -140,8 +140,16 @@ export function claimRun(scope) {
     return null; // D-10: one export at a time — caller refuses with backupRunInProgress
   }
   const runId = crypto.randomUUID(); // D-18
-  currentRun = { runId, scope, stage: 'collecting', startedAt: Date.now() }; // synchronous claim
+  currentRun = { runId, scope, stage: 'collecting', cancelled: false, startedAt: Date.now() }; // synchronous claim
   return runId;
+}
+
+/* Cancellation token (WR-03): shutdown flips the flag; runExport checks it
+   at every stage transition and aborts cleanly — its own catch path then
+   owns staging removal and failRun(), so state can never flip back to
+   done mid-shutdown. */
+export function cancelRun() {
+  if (currentRun) currentRun.cancelled = true;
 }
 
 function setStage(stage) {
@@ -546,6 +554,8 @@ export async function runExport(scope) {
         }
       }
     });
+    /* WR-03 cancellation checkpoint: abort cleanly before any further staging work */
+    if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     // post-fence: blob copies + scope walk (never inside the fence)
     if (scope.kind === 'instance') {
       collectInstanceFiles(dirsSnapshot, stagingDir, files);
@@ -581,6 +591,7 @@ export async function runExport(scope) {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
     /* PASS 2 — tar (stage: archiving): manifest FIRST, then tables, then files */
+    if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     setStage('archiving');
     const startedAt = currentRun.startedAt;
     const tarPath = path.join(stagingDir, 'archive.tar.gz');
@@ -605,12 +616,14 @@ export async function runExport(scope) {
     }
 
     /* Self-verify (stage: verifying) — recompute staged hashes, fail-closed */
+    if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     setStage('verifying');
     await verifyStagedBackup(stagingDir, manifest);
 
     /* Finalize: whole-archive sha256 over the FINAL bytes (canonical
        statement — computed once, after the tar is complete), then the
        atomic rename into DATA_DIR/backups (same filesystem — Pitfall 6). */
+    if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     const { sha256 } = await sha256AndSize(tarPath);
     const filename = archiveName(scope, Date.now());
     const destination = path.join(dirs.backupsDir, filename);
