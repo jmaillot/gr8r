@@ -87,3 +87,51 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
   const toggleBody = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskToggle ='));
   assert.ok(toggleBody.slice(0, 700).includes('refreshBackupTasks'), 'toggle refills via refreshBackupTasks (server owns next_run_at)');
 });
+
+test('D-14: the history card renders the payload verbatim — newest-first and cap 50 are the server\'s', () => {
+  assert.match(pagesSrc, /const historyCard = task =>/, 'the history card exists');
+  assert.match(pagesSrc, /const runRow = run =>/, 'the run row renderer exists');
+  assert.match(pagesSrc, /h\.runs\.map\(runRow\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap');
+  assert.ok(!/\.slice\(0, 50\)|\.sort\(/.test(pagesSrc.split('/* Per-task card')[0].split('RUN_STATUS_KEYS')[1] || ''), 'no client-side cap or sort in the history block');
+  /* esc() on every interpolated payload field of the run row */
+  for (const re of [/esc\(run\.sha256\)/, /esc\(String\(run\.sha256\)\.slice\(0, 12\)\)/, /esc\(run\.filename\)/, /esc\(run\.error\)/, /esc\(when\)/]) {
+    assert.match(pagesSrc, re, `run row interpolates through esc(): ${re}`);
+  }
+  /* D-06: skipped_overlap and interrupted are first-class labeled states. */
+  assert.match(pagesSrc, /skipped_overlap: 'page\.backup\.statusSkippedOverlap'/);
+  assert.match(pagesSrc, /interrupted: 'page\.backup\.statusInterrupted'/);
+  assert.match(actionsSrc, /A\.backupTaskHistory =/, 'the history toggle handler exists');
+  assert.match(actionsSrc, /S\.ui\.backupHistory\[id\]|store\[id\] = \{ runs:/, 'the fetch result stages verbatim per task');
+  assert.match(actionsSrc, /refreshOpenBackupHistories\(\);/, 'backupPollTick piggybacks the open-history refresh');
+  assert.match(actionsSrc, /A\.backupRunErr =/, 'the expandable error toggle exists');
+});
+
+test('5-locale key parity for every 87-04 backup page key', () => {
+  const required = [
+    'page.backup.tasksTitle', 'page.backup.taskFormTitle', 'page.backup.taskEditTitle', 'page.backup.taskNameLabel',
+    'page.backup.scheduleLabel', 'page.backup.tzLabel', 'page.backup.nextRunLabel', 'page.backup.retentionLabel',
+    'page.backup.presetDaily', 'page.backup.presetWeekly', 'page.backup.presetMonthly', 'page.backup.presetCustom',
+    'page.backup.fieldMinute', 'page.backup.fieldHour', 'page.backup.fieldDayOfMonth', 'page.backup.fieldMonth', 'page.backup.fieldDayOfWeek',
+    'page.backup.taskSaveAction', 'page.backup.taskCancelAction', 'page.backup.taskSaved', 'page.backup.taskUpdated',
+    'page.backup.taskEnabled', 'page.backup.taskDisabled', 'page.backup.taskEnable', 'page.backup.taskDisable',
+    'page.backup.taskRunNow', 'page.backup.taskDelete', 'page.backup.taskDeleteBody', 'page.backup.taskDeleted',
+    'page.backup.summaryDaily', 'page.backup.summaryWeekly', 'page.backup.summaryMonthly', 'page.backup.summaryCustom',
+    'page.backup.scheduleSummaryPrefix',
+    'page.backup.historyAction', 'page.backup.historyTitle', 'page.backup.historyCap', 'page.backup.historyEmpty',
+    'page.backup.historyLoading', 'page.backup.historyUnavailable', 'page.backup.errorToggle',
+    'page.backup.durLabel', 'page.backup.sizeLabel',
+    'page.backup.statusRunning', 'page.backup.statusSucceeded', 'page.backup.statusFailed',
+    'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
+    'page.backup.triggerManual', 'page.backup.triggerScheduled', 'page.backup.triggerUnknown',
+  ];
+  for (const key of required) assert.ok(pagesSrc.includes(key) || actionsSrc.includes(key), `the combined source uses ${key}`);
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    for (const key of required) assert.ok(Object.hasOwn(cat, key), `${loc} is missing ${key}`);
+  }
+  /* The keyed refusal vocabulary the task routes can emit (87-01 catalogue). */
+  const en = JSON.parse(read('src/locales/en.json'));
+  for (const code of ['taskNameRequired', 'invalidSchedule', 'invalidTimezone', 'backupInvalidScope', 'invalidRetention', 'taskNotFound', 'backupManageRequired']) {
+    assert.ok(Object.hasOwn(en, `err.${code}`), `err.${code} resolves in the refusal catalogue`);
+  }
+});

@@ -33,7 +33,7 @@ import { api } from '../core/api.js';
 import { S } from '../core/store.js';
 import { t, getLocale } from '../core/i18n.js';
 import { esc, fmtDate } from '../core/utils.js';
-import { empty } from '../ui/helpers.js';
+import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox, tzPreselect } from './settings.js';
 import { refreshBackupTasks, backupPollTick, backupPollKickAllowed } from '../actions/actions.js';
 
@@ -106,6 +106,67 @@ const runNowCard = flags => {
    cron evaluation: the schedule "summary" is human-readable TEXT derived
    from the selections, never a computed timestamp preview (Pitfall 6). */
 
+/* =====================================================================
+   87-04 PER-TASK RUN HISTORY CARD (D-14/D-06) — renders the GET
+   /api/backup/runs?taskId= payload VERBATIM: newest-first is the server's
+   ordering, the 50-run cap is the server's LIMIT — the client derives
+   nothing and paginates nothing. Every payload field goes through esc();
+   statuses and triggers are keyed labels (skipped_overlap and interrupted
+   are first-class states — never silently hidden, D-06).
+   ===================================================================== */
+const RUN_STATUS_KEYS = {
+  running: 'page.backup.statusRunning',
+  succeeded: 'page.backup.statusSucceeded',
+  failed: 'page.backup.statusFailed',
+  interrupted: 'page.backup.statusInterrupted',
+  skipped_overlap: 'page.backup.statusSkippedOverlap',
+  deleted: 'page.backup.statusDeleted',
+};
+const RUN_TRIGGER_KEYS = { manual: 'page.backup.triggerManual', scheduled: 'page.backup.triggerScheduled' };
+const durText = ms => (Number.isFinite(ms) && ms >= 0 ? `${(ms / 1000).toFixed(1)} s` : '—');
+
+const runRow = run => {
+  const errOpen = S.ui.backupRunErrOpen?.has(run.id);
+  const startedMs = Number(run.started_at);
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  return `<div style="padding:8px 0;border-top:1px solid var(--border)">
+    <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
+      <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
+      <span class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</span>
+      <span class="faint">${esc(when)}</span>
+      <span class="faint">${t('page.backup.durLabel')}: ${esc(durText(Number(run.duration_ms)))}</span>
+      <span class="faint">${t('page.backup.sizeLabel')}: ${esc(fsize(Number(run.size_bytes) || 0))}</span>
+      ${run.sha256 ? `<span class="mono faint" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</span>` : ''}
+      ${run.filename ? `<span class="mono faint">${esc(run.filename)}</span>` : ''}
+    </div>
+    ${
+      run.error
+        ? `<div style="margin-top:4px"><a href="#" data-a="backupRunErr" data-id="${esc(run.id)}">${t('page.backup.errorToggle')}</a>${
+            errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
+          }</div>`
+        : ''
+    }
+  </div>`;
+};
+
+const historyCard = task => {
+  const h = S.ui.backupHistory?.[task.id];
+  const body = !h
+    ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyLoading')}</div>`
+    : h.err
+      ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
+      : !h.runs.length
+        ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`
+        : h.runs.map(runRow).join('');
+  return `<div style="margin-top:10px">
+    <div class="row" style="gap:8px;align-items:center">
+      <strong style="font-size:13px">${t('page.backup.historyTitle')}</strong>
+      <span class="faint" style="font-size:12px">${t('page.backup.historyCap')}</span>
+    </div>
+    ${body}
+  </div>`;
+};
+
 /* Per-task card: the payload row verbatim (name, scope, enabled, schedule,
    tz, retention, next_run_at) — esc() on every interpolated payload field.
    Operator actions (toggle / delete / Run now) render only when the payload's
@@ -125,6 +186,7 @@ const taskCard = (task, manage) => {
     ? `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-sm" data-a="backupTaskToggle" data-id="${esc(task.id)}">${task.enabled ? t('page.backup.taskDisable') : t('page.backup.taskEnable')}</button>
         <button class="btn btn-sm" data-a="backupTaskRunNow" data-id="${esc(task.id)}">${ic('play', 13)}${t('page.backup.taskRunNow')}</button>
+        <button class="btn btn-sm" data-a="backupTaskHistory" data-id="${esc(task.id)}">${ic('history', 13)}${t('page.backup.historyAction')}</button>
         <button class="btn btn-sm btn-danger" data-a="backupTaskDelete" data-id="${esc(task.id)}">${ic('trash', 13)}${t('page.backup.taskDelete')}</button>
       </div>`
     : '';
@@ -141,6 +203,7 @@ const taskCard = (task, manage) => {
       <span class="faint">${t('page.backup.nextRunLabel')}: <span class="mono">${esc(nextRun)}</span></span>
     </div>
     ${actions}
+    ${manage && S.ui.backupHistoryOpen?.has(task.id) ? historyCard(task) : ''}
   </div></div>`;
 };
 

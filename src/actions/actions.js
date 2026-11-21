@@ -4808,6 +4808,9 @@ export async function backupPollTick() {
     S.ui.backupPollFailedAt = Date.now();
   }
   render();
+  /* 87-04 piggyback: while the run poll ticks, refresh every OPEN per-task
+     history card so a finishing run's row lands without a manual toggle. */
+  refreshOpenBackupHistories();
   return S.ui.backupRun;
 }
 
@@ -5017,8 +5020,56 @@ A.backupTaskRunNow = async el => {
     if (res.status === 401) return;
     return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
   }
+  /* Render-only: no stage is fabricated client-side — the pending flag only
+     says "trigger accepted, first poll has not landed yet"; the first tick
+     writes the real D-19 payload. */
   S.ui.backupPending = true;
   backupStartPolling();
+  render();
+};
+/* 87-04 (D-14): per-task history card — open/close + one fetch per open.
+   Newest-first and the 50 cap are the SERVER's (the client derives none of
+   it); the fetch result is staged verbatim in S.ui.backupHistory[taskId]. */
+A.backupTaskHistory = async el => {
+  const id = el.dataset.id;
+  if (!id) return;
+  const open = (S.ui.backupHistoryOpen = S.ui.backupHistoryOpen || new Set());
+  const store = (S.ui.backupHistory = S.ui.backupHistory || {});
+  if (open.has(id)) {
+    open.delete(id);
+    render();
+    return;
+  }
+  open.add(id);
+  render();
+  await backupHistoryFetch(id);
+};
+const backupHistoryFetch = async id => {
+  const res = await api.backupRuns({ taskId: id });
+  const store = (S.ui.backupHistory = S.ui.backupHistory || {});
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    /* D-14: the history read is refused with backupManageRequired for
+       non-operators — the card degrades to the "unavailable" line, never
+       an error storm. taskNotFound after the gate renders the same way. */
+    store[id] = { err: res.data?.code || res.error || 'historyUnavailable' };
+  } else {
+    store[id] = { runs: Array.isArray(res.data?.runs) ? res.data.runs : [] };
+  }
+  render();
+};
+/* Piggyback refresh (87-04): while a run is active, backupPollTick's 1 s
+   cadence also refreshes every OPEN history card so a finishing run's row
+   lands without a manual toggle. Reads-only over the same keyed endpoint. */
+export async function refreshOpenBackupHistories() {
+  const open = S.ui.backupHistoryOpen;
+  if (!open || !open.size) return;
+  for (const id of open) await backupHistoryFetch(id);
+}
+A.backupRunErr = el => {
+  const set = (S.ui.backupRunErrOpen = S.ui.backupRunErrOpen || new Set());
+  if (set.has(el.dataset.id)) set.delete(el.dataset.id);
+  else set.add(el.dataset.id);
   render();
 };
 
