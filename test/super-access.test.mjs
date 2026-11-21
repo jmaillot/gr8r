@@ -125,3 +125,31 @@ test('super-access: operator write inside archived workspace is refused (viewer 
   const put = await operator.put(`/api/workspaces/${foreignSlug}`, { revision: got.data.revision, doc });
   assert.equal(put.status, 403, 'viewer rank blocks content writes');
 });
+
+/* SUPER_ACCESS=false: the opt-out gate — a second server instance with the
+   flag off. The admin keeps instance powers (governance) but can no longer
+   enter a foreign workspace (no synthetic membership; membership-only
+   switcher). Token discipline: an invalid token boot-refuses (WSG-01 mold). */
+test('super-access off: SUPER_ACCESS=false closes foreign entry, governance keeps working', async t => {
+  const server2 = await startServer({ env: { SUPER_ACCESS: 'false', ADMIN_EMAIL: 'saoff@test.local', ADMIN_PASSWORD: 'sa-off-pass-1', ADMIN_NAME: 'SA Off Admin' } });
+  t.after(() => server2.stop?.());
+  const helpers = await import('./helpers/server.mjs');
+  const ops = (await helpers.login(server2.base, 'saoff@test.local', 'sa-off-pass-1')).client;
+  const m = (await helpers.signup(server2.base, { name: 'M', email: 'saoff-m@test.local', password: 'sa-off-m-1' })).client;
+
+  const cfg = await ops.get('/api/config');
+  assert.equal(cfg.data.superAccess, false, 'config carries superAccess=false');
+
+  const ws2 = await m.post('/api/workspaces', { name: 'F', slug: 'foreign-off' });
+  assert.ok([200, 201].includes(ws2.status), 'member creates foreign ws');
+
+  const entry = await ops.get('/api/workspaces/foreign-off');
+  assert.equal(entry.status, 404, 'super-access off: foreign workspace is 404 for the admin');
+
+  const own = await ops.get('/api/workspaces/acme');
+  assert.equal(own.status, 200, 'own workspace still accessible');
+  const list = await ops.get('/api/auth/operator/workspaces');
+  assert.equal(list.status, 200, 'governance powers intact');
+  const me = await ops.get('/api/auth/me');
+  assert.deepEqual((me.data.user.workspaces || []).map(w => w.slug), ['acme'], 'switcher lists only real memberships');
+});

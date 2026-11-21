@@ -536,7 +536,11 @@ export const isMemberAdmin = () => ['Owner', 'Admin'].includes(me()?.role || '')
    one workspace, derived from the current `ws` object (never a stored list). */
 export function workspaceList() {
   if (api.enabled) {
-    return api.workspaces.map(w => ({ id: w.id, slug: w.slug, name: w.name, color: w.color, role: w.role }));
+    /* [2026-11-21] SUPER_ACCESS off: the server already unions nothing into
+       /api/auth/me, so this list is naturally membership-only; the client-side
+       filter is a belt-and-suspenders for a stale session payload. */
+    const rows = api.workspaces.map(w => ({ id: w.id, slug: w.slug, name: w.name, color: w.color, role: w.role, memberId: w.memberId ?? null }));
+    return api.canSuperAccess ? rows : rows.filter(w => w.memberId != null);
   }
   const ws = D().ws || {};
   return [{ id: 'demo', slug: currentSlug(), name: ws.name || t('common.workspace'), color: ws.c || '#1D1C1A', role: 'owner' }];

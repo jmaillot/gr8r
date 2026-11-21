@@ -19,6 +19,11 @@ const state = {
   workspace: null,
   memberId: null,
   maxUploadMb: 25, // /api/config discloses the server's MAX_UPLOAD_MB knob (G-12-3); 25 is the server default
+  /* [2026-11-21] Super-access gate — SERVER ground truth from /api/config.
+     False: the switcher lists only real memberships and governance hides the
+     Open action (the server enforces the same flag; this is cosmetic, T-78-05
+     precedent). Default true (server default). */
+  superAccess: true,
   /* Phase 30 (D-10): SSO visibility is SERVER ground truth from /api/config —
      both default false so the SSO button stays hidden until the config lands. */
   oidcEnabled: false,
@@ -171,6 +176,11 @@ export const api = {
   rolesIn(slug) {
     return state.workspaces.find(w => w.slug === slug)?.role || null;
   },
+  /* [2026-11-21] Super-access surface gate: false hides governance Open and
+     keeps the switcher honest (cosmetic only — the server enforces). */
+  get canSuperAccess() {
+    return state.superAccess;
+  },
 
   async init() {
     const r = await call('GET', '/api/config');
@@ -181,6 +191,7 @@ export const api = {
        boolean only — the old 'open'/'admins' string shape is dead server-side.
        Deploy coupling (Pitfall 3): server+client ship from the same repo/commit. */
     state.creation = !!r.data?.workspaceCreation;
+    state.superAccess = r.data?.superAccess !== false;
     state.url = typeof r.data?.url === 'string' ? r.data.url.replace(/\/+$/, '') : '';
     state.maxUploadMb = Number(r.data?.maxUploadMb) || 25;
     state.oidcEnabled = !!r.data?.oidcEnabled;

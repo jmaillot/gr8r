@@ -18,6 +18,9 @@
      APP_URL                public base URL for share/invite links
      ALLOW_SIGNUP=false     let visitors create accounts (WORKSPACE_CREATION gates workspace creation)
      WORKSPACE_CREATION     'true'|'false' — who may create workspaces; unset = false (operators only)
+     SUPER_ACCESS=true      'false' = the instance admin keeps governance powers but can no
+                            longer enter workspaces they hold no membership in (no synthetic
+                            owner access, no governance Open action, membership-only switcher)
      SEED_DATA=true         false = start with an empty workspace
      SESSION_DAYS=30
      INVITE_DAYS=7          invite link lifetime
@@ -153,6 +156,24 @@ const WORKSPACE_CREATION =
       : _WORKSPACE_CREATION_RAW === 'false'
         ? false
         : null; // sentinel → boot-refuse
+/* [2026-11-21, owner quick-task] SUPER_ACCESS: the super-access gate. When
+   'false', the instance admin keeps instance-level powers (governance:
+   create/archive/delete/rename, operator console) but can NO LONGER enter a
+   workspace they hold no membership in — requireWorkspace synthesizes no
+   membership, membershipsOf unions nothing, the governance Open action is
+   hidden and the switcher lists only real memberships. Default: 'true' (the
+   ratified behavior; the flag is an opt-OUT for stricter instances). Same
+   strict token discipline as WORKSPACE_CREATION (WSG-01): exactly 'true' or
+   'false', unset defaults to true, any other token boot-refuses. */
+const _SUPER_ACCESS_RAW = process.env.SUPER_ACCESS;
+const SUPER_ACCESS =
+  _SUPER_ACCESS_RAW === undefined
+    ? true
+    : _SUPER_ACCESS_RAW === 'true'
+      ? true
+      : _SUPER_ACCESS_RAW === 'false'
+        ? false
+        : null; // sentinel → boot-refuse
 const SEED_DATA = process.env.SEED_DATA !== 'false';
 const WORKSPACE_NAME = (process.env.WORKSPACE_NAME || 'Projects Studio').trim() || 'Projects Studio';
 const WORKSPACE_SLUG = String(process.env.WORKSPACE_SLUG || '').trim();
@@ -196,6 +217,12 @@ const logError = msg => logLine('error', msg);
 if (WORKSPACE_CREATION === null) {
   logError(
     `WORKSPACE_CREATION: invalid value ${JSON.stringify(_WORKSPACE_CREATION_RAW)} — only 'true' or 'false' are accepted (unset defaults to false)`,
+  );
+  process.exit(1);
+}
+if (SUPER_ACCESS === null) {
+  logError(
+    `SUPER_ACCESS: invalid value ${JSON.stringify(_SUPER_ACCESS_RAW)} — only 'true' or 'false' are accepted (unset defaults to true)`,
   );
   process.exit(1);
 }
@@ -983,7 +1010,7 @@ async function membershipsOf(userId) {
     [userId],
   );
   const user = await db.get('select is_instance_admin from users where id = ?', [userId]);
-  if (!user || !user.is_instance_admin) return rows;
+  if (!user || !user.is_instance_admin || !SUPER_ACCESS) return rows;
   const all = await db.all('select * from workspaces order by created_at, name');
   const byId = new Map(rows.map(r => [r.id, r]));
   for (const w of all) {
@@ -4965,7 +4992,7 @@ async function requireWorkspace(req, res, slug, minRole = 'viewer') {
      the actor's email. Archived workspaces: the operator may ENTER (79-D-02
      blocked members only) but read-only — rank stays below admin so every
      content write fails the role check naturally; no new gate vocabulary. */
-  const isOperator = !membership && ws && isInstanceAdmin(user);
+  const isOperator = !membership && ws && isInstanceAdmin(user) && SUPER_ACCESS;
   if (isOperator) {
     membership = {
       workspace_id: ws.id,
@@ -5161,6 +5188,7 @@ async function handleApi(req, res, url) {
       mail: MAILER.enabled,
       url: appBase(req),
       workspaceCreation: WORKSPACE_CREATION,
+      superAccess: SUPER_ACCESS,
       maxUploadMb: MAX_UPLOAD_MB,
       oidcEnabled: OIDC.enabled,
       oidcSsoOnly: OIDC.ssoOnly,

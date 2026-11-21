@@ -1494,7 +1494,7 @@
   "settings.operator.toastRevoked": "Sessions révoquées. L’utilisateur doit se reconnecter.",
   "settings.operator.promote": "Nommer Super Admin",
   "settings.operator.demoteShort": "Retirer le Super Admin",
-  "settings.operator.demoteConfirmBody": "Retirer les droits de Super Admin à cet utilisateur ?",
+  "settings.operator.demoteConfirmBody": "Retirer les droits de Super Admin à cet utilisateur ?",
   "settings.operator.demoteConfirm": "Retirer",
   "settings.operator.toastPromoted": "Droits de Super Admin accordés.",
   "settings.operator.toastDemoted": "Droits de Super Admin retirés.",
