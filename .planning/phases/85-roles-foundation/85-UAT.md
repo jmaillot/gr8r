@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 85-roles-foundation
 source: [85-VERIFICATION.md]
 started: 2026-11-21T00:00:00Z
-updated: 2026-11-21T00:00:00Z
+updated: 2026-11-21T18:35:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Backup page states
-expected: |
-  Empty state for holders; keyed 403 fullstate (err.backupRoleRequired) + home button for non-holders deep-linking /backup
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -26,14 +22,14 @@ result: pass
 
 ### 3. Tab rendering
 expected: Rows show user, role badge, granter display name, relative time; the recent trail lists the audited actions newest-first
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 3
-passed: 2
+passed: 3
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
