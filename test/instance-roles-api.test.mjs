@@ -301,6 +301,101 @@ test('POST /api/backup/tasks: Restore Operator gets the keyed backupManageRequir
   }
 });
 
+/* ---------- D-36 e2e set: audit rollback + no-oracle discipline ---------- */
+
+test('D-36: Backup Operator POST /api/auth/operator/instance-roles → 403 operatorOnly regardless of body (D-17)', async () => {
+  const server = await startServer({});
+  try {
+    await makeUser(server, 'Backup Op', 'backupop@test.local');
+    await makeUser(server, 'Target', 'target@test.local');
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    assert.equal((await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, 'backupop@test.local'), role: 'backup_operator' })).status, 200);
+    const backupOp = (await login(server.base, 'backupop@test.local', 'password-1234')).client;
+    for (const body of [
+      { userId: 'whatever', role: 'not-a-role' },
+      { userId: userIdByEmail(server, 'target@test.local'), role: 'restore_operator' },
+    ]) {
+      const res = await backupOp.post('/api/auth/operator/instance-roles', body);
+      assert.equal(res.status, 403, `expected 403, got ${res.status}: ${JSON.stringify(res.data)}`);
+      assert.equal(res.data.code, 'operatorOnly');
+    }
+    assert.equal(roleRows(server).length, 1, 'the operator grant stays; nothing from the refusals');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-36/BKROLE-03: forced audit failure rolls back the GRANT — no instance_roles row lands un-logged', async () => {
+  const server = await startServer({});
+  try {
+    await makeUser(server, 'Grantee', 'grantee@test.local');
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const granteeId = userIdByEmail(server, 'grantee@test.local');
+    withDb(server.dbPath, db => db.exec('drop table audit_log'));
+    const res = await operator.post('/api/auth/operator/instance-roles', { userId: granteeId, role: 'backup_operator' });
+    assert.ok(res.status >= 500, `audit failure surfaces as 5xx (got ${res.status})`);
+    assert.equal(roleRows(server).length, 0, 'the grant INSERT was rolled back with the failed audit');
+    withDb(server.dbPath, db => {
+      db.exec(`create table if not exists audit_log (
+        id            text primary key,
+        actor_id      text,
+        target_id     text,
+        action        text not null,
+        session_count integer not null,
+        ip            text,
+        workspace_id  text,
+        actor_name    text not null,
+        actor_email   text not null,
+        target_name   text not null,
+        target_email  text not null,
+        created_at    integer not null
+      )`);
+    });
+    const retry = await operator.post('/api/auth/operator/instance-roles', { userId: granteeId, role: 'backup_operator' });
+    assert.equal(retry.status, 200, 'the grant succeeds once the audit funnel works again');
+    assert.equal(auditRows(server).length, 1, 'the retried grant IS audited');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('D-36/BKROLE-03: forced audit failure rolls back the REVOKE — the row survives un-logged removal', async () => {
+  const server = await startServer({});
+  try {
+    await makeUser(server, 'Grantee', 'grantee@test.local');
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const granteeId = userIdByEmail(server, 'grantee@test.local');
+    assert.equal((await operator.post('/api/auth/operator/instance-roles', { userId: granteeId, role: 'restore_operator' })).status, 200);
+    const row = roleRows(server).find(r => r.user_id === granteeId);
+    withDb(server.dbPath, db => db.exec('drop table audit_log'));
+    const res = await operator.del(`/api/auth/operator/instance-roles/${row.id}`);
+    assert.ok(res.status >= 500, `audit failure surfaces as 5xx (got ${res.status})`);
+    assert.equal(roleRows(server).length, 1, 'the DELETE was rolled back — the role row survives');
+    withDb(server.dbPath, db => {
+      db.exec(`create table if not exists audit_log (
+        id            text primary key,
+        actor_id      text,
+        target_id     text,
+        action        text not null,
+        session_count integer not null,
+        ip            text,
+        workspace_id  text,
+        actor_name    text not null,
+        actor_email   text not null,
+        target_name   text not null,
+        target_email  text not null,
+        created_at    integer not null
+      )`);
+    });
+    const retry = await operator.del(`/api/auth/operator/instance-roles/${row.id}`);
+    assert.equal(retry.status, 200, 'the revoke succeeds once the audit funnel works again');
+    assert.equal(roleRows(server).length, 0, 'the retried revoke removed the row');
+    assert.equal(auditRows(server).length, 1, 'the retried revoke IS audited');
+  } finally {
+    await server.stop();
+  }
+});
+
 /* ---------- the payload capability flags (D-23/D-25) ---------- */
 
 
