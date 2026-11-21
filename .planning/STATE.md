@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 87
-current_phase_name: Scheduler, Tasks, Run History & Rotation
-status: planning
-stopped_at: Phase 87 context gathered
-last_updated: "2026-11-21T19:48:42.745Z"
+current_plan: 3
+status: executing
+stopped_at: Completed 87-01-PLAN.md
+last_updated: "2026-11-21T22:14:58.728Z"
 last_activity: 2026-11-21
-last_activity_desc: Phase 86 complete, transitioned to Phase 87
-state_head: 7eb7ec44f13bf642c06e6c0c3323c500581480d6
+last_activity_desc: Phase 87 execution resumed (wave continue)
+state_head: 39ad471b04856e7e28a6c6e2be9482f0f51dc08b
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 8
+  completed_plans: 5
 ---
 
 # Project State
@@ -25,14 +25,15 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 86 — Export Core ("gr8r backup v1")
+**Current focus:** Phase 87
 
 ## Current Position
 
-Phase: 87 — Scheduler, Tasks, Run History & Rotation
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-21 — Phase 86 complete, transitioned to Phase 87
+Phase: 87 — EXECUTING
+Current Plan: 2
+Total Plans in Phase: 4
+Status: Ready to execute plan 87-02 (87-01 complete)
+Last activity: 2026-11-21 — 87-01 complete (DDL + cron evaluator + task CRUD)
 
 ## Milestone v3.3 Phase Map
 
@@ -87,6 +88,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 |------|----------|-------|-------|
 | Phase 86 P86-01 | 22 min | 3 tasks | 4 files |
 | Phase 86 P02 | ~50m | 3 tasks | 15 files |
+| Phase 87 P87-01 | 30m | 4 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -112,6 +114,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 86]: db-adapter pgPoolRef() added as the sanctioned read-only pool seam for the export fence; blob copies run after fence release (Pitfall 4) — pg fence needs a checked-out client without exposing the pool; snapshot xmin must never span filesystem streaming
 - [Phase 86]: 86-02: route refuses via getRunState() then relies on runExport's synchronous claim (before first await) as the atomicity point; claim-race pinned by test
 - [Phase 86]: 86-02: project-scope existence read from the workspace doc data.projects (same source as the 86-01 collector), fail-closed
+- [Phase 87]: D-04 one-way raw 5-field cron storage ratified by owner (87-01 checkpoint, 2026-11-21); next_run_at is a persisted cache, never re-parsed at tick
+- [Phase 87]: Backup task identity: backup_runs.task_id NULL = manual Run-now archive outside rotation (D-11); default task tz Europe/Paris via resolveTz(null) — users has no tz column
+- [Phase 87]: 87-01 keyed-refusal collisions resolved: scope refusal is backupInvalidScope (perms key untouched), name refusal reuses generic taskNameRequired, dead backupNotConfigured removed x5
 
 ### Pending Todos
 
@@ -133,9 +138,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T19:48:42.620Z
-Stopped at: Phase 87 context gathered
-Resume file: .planning/phases/87-scheduler-tasks-run-history-rotation/87-CONTEXT.md
+Last session: 2026-11-21T22:14:48.459Z
+Stopped at: Completed 87-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

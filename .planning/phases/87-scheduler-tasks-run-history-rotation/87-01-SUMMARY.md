@@ -54,7 +54,7 @@ actuals:
   tasks: 4
   commits: 3
   plan_head_before: cc2dd491e6d882bc11b1e6319e1c3fbc1fba43f9
-plan_head_after: pending-metadata-commit
+plan_head_after: 12b11763
 duration: 30m
 completed: 2026-11-21
 status: complete
