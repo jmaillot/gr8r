@@ -1,93 +1,69 @@
-# Milestone v3.2 Requirements — Entra Group Mapping & Governance Backlog
+# Milestone v3.3 Requirements — Instance Operations: Backup, Restore & Roles
 
-*Defined 2026-11-20 from research SUMMARY.md + owner decisions.*
+*Defined 2026-11-21 from research SUMMARY.md + owner decisions (seeds: backup-restore-operators, super-admin-console-role-first-listing).*
 
 ## Goal
 
-Let Entra ID groups drive gr8r workspace membership and operator rights at SSO login, and finish the deferred governance/backlog work.
+Delegate instance operations to Backup/Restore Operator roles — scheduled multi-scope backups with GFS rotation, safe selective restore — and finish the Super Admin console.
 
-## Owner-Ratified Decisions
+## Owner-Ratified Decisions (2026-11-21 intake)
 
-- **D-82-1:** Multiple groups mapping one user to one workspace → **highest role wins**.
-- **D-82-2:** Group-derived role **wins over** an existing invite/manual grant role at login (group re-asserts each login).
-- **D-82-3:** Manual operator demotion is cleared and **re-granted at next login** by a mapped group (never mid-session).
-- **D-82-4:** Group-claim overage (`_claim_names`) → user proceeds **as unmapped** (no grants, no removals), login succeeds, warning logged.
-- **D-82-5:** After a rename changes the slug, the old slug **404s with no redirect**.
-- **D-82-6:** Dead mappings (deleted Entra group or deleted workspace ID) surface as a **warning section in the operator console** (plus boot log).
+- **D-33-1:** ONE logical export format — tar+gzip archive ("gr8r backup v1"), manifest as entry 0, per-table NDJSON, sha256 3-level; identical code path SQLite/Postgres (Postgres is v1).
+- **D-33-2:** Restore semantics — import-as-new (`-restored`) is the default; overwrite optional with type-to-confirm + automatic pre-restore snapshot.
+- **D-33-3:** Destinations v1 — local mapped volume + S3-compatible (hand-rolled SigV4 client: AWS/MinIO/Backblaze B2). SMB/FTP deferred to v2.
+- **D-33-4:** Extensible `instance_roles` table (not boolean columns); Super Admins are implicit members of every role.
+- **D-33-5:** ONE "Instance Roles" tab in Instance > Governance (next to Super Admin Console), extensible to future roles.
+- **D-33-6:** GFS rotation per task, per-scale counts, community defaults 7/4/12/5, configurable.
+- **D-33-7:** Backup Operator = full task management (create/edit/delete/Run now). Restore Operator = browse/preview/restore only, no task editing.
+- **D-33-8:** Failure notification is transition-based (state change → email via email_outbox to Super Admins + Backup Operators); no per-run success emails.
+- **D-33-9:** Schedule via builder + presets in the UI (never free-text cron input); stored as 5-field cron subset.
+- **D-33-10:** Restore authority is scoped by LIVE rights, never archive contents; operational tables (users, instance_roles, sessions, backup_tasks) are never selectively restored by default; archive download tiered above run rights.
+- **D-33-11:** Zero new npm dependencies — S3 client, cron math, tar/gzip all hand-rolled on Node stdlib.
+- **D-33-12:** Anti-features ratified out of scope: incremental/dedup backups, backup encryption at rest, per-item restore UI, dry-run restore, success emails, multiple destinations per task, SMB/FTP (v2), live-restore browse.
 
 ## Requirements
 
-### Group Mapping — Config & Ingestion (GM)
+### Roles & Governance (BKROLE)
+- [ ] **BKROLE-01**: Operator can grant or revoke the Backup Operator and Restore Operator roles to any user from the Instance Roles tab in Instance > Governance; granted users see the Backup/Restore surfaces, revoked users lose them; Super Admins always retain both roles implicitly.
+- [ ] **BKROLE-02**: A Backup Operator can create, edit, delete and manually run backup tasks (full CRUD); a Restore Operator can browse, preview and restore backups but cannot edit tasks.
+- [ ] **BKROLE-03**: Every role grant/revoke and every backup/restore/rotation action is audit-logged through the existing audit funnel.
 
-- [x] **GM-01**: Operator can manage group mapping configuration in-app (DB-backed, edited from the /governance page in Phase 83); save-time validation refuses malformed GUIDs, unknown workspace IDs, and invalid role tokens with keyed errors; mappings become dead only by later deletion (warned at boot + console, D-82-6). *(Owner decision 2026-11-20: env-var config superseded by in-app DB config. Storage + validation half shipped in Phase 80 (80-01/80-02); the editor UI lands in Phase 83.)*
-- [x] **GM-02**: Server reads the `groups` claim (Object ID GUIDs) from the SSO ID token; `_claim_names` overage is detected and treated as unmapped per D-82-4 (never as an empty list).
-- [x] **GM-03**: Mapping config keys are validated at boot: malformed GUIDs or unknown workspace IDs are refused or warned (dead mapping) — labels are display-only, never matching keys.
+### Backup (BKBCK)
+- [ ] **BKBCK-01**: A Backup Operator can export a single project, a single workspace, or the full instance as a logical archive (DB rows + the scope's uploaded files, versioned manifest, per-table/per-file/whole-archive sha256), consistently on both SQLite and Postgres, with manifest self-verification failing the run on mismatch.
+- [ ] **BKBCK-02**: A Backup Operator can configure multiple backup tasks — each with name, scope, destination (local volume v1), builder-based schedule with presets, GFS rotation retention per scale (default 7/4/12/5), and enable/disable — saved with keyed 5-locale refusals on invalid input.
+- [ ] **BKBCK-03**: Scheduled tasks run automatically on their cron schedule (5-field subset, timezone-aware), with at-most-once catch-up after restart, no overlapping runs of the same task, and GFS rotation applied only after a verified successful run (newest verified backup never deleted).
+- [ ] **BKBCK-04**: Every run (manual or scheduled) is recorded in a history the Backup Operator can consult — status, trigger, duration, size, error, checksum — with a Run now action per task, and failure emails sent on failure-state transitions to Super Admins and Backup Operators.
+- [ ] **BKBCK-05**: A task destination can be an S3-compatible endpoint (AWS S3, MinIO, Backblaze B2) configured via boot-frozen env credentials, with uploads streamed (memory-bounded) and the stored checksum verifiable after upload.
 
-### Group Mapping — Grant Path (GW)
+### Restore (BKRST)
+- [ ] **BKRST-01**: A Restore Operator can list available backups across destinations and preview a backup's contents (scopes, tables, file counts, checksum) from the manifest without downloading or unpacking it.
+- [ ] **BKRST-02**: A Restore Operator can restore a workspace or project from a backup as a new workspace/project with a `-restored` suffix (full ID remap, containing only the restoring operator as member), with the whole restore in one transaction.
+- [ ] **BKRST-03**: A Backup Operator or Super Admin can overwrite an existing workspace/project from a backup — gated by type-to-confirm, preceded by an automatic pre-restore snapshot, executed in a single transaction; operational tables (users, roles, sessions, tasks) are never overwritten by selective restore.
+- [ ] **BKRST-04**: A Super Admin can restore a full instance from an instance-scope backup (disaster-recovery path) — Super-Admin-only, type-to-confirm, with global session revocation and a security contract (threats_open: 0) covering privilege-escalation-via-restore.
 
-- [x] **GW-01**: At SSO login, a user whose groups map to a workspace gains membership automatically (JIT-provisioned or existing account), with role = highest mapped role (D-82-1).
-- [x] **GW-02**: Group-derived role re-asserts over an existing invite/manual grant at each login (D-82-2), while manual grants survive removal-sync (see GS-01 provenance).
-- [x] **GW-03**: Group mapping runs strictly after the DP-4 signup door and before DP-5 invite reconciliation — group membership can never JIT-provision a domain-refused email.
-- [x] **GW-04**: Membership rows created by groups carry provenance `group:<guid>` (new `memberships.provenance` column via `adapterEnsureColumn`); invite/manual rows carry their own provenance and are never touched by group logic.
-
-### Group Mapping — Operator Mapping (GO)
-
-- [x] **GO-01**: Members of an Entra group mapped to operator are granted `is_instance_admin` at login; groups grant the flag, never revoke it (demoted-then-mapped users are re-granted at next login, D-82-3).
-- [x] **GO-02**: Group-derived operator grants are audit-logged like console promote/demote actions.
-
-### Group Mapping — Removal Sync (GS)
-
-- [x] **GS-01**: At login, a user no longer in any group mapping a workspace loses only their group-derived (`group:<guid>`) membership; invite/manual grants are immune.
-- [x] **GS-02**: Removal sync routes through the shared guard funnel: removal of a workspace owner or last operator is refused (count-before-write), logged loudly, and **the login still succeeds** (skip-and-audit).
-- [x] **GS-03**: Removal sync only downgrades role when a mapped role drops below the current grant AND the current grant is group-derived; manual/invite roles are never downgraded.
-- [x] **GS-04**: All group-driven changes (grants, role changes, removals, skips) are audit-logged with group GUID and reason.
-
-### Governance — Workspace Settings Editing (GV)
-
-- [x] **GV-01**: Operator can edit a workspace's name and slug from the /governance page (server-side validation, collision refusal, keyed 5-locale error messages).
-- [x] **GV-02**: Renamed slug 404s at the old address with no redirect (D-82-5); destructive rename (slug change) requires confirm.
-- [x] **GV-03**: Operator console shows a warning section listing dead mappings (deleted group GUIDs, unknown workspace IDs) per D-82-6.
-
-### Backlog Polish (BP)
-
-- [x] **BP-01**: Searchable token-chip pickers for member/team selection inputs.
-- [x] **BP-02**: Fix the 56-02 e2e spec failures. (Complete — phase 84, ship gate 157/157 green)
-- [x] **BP-03**: Phase 57 mobile layout follow-ups.
+### Backlog (SACON)
+- [ ] **SACON-01**: The Super Admin console lists Super Admins by default; typing searches all users by name and email, non-admin matches render as promote candidates with a result cap (show-more control), and a successful promotion shows a keyed success toast, removes the candidate from results, and adds them to the roster without a page reload.
 
 ## Future Requirements (deferred)
 
-- Graph overage fallback (`getMemberObjects` via client-credentials) — documented recipe in STACK.md; only needed if ApplicationGroup mode proves insufficient.
-- Admin-UI mapping editor (env triples are the v3.2 config surface; documented future trigger).
-- Periodic reconcile job (snapshot-at-login is the v3.2 semantics).
-- SCIM provisioning (anti-feature at gr8r's scale).
+- SMB and FTP/FTPS destinations (D-33-3, v2)
+- Backup encryption at rest (D-33-12)
+- Incremental/dedup backups, multiple destinations per task (D-33-12)
+- Test-restore verification (restore into a sandbox to validate a backup)
+- Scheduled restore prod→staging
 
 ## Out of Scope
 
-- **Group names/sAMAccountNames as matching keys** — Object IDs only (names are rename-able, non-unique).
-- **OBO Graph flows** — client-credentials (if ever needed) is simpler and sufficient.
-- **Removal-sync account deactivation** — group removal touches membership/operator grants only, never the account.
-- **Redirect machinery for old slugs** — documented link death (D-82-5).
+- Per-item restore inside a project (D-33-12) — workspace/project/instance granularity only
+- Free-text cron input (D-33-9) — builder + presets only
+- Success notification emails (D-33-12)
+- Dry-run restore (manifest preview covers the trust need)
+- Cross-instance import (not requested; restore assumes same major schema)
 
 ## Traceability
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| GM-01 | Phase 80 | Complete (storage/validation half; editor UI in Phase 83) |
-| GM-02 | Phase 80 | Complete |
-| GM-03 | Phase 80 | Complete |
-| GW-01 | Phase 81 | Complete |
-| GW-02 | Phase 81 | Complete |
-| GW-03 | Phase 81 | Complete |
-| GW-04 | Phase 81 | Complete |
-| GO-01 | Phase 81 | Complete |
-| GO-02 | Phase 81 | Complete |
-| GS-01 | Phase 82 | Complete |
-| GS-02 | Phase 82 | Complete |
-| GS-03 | Phase 82 | Complete |
-| GS-04 | Phase 82 | Complete |
-| GV-01 | Phase 83 | Complete |
-| GV-02 | Phase 83 | Complete |
-| GV-03 | Phase 83 | Complete |
-| BP-01 | Phase 84 | Complete |
-| BP-02 | Phase 84 | Complete |
-| BP-03 | Phase 84 | Complete |
+*Filled by roadmap: requirement → phase mapping.*
+
+| Req | Phase | Status |
+|-----|-------|--------|
+| (pending roadmap) | | |
