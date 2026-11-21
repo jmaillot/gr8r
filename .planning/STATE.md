@@ -2,19 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
-current_phase: 85
-current_phase_name: Roles Foundation
-status: executing
-stopped_at: Phase 85 context gathered
-last_updated: "2026-11-21T15:01:53.135Z"
+current_phase: 86
+current_phase_name: "Export Core (\"gr8r backup v1\")"
+status: planning
+stopped_at: Phase 85 complete, ready to plan Phase 86
+last_updated: "2026-11-21T16:37:57.008Z"
 last_activity: 2026-11-21
-last_activity_desc: Phase 85 execution started
-state_head: aa5a50103c4b5cffee190f4abb25ae0ca4099775
+last_activity_desc: Phase 85 complete, transitioned to Phase 86
+state_head: 0fd47c85574ca1fa52339cad0a94d344b98114c0
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 2
+  percent: 17
 ---
 
 # Project State
@@ -29,10 +30,10 @@ before features.
 
 ## Current Position
 
-Phase: 85 (Roles Foundation) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 85
-Last activity: 2026-11-21 — Phase 85 execution started
+Phase: 86 — Export Core ("gr8r backup v1")
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-21 — Phase 85 complete, transitioned to Phase 86
 
 ## Milestone v3.3 Phase Map
 
@@ -73,7 +74,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 85 | 0 | - | - |
+| 85 | 2 | - | - |
 | 86 | 0 | - | - |
 | 87 | 0 | - | - |
 | 88 | 0 | - | - |
@@ -124,7 +125,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-21T14:44:02.819Z
-Stopped at: Phase 85 context gathered
+Stopped at: Phase 85 complete, ready to plan Phase 86
 Resume file: .planning/phases/85-roles-foundation/85-CONTEXT.md
 
 ## Operator Next Steps

@@ -21,7 +21,7 @@
 
 ## Phases
 
-- [ ] **Phase 85: Roles Foundation** — instance_roles table, hasInstanceRole funnel, Instance Roles governance tab, restore-authority ≠ archive-read-authority encoding
+- [x] **Phase 85: Roles Foundation** — instance_roles table, hasInstanceRole funnel, Instance Roles governance tab, restore-authority ≠ archive-read-authority encoding (completed 2026-11-21)
 - [ ] **Phase 86: Export Core ("gr8r backup v1")** — pure backup.js fence, snapshot fence, archive format freeze + manifest + table classification, local destination, manual Run now
 - [ ] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email
 - [ ] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify
@@ -42,7 +42,7 @@
 4. Every role grant/revoke appears in the audit trail through the existing audit funnel.
 5. The `hasInstanceRole` funnel exists server-side with Super-Admins-auto-members semantics, and the distinction "restore authority ≠ archive-read authority" (download tiering vocabulary) is encoded in the role design now — before any restore endpoint is written.
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 
 Plans:
 - [x] 85-01-PLAN.md — Server roles core: instance_roles table, roles.js funnel, operator routes + audit, stub backup endpoints, D-35 pins
@@ -134,7 +134,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 85. Roles Foundation | 2/2 | In Progress|  |
+| 85. Roles Foundation | 2/2 | Complete    | 2026-11-21 |
 | 86. Export Core ("gr8r backup v1") | 0/? | Not started | - |
 | 87. Scheduler, Tasks, Run History & Rotation | 0/? | Not started | - |
 | 88. S3 Destination | 0/? | Not started | - |

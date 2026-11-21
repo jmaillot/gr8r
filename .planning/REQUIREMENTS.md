@@ -24,11 +24,13 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 ## Requirements
 
 ### Roles & Governance (BKROLE)
-- [ ] **BKROLE-01**: Operator can grant or revoke the Backup Operator and Restore Operator roles to any user from the Instance Roles tab in Instance > Governance; granted users see the Backup/Restore surfaces, revoked users lose them; Super Admins always retain both roles implicitly.
-- [ ] **BKROLE-02**: A Backup Operator can create, edit, delete and manually run backup tasks (full CRUD); a Restore Operator can browse, preview and restore backups but cannot edit tasks.
-- [ ] **BKROLE-03**: Every role grant/revoke and every backup/restore/rotation action is audit-logged through the existing audit funnel.
+
+- [x] **BKROLE-01**: Operator can grant or revoke the Backup Operator and Restore Operator roles to any user from the Instance Roles tab in Instance > Governance; granted users see the Backup/Restore surfaces, revoked users lose them; Super Admins always retain both roles implicitly.
+- [x] **BKROLE-02**: A Backup Operator can create, edit, delete and manually run backup tasks (full CRUD); a Restore Operator can browse, preview and restore backups but cannot edit tasks.
+- [x] **BKROLE-03**: Every role grant/revoke and every backup/restore/rotation action is audit-logged through the existing audit funnel.
 
 ### Backup (BKBCK)
+
 - [ ] **BKBCK-01**: A Backup Operator can export a single project, a single workspace, or the full instance as a logical archive (DB rows + the scope's uploaded files, versioned manifest, per-table/per-file/whole-archive sha256), consistently on both SQLite and Postgres, with manifest self-verification failing the run on mismatch.
 - [ ] **BKBCK-02**: A Backup Operator can configure multiple backup tasks — each with name, scope, destination (local volume v1), builder-based schedule with presets, GFS rotation retention per scale (default 7/4/12/5), and enable/disable — saved with keyed 5-locale refusals on invalid input.
 - [ ] **BKBCK-03**: Scheduled tasks run automatically on their cron schedule (5-field subset, timezone-aware), with at-most-once catch-up after restart, no overlapping runs of the same task, and GFS rotation applied only after a verified successful run (newest verified backup never deleted).
@@ -36,12 +38,14 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 - [ ] **BKBCK-05**: A task destination can be an S3-compatible endpoint (AWS S3, MinIO, Backblaze B2) configured via boot-frozen env credentials, with uploads streamed (memory-bounded) and the stored checksum verifiable after upload.
 
 ### Restore (BKRST)
+
 - [ ] **BKRST-01**: A Restore Operator can list available backups across destinations and preview a backup's contents (scopes, tables, file counts, checksum) from the manifest without downloading or unpacking it.
 - [ ] **BKRST-02**: A Restore Operator can restore a workspace or project from a backup as a new workspace/project with a `-restored` suffix (full ID remap, containing only the restoring operator as member), with the whole restore in one transaction.
 - [ ] **BKRST-03**: A Backup Operator or Super Admin can overwrite an existing workspace/project from a backup — gated by type-to-confirm, preceded by an automatic pre-restore snapshot, executed in a single transaction; operational tables (users, roles, sessions, tasks) are never overwritten by selective restore.
 - [ ] **BKRST-04**: A Super Admin can restore a full instance from an instance-scope backup (disaster-recovery path) — Super-Admin-only, type-to-confirm, with global session revocation and a security contract (threats_open: 0) covering privilege-escalation-via-restore.
 
 ### Backlog (SACON)
+
 - [ ] **SACON-01**: The Super Admin console lists Super Admins by default; typing searches all users by name and email, non-admin matches render as promote candidates with a result cap (show-more control), and a successful promotion shows a keyed success toast, removes the candidate from results, and adds them to the roster without a page reload.
 
 ## Future Requirements (deferred)
@@ -64,9 +68,9 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 
 | Req | Phase | Status |
 |-----|-------|--------|
-| BKROLE-01 | Phase 85 | Pending |
-| BKROLE-02 | Phase 85 | Pending |
-| BKROLE-03 | Phase 85 | Pending |
+| BKROLE-01 | Phase 85 | Complete |
+| BKROLE-02 | Phase 85 | Complete |
+| BKROLE-03 | Phase 85 | Complete |
 | BKBCK-01 | Phase 86 | Pending |
 | BKBCK-02 | Phase 87 | Pending |
 | BKBCK-03 | Phase 87 | Pending |
