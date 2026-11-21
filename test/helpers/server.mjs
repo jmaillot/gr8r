@@ -202,6 +202,7 @@ export async function withPg(url, fn) {
    first, users/workspaces last — so the cascade-free drop sequence never
    trips an FK. Matrix tests start every scenario from a clean database. */
 const PG_TABLES = Object.freeze([
+  'instance_roles', // Phase 85: children first — references users on delete cascade
   'user_notif_prefs',
   'reminders_sent',
   'audit_log',

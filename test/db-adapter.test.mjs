@@ -266,9 +266,10 @@ const TABLES = [
   'user_notif_prefs',
   'push_subscriptions',
   'group_mappings',
+  'instance_roles',
 ];
 
-test('pgSchemaVariant: all 16 tables, zero collate nocase, zero pragma, functional nocase index', () => {
+test('pgSchemaVariant: all 17 tables, zero collate nocase, zero pragma, functional nocase index', () => {
   const variant = adapter.pgSchemaVariant();
   for (const table of TABLES) {
     assert.match(variant, new RegExp(`create table if not exists ${table} \\(`), `table ${table} missing from pg variant`);
@@ -337,9 +338,50 @@ test('group_mappings DDL: insert round-trip, 3-token role CHECK, unique (guid, w
   db.close();
 });
 
-/* ---- runSchema (D-10): dialect-owned schema execution ----------------- */
+/* ---- INSTANCE-ROLES (Phase 85, BKROLE-01, D-01..D-04): in-memory DDL proof ---- */
 
-test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 16 tables)', async () => {
+test('instance_roles DDL: insert round-trip, 2-token role CHECK, unique (user_id, role) pair, user cascade (D-04)', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(adapter.SQLITE_SCHEMA);
+  db.prepare(
+    "insert into users (id, email, name, password_hash, created_at) values ('u1', 'op@example.com', 'Op', 'x', 1)",
+  ).run();
+  db.prepare(
+    "insert into users (id, email, name, password_hash, created_at) values ('u2', 'gr@example.com', 'Gr', 'x', 1)",
+  ).run();
+  const insert = db.prepare(
+    'insert into instance_roles (id, user_id, role, granted_by, granted_at) values (?, ?, ?, ?, ?)',
+  );
+  insert.run('r1', 'u2', 'backup_operator', 'u1', 1);
+  const got = db.prepare('select user_id, role, granted_by, granted_at from instance_roles where id = ?').get('r1');
+  assert.deepEqual({ ...got }, { user_id: 'u2', role: 'backup_operator', granted_by: 'u1', granted_at: 1 });
+  // T-85 pin (D-01): the CHECK enum admits exactly the two operator roles.
+  for (const role of ['viewer', 'owner', 'admin', 'Backup_Operator', 'restore']) {
+    assert.throws(
+      () => insert.run('r2', 'u2', role, 'u1', 1),
+      /CHECK constraint failed/,
+      `role ${JSON.stringify(role)} must be refused by the table CHECK`,
+    );
+  }
+  // D-02: unique (user_id, role) — a duplicate grant is refused, but the OTHER
+  // role is a legal second row for the same user.
+  assert.throws(
+    () => insert.run('r3', 'u2', 'backup_operator', 'u1', 1),
+    /UNIQUE constraint failed/,
+    'duplicate (user_id, role) pair must be refused',
+  );
+  insert.run('r4', 'u2', 'restore_operator', 'u1', 1);
+  assert.equal(db.prepare('select count(*) as n from instance_roles').get().n, 2);
+  // D-04: deleting the user cascades the rows away — no dead role rows.
+  db.prepare('delete from users where id = ?').run('u2');
+  assert.equal(db.prepare('select count(*) as n from instance_roles').get().n, 0, 'user deletion must cascade the role rows');
+  // pg-incompatible DDL must never enter the new table (mirror discipline).
+  const tableSql = db.prepare("select sql from sqlite_master where type = 'table' and name = 'instance_roles'").get().sql;
+  assert.equal(/collate nocase/i.test(tableSql), false, 'instance_roles must carry zero collate nocase');
+  db.close();
+});
+
+/* ---- runSchema (D-10): dialect-owned schema execution ----------------- */test('runSchema executes the SQLite SCHEMA verbatim through the facade (fresh DB gets 17 tables)', async () => {
   const dbPath = tmpDbPath();
   await adapter.connectDb({ dbPath });
   assert.equal(adapter.backendKind, 'sqlite');
@@ -413,7 +455,7 @@ test('the invites scalar→teams backfill is sqliteOnly-gated (D-09: SQLite-only
 
 /* ---- seed portability (D-07) ------------------------------------------ */
 
-test('seed is portable: two fresh boots produce identical row counts across all 16 tables (D-07)', async () => {
+test('seed is portable: two fresh boots produce identical row counts across all 17 tables (D-07)', async () => {
   const bootCounts = async () => {
     const server = await startServer({ env: { SEED_DATA: 'true' } });
     try {
