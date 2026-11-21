@@ -5,17 +5,16 @@ milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 86
 current_phase_name: "Export Core (\"gr8r backup v1\")"
 status: planning
-stopped_at: Phase 85 complete, ready to plan Phase 86
-last_updated: "2026-11-21T16:37:57.008Z"
+stopped_at: Phase 86 context gathered
+last_updated: "2026-11-21T16:52:56.945Z"
 last_activity: 2026-11-21
 last_activity_desc: Phase 85 complete, transitioned to Phase 86
-state_head: 0fd47c85574ca1fa52339cad0a94d344b98114c0
+state_head: 1dc7ac9dd88495f1bab531c5765f43f902b71a9f
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 2
   completed_plans: 2
-  percent: 17
 ---
 
 # Project State
@@ -124,9 +123,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T14:44:02.819Z
-Stopped at: Phase 85 complete, ready to plan Phase 86
-Resume file: .planning/phases/85-roles-foundation/85-CONTEXT.md
+Last session: 2026-11-21T16:52:56.902Z
+Stopped at: Phase 86 context gathered
+Resume file: .planning/phases/86-export-core-gr8r-backup-v1/86-CONTEXT.md
 
 ## Operator Next Steps
 
