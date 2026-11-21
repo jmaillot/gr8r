@@ -2213,7 +2213,7 @@
   "page.backup.summaryDaily": "Chaque jour à {time}",
   "page.backup.summaryWeekly": "Chaque semaine le {day} à {time}",
   "page.backup.summaryMonthly": "Le jour {dom} de chaque mois à {time}",
-  "page.backup.summaryCustom": "Planification personnalisée : {cron}",
+  "page.backup.summaryCustom": "Planification personnalisée : {cron}",
   "page.backup.scheduleSummaryPrefix": "Planification",
   "page.backup.taskEnable": "Activer",
   "page.backup.taskDisable": "Désactiver",
