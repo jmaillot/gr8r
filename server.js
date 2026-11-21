@@ -83,7 +83,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
@@ -3302,6 +3302,97 @@ function webhookTestLookup(map) {
 }
 
 /* =====================================================================
+   BACKUP SCHEDULER — Phase 87 (87-02, BKBCK-03/BKBCK-04, D-05..D-08).
+   =====================================================================
+   The sweep is a named async helper with an injectable clock (the
+   runEmailDeliveryPass({ now }) precedent) so tests time-travel without
+   sleeps. Catch-up is AT-MOST-ONCE BY CONSTRUCTION: a due task fires at
+   most once per pass and next_run_at is recomputed from NOW (never from
+   the missed window — no while(next <= now) fire loop exists anywhere;
+   D-05). next_run_at is advanced BEFORE the fire is awaited so a long
+   export cannot let a concurrent pass double-fire the same task.
+
+   T-87-04: per-task try/catch — one malformed task never starves the
+   others in the same tick, and the interval callback keeps the
+   try/catch + promise .catch + unref() discipline (an uncaught throw in
+   a setInterval callback kills the process). */
+
+/* Persisted-run writer (BKBCK-04 / 86-D-11): installed ONCE at boot; the
+   seam in export/backup.js emits start/complete/fail for EVERY run — the
+   manual POST /api/backup/runs path AND scheduled sweep fires — so both
+   triggers produce backup_runs history rows. Row id = the D-18 run id.
+   Writer errors never propagate (the seam swallows them). */
+const writeBackupRunRow = async event => {
+  if (event.kind === 'start') {
+    await db.run(
+      'insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values (?,?,?,?,?,?,?)',
+      [event.runId, event.taskId ?? null, JSON.stringify({ kind: event.scope?.kind, id: event.scope?.id ?? null }), event.trigger, 'running', event.startedAt, now()],
+    );
+  } else if (event.kind === 'complete') {
+    await db.run(
+      'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, size_bytes = ?, sha256 = ?, filename = ? where id = ?',
+      ['succeeded', event.finishedAt, event.durationMs, event.sizeBytes, event.sha256, event.filename, event.runId],
+    );
+  } else if (event.kind === 'fail') {
+    await db.run(
+      'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, error = ? where id = ?',
+      ['failed', event.finishedAt, event.durationMs, event.error, event.runId],
+    );
+  }
+};
+setBackupRunWriter(writeBackupRunRow);
+
+export async function runBackupSchedulerPass({ now: at } = {}) {
+  const nowMs = at instanceof Date ? at.getTime() : Number(at ?? Date.now());
+  const due = await db.all(
+    'select * from backup_tasks where enabled = 1 and next_run_at is not null and next_run_at <= ?',
+    [nowMs],
+  );
+  for (const task of due) {
+    /* T-87-04: one malformed task never starves the others in the same tick. */
+    try {
+      const next = nextRunAt(task.cron, task.tz, nowMs);
+      if (!Number.isInteger(next)) {
+        /* A stored cron the evaluator cannot parse fails the task honestly —
+           log + clear the cache, never crash the sweep (D-08 discipline). */
+        logWarn(`backup scheduler: task ${task.id} cron "${task.cron}" does not evaluate — no fire, next_run_at cleared`);
+        await db.run('update backup_tasks set next_run_at = ?, updated_at = ? where id = ?', [null, nowMs, task.id]);
+        continue;
+      }
+      /* D-05: advance the persisted cache from NOW first — several missed
+         windows collapse into this single firing, and a concurrent pass
+         (or a crash mid-export) can never re-fire the same window. */
+      await db.run('update backup_tasks set next_run_at = ?, updated_at = ? where id = ?', [next, nowMs, task.id]);
+      let scope;
+      try { scope = JSON.parse(task.scope); } catch { scope = {}; }
+      /* 86-D-10 overlap: the sweep maps runExport's SYNCHRONOUS claim refusal
+         — the claim inside runExport is the atomicity point (86-02 precedent,
+         chosen over a pre-claim getRunState() probe). A refused fire records
+         a skipped_overlap history row (D-06 — never silent) and never starts
+         a second export. */
+      const result = await runExport(scope, { taskId: task.id, trigger: 'scheduled' });
+      if (!result.ok && result.code === 'backupRunInProgress') {
+        await db.run(
+          'insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values (?,?,?,?,?,?,?)',
+          [uid(), task.id, task.scope, 'scheduled', 'skipped_overlap', nowMs, nowMs],
+        );
+      }
+    } catch (err) {
+      logWarn(`backup scheduler: task ${task.id}: ${err?.message || err}`);
+    }
+  }
+  return due.length;
+}
+
+/* Boot-time stale-run sweep (BKBCK-03): a crash mid-export leaves
+   status='running' rows behind; boot marks them interrupted before the
+   first sweep tick so history never lies about in-flight work. */
+async function sweepStaleBackupRuns() {
+  const marked = (await db.run('update backup_runs set status = ? where status = ?', ['interrupted', 'running']))?.changes || 0;
+  return marked;
+}
+
+/* =====================================================================
    WEBHOOK HOOK CRUD — Phase 67 (67-03, WHK-01/D-06/D-10/D-11/D-12).
    =====================================================================
    Route family: GET/POST /api/workspaces/:slug/projects/:pid/webhooks,
@@ -5289,6 +5380,20 @@ async function handleApi(req, res, url) {
       : undefined;
     const pass = await runEmailDeliveryPass({ now: body?.now, send: sendFn });
     return json(res, 200, { ...pass, calls });
+  }
+
+  /* Plan 87-02: test-only clock injection for the backup scheduler sweep
+     (the reminder-pass pattern). The route exists ONLY while
+     BACKUP_TEST_TOKEN is set (the node:test harness sets it); unset in
+     production the path 404s like any unknown route. The pass is
+     idempotent by construction (next_run_at claim + single-fire pass). */
+  if (pathname === '/api/internal/backup-scheduler-pass' && method === 'POST') {
+    if (!process.env.BACKUP_TEST_TOKEN || req.headers['x-backup-token'] !== process.env.BACKUP_TEST_TOKEN) {
+      return fail(res, 404, 'notFound', 'Not found');
+    }
+    const body = await readJson(req).catch(() => ({}));
+    const fired = await runBackupSchedulerPass({ now: body?.now ? new Date(body.now) : undefined });
+    return json(res, 200, { fired });
   }
 
   if (pathname === '/api/config' && method === 'GET') {
@@ -10351,6 +10456,10 @@ async function main() {
      orphans left by a SIGTERM/crash (the sweep is from the 86-01 pipeline). */
   const sweptBackupStaging = sweepStaleBackupStaging();
   if (sweptBackupStaging) logInfo(`backup staging sweep: removed ${sweptBackupStaging} orphan(s)`);
+  /* BKBCK-03 (87-02): stale status='running' run rows from a crash become
+     'interrupted' at boot, BEFORE the first sweep tick (history never lies). */
+  const interruptedRuns = await sweepStaleBackupRuns();
+  if (interruptedRuns) logInfo(`backup run sweep: marked ${interruptedRuns} stale running run(s) interrupted`);
   /* PUSH-05: VAPID custody runs after the migrations so DATA_DIR is settled —
      env → persisted file → generate-once ladder (feature absent on failure). */
   await initPushCustody();
@@ -10397,6 +10506,22 @@ async function main() {
   await runReminderPass();
   setInterval(() => {
     runReminderPass().catch(err => logWarn(`reminder tick: ${err.message}`));
+  }, 60_000).unref();
+
+  /* BKBCK-03 (87-02, D-05/D-08): backup scheduler sweep — the boot catch-up
+     pass fires each due task exactly once (missed windows collapse into one
+     firing; next_run_at recomputes from NOW inside the pass), then the
+     1-minute unref'd tick. Same house rules as the reminder tick: the
+     interval callback keeps try/catch AND a promise .catch (an uncaught
+     throw or rejection in a setInterval callback kills the process);
+     unref() keeps the timer from holding the event loop open. */
+  await runBackupSchedulerPass();
+  setInterval(() => {
+    try {
+      runBackupSchedulerPass().catch(err => logWarn(`backup scheduler tick: ${err.message}`));
+    } catch (err) {
+      logWarn(`backup scheduler tick: ${err.message}`);
+    }
   }, 60_000).unref();
 
   /* WHK-03 (Phase 67): webhook delivery driver — same house rules as the

@@ -499,10 +499,14 @@ function collectInstanceFiles(dirs, stagingDir, files) {
 }
 
 /* ---- Filename (D-14): backup-<scope-kind>-<scope-id>-<YYYYMMDD-HHMMSS>.tar.gz ---- */
-function archiveName(scope, now) {
+/* 87-02 (D-11): scheduled fires pass { taskId } through meta — the archive is
+   named backup-task-<taskId>-<ts>.tar.gz (greppable on disk for rotation and
+   restore); manual run names stay frozen per 86-D-14. */
+function archiveName(scope, now, meta = {}) {
   const d = new Date(now);
   const p = n => String(n).padStart(2, '0');
   const ts = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+  if (meta.taskId) return `backup-task-${meta.taskId}-${ts}.tar.gz`;
   return scope.kind === 'instance'
     ? `backup-instance-${ts}.tar.gz`
     : `backup-${scope.kind}-${scope.id}-${ts}.tar.gz`;
@@ -512,10 +516,37 @@ function rmStaging(stagingDir) {
   try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch { /* D-15 best-effort */ }
 }
 
-/* ---- The export run. Returns the final run-state object. ---- */
-export async function runExport(scope) {
+/* ---- Persisted-run writer seam (Phase 87, 87-02, BKBCK-04 / 86-D-11).
+   server.js installs ONE writer via setBackupRunWriter(); every run — the
+   manual POST /api/backup/runs path AND scheduled sweep fires — emits
+   start/complete/fail events so BOTH triggers produce persisted backup_runs
+   history rows. The writer is awaited at each emission point so event order
+   is deterministic, but a writer error NEVER affects the run itself (the
+   in-memory state holder stays authoritative for the API; persistence is
+   the server's observability concern and is best-effort by contract). ---- */
+let backupRunWriter = null;
+export function setBackupRunWriter(fn) {
+  backupRunWriter = typeof fn === 'function' ? fn : null;
+}
+async function emitRunEvent(event) {
+  if (!backupRunWriter) return;
+  try {
+    await backupRunWriter(event);
+  } catch { /* history-write trouble never fails a run (see contract above) */ }
+}
+
+/* ---- The export run. Returns the final run-state object.
+   meta (87-02): { taskId: null, trigger: 'manual' | 'scheduled' } — rides
+   through the writer seam and the task-scoped archive name. ---- */
+export async function runExport(scope, meta = {}) {
+  const runMeta = {
+    taskId: typeof meta.taskId === 'string' && meta.taskId ? meta.taskId : null,
+    trigger: meta.trigger === 'scheduled' ? 'scheduled' : 'manual',
+  };
   const runId = claimRun(scope);
   if (!runId) return { ok: false, code: 'backupRunInProgress' };
+  const startedAtMs = currentRun.startedAt;
+  await emitRunEvent({ kind: 'start', runId, ...runMeta, scope, startedAt: startedAtMs });
   const dirs = dataDirs();
   const stagingDir = path.join(dirs.tmpDir, `backup-${runId}`);
   try {
@@ -628,8 +659,8 @@ export async function runExport(scope) {
        rename, so a "failed" status can never coexist with a published
        archive in backups/. */
     if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
-    const { sha256 } = await sha256AndSize(tarPath);
-    const filename = archiveName(scope, Date.now());
+    const { sha256, size } = await sha256AndSize(tarPath);
+    const filename = archiveName(scope, Date.now(), runMeta);
     const destination = path.join(dirs.backupsDir, filename);
     const sidecarStaged = path.join(stagingDir, 'archive.sha256.staged');
     fs.writeFileSync(sidecarStaged, `${sha256}  ${filename}\n`);
@@ -638,10 +669,19 @@ export async function runExport(scope) {
 
     rmStaging(stagingDir); // D-15: only the verified archive remains
     completeRun(filename, sha256);
+    await emitRunEvent({
+      kind: 'complete', runId, ...runMeta, filename, sha256, sizeBytes: size,
+      startedAt: startedAtMs, finishedAt: currentRun.finishedAt, durationMs: currentRun.finishedAt - startedAtMs,
+    });
     return { ok: true, runId, filename, sha256 };
   } catch (err) {
     rmStaging(stagingDir); // D-15: failed runs leave NOTHING behind
     failRun(err);
+    await emitRunEvent({
+      kind: 'fail', runId, ...runMeta,
+      error: String(err?.message || err).slice(0, 300),
+      startedAt: startedAtMs, finishedAt: currentRun.finishedAt, durationMs: currentRun.finishedAt - startedAtMs,
+    });
     return { ok: false, runId, error: String(err?.message || err) };
   }
 }
