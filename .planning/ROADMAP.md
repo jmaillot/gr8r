@@ -42,11 +42,11 @@
 4. Every role grant/revoke appears in the audit trail through the existing audit funnel.
 5. The `hasInstanceRole` funnel exists server-side with Super-Admins-auto-members semantics, and the distinction "restore authority ≠ archive-read authority" (download tiering vocabulary) is encoded in the role design now — before any restore endpoint is written.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 - [x] 85-01-PLAN.md — Server roles core: instance_roles table, roles.js funnel, operator routes + audit, stub backup endpoints, D-35 pins
-- [ ] 85-02-PLAN.md — UI surfaces: Instance Roles tab on /governance, gated Backup page + nav, payload-flag getters, 5-locale UI keys
+- [x] 85-02-PLAN.md — UI surfaces: Instance Roles tab on /governance, gated Backup page + nav, payload-flag getters, 5-locale UI keys
 
 **Gaps for discuss-phase**: none — v3.2 groups.js template copied verbatim (dual mirror + pin test + refusal funnel).
 **UI hint**: yes
@@ -134,7 +134,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 85. Roles Foundation | 1/2 | In Progress|  |
+| 85. Roles Foundation | 2/2 | In Progress|  |
 | 86. Export Core ("gr8r backup v1") | 0/? | Not started | - |
 | 87. Scheduler, Tasks, Run History & Rotation | 0/? | Not started | - |
 | 88. S3 Destination | 0/? | Not started | - |
