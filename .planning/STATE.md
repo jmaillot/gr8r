@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 status: planning
-last_updated: "2026-11-21T13:49:19.108Z"
+last_updated: "2026-11-21T14:10:00.000Z"
 last_activity: 2026-11-21
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,35 +17,51 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-20)
+See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 83 — Governance — Workspace Rename & Slug Edit
+**Current focus:** Phase 85 — Roles Foundation (not started; roadmap just ratified-in-progress)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 85 (first of 6)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-11-21 — Milestone v3.3 started
+Status: Roadmap created, awaiting approval → /gsd-plan-phase 85
+Last activity: 2026-11-21 — v3.3 roadmap written (Phases 85-90)
 
-## Milestone v3.2 Phase Map
+## Milestone v3.3 Phase Map
 
 | Phase | Name | Requirements | Depends on |
 |-------|------|--------------|------------|
-| 80 | Group Mapping Core — Parser, Resolver, Overage Detection | GM-01..03 | Nothing |
-| 81 | Group Grant Path — Callback Wiring + Provenance | GW-01..04, GO-01..02 | 80 |
-| 82 | Removal Sync + Guards + Audit | GS-01..04 | 81 |
-| 83 | Governance — Workspace Rename & Slug Edit | GV-01..03 | Nothing (parallel) |
-| 84 | Backlog Polish & Ship | BP-01..03 | 80–83 |
+| 85 | Roles Foundation | BKROLE-01..03 | Nothing |
+| 86 | Export Core ("gr8r backup v1") | BKBCK-01 | 85 |
+| 87 | Scheduler, Tasks, Run History & Rotation | BKBCK-02..04 | 86 |
+| 88 | S3 Destination | BKBCK-05 | 86 |
+| 89 | Restore | BKRST-01..04 | 85, 86, 88 |
+| 90 | Polish & Verification Sweep | SACON-01 | 85–89 |
 
-Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-mapping phases.
+Owner-ratified decisions D-33-1..12 live in REQUIREMENTS.md and bind all phases — do not reopen.
+
+Standing constraints for v3.3:
+
+- Zero new npm dependencies (D-33-11) — S3 client, cron math, tar/gzip all hand-rolled on Node stdlib
+- 5-locale keyed refusals land in the same commit as the first emitting gate (en/fr/nl/de/es)
+- Restore authority is scoped by LIVE rights, never archive contents (D-33-10); download tiered above run rights
+- One destination per task (D-33-12 anti-features ratified)
+- Continuous phase numbering: v3.3 starts at Phase 85 (v3.2 ended at 84)
+
+Research flags carried into planning (do not resolve at roadmap level):
+
+- Phase 86: ustar size math; file-id→workspace/project mapping verification; tmp hygiene sweep
+- Phase 87: GFS namespace semantics (per-task vs shared — recommend per-task)
+- Phase 88: MinIO/B2 provider quirks re-check against pinned MinIO version
+- Phase 89: overwrite-restore concurrency model; row-shaped tables restore scope; MCP mirror in/out
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed (v3.2): 0
+- Total plans completed (v3.3): 0
 - Average duration: —
 - Total execution time: —
 
@@ -53,56 +69,35 @@ Owner-ratified decisions D-82-1..6 live in REQUIREMENTS.md and bind all group-ma
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 80 | 2 | - | - |
-| 81 | 0 | - | - |
-| 82 | 2 | - | - |
-| 83 | 2 | - | - |
-| 84 | 4 | - | - |
+| 85 | 0 | - | - |
+| 86 | 0 | - | - |
+| 87 | 0 | - | - |
+| 88 | 0 | - | - |
+| 89 | 0 | - | - |
+| 90 | 0 | - | - |
 
 *Updated after each plan completion*
-**Per-Plan Metrics:**
-
-| Plan | Duration | Tasks | Files |
-|------|----------|-------|-------|
-| Phase 80 P01 | 8 min | 3 tasks | 5 files |
-| Phase 80 P02 | 6 min | 3 tasks | 10 files |
-| Phase 82 P01 | ~35 min | 3 tasks | 2 files |
-| Phase 82 P02 | ~40 min | 3 tasks | 2 files |
-| Phase 83 P01 | ~35 min | 3 tasks | 4 files |
-| Phase 83 P02 | ~55 min | 2 tasks | 11 files |
-| Phase 84 P02 | 22 min | 4 tasks | 13 files |
-| Phase 84 P03 | 19 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table. Standing constraints for v3.2:
+Owner-ratified 2026-11-21 (REQUIREMENTS.md D-33-1..12, binding):
 
-- Zero new dependencies (no Graph SDK — claims-first; `test/dependencies.test.mjs` invariant pins this)
-- 5-locale keyed refusals land in the same commit as the first emitting gate (en/fr/nl/de/es)
-- Owner-scoped endpoints must not leak existence; destructive actions confirmed + audit-logged
-- Boot-frozen env consts with strict-token tri-state parse (unset = off, invalid = boot-refuse)
-- Group claims are snapshot-at-login (no periodic reconcile); unmapped users behave byte-identically
-- Group match is a parallel admission concept beside the v3.0 domain door matrix (unchanged)
-- `_claim_names` overage = UNMAPPED (never an empty list) — co-designed in 80, honored in 82
-- Continuous phase numbering: v3.2 starts at Phase 80 (v3.1 ended at 79)
-- D-82-1 highest role wins · D-82-2 group re-asserts over manual grants at login · D-82-3 operator
-  demotion cleared then re-granted at next login · D-82-4 overage proceeds as unmapped ·
-  D-82-5 old slug 404s, no redirect · D-82-6 dead mappings surface in operator console + boot log
-- [Phase 80]: group_mappings carries a kind column ('workspace'|'operator') implementing the dedicated operator-mapping row kind now, so Phase 81 passes claims without config migration
-- [Phase 80]: Non-array groups claim stays fail-closed (unmapped/shape); operatorFlag is true|null tri-state, never false
-- [Phase 80, 80-02]: Refusal-code literals passed EXPLICITLY at the server.js call site (domains.js precedent) — the error-codes reverse-parity test greps server.js source, so default codes inside a module stay invisible to it
-- [Phase 80, 80-02]: Boot group-mappings line is D-11 vocabulary (zero rows → exactly one off-line, no dead-mapping query); save route audits via logSecurity('group_mapping_saved') now to avoid the Phase 83 retrofit
-- [Phase 82, 82-01]: GS-02 sole-owner e2e uses groups: [] (genuinely-empty = reconcile-bearing shape) — a missing groups key skips the whole else-branch and never reaches the guard
-- [Phase 82, 82-01]: guardRefuse(wsId, guid, delta) is the shared owner-guard funnel — Plan 02's owner-downgrade arm must route through it, not fork a second guard
-- [Phase 82, 82-02]: downgrade writes go through addMembership so the D-82-7 conditional clause re-stamps the DRIVING group's provenance (role-source semantics)
-- [Phase 82, 82-02]: delta audit rows use their OWN db.tx — addMembership owns an internal tx and db.tx does not nest (no savepoints)
-- [Phase 82, 82-02]: D-82-11 uniform trail live — zero sso_group% security verbs remain; grant-side skips carry dead-workspace/archived-workspace reasons, removal-side dead-workspace stays vocabulary-only (FK cascade)
-- [Phase 83, 83-02]: dead-mappings payload rides refreshGovernanceWorkspaces (seq-guarded, refusal hides card only); staged edit state carries origSlug so the D-03 fork compares against ground truth; rename refusals surface via tErr over existing err.* keys (zero new vocabulary)
-- [Phase 83, 83-02]: the data-a/data-r/data-v machine-identifier pins exist in TWO suites (i18n-toast + i18n-shell) and the en catalogue size is pinned in i18n-core-features — all three bump together under D-12
-- [Phase 84]: 84-02: locale keys land in the same commit as emitting markup (Tasks 2+3 merged); keyboard hook = input-scoped keyboard.js branch cloning the tz branch; tree-wide data-a/data-v count pins bumped as D-12 same-commit pins
-- [Phase 84]: 84-03: toolbar flex-wrap already existed — hide-m label collapse alone fixed the 57-UAT truncation; sweep found zero document-level overflow (perm-t tables scroll scoped); mobile specs navigate routes directly at 390px (off-canvas sidebar pitfall)
+- D-33-1 tar+gzip "gr8r backup v1", manifest entry 0, per-table NDJSON, sha256 3-level, one code path SQLite/Postgres
+- D-33-2 import-as-new (-restored) default; overwrite optional with type-to-confirm + pre-restore snapshot
+- D-33-3 local + S3-compatible destinations v1; SMB/FTP v2
+- D-33-4 extensible instance_roles table; Super Admins implicit members
+- D-33-5 one "Instance Roles" tab in Instance > Governance
+- D-33-6 GFS per task, per-scale counts, defaults 7/4/12/5
+- D-33-7 Backup Operator = full task CRUD; Restore Operator = browse/preview/restore only
+- D-33-8 transition-based failure email via email_outbox (no success emails)
+- D-33-9 builder + presets in UI, stored as 5-field cron subset (no free-text cron)
+- D-33-10 restore authority by live rights; operational tables never selectively restored
+- D-33-11 zero new npm dependencies
+- D-33-12 anti-features out of scope: incremental/dedup, encryption at rest, per-item restore UI, dry-run, success emails, multi-destination tasks, SMB/FTP, live-restore browse
+
+Cross-phase decisions that freeze in Phase 86: archive format, manifest schema + entity addressability, data-vs-operational table classification, checksum canonical statement (sha256 of final destination bytes, computed once at export).
 
 ### Pending Todos
 
@@ -110,12 +105,9 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 82 planning: highest combined test surface (guard composition × provenance × overage) —
-  plan-phase should be thorough; no external research needed
-- Phase 80 planning: if the Graph overage fallback were ever ratified (it is NOT — D-82-4),
-  the client-credentials contract would need live-doc verification
-- DEPLOY.md must document that group nesting semantics live tenant-side (ApplicationGroup =
-  direct-membership-only); no app-side resolution either way
+- Phase 86 is the one genuinely new engineering surface (archive format, snapshot fence) — plan-phase with research recommended
+- Phase 89 is the highest-risk phase (restore atomicity, id remap, privilege escalation) — security contract (Phase 30 pattern, threats_open: 0) required
+- v3.2 carried-forward debt: Nyquist VALIDATION.md missing for 80/81/82/84; webhook-events pre-existing test failure
 
 ## Deferred Items
 
@@ -127,10 +119,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-20T18:32:11.394Z
-Stopped at: Phase 83 complete — all phases complete
+Last session: 2026-11-21 — v3.3 roadmap created
+Stopped at: Roadmap written (Phases 85-90), awaiting orchestrator approval gate
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Review .planning/ROADMAP.md, then run /gsd-plan-phase 85
