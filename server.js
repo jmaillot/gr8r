@@ -3215,6 +3215,7 @@ async function deliverEmail(d, atMs, sendFn) {
     sendFn ||
     (async (kind, a) => {
       if (kind === 'digest') return MAILER.sendDigest(a);
+      if (kind === 'backup_alert') return MAILER.sendBackupAlert(a);
       return MAILER.sendNotif(a);
     });
   try {
@@ -3333,11 +3334,25 @@ const writeBackupRunRow = async event => {
       'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, size_bytes = ?, sha256 = ?, filename = ? where id = ?',
       ['succeeded', event.finishedAt, event.durationMs, event.sizeBytes, event.sha256, event.filename, event.runId],
     );
+    if (event.taskId) {
+      /* 87-03: verified success → GFS rotation for THIS task (D-10/D-13:
+         the pipeline fails the run on manifest mismatch, so 'succeeded' IS
+         verified success — rotation only ever follows a verified run),
+         then the outcome transition hook (failed→ok recovery email, D-16).
+         Both are swallowed with any other writer error by the seam. */
+      await runBackupRotationPass({ taskId: event.taskId });
+      await handleBackupTaskOutcome(event.taskId, event.runId, 'ok', '');
+    }
   } else if (event.kind === 'fail') {
     await db.run(
       'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, error = ? where id = ?',
       ['failed', event.finishedAt, event.durationMs, event.error, event.runId],
     );
+    if (event.taskId) {
+      /* 87-03: outcome transition (ok→failed failure email on transition
+         only, D-15 — consecutive failures never re-email). */
+      await handleBackupTaskOutcome(event.taskId, event.runId, 'failed', event.error);
+    }
   }
 };
 setBackupRunWriter(writeBackupRunRow);
@@ -3390,6 +3405,236 @@ export async function runBackupSchedulerPass({ now: at } = {}) {
 async function sweepStaleBackupRuns() {
   const marked = (await db.run('update backup_runs set status = ? where status = ?', ['interrupted', 'running']))?.changes || 0;
   return marked;
+}
+
+/* 87-03 failure/recovery email transitions (D-14..D-17). Called from the
+   writer seam for EVERY task-scoped run outcome. Map outcome → observed
+   state ('ok' | 'failed'), compare-and-update backup_tasks.last_notified_state
+   in ONE guarded write (the compare lives in the UPDATE — the atomic
+   last-write wins, so two concurrent passes can never both observe a
+   transition), and on a REAL transition enqueue one POL-02 claim row per
+   recipient (instance_roles backup_operator + users.is_instance_admin=1,
+   D-17: no notification-preferences gating for backup alerts — operators
+   who own the task must hear about its failure/recovery regardless).
+   workspace_id sentinel '' (instance-scope rows, POL-02 nullable-workspace
+   precedent), dedup_key `backup-alert:<runId>:<recipientEmail>` (one claim
+   per run per recipient), kind 'backup_alert'. Enqueue gated on
+   MAILER.enabled (no SMTP → the state is still tracked honestly, zero
+   claims). Delivery is post-commit via runEmailDeliveryPass().catch(...)
+   (fire-and-forget, the seam's failure discipline). */
+async function handleBackupTaskOutcome(taskId, runId, outcome, errorText) {
+  const notified = outcome === 'ok' ? 'ok' : 'failed'; // whitelist the observed state
+  const task = await db.get('select id, name, last_notified_state from backup_tasks where id = ?', [taskId]);
+  if (!task) return;
+  /* D-16: NULL→ok (first-ever success) is NOT a transition; recovery fires
+     only after a NOTIFIED failure. Steady-state outcomes write only. */
+  const transition =
+    (task.last_notified_state === 'failed' && notified === 'ok' && 'recovered') ||
+    (task.last_notified_state !== 'failed' && notified === 'failed' && 'failed') ||
+    null;
+  const claimed = await db.run('update backup_tasks set last_notified_state = ? where id = ? and (last_notified_state is null or last_notified_state <> ?)', [
+    notified,
+    taskId,
+    notified,
+  ]);
+  if (!claimed.changes || !transition) return; // no transition observed → nothing to email
+  if (!MAILER.enabled) return; // D-17: enqueue gated on SMTP presence (state still tracked above)
+  const recipients = await db.all(
+    `select distinct u.email, u.locale from instance_roles ir
+       join users u on u.id = ir.user_id
+      where ir.role = 'backup_operator'
+      union
+      select u.email, u.locale from users u where u.is_instance_admin = 1`,
+  );
+  for (const r of recipients) {
+    const locale = r.locale && r.locale !== 'en' ? r.locale : null; // null → base EN at send time
+    const subjectKey = transition === 'recovered' ? 'backup.alert.recovered.subject' : 'backup.alert.failed.subject';
+    await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
+      uid(),
+      '',
+      `backup-alert:${runId}:${r.email}`,
+      'backup_alert',
+      r.email,
+      JSON.stringify({
+        type: 'backup_alert',
+        to: r.email,
+        transition,
+        taskId,
+        taskName: task.name,
+        runId,
+        error: errorText || '',
+        subjectKey,
+        locale,
+      }),
+      now(),
+    ]);
+  }
+  runEmailDeliveryPass().catch(err => logWarn(`backup alert post-commit pass: ${err.message}`));
+}
+
+/* =====================================================================
+   GFS ROTATION (Phase 87, plan 87-03, BKBCK-03 / D-09..D-13).
+
+   One pass, per task, over THAT task's succeeded backup_runs rows only
+   (D-11: every delete query is scoped by task_id — task_id NULL manual
+   archives are structurally outside every task's set, T-87-06; filenames
+   are read from DB rows only). Buckets are assigned exactly-one-per-run
+   (D-10) lazily at rotation time from the run's UTC calendar position —
+   the same UTC stamp archiveName() writes into the filename
+   (export/backup.js:502-510). Deletable = per-bucket rows beyond the
+   task's keep-N, minus the newest VERIFIED run's EXPLICIT ID (D-13 —
+   exclusion lives in the delete-set query as `id <> ?`, never ordering
+   arithmetic alone, T-87-07), with the refuse-to-empty floor as an
+   independent second guard. Deletion order: .sha256 sidecar FIRST, then
+   the .tar.gz, both best-effort (rmStaging discipline, Pitfall 5); run
+   rows are marked status='deleted' only after both unlinks — history
+   rows REMAIN, marked deleted (D-12). One audited event per task pass;
+   details ride the action string per house convention
+   (group_<delta>:group:<guid>:... precedent) — ids, per-id bucket, why.
+   Injectable clock ({ now }) like every other pass. Invoked from the
+   run-writer seam's complete event (verified success only — the export
+   pipeline fails the run on manifest mismatch, so 'succeeded' IS
+   verified success).
+   ===================================================================== */
+
+const ISO_DAY_MS = 86_400_000;
+
+/* ISO-8601 week key (UTC, nearest-Thursday algorithm) — the weekly-bucket
+   label. Pure UTC math, no tz caching (tz.js discipline). */
+function isoWeekKey(ms) {
+  const d = new Date(ms);
+  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  target.setUTCDate(target.getUTCDate() - ((target.getUTCDay() + 6) % 7) + 3); // nearest Thursday
+  const isoYear = target.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  jan4.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() + 6) % 7) + 3); // week-1 Thursday
+  const week = 1 + Math.round((target.getTime() - jan4.getTime()) / (7 * ISO_DAY_MS));
+  return `${isoYear}-W${String(week).padStart(2, '0')}`;
+}
+
+/* D-10 exactly-one-bucket assignment over the task's succeeded runs OLDEST
+   first: yearly when the run is the task's FIRST of its calendar year, else
+   monthly when first of its calendar month, else weekly when first of its
+   ISO week, else daily. A run holds exactly ONE bucket label (documented
+   choice — RESEARCH Pattern 4 "exactly-one-bucket"). Task-scoped manual
+   Run-now rows (trigger manual, task_id set) participate the same way —
+   daily-tier candidates per D-10. */
+function assignGfsBuckets(runsAsc) {
+  const seenYears = new Set();
+  const seenMonths = new Set();
+  const seenWeeks = new Set();
+  const out = new Map();
+  for (const r of runsAsc) {
+    const d = new Date(r.created_at);
+    const year = d.getUTCFullYear();
+    const month = `${year}-${d.getUTCMonth() + 1}`;
+    const week = isoWeekKey(r.created_at);
+    /* Mark ALL calendar positions seen — a yearly run is also that month's
+       and that week's first run, but it holds only the yearly label: later
+       runs must not inherit the monthly/weekly slots from it. */
+    const newYear = !seenYears.has(year);
+    const newMonth = !seenMonths.has(month);
+    const newWeek = !seenWeeks.has(week);
+    seenYears.add(year);
+    seenMonths.add(month);
+    seenWeeks.add(week);
+    let bucket = 'daily';
+    if (newYear) bucket = 'yearly';
+    else if (newMonth) bucket = 'monthly';
+    else if (newWeek) bucket = 'weekly';
+    out.set(r.id, bucket);
+  }
+  return out;
+}
+
+/* One rotation pass. taskId rotates just that task; omitted rotates every
+   task that has rotation-eligible rows. Injectable clock for tests. */
+export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}) {
+  void at; // clock accepted for pass-shape parity (bucket math is UTC-calendar, not wall-clock)
+  const taskIds = onlyTaskId
+    ? [onlyTaskId]
+    : (await db.all("select distinct task_id as id from backup_runs where task_id is not null and status in ('succeeded','deleted')")).map(r => r.id);
+  const report = { scanned: taskIds.length, deleted: 0, floorHeld: 0, tasks: [] };
+  const backupsDir = path.join(DATA_DIR, 'backups');
+  for (const taskId of taskIds) {
+    /* Per-task try/catch — one broken task never starves the others (T-87-04 discipline). */
+    try {
+      const task = await db.get('select * from backup_tasks where id = ?', [taskId]);
+      if (!task) continue;
+      const runsAsc = await db.all(
+        "select id, created_at, filename from backup_runs where task_id = ? and status = 'succeeded' order by created_at asc, id asc",
+        [taskId],
+      );
+      if (runsAsc.length < 2) continue;
+      /* D-13 (T-87-07): resolve the newest VERIFIED run's explicit ID first —
+         the exclusion below is by ID, never by ordering arithmetic. */
+      const newestVerified = await db.get(
+        "select id from backup_runs where task_id = ? and status = 'succeeded' order by created_at desc, id desc limit 1",
+        [taskId],
+      );
+      const buckets = assignGfsBuckets(runsAsc);
+      const keep = { daily: task.retention_daily, weekly: task.retention_weekly, monthly: task.retention_monthly, yearly: task.retention_yearly };
+      /* keep-N per bucket: count from the newest backwards; rows beyond the
+         bucket's keep-N are expired candidates. */
+      const seenPerBucket = {};
+      const candidates = [];
+      for (const r of [...runsAsc].reverse()) {
+        const bucket = buckets.get(r.id);
+        seenPerBucket[bucket] = (seenPerBucket[bucket] || 0) + 1;
+        if (seenPerBucket[bucket] > keep[bucket]) candidates.push(r.id);
+      }
+      if (!candidates.length) continue;
+      /* T-87-07: the delete set is re-selected with the newest verified ID as
+         an explicit `id <> ?` parameter — the exclusion lives in the QUERY,
+         not only in the JS arithmetic above. */
+      const deleteSet = await db.all(
+        `select id, filename from backup_runs where task_id = ? and status = 'succeeded' and id in (${candidates.map(() => '?').join(',')}) and id <> ?`,
+        [taskId, ...candidates, newestVerified.id],
+      );
+      /* D-13 refuse-to-empty floor (independent second guard): a pass that
+         would remove EVERY remaining archive of the task performs zero
+         deletes and leaves the floor intact. */
+      if (deleteSet.length >= runsAsc.length) {
+        report.floorHeld += 1;
+        report.tasks.push({ taskId, floor: true });
+        continue;
+      }
+      if (!deleteSet.length) continue;
+      /* D-12 / Pitfall 5: sidecar FIRST, then archive, both best-effort
+         (rmStaging discipline); run rows marked deleted only after both. */
+      for (const row of deleteSet) {
+        try {
+          fs.rmSync(path.join(backupsDir, `${row.filename}.sha256`), { force: true });
+        } catch {
+          /* best-effort — a dangling sidecar is detectable, never fatal */
+        }
+        try {
+          fs.rmSync(path.join(backupsDir, row.filename), { force: true });
+        } catch {
+          /* best-effort */
+        }
+      }
+      const ids = deleteSet.map(r => r.id);
+      const marked = await db.run(
+        `update backup_runs set status = 'deleted' where id in (${ids.map(() => '?').join(',')}) and task_id = ?`,
+        [...ids, taskId],
+      );
+      /* T-87-08: one audited rotation event per task pass — ids, per-id
+         bucket and why named in the action string (house convention:
+         details ride the action column). */
+      const detail = deleteSet.map(r => `${buckets.get(r.id)}:${r.id}`).join(',');
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), null, taskId, `backup_rotation:expired:${detail}`, 0, null, null, 'Backup rotation', '', task.name, '', now()],
+      );
+      report.deleted += marked?.changes || 0;
+      report.tasks.push({ taskId, deletedRunIds: ids });
+      logInfo(`backup rotation: task ${taskId} deleted ${ids.length} expired archive(s) (${detail})`);
+    } catch (err) {
+      logWarn(`backup rotation: task ${taskId}: ${err?.message || err}`);
+    }
+  }
+  return report;
 }
 
 /* =====================================================================
@@ -5394,6 +5639,21 @@ async function handleApi(req, res, url) {
     const body = await readJson(req).catch(() => ({}));
     const fired = await runBackupSchedulerPass({ now: body?.now ? new Date(body.now) : undefined });
     return json(res, 200, { fired });
+  }
+
+  /* Plan 87-03: test-only clock injection for the GFS rotation pass — the
+     same harness pattern as the scheduler-pass route above. Exists ONLY
+     while BACKUP_TEST_TOKEN is set; unset in production the path 404s. */
+  if (pathname === '/api/internal/backup-rotation-pass' && method === 'POST') {
+    if (!process.env.BACKUP_TEST_TOKEN || req.headers['x-backup-token'] !== process.env.BACKUP_TEST_TOKEN) {
+      return fail(res, 404, 'notFound', 'Not found');
+    }
+    const body = await readJson(req).catch(() => ({}));
+    const report = await runBackupRotationPass({
+      now: body?.now ? new Date(body.now) : undefined,
+      taskId: typeof body?.taskId === 'string' && body.taskId ? body.taskId : undefined,
+    });
+    return json(res, 200, report);
   }
 
   if (pathname === '/api/config' && method === 'GET') {
