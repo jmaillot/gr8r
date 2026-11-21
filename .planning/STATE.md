@@ -5,16 +5,16 @@ milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 87
 current_plan: 4
 status: executing
-stopped_at: Completed 87-04-PLAN.md
-last_updated: "2026-11-21T23:34:38.026Z"
+stopped_at: Completed 87-03-PLAN.md
+last_updated: "2026-11-21T23:44:03.747Z"
 last_activity: 2026-11-21
 last_activity_desc: Phase 87 execution resumed (wave continue)
-state_head: bd97885f25322622600d83ce203e61971876cf7d
+state_head: 79e6a7c7c507c319d4bd7366f683b4bbbd525137
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -91,6 +91,8 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 87 P87-01 | 30m | 4 tasks | 12 files |
 | Phase 87 P87-02 | 38m | 3 tasks | 3 files |
 | Phase 87 P4 | 49m | 3 tasks | 15 files |
+| Phase 87 P87-03 | 4h | 2 tasks | 5 files |
+| Phase 87 P87-03 | 4h | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -124,6 +126,10 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 87]: 87-02 persisted-run writer seam (setBackupRunWriter) covers both triggers from one seam — manual POST and scheduled fires share the backup_runs lifecycle; history cap = 50 (D-14)
 - [Phase 87]: tzPreselect lives in src/lib/timezones.js (settings.js re-exports) — entry-resident actions.js needs the shared rule without an entry→settings edge (87-04, chunk gate)
 - [Phase 87]: Backup task edit mode never re-sends an untouched schedule (cronDirty flag); per-task Run now reuses POST /api/backup/runs with the task scope (87-04)
+- [Phase 87]: 87-03: GFS rotation uses exactly-one-bucket assignment (UTC calendar position, oldest-first, all positions marked seen); newest verified run excluded by explicit id<>?
+- [Phase 87]: 87-03: backup alerts are transition-only via third outbox claim site (backup-alert:<runId>:<email> dedup); locale keys delegated to 87-04 via 87-03-LOCALE-HANDOFF.md (SC-5 EN fallback meanwhile)
+- [Phase 87]: 87-03: GFS rotation uses exactly-one-bucket assignment (UTC calendar position, oldest-first, all positions marked seen); newest verified run excluded by explicit id<>?
+- [Phase 87]: 87-03: backup alerts are transition-only via third outbox claim site (backup-alert:<runId>:<email> dedup); locale keys delegated to 87-04 via 87-03-LOCALE-HANDOFF.md (SC-5 EN fallback meanwhile)
 
 ### Pending Todos
 
@@ -145,8 +151,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T23:34:37.896Z
-Stopped at: Completed 87-04-PLAN.md
+Last session: 2026-11-21T23:44:03.612Z
+Stopped at: Completed 87-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
