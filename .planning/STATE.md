@@ -2,20 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v3.2
 milestone_name: Entra Group Mapping & Governance Backlog
-current_phase: 83
-current_plan: Not started
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 83 complete — all phases complete
-last_updated: "2026-11-21T13:03:23.532Z"
+last_updated: "2026-11-21T13:04:25.097Z"
 last_activity: 2026-11-21
-last_activity_desc: Phase 83 complete
-state_head: b42aea34d5ccc45c08db7eb87054c2d9ee0c6a8e
+last_activity_desc: Milestone v3.2 completed and archived
+state_head: cbf76c2b688460e339cb8f3f7add5b5c8b9f8f19
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 12
   completed_plans: 12
-  percent: 80
+  percent: 100
+current_phase: 83
 ---
 
 # Project State
@@ -30,13 +29,10 @@ before features.
 
 ## Current Position
 
-Phase: 83
-Current Plan: Not started
-Total Plans in Phase: 4
-Status: All phases complete
-Last activity: 2026-11-21 — Phase 83 complete
-
-Progress: [████████░░] 80%
+Phase: Milestone v3.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-21 — Milestone v3.2 completed and archived
 
 ## Milestone v3.2 Phase Map
 
@@ -141,4 +137,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Review .planning/ROADMAP.md, then start Phase 80 with /gsd-plan-phase 80
+- Start the next milestone with /gsd-new-milestone

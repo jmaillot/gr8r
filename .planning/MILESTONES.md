@@ -1,5 +1,25 @@
 # Milestones
 
+## v3.2 Entra Group Mapping & Governance Backlog (Shipped: 2026-11-21)
+
+**Phases completed:** 5 phases, 12 plans, 9 tasks
+
+**Key accomplishments:**
+- Inert groups.js core (GUID canonicalization, keyed refusal funnel, four-outcome overage detector, D-82-1 highest-role-wins resolver with operator-flag tri-state) plus the group_mappings table in both schema mirrors, pinned by a pure zero-boot unit suite
+- Operator-gated POST /api/governance/group-mappings with four keyed 5-locale refusals, D-82-6 dead-mapping boot warnings, and the groups.js Dockerfile COPY contract — nothing invalid ever stored, empty config boots byte-identically
+- Operator rename route (Phase 79 guard order, slug rules reused verbatim, no existence oracle) + on-read dead-mappings route (orphans + encoded guard trail) with their api.js client methods, proven by a 17-case Wave 0 node:test suite.
+- Governance Edit modal (name-only direct save, slug-change danger confirm with the old slug bold via esc() and type-to-confirm), one-click slugTaken-suggestion adopt, display-only dead-mapping warning card (hidden entirely at zero items, first-colon trail split), and 14 five-locale keys — pinned by 8 new source assertions.
+- Repaired all 4 failing e2e specs root-cause-first (operator nav swap to /governance, STOP_LIST cognate 'Instance', flows 2FA nextWindow/retry hardening) — full suite 155/155 green ×3 consecutive, zero debt waivers.
+- Searchable multi-add team pickers (assignee-modal clone, own lazy chunk) on invite-form and member-edit with D-03 keyboard contract, plus the IN-02 derived i18n catalogue check replacing the 2030 pin.
+- Columns button label collapses at phone width via the sibling hide-m pattern, phone-viewport overflow sweep (dashboard/members/governance) pinned green with zero overflow found, and the rename route now stamps updated_at = now() (IN-01) with a unit pin.
+
+**Known gaps / tech debt carried forward:**
+- Nyquist VALIDATION.md missing for phases 80, 81, 82, 84 (83 is a draft) — requirements were verified goal-backward instead; fill via `/gsd-validate-phase` if desired.
+- Ship-gate e2e env now pins `SUPER_ACCESS=false` (milestone-close decision 2026-11-21): the suite tests pre-super-access tenancy semantics; the super-access default path is covered by unit tests (test/super-access.test.mjs) only.
+- 20 artifact-audit items carried forward as acknowledged (suppressed in future audits); seed captured for next milestone: Super Admin console role-first listing (`.planning/seeds/super-admin-console-role-first-listing.md`).
+
+---
+
 ## v3.1 Workspace Governance (Shipped: 2026-11-20)
 
 **Phases completed:** 2 phases, 5 plans, 5 tasks
