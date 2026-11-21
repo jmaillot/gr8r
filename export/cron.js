@@ -10,7 +10,7 @@
    never under src/ (the prohibition test fails the moment a src/
    module reaches this file). Zero new npm dependencies: parsing and
    timezone math are hand-rolled on Node's Intl stdlib only (T-87-01 —
-   char-class whitelist parser, no eval/Function, bounded scan).
+   char-class whitelist parser, no eval/Function/exec usage, bounded scan).
 
    nextRunAt() NEVER caches formatters or offsets across evaluations
    (tz.js discipline: "DST is real"): a fresh Intl.DateTimeFormat is
@@ -37,10 +37,13 @@ const MAX_SCAN_MINUTES = 527_040;
 
 /* Single cron field → Set of ints (or null when malformed). Char-class
    whitelist only: digits, '-', ',', '/', '*' — everything else refuses.
+   Full grammar: star, lists, ranges a-b (a ≤ b, in-bounds), steps over
+   star or over a range; a bare single value may not carry a step.
    dow is 0-7 with 0=7=Sunday (7 folds onto 0 per the vixie convention). */
 function parseField(field, min, max, isDow) {
   if (typeof field !== 'string' || !field) return null;
   const out = new Set();
+  const fold = v => (isDow && v === 7 ? 0 : v);
   for (const part of field.split(',')) {
     if (!part) return null;
     let range = part;
@@ -54,16 +57,22 @@ function parseField(field, min, max, isDow) {
       if (step < 1) return null;
     }
     if (range === '*') {
-      for (let v = min; v <= max; v += step) out.add(v);
+      for (let v = min; v <= max; v += step) out.add(fold(v));
       continue;
     }
-    /* Tracer grammar (preset subset): single ints and star-steps only.
-       a-b ranges and range-steps land with the full-grammar task — the
-       RED matrix pins their arrival. */
+    const rm = range.match(/^(\d+)-(\d+)$/);
+    if (rm) {
+      const lo = Number(rm[1]);
+      const hi = Number(rm[2]);
+      if (lo < min || hi > max || lo > hi) return null;
+      for (let v = lo; v <= hi; v += step) out.add(fold(v));
+      continue;
+    }
+    /* A bare single value carries no step ('5/10' is not vixie grammar). */
     if (slash !== -1 || !/^\d+$/.test(range)) return null;
     const v = Number(range);
     if (v < min || v > max) return null;
-    out.add(v);
+    out.add(fold(v));
   }
   return out;
 }
@@ -107,10 +116,10 @@ function resolveTz(value) {
   return 'Europe/Paris';
 }
 
-/* dom/dow match — tracer simplification: both restricted ANDs together
-   (the vixie OR correction lands with the full-grammar task, pinned RED). */
+/* dom/dow match — vixie semantics: both restricted → EITHER may fire;
+   a single restricted field wins; neither restricted → every day. */
 function dayMatches(p, dom, dow) {
-  if (p.domRestricted && p.dowRestricted) return p.dom.has(dom) && p.dow.has(dow);
+  if (p.domRestricted && p.dowRestricted) return p.dom.has(dom) || p.dow.has(dow);
   if (p.domRestricted) return p.dom.has(dom);
   if (p.dowRestricted) return p.dow.has(dow);
   return true;
