@@ -51,8 +51,10 @@ import { palServerSearch } from '../overlays/palette.js'; // Phase 58 D-01: debo
 import { strengthMeter } from '../ui/strength.js';
 import { prefValue } from '../core/prefs.js';
 /* 87-04 (D-03): the task form's tz default resolves through the SHARED
-   settings.js tzPreselect — one timezone defaulting rule, never a second. */
-import { tzPreselect } from '../pages/settings.js';
+   tzPreselect — one timezone defaulting rule, never a second. The import
+   targets the leaf lib module (NOT pages/settings.js): an entry→settings
+   edge would dissolve the lazy settings chunk (build-chunk-size gate). */
+import { tzPreselect } from '../lib/timezones.js';
 /* [Phase 57-03 Rule 3] buildExportModel lives in a LAZY chunk (DELIV-02
    index gate): A.exportOpen loads it before the modal opens and stashes the
    module on S.ui.expMod; the submit path awaits the same import. */

@@ -193,21 +193,13 @@ export function tzFilter(q) {
    3. an empty stored value preselects the browser zone
       (Intl.DateTimeFormat().resolvedOptions().timeZone) when it is in the
       list, else Europe/Paris (invalid-browser-zone degradation, D-04/D-07).
-   Exported for the wiring test's ordering assertion. */
-export function tzPreselect(stored) {
-  const s = typeof stored === 'string' ? stored.trim() : '';
-  if (s) {
-    const zone = resolveTz(s);
-    return TIMEZONES.some(z => z.id === zone) ? zone : 'Europe/Paris';
-  }
-  let browser = '';
-  try {
-    browser = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-  } catch {
-    browser = '';
-  }
-  return browser && TIMEZONES.some(z => z.id === browser) ? browser : 'Europe/Paris';
-}
+   Exported for the wiring test's ordering assertion.
+   87-04 (D-03): the implementation MOVED to ../lib/timezones.js (the same
+   remedy as strength.js — the entry-resident actions.js needs the rule for
+   the Backup task console and an entry→settings edge would dissolve the
+   lazy settings chunk); re-exported here so this chunk and the wiring
+   test keep their single import site. */
+export { tzPreselect } from '../lib/timezones.js';
 
 export function tzCombobox(storedOverride) {
   /* D-09: the stored value read here is the member profile's tz (me()), with

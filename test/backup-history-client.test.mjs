@@ -66,12 +66,13 @@ test('D-01: no free-text cron input exists in the page source (pinned from the t
 });
 
 test('D-03: the tz picker is the reused settings combobox — never a second picker', () => {
-  assert.match(pagesSrc, /import \{ tzCombobox, tzPreselect \} from '\.\/settings\.js';/, 'backup.js imports the Phase 34 combobox');
+  assert.match(pagesSrc, /import \{ tzCombobox \} from '\.\/settings\.js';/, 'backup.js imports the Phase 34 combobox');
+  assert.match(pagesSrc, /import \{ tzPreselect \} from '\.\.\/lib\/timezones\.js';/, 'backup.js resolves the default through the shared lib rule');
   assert.match(pagesSrc, /tzCombobox\(form\.tz\)/, 'the form embeds the shared component');
   /* The selection stages into the form (backup context branch) — the member
      profile save path only runs when the backup form is NOT staged. */
   assert.match(actionsSrc, /if \(S\.ui\.backupTaskForm\) \{[\s\S]*?backupTaskForm\.tz = el\.dataset\.v/, 'IN.tzSel routes form-context selections into S.ui.backupTaskForm.tz');
-  assert.match(actionsSrc, /import \{ tzPreselect \} from '\.\.\/pages\/settings\.js';/, 'actions.js resolves the tz default through the shared tzPreselect');
+  assert.match(actionsSrc, /import \{ tzPreselect \} from '\.\.\/lib\/timezones\.js';/, 'actions.js resolves the tz default through the shared tzPreselect (leaf lib — no entry→settings edge)');
   /* The settings combobox takes the override parameter (backward compatible). */
   const settingsSrc = read('src/pages/settings.js');
   assert.match(settingsSrc, /export function tzCombobox\(storedOverride\)/, 'tzCombobox accepts the staged-form override');

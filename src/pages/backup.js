@@ -34,7 +34,8 @@ import { S } from '../core/store.js';
 import { t, getLocale } from '../core/i18n.js';
 import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
-import { tzCombobox, tzPreselect } from './settings.js';
+import { tzCombobox } from './settings.js';
+import { tzPreselect } from '../lib/timezones.js';
 import { refreshBackupTasks, backupPollTick, backupPollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
@@ -103,7 +104,7 @@ const runNowCard = flags => {
    verbatim chrome (never recomputed). The builder serializes preset+field
    dropdown selections into the raw 5-field cron string (D-04) — there is NO
    free-text cron input anywhere in the page (D-01, T-87-11) and NO client
-   cron evaluation: the schedule "summary" is human-readable TEXT derived
+   cron evaluation: the schedule summary is human-readable TEXT derived
    from the selections, never a computed timestamp preview (Pitfall 6). */
 
 /* =====================================================================

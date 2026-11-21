@@ -78,8 +78,14 @@ test('D-03: no runtime zone enumeration under src/, and the static list is impor
 });
 
 test('preselect chain ordering (D-04 → D-05 → D-07), pinned structurally: stored → resolveTz → browser → Paris', () => {
-  const fn = settingsSrc.slice(settingsSrc.indexOf('export function tzPreselect'), settingsSrc.indexOf('export function tzCombobox'));
-  assert.ok(fn, 'tzPreselect must be exported for this assertion');
+  /* 87-04 (D-03): the implementation moved to ../lib/timezones.js (the same
+     remedy as strength.js — the entry-resident actions.js needs the rule
+     without an entry→settings edge); settings.js re-exports it. The chain
+     pins now read the lib module, the re-export stays pinned in settings.js. */
+  const tzLibSrc = read('src/lib/timezones.js');
+  const fn = tzLibSrc.slice(tzLibSrc.indexOf('export function tzPreselect'));
+  assert.ok(fn, 'tzPreselect must be exported from ../lib/timezones.js');
+  assert.ok(settingsSrc.includes("export { tzPreselect } from '../lib/timezones.js';"), 'settings.js re-exports the moved rule (single import site for its chunk)');
   const iResolve = fn.indexOf('resolveTz(');
   const iBrowser = fn.indexOf('resolvedOptions()');
   const iParis = fn.indexOf("'Europe/Paris'");
