@@ -152,6 +152,9 @@ PGID=1000
 ALLOW_SIGNUP=false
 # Workspace creation gate: 'true' | 'false'. Unset = false (operators only).
 WORKSPACE_CREATION=true
+# Super-access gate: 'true' | 'false'. Unset = true (the instance admin may
+# enter any workspace owner-like; 'false' closes foreign entry).
+SUPER_ACCESS=
 # Optional admission doors (Phase 75). Comma-separated email-domain allowlists.
 ALLOW_SIGNUP_DOMAINS=
 ALLOW_INVITE_DOMAINS=
@@ -175,6 +178,15 @@ restart (it is read once at boot). It is fully decoupled from `ALLOW_SIGNUP`, wh
 continues to govern account signup only — setting `ALLOW_SIGNUP=true` no longer lets users
 create workspaces. The resolved value is logged at boot (`workspace creation: open …` /
 `closed …`) and exposed as the boolean `workspaceCreation` field of `/api/config`.
+
+`SUPER_ACCESS` gates the instance admin's super-access (entering a workspace they hold no
+membership in, acting as owner inside it — archived ones read-only). It accepts **exactly**
+`true` or `false`, same discipline as `WORKSPACE_CREATION`; **unset defaults to `true`**
+(the ratified default — an opt-out flag for stricter instances). `false` closes foreign
+entry (`404`), the workspace switcher lists only real memberships, and the governance
+"Open" action is hidden — but instance powers (create/archive/delete/rename, the operator
+console) stay intact. Changing it requires a restart. Exposed as the boolean `superAccess`
+field of `/api/config`.
 
 `ALLOW_SIGNUP_DOMAINS` and `ALLOW_INVITE_DOMAINS` are the two admission doors (Phase 75).
 Each takes a comma-separated list of email domains and is tri-state: **unset** = door off

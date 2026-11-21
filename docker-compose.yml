@@ -46,6 +46,9 @@ services:
       PUID: ${PUID:-1000}
       PGID: ${PGID:-}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      # Super-access gate: 'true' (default) lets the instance admin enter any
+      # workspace owner-like; 'false' restricts them to governance actions.
+      SUPER_ACCESS: ${SUPER_ACCESS:-true}
       # Phase 75 domain doors passed via env_file — environment: interpolation
       # (${VAR:-}) would coerce "unset" to "", flipping fail-open to deny-all.
       # With env_file, a var absent from .env stays undefined (fail-open).
