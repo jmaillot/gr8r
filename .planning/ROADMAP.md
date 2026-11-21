@@ -40,7 +40,11 @@
 3. Super Admins exercise both operator capabilities without ever appearing in or being demotable from the instance_roles membership list (implicit membership).
 4. Every role grant/revoke appears in the audit trail through the existing audit funnel.
 5. The `hasInstanceRole` funnel exists server-side with Super-Admins-auto-members semantics, and the distinction "restore authority ≠ archive-read authority" (download tiering vocabulary) is encoded in the role design now — before any restore endpoint is written.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 85-01-PLAN.md — Server roles core: instance_roles table, roles.js funnel, operator routes + audit, stub backup endpoints, D-35 pins
+- [ ] 85-02-PLAN.md — UI surfaces: Instance Roles tab on /governance, gated Backup page + nav, payload-flag getters, 5-locale UI keys
 **Gaps for discuss-phase**: none — v3.2 groups.js template copied verbatim (dual mirror + pin test + refusal funnel).
 **UI hint**: yes
 
