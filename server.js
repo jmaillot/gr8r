@@ -8326,6 +8326,38 @@ async function handleApi(req, res, url) {
     return json(res, 200, payload);
   }
 
+  /* -------------- backup run history (Phase 87, 87-02, BKBCK-04/D-14) --------------
+     GET /api/backup/runs?taskId=<id> — one task's run rows, newest first
+     (created_at desc), capped at 50 (D-14 "capped ~50" → 50, documented).
+     taskId=manual lists the manual Run-now archives (task_id NULL, D-11).
+     The frozen /api/backup/runs/current GET block above is UNTOUCHED (Phase
+     86 frozen surface) — this is a separate query variant. Guard chain
+     order copied verbatim from that GET: sameOrigin → requireUser →
+     capability gate → query; both operator roles may read (D-33-7).
+     Refusals keyed; taskNotFound resolves only AFTER the gate (T-86-06 —
+     never a pre-gate existence oracle). Error strings are persisted
+     verbatim and rendered client-side through esc() (T-87-05 / Pitfall 7). */
+  if (pathname === '/api/backup/runs' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can read backup history');
+    }
+    const taskId = url.searchParams.get('taskId');
+    if (!taskId) return fail(res, 400, 'taskNotFound', 'That backup task does not exist');
+    if (taskId === 'manual') {
+      const rows = await db.all('select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      return json(res, 200, { runs: rows });
+    }
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
+    if (!(await db.get('select id from backup_tasks where id = ?', [taskId]))) {
+      return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
+    }
+    const rows = await db.all('select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    return json(res, 200, { runs: rows });
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */

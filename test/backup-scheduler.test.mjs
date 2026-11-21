@@ -322,3 +322,104 @@ test('a malformed stored cron logs, clears its cache, and never starves the othe
     await server.stop();
   }
 });
+
+/* ---------- history read endpoint (87-02 history task, BKBCK-04/D-14) ---------- */
+
+/* A Restore Operator + client, granted through the Phase 85 grant route. */
+async function makeRestoreOp(server, email) {
+  const joined = await signup(server.base, { name: 'Restore Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, email), role: 'restore_operator' });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  return (await login(server.base, email, 'password-1234')).client;
+}
+
+const seedRun = (srv, { id, taskId, trigger = 'scheduled', status = 'succeeded', createdAt }) =>
+  withDb(srv.dbPath, db =>
+    db.prepare(
+      'insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values (?,?,?,?,?,?,?)',
+    ).run(id, taskId, '{}', trigger, status, createdAt, createdAt),
+  );
+
+test('GET /api/backup/runs?taskId= returns the task runs newest-first capped at 50 (D-14)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-history@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'History', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    const id = created.data.task.id;
+    const base = 1_700_000_000_000;
+    /* Seed 55 rows with DISTINCT descending created_at values (deterministic
+       order + cap math). */
+    for (let i = 0; i < 55; i++) seedRun(server, { id: `hist-${i}`, taskId: id, createdAt: base + i * 1000 });
+
+    const res = await op.get(`/api/backup/runs?taskId=${id}`);
+    assert.equal(res.status, 200);
+    const runs = res.data.runs;
+    assert.equal(runs.length, 50, 'capped at exactly 50 (D-14)');
+    for (let i = 1; i < runs.length; i++) {
+      assert.ok(runs[i - 1].created_at >= runs[i].created_at, 'newest first (created_at desc)');
+    }
+    assert.equal(runs[0].id, 'hist-54', 'the newest row leads');
+    /* Field projection carries the history-card contract (D-14). */
+    const row = runs[0];
+    for (const field of ['id', 'trigger', 'status', 'started_at', 'finished_at', 'duration_ms', 'size_bytes', 'sha256', 'filename', 'error', 'task_id']) {
+      assert.ok(field in row, `field ${field} present`);
+    }
+    assert.equal(row.task_id, id);
+    assert.ok(!('scope' in row), 'internal scope JSON is not projected');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('history read gate: RESTORE_USE-only holder reads; non-holder gets keyed 403 backupManageRequired (T-86-06: taskNotFound only after the gate)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-gate@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Gated', scope: { kind: 'instance' }, cron: '0 3 * * *' });
+    const id = created.data.task.id;
+    seedRun(server, { id: 'hist-gate-1', taskId: id, createdAt: Date.now() });
+
+    const ro = await makeRestoreOp(server, 'ro-history@test.local');
+    const ok = await ro.get(`/api/backup/runs?taskId=${id}`);
+    assert.equal(ok.status, 200, 'RESTORE_USE-only holder may read (D-33-7)');
+    assert.equal(ok.data.runs.length, 1);
+
+    const plain = (await signup(server.base, { name: 'Nobody', email: 'plain-history@test.local' })).client;
+    const refused = await plain.get(`/api/backup/runs?taskId=${id}`);
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'backupManageRequired');
+
+    const missing = await op.get('/api/backup/runs?taskId=does-not-exist');
+    assert.equal(missing.status, 404);
+    assert.equal(missing.data.code, 'taskNotFound');
+    const malformed = await op.get('/api/backup/runs?taskId=..%2Fetc');
+    assert.equal(malformed.status, 404);
+    assert.equal(malformed.data.code, 'taskNotFound', 'same keyed refusal — no which-part oracle');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('taskId=manual lists the manual Run-now archives (task_id NULL, D-11); the frozen current GET is untouched', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-manualq@test.local');
+    seedRun(server, { id: 'man-1', taskId: null, trigger: 'manual', createdAt: 1_700_000_000_000 });
+    seedRun(server, { id: 'man-2', taskId: null, trigger: 'manual', createdAt: 1_700_000_050_000 });
+
+    const res = await op.get('/api/backup/runs?taskId=manual');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.runs.length, 2);
+    assert.ok(res.data.runs.every(r => r.task_id === null && r.trigger === 'manual'));
+    assert.equal(res.data.runs[0].id, 'man-2', 'newest first');
+
+    /* The frozen Phase 86 surface still answers byte-compatibly. */
+    const cur = await op.get('/api/backup/runs/current');
+    assert.equal(cur.status, 200);
+    assert.equal(cur.data.stage, 'idle');
+  } finally {
+    await server.stop();
+  }
+});
