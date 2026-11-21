@@ -22,7 +22,7 @@
 ## Phases
 
 - [x] **Phase 85: Roles Foundation** — instance_roles table, hasInstanceRole funnel, Instance Roles governance tab, restore-authority ≠ archive-read-authority encoding (completed 2026-11-21)
-- [ ] **Phase 86: Export Core ("gr8r backup v1")** — pure backup.js fence, snapshot fence, archive format freeze + manifest + table classification, local destination, manual Run now
+- [x] **Phase 86: Export Core ("gr8r backup v1")** — pure backup.js fence, snapshot fence, archive format freeze + manifest + table classification, local destination, manual Run now (completed 2026-11-21)
 - [ ] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email
 - [ ] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify
 - [ ] **Phase 89: Restore** — preview-from-manifest, import-as-new (-restored) default, guarded overwrite with pre-restore snapshot, Super-Admin-only instance DR restore + security contract
@@ -63,7 +63,7 @@ Plans:
 4. Memory stays bounded (~65 MiB) regardless of archive size via the staged temp-file streaming pipeline, with atomic rename on completion.
 5. Research flags to resolve at plan time (not here): ustar size math confirmation; file-id→workspace/project mapping existence; SIGTERM/crash hygiene sweep of DATA_DIR/tmp/backup-*.
 
-**Plans**: 2/2 plans executed
+**Plans**: 2/2 plans complete
 - [x] 86-01-PLAN.md — Export pipeline core: ustar writer, two-pass staged pipeline, scope containment, manifest + self-verify, dual-engine fences
 - [x] 86-02-PLAN.md — /api/backup/runs route pair + Backup page Run now card/progress (frozen API surface, refusals, audit, throttle)
 
@@ -138,7 +138,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 85. Roles Foundation | 2/2 | Complete    | 2026-11-21 |
-| 86. Export Core ("gr8r backup v1") | 2/2 | In Progress|  |
+| 86. Export Core ("gr8r backup v1") | 2/2 | Complete    | 2026-11-21 |
 | 87. Scheduler, Tasks, Run History & Rotation | 0/? | Not started | - |
 | 88. S3 Destination | 0/? | Not started | - |
 | 89. Restore | 0/? | Not started | - |
