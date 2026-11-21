@@ -301,14 +301,11 @@ boot: status='running' → 'interrupted'
 | A4 | A 60 s sweep interval is sufficient (all field granularity is minutes; 1-min tick matches the reminder precedent) | Pattern 1/2 | Worst case a fire is up to 60 s late — acceptable, discretion area |
 | A5 | Users' notification prefs (`user_notif_prefs`) are NOT consulted for backup alerts (D-17 says role-resolved recipients, no opt-out mentioned) | Pattern 5 | Over/under-emailing; confirm with user if prefs should gate |
 
-## Open Questions
+## Open Questions (RESOLVED at plan time)
 
-1. **Where does "the creating operator's account timezone" live?**
-   - What we know: `users` has `locale` (server.js:764) but tz historically lives on workspace members (`members[*].tz`, tz.js legacy map); D-02 says the task defaults to the creator's account tz.
-   - What's unclear: whether a per-user tz exists server-side today.
-   - Recommendation: planner checks `users` DDL; if absent, default `resolveTz(undefined)` → Europe/Paris and let the operator pick in the form (combobox makes this one click). Cheap either way.
-2. **Instance-scope sentinel for `email_outbox.workspace_id`** (A2) — verify against `runEmailDeliveryPass` internals before writing the email seam.
-3. **Should backup alerts respect `user_notif_prefs` opt-outs?** D-17 doesn't mention prefs; recommend no gating in v1 (role-defined recipients), confirm if desired.
+1. **Where does "the creating operator's account timezone" live?** — **RESOLVED** via Plan 87-01 task 1 `checkpoint:decision`: planner confirmed `users` carries no per-user tz server-side; default is `resolveTz(undefined)` (Europe/Paris fallback) and the operator picks per task via the combobox (D-02/D-03). Surfaced to the user at the checkpoint before DDL lands.
+2. **Instance-scope sentinel for `email_outbox.workspace_id`** (A2) — **RESOLVED** in Plan 87-03 task 3: sentinel `''`, verified against the `runEmailDeliveryPass` claim insert (server.js:3193-3201 accepts any string; no FK enforcement on workspace_id).
+3. **Should backup alerts respect `user_notif_prefs` opt-outs?** — **RESOLVED**: no prefs gating (role-defined recipients per D-17); recorded in Plan 87-03 task 3.
 
 ## Environment Availability
 
