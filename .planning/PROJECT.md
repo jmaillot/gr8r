@@ -1,8 +1,36 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-20 — v3.2 milestone started*
+*Last updated: 2026-11-21 — v3.2 milestone shipped*
 
-## Current Milestone: v3.2 Entra Group Mapping & Governance Backlog
+## Current State: v3.2 Entra Group Mapping & Governance Backlog — SHIPPED (2026-11-21)
+
+**Shipped:** 5 phases (80–84), 12 plans, 19/19 requirements traced, all phases verified
+(closeout: verified_closeout; ship gate e2e 157/157 green, unit 2050/0).
+
+**What the app does now (delta from v3.1):**
+- **Entra group → workspace mapping at SSO login** (claims-first, zero new dependencies): the
+  `groups` claim (Entra Object-ID GUIDs, `ApplicationGroup` mode) is matched against
+  operator-managed mappings on `/governance` — highest role wins (D-82-1); grants only,
+  removals sync at next login through the shared guard funnel with last-operator/last-owner
+  guards; >200-group overage resolves as UNMAPPED, never silently empty; unmapped users
+  behave byte-identically to v3.1.
+- **Governance surface:** workspace rename + slug edit from `/governance` with honest link
+  death (old slug 404s), type-to-confirm danger fork, one-click slugTaken-suggestion adopt,
+  dead-mapping warning card + boot warnings.
+- **Backlog cleared:** searchable multi-add team pickers (invite + member-edit), e2e spec
+  debt repaired, mobile columns-button fix + phone-viewport sweep, DEPLOY.md Entra/SSO
+  docs (incl. SUPER_ACCESS/WORKSPACE_CREATION), CHANGELOG 3.0.0/3.1.0/3.2.0, version 3.2.0.
+- **Operator super-access** (post-ship quick tasks, ratified): instance admins enter any
+  workspace owner-like; opt-out via `SUPER_ACCESS=false` (strict-token, boot-refuse).
+
+**Known gaps carried forward:** Nyquist VALIDATION.md missing for 80/81/82/84 (see
+MILESTONES.md); Super Admin console role-first listing captured as a seed for the next
+milestone (`.planning/seeds/super-admin-console-role-first-listing.md`).
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+
+<details>
+<summary>Milestone v3.2 (in-progress record, archived 2026-11-21)</summary>
 
 **Goal:** Let Entra ID groups drive gr8r workspace membership and operator rights at SSO login, and finish the deferred governance/backlog work.
 
@@ -18,9 +46,9 @@
 snapshot-at-login (no periodic reconcile); unmapped users behave exactly as today (fail-closed);
 group match is a parallel admission concept beside the v3.0 domain door matrix, which is unchanged.
 
-<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+</details>
 
-## Current Milestone: v3.1 Workspace Governance — SHIPPED (2026-11-20)
+## Milestone v3.1 Workspace Governance — SHIPPED (2026-11-20)
 
 **Goal:** Instance operators control who can create workspaces and can see and manage every
 workspace on the instance — no shadow workspaces.
