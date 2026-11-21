@@ -2102,6 +2102,7 @@
   "pwa.install.hint": "Installez l’application pour un accès en un geste",
   "pwa.install.iosHint": "Partager → Sur l’écran d’accueil",
   "nav.route.governance": "Gouvernance",
+  "nav.route.backup": "Sauvegarde",
   "common.instance": "Instance",
   "page.governance.subtitle": "Chaque espace de travail de cette instance. Vous seul pouvez voir cette page.",
   "page.governance.wsTitle": "Espaces de travail",
@@ -2161,5 +2162,10 @@
   "toast.governanceUnarchived": "Espace de travail désarchivé.",
   "toast.governanceDeleted": "Espace de travail supprimé.",
   "toast.governanceRenamed": "Espace de travail renommé.",
-  "page.governance.open": "Ouvrir"
+  "page.governance.open": "Ouvrir",
+  "page.backup.subtitle": "Sauvegardes et restaurations de l'instance.",
+  "page.backup.emptyTitle": "Aucune tâche de sauvegarde",
+  "page.backup.emptyBody": "La sauvegarde n'est pas encore configurée. Les tâches de sauvegarde apparaîtront ici dès que l'opérateur de l'instance les aura créées.",
+  "page.backup.flagBackup": "Opérateur de sauvegarde",
+  "page.backup.flagRestore": "Opérateur de restauration"
 }

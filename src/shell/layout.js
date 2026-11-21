@@ -68,6 +68,10 @@ const P = {
   /* 79-02 (WSG-07/D-11): the governance surface is instance-scoped and
      operator-only — lazy-loaded like dashboard, never on the entry chunk. */
   governance: lazy(() => import('../pages/governance.js'), 'pageGovernance'),
+  /* 85-02 (D-21/D-27): the Backup surface is a shared top-level page (both
+     operator roles + Super Admins) — lazy-loaded like governance so the
+     entry chunk never carries it (chunk-size discipline). */
+  backup: lazy(() => import('../pages/backup.js'), 'pageBackup'),
   system: lazy(() => import('../pages/design-system.js'), 'pageSystem'),
   states: lazy(() => import('../pages/design-system.js'), 'pageStates'),
   archive: lazy(() => import('../features/archive.js'), 'pageArchive'),
@@ -172,6 +176,11 @@ export function renderSidebar() {
       ${sItem('mytasks', routeName('mytasks'), 'circle-check', { ct: myOpen || '' })}
       ${sItem('favorites', routeName('favorites'), 'star')}
       ${sItem('notifications', routeName('notifications'), 'bell', { ct: unreadAll || '' })}
+      ${/* 85-02 (D-21/D-23): the Backup entry is TOP-LEVEL — never nested in
+           the instance group (Backup Operators are regular users, not
+           operators). UX gate only — the server 403 is the control
+           (layout.js:178 doctrine applies verbatim). */ ''}
+      ${api.user?.canBackup || api.user?.canRestore ? sItem('backup', routeName('backup'), 'database-backup') : ''}
       <div class="sgroup">
         <div class="sgroup-h">${t('common.workspace')}</div>
         ${sItem('overview', routeName('overview'), 'layout-dashboard')}

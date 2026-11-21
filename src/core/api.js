@@ -157,6 +157,17 @@ export const api = {
   get memberId() {
     return state.memberId;
   },
+  /* ---------- payload flags (85-02 D-23) ----------
+     Client gating is cosmetic (T-78-05): the server re-checks every backup
+     endpoint through the hasInstanceRole funnel; these getters only decide
+     whether the chrome renders. */
+  get canBackup() {
+    return !!state.user?.canBackup;
+  },
+  get canRestore() {
+    return !!state.user?.canRestore;
+  },
+
   /* Creation gate (WSG-03/D-112): the server's WORKSPACE_CREATION boolean is
      the truth — creation passes when the gate is open OR the user is an
      instance operator. The legacy workspace owner/admin clause is DEAD under
@@ -412,6 +423,11 @@ export const api = {
      throttle; the payload is raw values (escaping happens at first render). */
   async operatorDeadMappings() {
     return call('GET', '/api/auth/operator/dead-mappings');
+  },
+  /* 85-02 (D-19/D-24): the Backup page's ground truth — the stub payload
+     carries the capability flags beside the (Phase 86/87) task list. */
+  async backupTasks({ signal } = {}) {
+    return call('GET', '/api/backup/tasks', undefined, { signal });
   },
   /* Phase 52 (TRN-01): the workspace-admin transparency read — what the TARGET
      member can access, computed server-side through the visibility funnel.

@@ -41,6 +41,7 @@ export const ROUTE_IDS = [
   'states',
   'archive',
   'governance',
+  'backup',
 ];
 export const routeName = id => t('nav.route.' + id);
 export const ROUTE_ICONS = {
@@ -64,6 +65,7 @@ export const ROUTE_ICONS = {
   states: 'layers',
   archive: 'archive',
   governance: 'scale',
+  backup: 'database-backup',
 };
 
 /* Phase 60 (D-05): per-route teardown registry. A lazy page with a running

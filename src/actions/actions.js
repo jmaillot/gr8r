@@ -4705,6 +4705,42 @@ A.govRetry = () => {
   render();
   refreshGovernanceWorkspaces();
 };
+
+/* =====================================================================
+   85-02 BACKUP (D-20/D-24/D-26) — the gated top-level surface's ground
+   truth. Render-only from the GET /api/backup/tasks payload and its
+   capability flags (D-23: the client never derives roles). One fill
+   loop with a monotonic sequence + in-flight abort (the governance
+   pattern above); NO auto-poll — a low-frequency surface. A non-holder
+   fetch 403s with the keyed backupRoleRequired refusal — the page
+   surfaces it as the D-26 fullstate, never a blank page or redirect.
+   ===================================================================== */
+let backupFillSeq = 0;
+let backupInflight = null;
+export async function refreshBackupTasks() {
+  if (!api.enabled) return null;
+  const my = ++backupFillSeq;
+  backupInflight?.abort();
+  backupInflight = new AbortController();
+  const res = await api.backupTasks({ signal: backupInflight.signal });
+  if (my !== backupFillSeq) return null;
+  if (res.ok) {
+    S.ui.backupTasks = { tasks: res.data.tasks || [], canBackup: !!res.data.canBackup, canRestore: !!res.data.canRestore };
+    S.ui.backupErr = null;
+  } else {
+    /* D-28: the central intercept owns the 401 teardown. Any other refusal
+       surfaces through the page's honest fullstate — never a blank page. */
+    if (res.status !== 401) S.ui.backupErr = { status: res.status };
+    return null;
+  }
+  render();
+  return S.ui.backupTasks;
+}
+A.backupRetry = () => {
+  S.ui.backupErr = null; // CR-01: recovery goes through the explicit retry action, never an auto re-kick
+  render();
+  refreshBackupTasks();
+};
 IN.govQ = el => {
   S.ui.govQ = el.value;
   render();

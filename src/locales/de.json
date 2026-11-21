@@ -2062,6 +2062,7 @@
   "pwa.install.hint": "Installiere die App für Zugriff mit einem Fingertipp",
   "pwa.install.iosHint": "Teilen → Zum Home-Bildschirm",
   "nav.route.governance": "Governance",
+  "nav.route.backup": "Backup",
   "common.instance": "Instanz",
   "page.governance.subtitle": "Jeder Workspace dieser Instanz. Nur du kannst diese Seite sehen.",
   "page.governance.wsTitle": "Workspaces",
@@ -2121,5 +2122,10 @@
   "toast.governanceUnarchived": "Workspace dearchiviert.",
   "toast.governanceDeleted": "Workspace gelöscht.",
   "toast.governanceRenamed": "Workspace umbenannt.",
-  "page.governance.open": "Öffnen"
+  "page.governance.open": "Öffnen",
+  "page.backup.subtitle": "Backups und Wiederherstellungen der Instanz.",
+  "page.backup.emptyTitle": "Noch keine Backup-Aufgaben",
+  "page.backup.emptyBody": "Backup ist noch nicht konfiguriert. Backup-Aufgaben erscheinen hier, sobald der Instanz-Operator sie anlegt.",
+  "page.backup.flagBackup": "Backup-Operator",
+  "page.backup.flagRestore": "Restore-Operator"
 }
