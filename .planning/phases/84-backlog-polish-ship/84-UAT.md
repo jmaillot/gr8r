@@ -1,8 +1,8 @@
 ---
 phase: "84"
-status: in_progress
+status: complete
 tests_total: 6
-tests_passed: 0
+tests_passed: 6
 tests_failed: 0
 tests_blocked: 0
 created: "2026-11-20"
@@ -16,7 +16,7 @@ created: "2026-11-20"
 
 **Expected:** Open the invite form (Members → invite). The old teams chip-row is replaced by selected chips + a picker opener button. Clicking it opens a searchable modal (clone of the assignee picker): type to filter teams (accent-insensitive/folded), Enter adds the highlighted team AND KEEPS the input open (chip accumulates), Backspace removes the last chip (with empty query), Escape closes. "Done" applies the draft. The typed invite email field must NOT be wiped by picker open/confirm. Submit the invite — it goes through with the chosen teams.
 
-**Result:** (pending)
+**Result:** PASS (owner UAT, 2026-11-21)
 
 ---
 
@@ -24,7 +24,7 @@ created: "2026-11-20"
 
 **Expected:** In a member's drawer/modal → Access tab (NOT General), the teams field is the same searchable picker. Pick/apply updates the member's teams; submission works.
 
-**Result:** (pending)
+**Result:** PASS (owner UAT, 2026-11-21 — walkthrough in French)
 
 ---
 
@@ -32,7 +32,7 @@ created: "2026-11-20"
 
 **Expected:** At a phone viewport (~390×844), the tasks-table toolbar's Columns button shows icon-only (label collapsed, like the Sort/Group buttons) — no truncation. The popover still opens and toggles drive both the desktop table columns and the mobile card stack. At desktop width (≥901px) the label is visible again.
 
-**Result:** (pending)
+**Result:** PASS (owner UAT, 2026-11-21 — walkthrough in French)
 
 ---
 
@@ -40,7 +40,7 @@ created: "2026-11-20"
 
 **Expected:** At ~390×844, dashboard, members and governance render without horizontal scrolling (body scrollWidth ≤ viewport width).
 
-**Result:** (pending)
+**Result:** PASS (owner UAT, 2026-11-21 — walkthrough in French)
 
 ---
 
@@ -74,4 +74,4 @@ created: "2026-11-20"
 5. An **archived** workspace: the operator can still enter it, but read-only (writes refused); real members stay locked out.
 6. A **non-operator** user still cannot see/enter workspaces they aren't a member of (no behavior change for regular users).
 
-**Result:** (pending)
+**Result:** PASS (owner UAT, 2026-11-21 — walkthrough in French)
