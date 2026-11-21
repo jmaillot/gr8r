@@ -4758,6 +4758,12 @@ let backupPollSeq = 0;
 let backupPollInflight = null;
 let backupPollTimer = null;
 const BACKUP_ACTIVE_STAGES = ['collecting', 'archiving', 'verifying'];
+/* WR-02: cooldown between render-kicked ticks after a failure — no backoff
+   here would let pageBackup's in-render kick re-fire on every render. */
+const BACKUP_POLL_FAILURE_COOLDOWN_MS = 30000;
+export function backupPollKickAllowed() {
+  return !S.ui.backupPollFailedAt || Date.now() - S.ui.backupPollFailedAt > BACKUP_POLL_FAILURE_COOLDOWN_MS;
+}
 
 export async function backupPollTick() {
   if (!api.enabled) return null;
@@ -4772,11 +4778,20 @@ export async function backupPollTick() {
     /* D-07: the interval runs only while a run is active — done|failed|idle stops it. */
     if (!BACKUP_ACTIVE_STAGES.includes(res.data?.stage)) backupStopPolling();
   } else {
-    /* D-28: the central intercept owns the 401 teardown. A role loss (403)
-       stops the loop — a non-holder must never spin against the keyed refusal. */
+    /* D-28: the central intercept owns the 401 teardown. Terminal refusals
+       (403 role loss, 404 route gone) stop the loop AND surface the error —
+       a non-holder must never spin against the keyed refusal. WR-02: any
+       other failure also clears backupPending (otherwise a failure landing
+       between trigger and first poll renders the pending panel forever) and
+       stamps backupPollFailedAt — the page's render-kick honors it as a
+       cooldown, so a persistent 500/network error degrades to one retry per
+       BACKUP_POLL_FAILURE_COOLDOWN_MS instead of a render→fetch→render loop. */
     if (res.status === 401) return null;
     backupStopPolling();
     S.ui.backupRun = null;
+    S.ui.backupPending = false;
+    if (res.status === 403 || res.status === 404) S.ui.backupErr = { status: res.status };
+    S.ui.backupPollFailedAt = Date.now();
   }
   render();
   return S.ui.backupRun;

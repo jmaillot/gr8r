@@ -26,7 +26,7 @@ import { S } from '../core/store.js';
 import { t } from '../core/i18n.js';
 import { esc } from '../core/utils.js';
 import { empty } from '../ui/helpers.js';
-import { refreshBackupTasks, backupPollTick } from '../actions/actions.js';
+import { refreshBackupTasks, backupPollTick, backupPollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
@@ -107,8 +107,10 @@ export function pageBackup() {
   const tasks = Array.isArray(flags.tasks) ? flags.tasks : [];
   /* D-07: pick up a run that is already active (page re-entry mid-run) — one
      payload-driven tick; the interval itself lives in actions.js and runs only
-     while the payload reports an active stage. */
-  if (flags.canBackup && !S.ui.backupRun && !S.ui.backupPending) backupPollTick();
+     while the payload reports an active stage. WR-02: the kick honors the
+     post-failure cooldown, so a persistent server error cannot loop
+     render→fetch→render. */
+  if (flags.canBackup && !S.ui.backupRun && !S.ui.backupPending && backupPollKickAllowed()) backupPollTick();
   /* The task list stays the Phase 87 surface — today the D-20 honest empty
      list renders beside the 86-02 Run now card (D-09). */
   const body = tasks.length
