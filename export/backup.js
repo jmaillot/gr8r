@@ -622,13 +622,19 @@ export async function runExport(scope) {
 
     /* Finalize: whole-archive sha256 over the FINAL bytes (canonical
        statement — computed once, after the tar is complete), then the
-       atomic rename into DATA_DIR/backups (same filesystem — Pitfall 6). */
+       atomic rename into DATA_DIR/backups (same filesystem — Pitfall 6).
+       WR-05: the sidecar is written INTO staging and renamed together
+       with the tar — if the sidecar write fails, the run fails BEFORE the
+       rename, so a "failed" status can never coexist with a published
+       archive in backups/. */
     if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     const { sha256 } = await sha256AndSize(tarPath);
     const filename = archiveName(scope, Date.now());
     const destination = path.join(dirs.backupsDir, filename);
+    const sidecarStaged = path.join(stagingDir, 'archive.sha256.staged');
+    fs.writeFileSync(sidecarStaged, `${sha256}  ${filename}\n`);
     fs.renameSync(tarPath, destination);
-    fs.writeFileSync(`${destination}.sha256`, `${sha256}  ${filename}\n`);
+    fs.renameSync(sidecarStaged, `${destination}.sha256`);
 
     rmStaging(stagingDir); // D-15: only the verified archive remains
     completeRun(filename, sha256);
