@@ -85,6 +85,7 @@ import { buildMspdi } from './export/mspdi.js';
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
+import { probeS3 } from './export/s3.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -191,6 +192,31 @@ const APP_URL = String(process.env.APP_URL || '')
   .replace(/\/+$/, '');
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 
+/* Phase 88 (D-88-11/13): the S3 destination env pair — boot-frozen like
+   WORKSPACE_CREATION/MAILER. Read ONCE here; no process.env reads after boot.
+   S3_ENDPOINT is OPTIONAL (absent = the AWS native host derived from the
+   region at config time — the documented default, never scheme guessing,
+   D-88-13); S3_REGION defaults us-east-1; S3_PATH_STYLE is a strict-token
+   boolean (default true — path-style PUT, MinIO/B2 need it, AWS accepts)
+   whose invalid token boot-refuses below (D-88-13). The raw values never
+   leave these consts: /api/config exposes the s3Enabled BOOLEAN only, task
+   rows carry s3_enabled, and no log line or error text carries a key
+   (D-88-11 custody / V14). */
+const S3_ENDPOINT = String(process.env.S3_ENDPOINT || '').trim();
+const S3_BUCKET = String(process.env.S3_BUCKET || '').trim();
+const S3_ACCESS_KEY_ID = String(process.env.S3_ACCESS_KEY_ID || '').trim();
+const S3_SECRET_KEY = String(process.env.S3_SECRET_KEY || '');
+const S3_REGION = String(process.env.S3_REGION || '').trim() || 'us-east-1';
+const _S3_PATH_STYLE_RAW = process.env.S3_PATH_STYLE;
+const S3_PATH_STYLE =
+  _S3_PATH_STYLE_RAW === undefined
+    ? true
+    : _S3_PATH_STYLE_RAW === 'true'
+      ? true
+      : _S3_PATH_STYLE_RAW === 'false'
+        ? false
+        : null; // sentinel → boot-refuse
+
 /* ------------------------------ LOG_LEVEL ------------------------------- */
 /* Zero-dependency leveled logging (Kanzo #9): one ladder — debug < info
    (default) < warn < error — selected by the LOG_LEVEL env variable. Every
@@ -228,6 +254,12 @@ if (WORKSPACE_CREATION === null) {
 if (SUPER_ACCESS === null) {
   logError(
     `SUPER_ACCESS: invalid value ${JSON.stringify(_SUPER_ACCESS_RAW)} — only 'true' or 'false' are accepted (unset defaults to true)`,
+  );
+  process.exit(1);
+}
+if (S3_PATH_STYLE === null) {
+  logError(
+    `S3_PATH_STYLE: invalid value ${JSON.stringify(_S3_PATH_STYLE_RAW)} — only 'true' or 'false' are accepted (unset defaults to true)`,
   );
   process.exit(1);
 }
@@ -311,6 +343,24 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
 const RESERVED_SLUGS = new Set(['api', 'w', 'join', 'assets', 'static', 'health', 'login', 'signup', 'onboarding', 'settings', 'admin']);
 const MAILER = createMailer();
 const OIDC = createOidc();
+/* Phase 88 (D-88-11/13): the boot-frozen S3 capability, mirroring the
+   MAILER `.enabled` pattern (optional-facility precedent). `.enabled` = the
+   bucket + key pair present — S3_ENDPOINT alone is never sufficient, and
+   its absence alone never disables. `S3.config()` is the ONE seam that
+   resolves the request config export/s3.js consumes (endpoint resolves to
+   the AWS native host when unset); everything else reads only `.enabled`.
+   No process.env reads after boot. */
+const S3 = {
+  enabled: !!(S3_BUCKET && S3_ACCESS_KEY_ID && S3_SECRET_KEY),
+  config: () => ({
+    endpoint: S3_ENDPOINT || `https://s3.${S3_REGION}.amazonaws.com`,
+    bucket: S3_BUCKET,
+    accessKeyId: S3_ACCESS_KEY_ID,
+    secretAccessKey: S3_SECRET_KEY,
+    region: S3_REGION,
+    pathStyle: S3_PATH_STYLE !== false,
+  }),
+};
 /* Registry codes the interface actually renders — derived from the same
    source of truth as the client's import.meta.glob (D-07): the build's own
    src/locales/*.json files. Was a hardcoded ['en','fr'] pair until phase 77
@@ -5716,6 +5766,9 @@ async function handleApi(req, res, url) {
       maxUploadMb: MAX_UPLOAD_MB,
       oidcEnabled: OIDC.enabled,
       oidcSsoOnly: OIDC.ssoOnly,
+      /* Phase 88 (D-88-11/T-88-05): the S3 boolean ground truth only — never
+         the endpoint/bucket names. The client hides the toggle when false. */
+      s3Enabled: S3.enabled,
     });
   }
 
@@ -8355,6 +8408,17 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_task_refused:invalidRetention');
       return fail(res, 400, 'invalidRetention', 'Retention must be small non-negative integers');
     }
+    /* Phase 88 (D-88-12/T-88-06): per-task S3 opt-in. Boolean-only (V5);
+       a truthy s3Enabled with the S3_* env pair absent is a keyed, audited
+       refusal — the same funnel shape every other field uses. */
+    if (body?.s3Enabled !== undefined && typeof body.s3Enabled !== 'boolean') {
+      await auditBackupTask(user, 'backup_task_refused:invalidS3Enabled');
+      return fail(res, 400, 'invalidS3Enabled', 's3Enabled must be a boolean');
+    }
+    if (body?.s3Enabled && !S3.enabled) {
+      await auditBackupTask(user, 'backup_task_refused:s3NotConfigured');
+      return fail(res, 400, 's3NotConfigured', 'S3 destination is not configured on this instance');
+    }
     /* D-04: the raw string is stored verbatim; next_run_at is the persisted
        cache computed in the SAME write (never re-parsed at tick). */
     const nextRun = nextRunAt(cron, tz, now());
@@ -8374,13 +8438,14 @@ async function handleApi(req, res, url) {
       retention_monthly: retention.monthly,
       retention_yearly: retention.yearly,
       next_run_at: nextRun,
+      s3_enabled: body?.s3Enabled === true ? 1 : 0,
       last_notified_state: null,
       created_at: now(),
       updated_at: now(),
     };
     await db.run(
-      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.last_notified_state, task.created_at, task.updated_at],
+      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, s3_enabled, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.s3_enabled, task.last_notified_state, task.created_at, task.updated_at],
     );
     await auditBackupTask(user, 'backup_task_created', task.id, task.name);
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
@@ -8473,6 +8538,21 @@ async function handleApi(req, res, url) {
       }
       retention = parsed;
     }
+    /* Phase 88 (D-88-12/T-88-06): per-task S3 opt-in on edit — the same
+       boolean-only + configured gate the POST funnel uses; absent flag keeps
+       the stored value. */
+    let s3Enabled = row.s3_enabled === 1;
+    if (body?.s3Enabled !== undefined) {
+      if (typeof body.s3Enabled !== 'boolean') {
+        await auditBackupTask(user, 'backup_task_refused:invalidS3Enabled', id);
+        return fail(res, 400, 'invalidS3Enabled', 's3Enabled must be a boolean');
+      }
+      if (body.s3Enabled && !S3.enabled) {
+        await auditBackupTask(user, 'backup_task_refused:s3NotConfigured', id);
+        return fail(res, 400, 's3NotConfigured', 'S3 destination is not configured on this instance');
+      }
+      s3Enabled = body.s3Enabled;
+    }
     const cronChanged = cron !== row.cron;
     const tzChanged = tz !== row.tz;
     const wasEnabled = row.enabled === 1;
@@ -8500,15 +8580,44 @@ async function handleApi(req, res, url) {
       retention_monthly: retention.monthly,
       retention_yearly: retention.yearly,
       next_run_at: nextRun,
+      s3_enabled: s3Enabled ? 1 : 0,
       updated_at: now(),
     };
     await db.run(
-      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, updated_at = ? where id = ?',
-      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.updated_at, id],
+      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, s3_enabled = ?, updated_at = ? where id = ?',
+      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.s3_enabled, updated.updated_at, id],
     );
     await auditBackupTask(user, 'backup_task_updated', id, updated.name);
     logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
     return json(res, 200, { task: backupTaskShape(updated) });
+  }
+
+  /* -------------- S3 probe-at-save (Phase 88, D-88-15, SC-1) --------------
+     POST /api/backup/s3/probe rides the EXACT task-mutation funnel: sameOrigin
+     → requireUser → operator-keyed throttle → capability gate → audit
+     (T-88-06/T-88-07). Env pair unset → the no-oracle keyed refusal (never a
+     probe, never a deployment oracle). Set → probeS3 (plan 01) runs
+     HeadBucket + marker PUT/DELETE with the boot-frozen consts and the keyed
+     result returns VERBATIM: success / deleteFailed / badCreds / s3ClockSkew
+     / unreachable + httpWarning (D-88-14/17). Probe events follow the
+     backup_* audit convention (CONTEXT discretion). */
+  if (pathname === '/api/backup/s3/probe' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`backupprobe|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'backup_probe_refused:backupManageRequired');
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can probe the S3 destination');
+    }
+    if (!S3.enabled) {
+      await auditBackupTask(user, 'backup_probe_refused:s3NotConfigured');
+      return fail(res, 400, 's3NotConfigured', 'S3 destination is not configured on this instance');
+    }
+    const result = await probeS3(S3.config());
+    await auditBackupTask(user, result.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', user.id, result.key);
+    logInfo(`s3 probe: ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
+    return json(res, 200, result);
   }
 
   /* -------------- backup run endpoints (Phase 86, 86-02, BKBCK-01/D-16) --------------

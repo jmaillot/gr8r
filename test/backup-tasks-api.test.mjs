@@ -32,7 +32,7 @@ const LOCALES = ['en', 'fr', 'es', 'de', 'nl'];
 const readLocale = loc => JSON.parse(fs.readFileSync(path.join(REPO, 'src/locales', loc + '.json'), 'utf8'));
 
 const taskAuditRows = srv =>
-  withDb(srv.dbPath, db => db.prepare("select * from audit_log where action like 'backup_task%' order by created_at, id").all());
+  withDb(srv.dbPath, db => db.prepare("select * from audit_log where action like 'backup_%' order by created_at, id").all());
 const userIdByEmail = (srv, email) => withDb(srv.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
 
 /* A holder + the operator client, granted through the Phase 85 grant route. */
@@ -414,4 +414,195 @@ test('dual-engine lockstep: the adapter mirror carries s3_enabled and the widene
     /'uploading'/,
     "'uploading' never becomes a status in the mirror either (comments may mention it)",
   );
+});
+
+/* ---------- Phase 88 (88-02): S3 config surface + probe route (SC-1, D-88-11..17) ---------- */
+
+/* A switchable in-process HTTP sink the probe route's SigV4 client hits.
+   `behavior` maps request method → { status, body, headers }. */
+function startSink(behavior) {
+  const hits = [];
+  const server = http.createServer((req, res) => {
+    let chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      hits.push({ method: req.method, url: req.url });
+      const spec = behavior()[req.method] || { status: 200 };
+      res.writeHead(spec.status, spec.headers || {});
+      res.end(spec.body || '');
+    });
+  });
+  return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, hits, port: server.address().port })));
+}
+
+const S3_ENV = (endpoint, extra = {}) => ({
+  S3_ENDPOINT: endpoint,
+  S3_BUCKET: 'gr8r-test-bucket',
+  S3_ACCESS_KEY_ID: 'gr8r-test-key',
+  S3_SECRET_KEY: 'gr8r-test-secret',
+  ...extra,
+});
+
+test('S3 env unset: config exposes s3Enabled:false, create/edit refuse s3Enabled keyed+audited, probe route is a no-oracle refusal', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-s3-unset@test.local');
+
+    const cfg = await op.get('/api/config');
+    assert.equal(cfg.status, 200);
+    assert.equal(cfg.data.s3Enabled, false, 'boolean ground truth (toggle hidden client-side)');
+
+    const created = await op.post('/api/backup/tasks', { name: 'X', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 400);
+    assert.equal(created.data.code, 's3NotConfigured');
+    const nonBool = await op.post('/api/backup/tasks', { name: 'X', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: 'yes' });
+    assert.equal(nonBool.status, 400);
+    assert.equal(nonBool.data.code, 'invalidS3Enabled', 'boolean-only (V5)');
+
+    const existing = await op.post('/api/backup/tasks', { name: 'Plain', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+    const edited = await op.put(`/api/backup/tasks/${existing.data.task.id}`, { s3Enabled: true });
+    assert.equal(edited.status, 400);
+    assert.equal(edited.data.code, 's3NotConfigured');
+
+    const probe = await op.post('/api/backup/s3/probe', {});
+    assert.equal(probe.status, 400);
+    assert.equal(probe.data.code, 's3NotConfigured', 'no-oracle refusal — no probe runs without the env pair');
+
+    const auditActions = taskAuditRows(server).map(r => r.action);
+    assert.ok(auditActions.includes('backup_task_refused:s3NotConfigured'));
+    assert.ok(auditActions.includes('backup_task_refused:invalidS3Enabled'));
+    assert.ok(auditActions.includes('backup_probe_refused:s3NotConfigured'));
+
+    /* The default (no s3Enabled) row persists 0 — the column exists everywhere. */
+    assert.equal(taskRow(server, existing.data.task.id).s3_enabled, 0);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('S3 env set: boolean exposure carries no identifiers (T-88-05); gate accepts and persists s3_enabled; PUT flips it', async () => {
+  const sink = await startSink(() => ({}));
+  const server = await startServer({ env: S3_ENV(`http://127.0.0.1:${sink.port}`) });
+  try {
+    const op = await makeBackupOp(server, 'op-s3-set@test.local');
+
+    const cfg = await op.get('/api/config');
+    assert.equal(cfg.status, 200);
+    assert.equal(cfg.data.s3Enabled, true);
+    const raw = JSON.stringify(cfg.data);
+    assert.ok(!raw.includes('gr8r-test-bucket') && !raw.includes(sink.port.toString()) && !raw.includes('gr8r-test-key'),
+      'the config payload never carries the bucket/endpoint/key (T-88-05/D-88-11)');
+
+    const created = await op.post('/api/backup/tasks', { name: 'S3 task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 200, `create: ${JSON.stringify(created.data)}`);
+    assert.equal(taskRow(server, created.data.task.id).s3_enabled, 1, 'accepted value persists to the s3_enabled column');
+
+    const off = await op.put(`/api/backup/tasks/${created.data.task.id}`, { s3Enabled: false });
+    assert.equal(off.status, 200);
+    assert.equal(taskRow(server, created.data.task.id).s3_enabled, 0, 'PUT flips it back off');
+
+    const on = await op.put(`/api/backup/tasks/${created.data.task.id}`, { s3Enabled: true });
+    assert.equal(on.status, 200);
+    assert.equal(taskRow(server, created.data.task.id).s3_enabled, 1);
+
+    const nonBool = await op.put(`/api/backup/tasks/${created.data.task.id}`, { s3Enabled: 1 });
+    assert.equal(nonBool.status, 400);
+    assert.equal(nonBool.data.code, 'invalidS3Enabled');
+  } finally {
+    await server.stop();
+    sink.server.close();
+  }
+});
+
+test('probe route maps keyed results: success (+httpWarning), s3ClockSkew, badCreds; refusal for non-operators (T-88-06)', async () => {
+  /* Success sink: HEAD 200, PUT 200, DELETE 200 — plain http:// endpoint so
+     httpWarning rides true (D-88-14). */
+  const okSink = await startSink(() => ({}));
+  const okServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${okSink.port}`) });
+  try {
+    const op = await makeBackupOp(okServer, 'op-probe-ok@test.local');
+    const probe = await op.post('/api/backup/s3/probe', {});
+    assert.equal(probe.status, 200, `probe: ${JSON.stringify(probe.data)}`);
+    assert.equal(probe.data.ok, true);
+    assert.equal(probe.data.key, 'success');
+    assert.equal(probe.data.httpWarning, true, 'plain-http endpoint warns the operator (D-88-14)');
+    assert.ok(okSink.hits.filter(h => h.method === 'HEAD').length >= 1, 'HeadBucket ran');
+    assert.ok(okSink.hits.some(h => h.method === 'PUT' && h.url.includes('gr8r-probe/')), 'marker PUT ran (D-88-15 write+delete)');
+    assert.ok(okSink.hits.some(h => h.method === 'DELETE' && h.url.includes('gr8r-probe/')), 'marker DELETE ran');
+    assert.ok(taskAuditRows(okServer).some(r => r.action === 'backup_s3_probe_ok'), 'probe audited');
+  } finally {
+    await okServer.stop();
+    okSink.server.close();
+  }
+
+  /* Clock-skew sink: HEAD → 403 RequestTimeTooSkewed. HEAD bodies are empty
+     on the wire — the code must ride the x-amz-error-code header (the 88-01
+     keyed-HEAD contract, SC-3/D-88-17). */
+  const skewSink = await startSink(() => ({
+    HEAD: { status: 403, headers: { 'x-amz-error-code': 'RequestTimeTooSkewed' } },
+  }));
+  const skewServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${skewSink.port}`) });
+  try {
+    const op = await makeBackupOp(skewServer, 'op-probe-skew@test.local');
+    const probe = await op.post('/api/backup/s3/probe', {});
+    assert.equal(probe.status, 200);
+    assert.equal(probe.data.key, 's3ClockSkew', 'D-88-17: the self-host trap is named');
+    assert.equal(probe.data.ok, false);
+    assert.ok(taskAuditRows(skewServer).some(r => r.action === 'backup_s3_probe_failed'));
+  } finally {
+    await skewServer.stop();
+    skewSink.server.close();
+  }
+
+  /* Bad-creds sink: HEAD → 403 InvalidAccessKeyId (via the HEAD header). */
+  const badSink = await startSink(() => ({
+    HEAD: { status: 403, headers: { 'x-amz-error-code': 'InvalidAccessKeyId' } },
+  }));
+  const badServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${badSink.port}`) });
+  try {
+    const op = await makeBackupOp(badServer, 'op-probe-bad@test.local');
+    const probe = await op.post('/api/backup/s3/probe', {});
+    assert.equal(probe.status, 200);
+    assert.equal(probe.data.key, 'badCreds');
+  } finally {
+    await badServer.stop();
+    badSink.server.close();
+  }
+
+  /* Funnel discipline: a non-operator gets the audited 403 BEFORE any probe. */
+  const gateSink = await startSink(() => ({}));
+  const gateServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${gateSink.port}`) });
+  try {
+    const plain = (await signup(gateServer.base, { name: 'Nobody', email: 'plain-probe@test.local' })).client;
+    const refused = await plain.post('/api/backup/s3/probe', {});
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'backupManageRequired');
+    assert.equal(gateSink.hits.length, 0, 'no bucket operation ran for a non-operator (T-88-06)');
+    assert.ok(taskAuditRows(gateServer).some(r => r.action === 'backup_probe_refused:backupManageRequired'));
+  } finally {
+    await gateServer.stop();
+    gateSink.server.close();
+  }
+});
+
+test('5-locale parity: every 88-02 S3 key exists in all five catalogues', () => {
+  const keys = [
+    'err.s3NotConfigured',
+    'err.invalidS3Enabled',
+    'err.s3ClockSkew',
+    'toast.s3ProbeSuccess',
+    'toast.s3ProbeDeleteFailed',
+    'toast.s3ProbeUnreachable',
+    'toast.s3ProbeBadCreds',
+    'toast.s3ProbeHttpWarning',
+    'page.backup.statusUploadFailed',
+    'page.backup.stageUploading',
+    'page.backup.partsProgress',
+  ];
+  for (const loc of LOCALES) {
+    const cat = readLocale(loc);
+    for (const key of keys) {
+      assert.ok(typeof cat[key] === 'string' && cat[key].length > 0, `${loc}.${key}`);
+    }
+  }
 });
