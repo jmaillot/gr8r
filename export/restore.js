@@ -499,6 +499,704 @@ function rmStaging(dir) {
 const FLAG_KEYS = Object.freeze(['missingBlob', 'pathEscaped', 'nameReserved', 'symlinkSkipped']);
 const isFlaggedRow = row => FLAG_KEYS.some(k => row[k]);
 
+/* ---- Import-as-new restore engine (Phase 89, plan 89-04, BKRST-02) ----
+   The phase's second genuinely new machinery (Discovery 1: the doc IS the
+   content — DATA_TABLES is 4 row-shaped tables; all workspace content
+   lives in workspaces.doc). Two units, siblings of the 86 core:
+
+   planRemap(manifest, archiveRows, liveContext) — PURE. Builds the
+   archive-id → fresh uid() map over the workspace id and every doc-graph
+   reference (projects[].id, tasks[].id/parentId/project, comments[]
+   id/taskId, files[].id/project/task, teams[].id, projOrder[], logo) and
+   validates totality BEFORE any insert: an unresolved reference fails
+   keyed restoreRemapIncomplete pre-write (prohibition P5, D-89-10 — ids
+   are never nulled, dropped, or skipped silently). user_id columns are
+   NEVER remapped (prohibition P4 — live users are the identity universe,
+   D-33-10): user-bearing rows are validated against liveContext.isLiveUser
+   and skip-and-reported, never re-pointed onto other live users.
+   Fresh ids are app-generated crypto.randomUUID() text; the map entry is
+   written as rows insert — there is NO engine readback API to hunt
+   (D-89-11, research Pattern 2 resolution).
+
+   restoreImportAsNew(...) — the executor. Stage extraction via the 89-01
+   extractArchive into restore-staging; blob copies to
+   FILES_DIR/<freshId> / LOGOS_DIR/<freshId> FLAT pre-tx with a
+   compensating unlink list (a failed unit removes the blobs it wrote —
+   D-89-32; copyFileSync, never rename — staging and FILES_DIR may sit on
+   different filesystems, research Pitfall 1 EXDEV); then ONE db.tx:
+   insert the workspaces row with the doc spliced in post-normalizeDoc
+   whitelisted shapes ONLY (no members/notifPrefs/views/sessions/tfa;
+   archived member_id/assignee values not resolving to the restorer's
+   roster are dropped, never ferried — Pitfall 4, prohibition P6), insert
+   the operator-only memberships row (D-89-9, role owner), and
+   syncTaskFts(scope, wsId, stored, next) with the TX SCOPE (module-level
+   db calls inside a pg tx body land OUTSIDE the transaction — Pitfall 2).
+   Every user_id-bearing archive row is validated against the live users
+   table and skip-and-reported (Pitfall 3); operational-classified tables
+   present in the archive are never inserted — counted into the skip
+   report (D-89-7). The D-89-30 verification runs PRE-COMMIT inside the
+   tx: remap totality re-check, per-table ndjson counts vs the manifest,
+   staged blob presence for every planned blob, whole-archive sha256
+   re-confirmed — any gap throws inside the tx (rollback) and the
+   compensating unlink runs after. A project-scope archive splices its
+   fragment into the live target workspace instead (doc-PUT discipline:
+   revision bump + in-tx FTS diff sync), never touching the target roster.
+   Stage events ride the setRestoreRunEmitter seam (server.js installs the
+   writer that forwards to its 89-02 emitRestoreRunEvent — same
+   setBackupRunWriter pattern as the 86/87 cores; emitter trouble never
+   fails a restore). The 'start'/fetching event belongs to the caller
+   (the Task-2 trigger route writes the start row before the pipeline
+   runs); this unit emits validating → restoring → verifying → done|failed.
+   ===================================================================== */
+import { get as dbGet, all as dbAll, tx as dbTx, syncTaskFts } from '../db-adapter.mjs';
+
+const arr = v => (Array.isArray(v) ? v : []);
+const memberBase = userId => `m_${String(userId).slice(0, 8)}`;
+
+/* Writer seam — the restore.js twin of backup.js setBackupRunWriter.
+   server.js installs ONE emitter at boot; every engine-level stage event
+   lands in restore_runs through it. Best-effort: a broken emitter never
+   fails a restore. */
+let restoreRunEmitter = null;
+export function setRestoreRunEmitter(fn) {
+  restoreRunEmitter = typeof fn === 'function' ? fn : null;
+}
+async function emitRestoreEvent(event) {
+  if (!restoreRunEmitter) return;
+  try {
+    await restoreRunEmitter(event);
+  } catch {
+    /* history-write trouble never fails a restore (best-effort discipline) */
+  }
+}
+
+/* Blob destinations — same derivation as export/backup.js dataDirs()
+   (module-private there; this twin keeps export/restore.js self-contained
+   without touching the frozen writer). */
+function blobsDirs() {
+  const dataDir = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
+  return { filesDir: path.join(dataDir, 'files'), logosDir: path.join(dataDir, 'logos') };
+}
+
+/* Streamed whole-file sha256 — no whole-file buffering (P3 posture). */
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', chunk => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+/* Doc-arrays of a stored doc, shape-tolerant (archive rows are attacker
+   input — a non-object doc degrades to empty arrays, never a crash). */
+function docData(wsRow) {
+  try {
+    return JSON.parse(wsRow?.doc)?.data ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/* Engine fallback for slug resolution (server.js passes its uniqueSlug
+   funnel — research A5: slug handling is the funnel's concern; this
+   mirror exists only so the engine unit works standalone). Mirrors the
+   uniqueSlug loop shape: sanitized root + -2, -3… until free. */
+async function engineUniqueSlug(base) {
+  let root = String(base)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32)
+    .replace(/-+$/g, '');
+  if (!root) root = 'workspace';
+  let slug = root;
+  let n = 2;
+  while (await dbGet('select 1 from workspaces where slug = ? collate nocase', [slug])) slug = `${root}-${n++}`;
+  return slug;
+}
+
+/* ---- planRemap (PURE): map + totality + user-row validation plans ----
+   Throws keyed restoreRemapIncomplete on ANY unresolved doc-graph
+   reference (pre-write refusal, prohibition P5). Never touches the db. */
+export function planRemap(manifest, archiveRows, liveContext = {}) {
+  const scope = manifest?.scope ?? {};
+  const operatorId = typeof liveContext.operatorId === 'string' && liveContext.operatorId ? liveContext.operatorId : null;
+  if (!operatorId) {
+    throw keyed('restoreRemapIncomplete', 'restore: no restoring operator identity', { reason: 'noOperator' });
+  }
+  const operatorMemberId = typeof liveContext.operatorMemberId === 'string' && liveContext.operatorMemberId ? liveContext.operatorMemberId : memberBase(operatorId);
+  const isLiveUser = typeof liveContext.isLiveUser === 'function' ? liveContext.isLiveUser : () => false;
+  const fresh = () => crypto.randomUUID();
+  const wsRows = arr(archiveRows?.workspaces);
+
+  /* The pre-write totality walker: every doc-graph reference must resolve
+     in the archive-id map — unresolved refs are collected and refused as
+     ONE keyed class (ids are never nulled/dropped to let a restore
+     proceed, D-89-10). */
+  const collectUnresolved = (refs, map) => {
+    const unresolved = [];
+    const need = (ref, what) => {
+      if (ref !== null && ref !== undefined && ref !== '' && !map.has(ref)) unresolved.push({ what, ref: String(ref) });
+    };
+    for (const ref of refs) need(ref.ref, ref.what);
+    return unresolved;
+  };
+
+  if (scope.kind === 'workspace') {
+    const srcRow = wsRows.find(r => r?.id === scope.id);
+    if (!srcRow) {
+      throw keyed('restoreRemapIncomplete', `restore: workspace ${scope.id} is missing from the archive tables`, { reason: 'workspaceMissing' });
+    }
+    const data = docData(srcRow);
+
+    const projects = arr(data.projects).filter(p => p && typeof p.id === 'string' && p.id);
+    const tasks = arr(data.tasks).filter(t => t && typeof t.id === 'string' && t.id);
+    const comments = arr(data.comments).filter(c => c && typeof c.id === 'string' && c.id);
+    const files = arr(data.files).filter(f => f && typeof f.id === 'string' && f.id);
+    const teams = arr(data.teams).filter(t => t && typeof t.id === 'string' && t.id);
+
+    const map = new Map();
+    for (const p of projects) map.set(p.id, fresh());
+    for (const t of tasks) map.set(t.id, fresh());
+    for (const c of comments) map.set(c.id, fresh());
+    for (const f of files) map.set(f.id, fresh());
+    for (const t of teams) map.set(t.id, fresh());
+    if (typeof data.logo === 'string' && data.logo && !map.has(data.logo)) map.set(data.logo, fresh());
+
+    const refs = [];
+    for (const t of tasks) {
+      refs.push({ ref: t.parentId, what: 'task.parentId' });
+      refs.push({ ref: t.project, what: 'task.project' });
+    }
+    for (const c of comments) refs.push({ ref: c.taskId, what: 'comment.taskId' });
+    for (const f of files) {
+      refs.push({ ref: f.project, what: 'file.project' });
+      refs.push({ ref: f.task, what: 'file.task' });
+    }
+    for (const ref of arr(data.projOrder)) refs.push({ ref, what: 'projOrder[]' });
+    for (const r of arr(archiveRows?.team_members).filter(r => r?.workspace_id === scope.id && isLiveUser(r.user_id))) {
+      refs.push({ ref: r.team_id, what: 'team_members.team_id' });
+    }
+    const unresolved = collectUnresolved(refs, map);
+    if (unresolved.length) {
+      throw keyed(
+        'restoreRemapIncomplete',
+        `restore: ${unresolved.length} unresolved reference(s) — ids are never dropped silently (D-89-10): ${unresolved
+          .slice(0, 3)
+          .map(u => `${u.what}=${JSON.stringify(u.ref)}`)
+          .join(', ')}`,
+        { reason: 'unresolvedRefs', refs: unresolved.slice(0, 10) },
+      );
+    }
+
+    /* Remapped doc — post-normalizeDoc whitelisted shapes ONLY. The
+       roster/prefs/session families are dropped by CONSTRUCTION (the
+       whitelist below is the whole document); archived member_id values
+       survive only when they resolve to the restorer's own roster slot
+       (Pitfall 4 / prohibition P6). */
+    const remapped = {
+      projects: projects.map(p => ({ ...p, id: map.get(p.id) })),
+      tasks: tasks.map(t => {
+        const n = {
+          ...t,
+          id: map.get(t.id),
+          parentId: t.parentId ? map.get(t.parentId) : null,
+          project: t.project ? map.get(t.project) : null,
+        };
+        n.assignees = (Array.isArray(t.assignees) ? t.assignees : []).filter(a => a === operatorMemberId);
+        delete n.assignee;
+        return n;
+      }),
+      comments: comments.map(c => {
+        const n = { ...c, id: map.get(c.id), taskId: c.taskId ? map.get(c.taskId) : null };
+        if ('memberId' in n) n.memberId = n.memberId === operatorMemberId ? n.memberId : null;
+        return n;
+      }),
+      files: files.map(f => ({
+        ...f,
+        id: map.get(f.id),
+        project: f.project ? map.get(f.project) : null,
+        task: f.task ? map.get(f.task) : null,
+      })),
+      teams: teams.map(t => {
+        const n = { ...t, id: map.get(t.id) };
+        delete n.members; // stale team member arrays stripped on every read (normalizeDoc discipline)
+        return n;
+      }),
+      projOrder: arr(data.projOrder).map(ref => map.get(ref)),
+      logo: typeof data.logo === 'string' && data.logo ? map.get(data.logo) : null,
+      activity: arr(data.activity).filter(a => a && typeof a === 'object'),
+      events: arr(data.events).filter(e => e && typeof e === 'object'),
+      notifs: arr(data.notifs).filter(n => n && typeof n.to === 'string' && n.to), // P4-a read-shape
+      savedViews: arr(data.savedViews),
+      recentSearches: arr(data.recentSearches),
+    };
+
+    /* User-bearing DATA rows: validate against live users, skip + report
+       the rest (Pitfall 3). Archive memberships are NEVER authoritative
+       (D-89-9) — every one of them skips; the operator-only row is built
+       by the executor. Invites never restore (D-89-9) — counted only. */
+    const teamMemberRows = [];
+    let teamMembersSkipped = 0;
+    for (const r of arr(archiveRows?.team_members)) {
+      if (r?.workspace_id !== scope.id) continue;
+      if (!r.user_id || !isLiveUser(r.user_id)) {
+        teamMembersSkipped += 1;
+        continue;
+      }
+      teamMemberRows.push({ teamId: map.get(r.team_id), memberId: r.member_id ?? null, userId: r.user_id });
+    }
+    const membershipsSkipped = arr(archiveRows?.memberships).filter(r => r?.workspace_id === scope.id).length;
+    const invitesSkipped = arr(archiveRows?.invites).filter(r => r?.workspace_id === scope.id).length;
+
+    return {
+      kind: 'workspace',
+      wsId: fresh(),
+      map,
+      sourceWs: { id: srcRow.id, name: srcRow.name ?? 'restored', color: srcRow.color ?? '#1D1C1A' },
+      data: remapped,
+      membershipRows: [{ userId: operatorId, role: 'owner' }],
+      membershipsSkipped,
+      teamMemberRows,
+      teamMembersSkipped,
+      invitesSkipped,
+      skippedOperational: arr(manifest?.tables)
+        .filter(t => t.classification === 'operational' && t.rows > 0)
+        .map(t => ({ table: t.name, rows: t.rows })),
+    };
+  }
+
+  if (scope.kind === 'project') {
+    /* The archive table dumps are instance-wide (86 dumpTable) — find the
+       workspace whose doc carries this project, then splice ONLY its
+       fragment (project + its tasks + their comments + its files). */
+    let srcRow = null;
+    for (const r of wsRows) {
+      if (arr(docData(r).projects).some(p => p?.id === scope.id)) {
+        srcRow = r;
+        break;
+      }
+    }
+    if (!srcRow) {
+      throw keyed('restoreRemapIncomplete', `restore: project ${scope.id} was not found in the archive`, { reason: 'projectMissing' });
+    }
+    const data = docData(srcRow);
+    const project = arr(data.projects).find(p => p?.id === scope.id);
+    const tasks = arr(data.tasks).filter(t => t && typeof t.id === 'string' && t.project === scope.id);
+    const taskIds = new Set(tasks.map(t => t.id));
+    const comments = arr(data.comments).filter(c => c && typeof c.id === 'string' && taskIds.has(c.taskId));
+    const files = arr(data.files).filter(f => f && typeof f.id === 'string' && f.project === scope.id);
+    const teams = arr(data.teams).filter(t => t && typeof t.id === 'string');
+
+    const map = new Map();
+    map.set(scope.id, fresh());
+    for (const t of tasks) map.set(t.id, fresh());
+    for (const c of comments) map.set(c.id, fresh());
+    for (const f of files) map.set(f.id, fresh());
+    for (const t of teams) if (!map.has(t.id)) map.set(t.id, fresh());
+
+    const refs = [];
+    for (const t of tasks) {
+      refs.push({ ref: t.parentId, what: 'task.parentId' });
+      refs.push({ ref: t.project, what: 'task.project' });
+    }
+    for (const c of comments) refs.push({ ref: c.taskId, what: 'comment.taskId' });
+    for (const f of files) {
+      refs.push({ ref: f.project, what: 'file.project' });
+      refs.push({ ref: f.task, what: 'file.task' });
+    }
+    const unresolved = collectUnresolved(refs, map);
+    if (unresolved.length) {
+      throw keyed(
+        'restoreRemapIncomplete',
+        `restore: ${unresolved.length} unresolved reference(s) in the project fragment — ids are never dropped silently (D-89-10): ${unresolved
+          .slice(0, 3)
+          .map(u => `${u.what}=${JSON.stringify(u.ref)}`)
+          .join(', ')}`,
+        { reason: 'unresolvedRefs', refs: unresolved.slice(0, 10) },
+      );
+    }
+
+    const remapped = {
+      projects: [{ ...project, id: map.get(scope.id) }],
+      tasks: tasks.map(t => {
+        const n = { ...t, id: map.get(t.id), parentId: t.parentId && map.has(t.parentId) ? map.get(t.parentId) : t.parentId ?? null, project: map.get(t.project) };
+        if (t.project && !map.has(t.project)) n.project = map.get(scope.id); // parentless ref safety — totality already refused unknown refs
+        n.assignees = (Array.isArray(t.assignees) ? t.assignees : []).filter(a => a === operatorMemberId);
+        delete n.assignee;
+        return n;
+      }),
+      comments: comments.map(c => {
+        const n = { ...c, id: map.get(c.id), taskId: map.get(c.taskId) };
+        if ('memberId' in n) n.memberId = n.memberId === operatorMemberId ? n.memberId : null;
+        return n;
+      }),
+      files: files.map(f => ({
+        ...f,
+        id: map.get(f.id),
+        project: map.get(f.project),
+        task: f.task && map.has(f.task) ? map.get(f.task) : null,
+      })),
+      teams: [],
+      projOrder: [map.get(scope.id)],
+      logo: null,
+    };
+
+    return {
+      kind: 'project',
+      wsId: null, // resolved by the executor (the live target)
+      map,
+      sourceWs: { id: srcRow.id, name: srcRow.name ?? 'restored', color: srcRow.color ?? '#1D1C1A' },
+      data: remapped,
+      membershipRows: [],
+      membershipsSkipped: 0,
+      teamMemberRows: [],
+      teamMembersSkipped: 0,
+      invitesSkipped: 0,
+      skippedOperational: [],
+    };
+  }
+
+  throw keyed('restoreRemapIncomplete', `restore: unsupported restore scope kind "${scope.kind}"`, { reason: 'scopeKind' });
+}
+
+/* Post-remap totality re-check (D-89-30, runs pre-commit INSIDE the tx):
+   every reference in the remapped fragment must resolve to a FRESH id the
+   map produced — the mirror of the pre-write walk over the archive ids. */
+function assertFragmentTotality(data, map) {
+  const freshIds = new Set(map.values());
+  const unresolved = [];
+  const need = (ref, what) => {
+    if (ref !== null && ref !== undefined && ref !== '' && !freshIds.has(ref)) unresolved.push({ what, ref: String(ref) });
+  };
+  for (const t of arr(data.tasks)) {
+    need(t.parentId, 'task.parentId');
+    need(t.project, 'task.project');
+  }
+  for (const c of arr(data.comments)) need(c.taskId, 'comment.taskId');
+  for (const f of arr(data.files)) {
+    need(f.project, 'file.project');
+    need(f.task, 'file.task');
+  }
+  for (const ref of arr(data.projOrder)) need(ref, 'projOrder[]');
+  if (unresolved.length) {
+    throw keyed(
+      'restoreVerificationFailed',
+      `restore: post-remap totality check failed on ${unresolved.length} reference(s): ${unresolved
+        .slice(0, 3)
+        .map(u => `${u.what}=${JSON.stringify(u.ref)}`)
+        .join(', ')}`,
+    );
+  }
+}
+
+/* ---- The import-as-new executor. Resolves by design (the runExport
+   posture): { ok: true, workspaceId, finalName, slug, summary } or
+   { ok: false, code, error } — keyed reader/refusal classes pass through
+   verbatim so runRestore (Task 2) persists them into restore_runs.error. ---- */
+export async function restoreImportAsNew(opts = {}) {
+  const runId = (typeof opts.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(opts.runId) ? opts.runId : crypto.randomUUID()).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64);
+  const startedAt = Number.isFinite(opts.startedAt) ? opts.startedAt : Date.now();
+  const scope = opts.scope ?? null;
+  const operatorId = typeof opts.operatorId === 'string' && opts.operatorId ? opts.operatorId : null;
+
+  const failWith = async err => {
+    /* keyed classes persist VERBATIM into restore_runs.error (D-89-33
+       consumer contract) — the run row carries "<code>: <message>". */
+    const code = typeof err?.code === 'string' ? err.code : null;
+    const persisted = code ? `${code}: ${err.message}` : err.message;
+    await emitRestoreEvent({ kind: 'fail', runId, error: persisted, finishedAt: Date.now() });
+    return { ok: false, runId, code: code ?? 'restoreFailed', error: err.message };
+  };
+
+  if (!scope || (scope.kind !== 'workspace' && scope.kind !== 'project')) {
+    return failWith(keyed('restoreScopeUnsupported', 'restore: scope must be a workspace or project archive'));
+  }
+  if (!operatorId) {
+    return failWith(keyed('restoreRemapIncomplete', 'restore: no restoring operator identity', { reason: 'noOperator' }));
+  }
+  const archivePath = opts.archivePath;
+  if (!archivePath || !fs.existsSync(archivePath)) {
+    return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
+  }
+
+  /* Stage validating: the 89-01 reader — every keyed refusal class it
+     throws (restoreEntryRejected / structural corruption /
+     restoreShaMismatch) passes through VERBATIM (D-89-33 producer/
+     consumer contract). */
+  await emitRestoreEvent({ kind: 'update', runId, stage: 'validating' });
+  let manifest;
+  try {
+    const verified = await streamVerifyArchive(archivePath, opts.expectedSha256);
+    manifest = verified.manifest;
+  } catch (err) {
+    return failWith(err);
+  }
+
+  const stagingDir = path.join(restoreStagingDir(), `restore-${runId}`);
+  try {
+    await extractArchive(archivePath, stagingDir, manifest);
+  } catch (err) {
+    // extractArchive already rmStaging()s its own tree on error (D-89-32)
+    return failWith(err);
+  }
+
+  /* Read the staged table ndjson back into row objects (local staging
+     only — the archive's bytes were hash-verified by extractArchive). */
+  const archiveRows = {};
+  for (const t of arr(manifest.tables)) {
+    const file = path.join(stagingDir, t.path ?? `${t.name}.ndjson`);
+    const rows = [];
+    if (fs.existsSync(file)) {
+      for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        try {
+          rows.push(JSON.parse(line));
+        } catch {
+          /* a line that survived the sha check always parses; skip defensively anyway */
+        }
+      }
+    }
+    archiveRows[t.name] = rows;
+  }
+
+  /* Live users are the identity universe (D-33-10): one read, then pure
+     validation inside planRemap. */
+  let liveUserIds;
+  try {
+    liveUserIds = new Set((await dbAll('select id from users', [])).map(r => r.id));
+  } catch (err) {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    return failWith(keyed('restoreFailed', `restore: live-user lookup failed: ${err.message}`));
+  }
+
+  const operatorMemberId = memberBase(operatorId);
+  let plan;
+  try {
+    plan = planRemap(manifest, archiveRows, { operatorId, operatorMemberId, isLiveUser: id => liveUserIds.has(id) });
+  } catch (err) {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    return failWith(err);
+  }
+
+  /* Stage restoring: blob copies PRE-TX with a compensating unlink list
+     (D-89-32). copyFileSync — never rename (research Pitfall 1: staging
+     and FILES_DIR may live on different filesystems). */
+  await emitRestoreEvent({ kind: 'update', runId, stage: 'restoring' });
+  const dirs = blobsDirs();
+  const writtenBlobs = [];
+  const blobPlan = [];
+  let missingBlobRestored = 0;
+  for (const row of arr(manifest.files)) {
+    if (isFlaggedRow(row)) {
+      if (plan.map.has(row.id)) missingBlobRestored += 1; // restored flagged, no blob (86-D-4)
+      continue;
+    }
+    const freshId = plan.map.get(row.id);
+    if (!freshId) continue; // blob not referenced by the restored fragment
+    blobPlan.push({ src: path.join(stagingDir, row.path), dest: path.join(row.logo ? dirs.logosDir : dirs.filesDir, freshId) });
+  }
+  fs.mkdirSync(dirs.filesDir, { recursive: true });
+  fs.mkdirSync(dirs.logosDir, { recursive: true });
+  try {
+    for (const b of blobPlan) {
+      fs.copyFileSync(b.src, b.dest);
+      writtenBlobs.push(b.dest);
+    }
+  } catch (err) {
+    for (const dest of writtenBlobs) {
+      try {
+        fs.unlinkSync(dest);
+      } catch {
+        /* compensating unlink is best-effort (ENOENT-tolerant) */
+      }
+    }
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    return failWith(keyed('restoreBlobFailed', `restore: blob copy failed: ${err.message}`));
+  }
+
+  /* Identity resolution — the D-89-13 name auto-counter mirrors the
+     uniqueSlug loop shape; the slug runs the caller's uniqueSlug funnel
+     when provided (research A5), falling back to the engine mirror. */
+  const finalNameBase = plan.kind === 'workspace' ? String(plan.sourceWs.name ?? 'restored') : null;
+  let target = null;
+  let storedDoc = null;
+  let finalName;
+  try {
+    if (plan.kind === 'workspace') {
+      finalName = `${finalNameBase}-restored`;
+      let n = 2;
+      while (await dbGet('select 1 from workspaces where name = ? collate nocase', [finalName])) finalName = `${finalNameBase}-restored-${n++}`;
+    } else {
+      target = await dbGet('select id, slug, name, doc from workspaces where id = ?', [opts.targetWorkspaceId]);
+      if (!target) throw keyed('restoreTargetMissing', 'restore: target workspace no longer exists');
+      storedDoc = JSON.parse(target.doc);
+      finalName = target.name;
+    }
+  } catch (err) {
+    for (const dest of writtenBlobs) {
+      try {
+        fs.unlinkSync(dest);
+      } catch {
+        /* best-effort */
+      }
+    }
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    return failWith(err);
+  }
+  let slug;
+  try {
+    if (plan.kind === 'workspace') {
+      slug = typeof opts.uniqueSlug === 'function' ? await opts.uniqueSlug(finalName) : await engineUniqueSlug(finalName);
+    } else {
+      slug = target.slug;
+    }
+  } catch (err) {
+    for (const dest of writtenBlobs) {
+      try {
+        fs.unlinkSync(dest);
+      } catch {
+        /* best-effort */
+      }
+    }
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    return failWith(keyed('restoreFailed', `restore: slug resolution failed: ${err.message}`));
+  }
+
+  /* The next document — workspace scope builds the whole doc (whitelisted
+     shapes only); project scope SPLICES the fragment into the stored doc
+     (Pattern 4) leaving every other collection untouched. */
+  let nextDoc;
+  if (plan.kind === 'workspace') {
+    nextDoc = {
+      data: {
+        ...plan.data,
+        ws: { name: finalName, url: slug, c: plan.sourceWs.color ?? '#1D1C1A', brand: true },
+        me: null,
+      },
+    };
+  } else {
+    const stored = storedDoc?.data ?? {};
+    nextDoc = {
+      data: {
+        ...stored,
+        projects: [...arr(stored.projects), ...plan.data.projects],
+        tasks: [...arr(stored.tasks), ...plan.data.tasks],
+        comments: [...arr(stored.comments), ...plan.data.comments],
+        files: [...arr(stored.files), ...plan.data.files],
+        teams: [...arr(stored.teams), ...plan.data.teams],
+        projOrder: [...arr(stored.projOrder), ...plan.data.projOrder],
+      },
+    };
+  }
+
+  /* ONE transaction per restore unit (Pattern 2): every write through the
+     tx scope — module-level db calls inside a pg tx body land OUTSIDE the
+     transaction (Pitfall 2). The D-89-30 verification runs PRE-COMMIT
+     inside this tx; any gap throws → full rollback → compensating unlink. */
+  const wsId = plan.kind === 'workspace' ? plan.wsId : target.id;
+  try {
+    await dbTx(async txScope => {
+      const t = Date.now();
+      if (plan.kind === 'workspace') {
+        /* member_id mirrors memberIdFor: base m_<8slice>, taken → m_<full> */
+        let memberId = operatorMemberId;
+        if (await txScope.get('select 1 from memberships where workspace_id = ? and member_id = ?', [wsId, memberId])) memberId = `m_${operatorId}`;
+        await txScope.run(
+          'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)',
+          [wsId, slug, finalName, plan.sourceWs.color ?? '#1D1C1A', JSON.stringify(nextDoc), 1, t, t, 0],
+        );
+        await txScope.run(
+          'insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)',
+          [wsId, operatorId, 'owner', memberId, 'restore'],
+        );
+        for (const r of plan.teamMemberRows) {
+          await txScope.run('insert into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [wsId, r.teamId, r.memberId, r.userId]);
+        }
+        /* FTS diff sync INSIDE the tx with the TX SCOPE (Pattern 4):
+           stored = null → every restored task indexes at commit time. */
+        await syncTaskFts(txScope, wsId, null, nextDoc);
+      } else {
+        await txScope.run('update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?', [JSON.stringify(nextDoc), t, wsId]);
+        await syncTaskFts(txScope, wsId, storedDoc, nextDoc);
+      }
+
+      await emitRestoreEvent({ kind: 'update', runId, stage: 'verifying' });
+
+      /* ---- D-89-30 verification, pre-commit ----
+         1. remap totality re-check over the final fragment;
+         2. per-table ndjson counts vs the manifest (extraction
+            completeness — every declared row was read back);
+         3. DB state matches the plan exactly;
+         4. blob presence for every planned blob;
+         5. whole-archive sha256 re-confirmed. */
+      assertFragmentTotality(plan.data, plan.map);
+      for (const t of arr(manifest.tables)) {
+        const read = (archiveRows[t.name] ?? []).length;
+        if (read !== t.rows) {
+          throw keyed('restoreVerificationFailed', `restore: table ${t.name} staged rows (${read}) disagree with the manifest (${t.rows})`);
+        }
+      }
+      const counts = {
+        workspaces: await txScope.get('select count(*) as n from workspaces where id = ?', [wsId]),
+        memberships: await txScope.get('select count(*) as n from memberships where workspace_id = ?', [wsId]),
+        team_members: await txScope.get('select count(*) as n from team_members where workspace_id = ?', [wsId]),
+      };
+      if (plan.kind === 'workspace' && counts.workspaces.n !== 1) {
+        throw keyed('restoreVerificationFailed', 'restore: workspace insert count mismatch');
+      }
+      /* Roster counts are workspace-scope only — a project splice NEVER
+         touches the target roster, so its pre-existing rows are expected. */
+      if (plan.kind === 'workspace') {
+        if (counts.memberships.n !== plan.membershipRows.length) {
+          throw keyed('restoreVerificationFailed', 'restore: membership insert count mismatch');
+        }
+        if (counts.team_members.n !== plan.teamMemberRows.length) {
+          throw keyed('restoreVerificationFailed', 'restore: team_members insert count mismatch');
+        }
+      }
+      for (const b of blobPlan) {
+        if (!fs.existsSync(b.dest)) {
+          throw keyed('restoreVerificationFailed', `restore: staged blob missing at ${path.basename(b.dest)}`);
+        }
+      }
+      if ((await sha256File(archivePath)) !== opts.expectedSha256) {
+        throw keyed('restoreVerificationFailed', 'restore: whole-archive digest changed under the run');
+      }
+    });
+  } catch (err) {
+    /* rollback happened inside dbTx — remove every blob this unit wrote
+       (compensating unlink, D-89-32) and sweep the staging tree */
+    for (const dest of writtenBlobs) {
+      try {
+        fs.unlinkSync(dest);
+      } catch {
+        /* best-effort */
+      }
+    }
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    return failWith(err);
+  }
+
+  /* Skip report (D-89-7): operational-classified tables + invites are
+     NEVER inserted — counted honestly; the user_id validation skips fold
+     into the same shape. */
+  const summary = {
+    skipped: [
+      ...plan.skippedOperational,
+      ...(plan.invitesSkipped > 0 ? [{ table: 'invites', rows: plan.invitesSkipped }] : []),
+    ],
+    memberships: { skipped: plan.membershipsSkipped, inserted: plan.membershipRows.length },
+    teamMembers: { skipped: plan.teamMembersSkipped, inserted: plan.teamMemberRows.length },
+    files: { restored: blobPlan.length, missingBlob: missingBlobRestored },
+  };
+  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName, finishedAt: Date.now() });
+  fs.rmSync(stagingDir, { recursive: true, force: true }); // success sweep — staging is spent
+  return { ok: true, runId, workspaceId: wsId, finalName, slug, summary };
+}
+
 /* Seek-extract ONLY manifest-declared entries into destDir (the caller
    passes restoreStagingDir()/<runId>/). Blobs land FLAT as
    destDir/files/<id> and destDir/logos/<name> (D-89-12, 86 A6); the

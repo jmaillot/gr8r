@@ -92,12 +92,18 @@ async function freshDb() {
   await db.close();
   await db.connectDb({ dbPath: path.join(DATA_DIR, 'projects.db') });
   await db.runSchema(db.SQLITE_SCHEMA);
+  await db.ensureSearchIndex(); // task_fts exists from boot in production (server.js boot call)
 }
 
 /* Raw handle WITHOUT the FK pragma — for planting rows that reference
    users deleted after the fact (the exact archive shape Pitfall 3 covers). */
 function rawDb() {
+  /* FK off via pragma — the point of this handle is planting rows whose
+     user was deleted after the fact (the archive shape Pitfall 3 covers).
+     node:sqlite enables FK by default and the constructor option only
+     landed later; the pragma works on this runtime. */
   const raw = new DatabaseSync(path.join(DATA_DIR, 'projects.db'));
+  raw.exec('pragma foreign_keys = off');
   raw.exec('pragma busy_timeout = 5000');
   return raw;
 }
@@ -112,6 +118,13 @@ function sha256Hex(filePath) {
    contract is pinned at engine level. ---- */
 restore.setRestoreRunEmitter(async event => {
   const t = Date.now();
+  /* The engine never emits 'start' (the trigger route owns the start row,
+     Task 2) — mirror that contract by upserting the base row first so the
+     standalone engine is observable. */
+  await db.run(
+    'insert or ignore into restore_runs (id, scope, trigger, status, stage, started_at, created_at) values (?,?,?,?,?,?,?)',
+    [event.runId, '{}', event.trigger ?? 'import_new', 'running', 'fetching', event.startedAt ?? t, t],
+  );
   if (event.kind === 'start') {
     await db.run(
       'insert into restore_runs (id, scope, trigger, status, stage, started_at, created_at) values (?,?,?,?,?,?,?)',
@@ -347,9 +360,13 @@ test('89-04 planRemap (unit): user ids are NEVER remapped (prohibition P4 — li
   };
   const manifest = { scope: { kind: 'workspace', id: WS_ID }, tables: [], files: [] };
   const plan = restore.planRemap(manifest, rows, { operatorId: LIVE_ID, isLiveUser: id => id === LIVE_ID });
-  // the archive operator id is NOT translated onto the restoring operator
-  const plannedUserIds = plan.membershipRows.map(r => r.userId);
-  assert.ok(!plannedUserIds.includes(LIVE_ID) || plannedUserIds[0] === OP_ID, 'user ids carried verbatim, never remapped onto other live users');
+  /* Only the operator row is EVER planned, carrying the operator id
+     verbatim — the archive's user_id (OP_ID) is never translated onto the
+     live operator (P4: user ids are never remapped, D-33-10); the archive
+     row skips + reports instead. */
+  assert.equal(plan.membershipRows.length, 1, 'only the operator membership is planned');
+  assert.equal(plan.membershipRows[0].userId, LIVE_ID, 'the operator id rides verbatim');
+  assert.equal(plan.membershipsSkipped, 1, 'the archive membership row skips + reports');
 });
 
 /* ---------- prohibition P5 end-to-end: crafted archive, no partial state ---------- */
@@ -382,10 +399,23 @@ test('89-04: a crafted doc referencing an unknown project id fails keyed restore
   manifest.tables.find(t => t.name === 'workspaces').sha256 = sha256Hex(wsFile);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
 
-  // re-tar: manifest.json first (entry 0 contract), then every other entry
+  // re-tar: manifest.json first (entry 0 contract), then every other FILE
+  // entry (directories are never entries — the writer emits files only,
+  // and a dir entry is typeflag '5', refused by the 89-01 reader)
   const crafted = path.join(BACKUPS_DIR, 'crafted.tar.gz');
-  const entryNames = ['manifest.json', ...fs.readdirSync(into).filter(n => n !== 'manifest.json')];
-  execFileSync('tar', ['czf', crafted, '-C', into, ...entryNames]);
+  const entryNames = ['manifest.json'];
+  const walk = dir => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(path.join(dir, e.name));
+      else entryNames.push(path.relative(into, path.join(dir, e.name)));
+    }
+  };
+  for (const top of fs.readdirSync(into, { withFileTypes: true })) {
+    if (top.name === 'manifest.json') continue;
+    if (top.isDirectory()) walk(path.join(into, top.name));
+    else entryNames.push(top.name);
+  }
+  execFileSync('tar', ['czf', crafted, '--format=ustar', '-C', into, ...entryNames]);
 
   const before = await workspaceCount();
   const stagingBefore = fs.existsSync(restore.restoreStagingDir()) ? fs.readdirSync(restore.restoreStagingDir()).length : 0;
@@ -414,7 +444,7 @@ test('89-04: a crafted doc referencing an unknown project id fails keyed restore
 
 test('89-04: a project archive splices its fragment into a live target workspace with a revision bump and FTS sync', async () => {
   await db.run(
-    'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?,?)',
+    'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)',
     ['ws-target', 'target', 'Target', '#000000', JSON.stringify({ data: { projects: [{ id: 'tp1', name: 'Home' }], tasks: [], comments: [], files: [], teams: [], projOrder: ['tp1'] } }), 1, NOW, NOW],
   );
   await db.run('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)', ['ws-target', OP_ID, 'owner', OP_MEMBER, 'manual']);
