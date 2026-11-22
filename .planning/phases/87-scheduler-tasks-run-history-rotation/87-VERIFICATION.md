@@ -1,7 +1,7 @@
 ---
 phase: 87-scheduler-tasks-run-history-rotation
 verified: 2026-11-22T09:15:00Z
-status: verified
+status: passed
 score: 21/21 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
