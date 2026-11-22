@@ -25,6 +25,8 @@ created: "2026-11-22"
 | Icon library | `ic()` inline SVG set, `src/core/icons.js` (lucide-style glyphs; 14px in buttons, 20px in fullstate glyphs) |
 | Font | Geist / Geist Mono via `--font` / `--mono` tokens (tokens.css:72-73) |
 
+**Primary visual anchor (this section's focal point):** during an active restore, the anchor is the active-run stage panel (`.panel` with the stage badge — the Run-progress analog); outside a run, the anchor is the restore card's backup list, the section's first panel. History card and confirm overlay are supporting elements, never the anchor.
+
 **Mandatory page idioms to mirror (from `src/pages/backup.js`):**
 - Every payload field renders through `esc()` — text nodes only, never raw interpolation (T-79-10).
 - Render-only doctrine: stages, statuses, badges and capability flags are payload fields rendered verbatim — never client-derived (D-23/T-85-06). Stage vocabulary `fetching → validating → restoring → verifying → done|failed` renders verbatim from the restore-run payload; the pending state ("trigger accepted, first poll has not landed") renders `aria-busy` copy, never a fabricated stage.
@@ -68,7 +70,7 @@ Use the project's existing 4pt tokens (tokens.css:61-70) — do NOT introduce ne
 | `--s-4` | 16px | Page-header to first panel, section spacing |
 | `--s-6` | 24px | `--gutter` horizontal content edge (unchanged) |
 
-Row-internal conventions (mirror `runRow` backup.js:141-150): history rows `padding:8px 0` with `border-top:1px solid var(--border)`; meta font-size 13px; detail grids `gap:10px 16px` (taskCard:210).
+Row-internal conventions (mirror `runRow` backup.js:141-150): history rows `padding:8px 0` with `border-top:1px solid var(--border)`; meta font-size 13.5px (`--fs` — meta shares the body size, see Typography); detail grids `gap:12px 16px` (12px sanctioned above — taskCard:210's `10px 16px` rhythm snapped onto the 4pt grid; do NOT carry the 10px over).
 
 Exceptions: none — 12px is already an in-tree established value on this page.
 
@@ -76,14 +78,16 @@ Exceptions: none — 12px is already an in-tree established value on this page.
 
 ## Typography
 
-Use existing type tokens (tokens.css:74-81); contract in resolved px:
+Use existing type tokens (tokens.css:74-81); contract in resolved px — exactly FOUR sizes:
 
 | Role | Size | Weight | Line Height | Token / usage |
 |------|------|--------|-------------|---------------|
-| Body | 13.5px | 400 | 1.55 | `--fs` default; modal body copy uses explicit `line-height:1.55` (confirmModal idiom) |
-| Meta / row | 13px (12px hint) | 400 | 1.5 | history rows, faint labels; uppercase 11px letter-spacing .04em for detail-grid labels (taskCard:207) |
-| Panel heading (h2) | 15-16px | 600 | 1.2 | confirm-modal heading is 15px/600 (modals.js:526); panel h2 per existing page |
+| Hint / uppercase label | 12px | 400 | 1.5 | `--fs-xs`; hint rows, faint labels, and uppercase detail-grid labels (letter-spacing .04em) — this phase's new detail grids use 12px, NOT the 11px at taskCard:207, to keep the declared scale at four sizes |
+| Body AND meta | 13.5px | 400 | 1.55 (modal body copy, confirmModal idiom) / 1.5 (meta + history rows) | `--fs`; one size serves both roles — meta rows differentiate via `.faint` pattern, not a smaller size |
+| Confirm-modal heading | 15px | 600 | 1.2 | existing confirmModal heading idiom (modals.js:526), reused verbatim — no new heading size invented |
 | Page heading (h1) | `--fs-2xl` (23px) | 600 | 1.2 | unchanged page header (restores share the Backup h1) |
+
+**Panel h2 (hierarchy note):** existing `.panel-h h2` renders at `--fs` 13.5px/600 (panels.css:15-16) — the same size as body, differentiated by weight 600 and the badge in `.panel-h`. Restore panels mirror that verbatim; no separate panel-heading size is declared.
 
 Weights: exactly two — 400 (body/meta) and 600 (headings, `<strong>` row titles, confirm target name). Monospace (`--mono`) for filenames, sha256, stage names, and the `RESTORE-INSTANCE` phrase rendering.
 
@@ -120,7 +124,7 @@ All copy is keyed. New keys live under `page.restore.*` (+ refusals under the ex
 | Location badge — local | `page.restore.locLocal` | "Local" |
 | Location badge — S3 | `page.restore.locS3` | "S3" |
 | Location badge — gone | `page.restore.locMissing` | "Unavailable" (archive deleted from both destinations — restore refused, keyed `err.restoreArchiveMissing`) |
-| Preview action | `page.restore.previewAction` | "Preview" |
+| Preview action | `page.restore.previewAction` | "Preview backup" |
 | Preview drawer title | `page.restore.previewTitle` | "Backup preview" |
 | Preview fields | `page.restore.scopeLabel` / `page.restore.tablesLabel` / `page.restore.filesLabel` / `page.restore.checksumLabel` | "Scope" / "Tables" / "Files" / "Checksum" |
 | Preview skipped-tables note | `page.restore.skippedTablesNote` | "Operational tables are never restored." |
@@ -184,7 +188,7 @@ State coverage resolved from CONTEXT.md decisions (D-89-14..29) — copy lives i
 
 ## Interaction Contract (trigger → outcome flow)
 
-1. **List → Preview:** "Preview" opens the existing drawer idiom with manifest-derived scope/table/file counts/checksum (render-verbatim). Drawer stays open until the operator triggers or closes it.
+1. **List → Preview backup:** "Preview backup" opens the existing drawer idiom with manifest-derived scope/table/file counts/checksum (render-verbatim). Drawer stays open until the operator triggers or closes it.
 2. **Trigger from drawer → confirm (destructive only) → drawer closes** on accepted trigger (CONTEXT §Specifics): import-as-new fires immediately; overwrite/DR open the `confirmModal` overlay first, and the drawer closes only after the confirm dialog's OK is accepted.
 3. **Accepted trigger returns a run id immediately** (D-89-2) → pending panel → poll loop reuses the backup poll tick idiom → stage badge + label render verbatim → done/failed terminal states carry the done/failed body copy.
 4. **Every refusal** = keyed toast (`tErr`) + audited server-side; the second restore / backup during a run gets `err.backupRestoreInProgress` (D-89-1) — no banner, no read-only chrome.
