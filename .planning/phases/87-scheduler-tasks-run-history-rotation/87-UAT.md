@@ -24,7 +24,8 @@ expected: |
   Create a backup task with cron `* * * * *` on a live dev server.
   Within ~90 seconds: a 'scheduled' history row, archive + .sha256 sidecar in
   DATA_DIR/backups (task-scoped filename), next_run_at advanced.
-result: [pending]
+result: PASS (2026-11-22) — human-verified on the Docker deployment (archives
+  on the separate host mount); scheduled row + archive + sidecar confirmed.
 
 ### 2. End-to-end rotation lifecycle (file + DB + UI)
 expected: |
@@ -39,9 +40,9 @@ result: [pending]
 ## Summary
 
 total: 2
-passed: 0
+passed: 1
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
