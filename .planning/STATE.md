@@ -5,11 +5,11 @@ milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 87
 current_plan: 4
 status: verified
-stopped_at: Phase 87 verified — UAT 2/2 passed
-last_updated: "2026-11-22T09:45:00.000Z"
+stopped_at: Phase 88 context gathered
+last_updated: "2026-11-22T10:34:39.282Z"
 last_activity: 2026-11-22
 last_activity_desc: Phase 87 UAT passed (2/2) after 4 UAT-fix rounds
-state_head: 79e6a7c7c507c319d4bd7366f683b4bbbd525137
+state_head: 903c375bb3507f41756e21e36b7d5ab25c0f5202
 progress:
   total_phases: 6
   completed_phases: 3
@@ -151,9 +151,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-21T23:44:03.612Z
-Stopped at: Completed 87-03-PLAN.md
-Resume file: None
+Last session: 2026-11-22T10:34:39.189Z
+Stopped at: Phase 88 context gathered
+Resume file: .planning/phases/88-s3-destination/88-CONTEXT.md
 
 ## Operator Next Steps
 
