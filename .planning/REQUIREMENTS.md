@@ -35,7 +35,7 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 - [x] **BKBCK-02**: A Backup Operator can configure multiple backup tasks — each with name, scope, destination (local volume v1), builder-based schedule with presets, GFS rotation retention per scale (default 7/4/12/5), and enable/disable — saved with keyed 5-locale refusals on invalid input.
 - [x] **BKBCK-03**: Scheduled tasks run automatically on their cron schedule (5-field subset, timezone-aware), with at-most-once catch-up after restart, no overlapping runs of the same task, and GFS rotation applied only after a verified successful run (newest verified backup never deleted).
 - [x] **BKBCK-04**: Every run (manual or scheduled) is recorded in a history the Backup Operator can consult — status, trigger, duration, size, error, checksum — with a Run now action per task, and failure emails sent on failure-state transitions to Super Admins and Backup Operators.
-- [ ] **BKBCK-05**: A task destination can be an S3-compatible endpoint (AWS S3, MinIO, Backblaze B2) configured via boot-frozen env credentials, with uploads streamed (memory-bounded) and the stored checksum verifiable after upload.
+- [x] **BKBCK-05**: A task destination can be an S3-compatible endpoint (AWS S3, MinIO, Backblaze B2) configured via boot-frozen env credentials, with uploads streamed (memory-bounded) and the stored checksum verifiable after upload.
 
 ### Restore (BKRST)
 
@@ -75,7 +75,7 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 | BKBCK-02 | Phase 87 | Complete |
 | BKBCK-03 | Phase 87 | Complete |
 | BKBCK-04 | Phase 87 | Complete |
-| BKBCK-05 | Phase 88 | Pending |
+| BKBCK-05 | Phase 88 | Complete |
 | BKRST-01 | Phase 89 | Pending |
 | BKRST-02 | Phase 89 | Pending |
 | BKRST-03 | Phase 89 | Pending |

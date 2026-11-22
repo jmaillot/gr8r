@@ -24,7 +24,7 @@
 - [x] **Phase 85: Roles Foundation** — instance_roles table, hasInstanceRole funnel, Instance Roles governance tab, restore-authority ≠ archive-read-authority encoding (completed 2026-11-21)
 - [x] **Phase 86: Export Core ("gr8r backup v1")** — pure backup.js fence, snapshot fence, archive format freeze + manifest + table classification, local destination, manual Run now (completed 2026-11-21)
 - [x] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email (completed 2026-11-22)
-- [ ] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify
+- [x] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify (completed 2026-11-22)
 - [ ] **Phase 89: Restore** — preview-from-manifest, import-as-new (-restored) default, guarded overwrite with pre-restore snapshot, Super-Admin-only instance DR restore + security contract
 - [ ] **Phase 90: Polish & Verification Sweep** — Super Admin console role-first listing, verify-checksum action, archive download tiering, PG parity e2e, DST cron tests
 
@@ -105,7 +105,7 @@ Plans:
 4. SigV4 correctness is proven by golden-vector tests plus a MinIO e2e against the pinned MinIO version (provider quirks re-checked at plan time — research flag).
 5. A restore-direction download to a staged temp file with streaming-hash verification exists (consumed by Phase 89).
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/3 plans complete
 
 Plans:
 - [x] 88-01-PLAN.md — SigV4 client core + tracer: golden-vector signer, MinIO pin smoke, signed PUT/GET roundtrip, probe ops, download seam
@@ -152,7 +152,7 @@ Plans:
 | 85. Roles Foundation | 2/2 | Complete    | 2026-11-21 |
 | 86. Export Core ("gr8r backup v1") | 2/2 | Complete    | 2026-11-21 |
 | 87. Scheduler, Tasks, Run History & Rotation | 4/4 | In Progress|  |
-| 88. S3 Destination | 3/3 | In Progress|  |
+| 88. S3 Destination | 3/3 | Complete    | 2026-11-22 |
 | 89. Restore | 0/? | Not started | - |
 | 90. Polish & Verification Sweep | 0/? | Not started | - |
 
