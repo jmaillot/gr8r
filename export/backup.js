@@ -782,7 +782,7 @@ export async function runExport(scope, meta = {}) {
         await uploadArchive(s3Dest.config, destination, key, sha256, (partsDone, partsTotal) => {
           currentRun = { ...currentRun, partsDone, partsTotal };
           emitRunEvent({ kind: 'progress', runId, stage: 'uploading', partsDone, partsTotal }); // writer errors swallowed by the seam
-        });
+        }, { isCancelled: () => currentRun.cancelled }); // MIN-04: shutdown mid-upload lands at the next part boundary → abort multipart → upload_failed
         /* D-88-8 verification: stream the object BACK and compare against
            the stored whole-archive sha256 — the ETag is never trusted
            (Pitfall 4). The sidecar must exist AND carry the same hash. */

@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { probeS3, downloadToStaged } from '../export/s3.js';
+import { probeS3, downloadToStaged, s3Request } from '../export/s3.js';
 
 /* In-process S3-shaped sink. handler(req, res) keyed on method+path. */
 function startSink(handler) {
@@ -161,7 +161,7 @@ import { uploadArchive, s3BackupKey, S3_MULTIPART_THRESHOLD, S3_PART_SIZE } from
 
 /* Stateful S3-shaped sink. opts.failPart: { partNumber, failTimes } makes
    that part's PUT return 503 the first N times it is attempted. */
-function startS3Sink({ failPart = null, discard = false } = {}) {
+function startS3Sink({ failPart = null, discard = false, completeErrorBody = false } = {}) {
   const state = {
     objects: new Map(), // key -> Buffer
     parts: new Map(), // uploadId -> Map(partNumber -> [Buffer, ...] per attempt)
@@ -193,6 +193,10 @@ function startS3Sink({ failPart = null, discard = false } = {}) {
       if (req.method === 'POST' && url.searchParams.has('uploadId')) {
         const id = url.searchParams.get('uploadId');
         state.completed.push({ uploadId: id, body });
+        if (completeErrorBody) {
+          // MIN-06 regression input: HTTP 200 with an error in the body (S3 quirk)
+          return respond(200, '<?xml version="1.0"?><Error><Code>InternalError</Code><Message>we committed it anyway</Message></Error>');
+        }
         return respond(200, `<?xml version="1.0"?><CompleteMultipartUploadResult><Location>lo</Location><Bucket>gr8r</Bucket><Key>${path}</Key><ETag>"etag"</ETag></CompleteMultipartUploadResult>`);
       }
       // UploadPart: PUT <key>?partNumber=&uploadId=
@@ -400,3 +404,188 @@ test('executor: threshold constants frozen at SC-2 values; s3BackupKey prefixes 
   assert.equal(s3BackupKey({}, 'backup-instance-1.tar.gz'), 'backup-manual/backup-instance-1.tar.gz');
   assert.equal(s3BackupKey(null, 'backup-instance-1.tar.gz'), 'backup-manual/backup-instance-1.tar.gz');
 });
+
+/* =====================================================================
+   HOST CONSTRUCTION (MAJ-02) — path-style vs virtual-host addressing
+   against a recording sink. The sink ignores signatures and answers
+   200, but records the wire Host header and the request path so the
+   addressing contract is pinned exactly: path-style keeps the bucket
+   in the path; virtual-host (S3_PATH_STYLE=false) moves the bucket
+   INTO the host and the signature signs the SAME host the wire uses.
+   ===================================================================== */
+
+test('host construction: path-style (default) keeps the bucket in the path, endpoint host unchanged', async () => {
+  const seen = [];
+  const { server, port } = await startSink((req, res) => {
+    seen.push({ host: req.headers.host, url: req.url });
+    res.writeHead(200).end();
+  });
+  try {
+    await s3Request(sinkConfig(port), { method: 'PUT', key: 'backup-task-t1/a.tar.gz', body: Buffer.from('x') });
+    assert.deepEqual(seen, [{ host: `127.0.0.1:${port}`, url: '/gr8r/backup-task-t1/a.tar.gz' }]);
+  } finally {
+    server.close();
+  }
+});
+
+test('host construction: virtual-host mode (pathStyle false) addresses <bucket>.<host> and signs that host', async () => {
+  const seen = [];
+  const { server, port } = await startSink((req, res) => {
+    seen.push({ host: req.headers.host, url: req.url, auth: req.headers.authorization });
+    res.writeHead(200).end();
+  });
+  try {
+    const config = { ...sinkConfig(port), pathStyle: false };
+    await s3Request(config, { method: 'PUT', key: 'backup-task-t1/a.tar.gz', body: Buffer.from('x') });
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].host, `gr8r.127.0.0.1:${port}`, 'the bucket is prepended to the endpoint host');
+    assert.equal(seen[0].url, '/backup-task-t1/a.tar.gz', 'the path carries the key only');
+    /* The signature's SignedHeaders set must carry `host` — the signer signs
+       the same virtual host the wire uses, so a real provider accepts it. */
+    assert.match(seen[0].auth, /SignedHeaders=[^;]*host/, 'the virtual host is inside the signed header set');
+  } finally {
+    server.close();
+  }
+});
+
+test('host construction: an endpoint path prefix is preserved in both addressing styles', async () => {
+  const seen = [];
+  const { server, port } = await startSink((req, res) => {
+    seen.push({ host: req.headers.host, url: req.url });
+    res.writeHead(200).end();
+  });
+  try {
+    await s3Request({ ...sinkConfig(port), endpoint: `http://127.0.0.1:${port}/alias` }, { method: 'PUT', key: 'k.bin', body: Buffer.from('x') });
+    await s3Request({ ...sinkConfig(port), endpoint: `http://127.0.0.1:${port}/alias`, pathStyle: false }, { method: 'PUT', key: 'k.bin', body: Buffer.from('x') });
+    assert.deepEqual(seen, [
+      { host: `127.0.0.1:${port}`, url: '/alias/gr8r/k.bin' },
+      { host: `gr8r.127.0.0.1:${port}`, url: '/alias/k.bin' },
+    ]);
+  } finally {
+    server.close();
+  }
+});
+
+test('host construction: virtual-host mode with no key (HeadBucket) targets the bucket host root', async () => {
+  const seen = [];
+  const { server, port } = await startSink((req, res) => {
+    seen.push({ host: req.headers.host, url: req.url, method: req.method });
+    res.writeHead(200).end();
+  });
+  try {
+    await s3Request({ ...sinkConfig(port), pathStyle: false }, { method: 'HEAD' });
+    assert.deepEqual(seen, [{ host: `gr8r.127.0.0.1:${port}`, url: '/', method: 'HEAD' }]);
+  } finally {
+    server.close();
+  }
+});
+
+/* =====================================================================
+   REVIEW-FIX REGRESSIONS (MIN-04/05/06)
+   ===================================================================== */
+
+test('min-05: an early error response destroys the piped request stream (no orphaned read stream)', async () => {
+  const { server, port } = await startSink((req, res) => {
+    res.writeHead(503, { 'content-type': 'application/xml' }).end(XML('ServiceUnavailable'));
+  });
+  try {
+    const staged = path.join(os.tmpdir(), `gr8r-s3-destroy-${Date.now()}.bin`);
+    fs.writeFileSync(staged, crypto.randomBytes(64 * KB));
+    const stream = fs.createReadStream(staged, { highWaterMark: 1024 * 1024 });
+    try {
+      await assert.rejects(
+        () => s3Request(sinkConfig(port), {
+          method: 'PUT',
+          key: 'k.bin',
+          body: stream,
+          bodyLength: 64 * KB,
+          payloadHash: crypto.createHash('sha256').update(fs.readFileSync(staged)).digest('hex'),
+        }),
+        (err) => {
+          assert.match(err.message, /503/);
+          return true;
+        },
+      );
+      assert.equal(stream.destroyed, true, 'the source stream is destroyed once the error response arrives');
+    } finally {
+      fs.rmSync(staged, { force: true });
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('min-06: a Complete answered 200-with-<Error> does NOT abort the committed transaction and hints the object may exist', async () => {
+  const partSize = 2 * KB;
+  const bytes = crypto.randomBytes(2 * partSize);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-complete-err-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink({ completeErrorBody: true });
+  try {
+    await assert.rejects(
+      () => uploadArchive(
+        sinkConfig(port), staged, 'backup-task-t1/comp-err.tar.gz', sha,
+        () => {},
+        { thresholdBytes: 1, partSize, backoffMs: () => 1 },
+      ),
+      (err) => {
+        assert.match(err.message, /object may exist/);
+        return true;
+      },
+    );
+    assert.equal(state.aborted.length, 0, 'no abort after the provider accepted the Complete (MIN-06)');
+    assert.equal(state.completed.length, 1);
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('min-04: cancellation between multipart parts aborts the transaction and rejects with the cancelled error', async () => {
+  const partSize = 2 * KB;
+  const bytes = crypto.randomBytes(4 * partSize);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-cancel-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink();
+  try {
+    // Simulate a shutdown flip after the first part lands (MIN-04: cancel at the upload boundary)
+    let cancelled = false;
+    await assert.rejects(
+      () => uploadArchive(
+        sinkConfig(port), staged, 'backup-task-t1/cancel.tar.gz', sha,
+        () => { cancelled = true; },
+        { thresholdBytes: 1, partSize, backoffMs: () => 1, isCancelled: () => cancelled },
+      ),
+      (err) => {
+        assert.match(err.message, /cancelled/);
+        return true;
+      },
+    );
+    assert.equal(state.aborted.length, 1, 'AbortMultipartUpload issued for the cancelled upload');
+    assert.equal(state.aborted[0], state.initUploadIds[0]);
+    assert.equal(state.completed.length, 0, 'no Complete after cancellation');
+    const uploaded = state.parts.get(state.initUploadIds[0]);
+    assert.equal(uploaded.get(1).length, 1, 'part 1 completed before the cancellation landed');
+    assert.ok(!uploaded.has(3), 'upload stopped at the part boundary');
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('min-01: NoSuchBucket probe failures surface their own s3NoBucket class, not generic unreachable', async () => {
+  const { server, port } = await startSink((req, res) => {
+    // HEAD responses carry no body — the code arrives via header (AWS S3 behavior)
+    res.writeHead(404, { 'x-amz-error-code': 'NoSuchBucket', 'content-type': 'application/xml' }).end(XML('NoSuchBucket'));
+  });
+  try {
+    const result = await probeS3(sinkConfig(port));
+    assert.equal(result.ok, false);
+    assert.equal(result.key, 's3NoBucket');
+  } finally {
+    server.close();
+  }
+});
+
