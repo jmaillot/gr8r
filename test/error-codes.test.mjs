@@ -269,6 +269,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'viewDeleteFailed', // fallback when the view DELETE answers no keyed code (57-02)
   'askAdmin', // toast composed by A.newWorkspace when canCreateWorkspace is false (Phase 78 client)
   'noReassignTargets', // keyed refusal composed by A.govOrphanPick when reassign is picked with zero destination workspaces (79 IN-04)
+  's3NoBucket', // S3 probe class emitted as probeS3's key (export/s3.js), riding the keyed refusal payload (88 review MIN-01)
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {

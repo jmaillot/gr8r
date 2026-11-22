@@ -8498,6 +8498,12 @@ async function handleApi(req, res, url) {
       [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.s3_enabled, task.last_notified_state, task.created_at, task.updated_at],
     );
     await auditBackupTask(user, 'backup_task_created', task.id, task.name);
+    /* MIN-07: the probe outcome at save is audited too — the backup_* audit
+       funnel stays symmetric with the dedicated probe route (refusals are
+       already audited above; deleteFailed is a warning, keyed in the detail). */
+    if (s3Probe) {
+      await auditBackupTask(user, s3Probe.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', task.id, s3Probe.key);
+    }
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
     /* s3Probe rides the response so the client can toast the keyed outcome
        (SC-1: probe-at-save is visible, not silent). */
@@ -8652,6 +8658,10 @@ async function handleApi(req, res, url) {
       [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.s3_enabled, updated.updated_at, id],
     );
     await auditBackupTask(user, 'backup_task_updated', id, updated.name);
+    /* MIN-07: probe outcome audit on edit — same symmetry as the create path. */
+    if (s3Probe) {
+      await auditBackupTask(user, s3Probe.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', id, s3Probe.key);
+    }
     logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
     return json(res, 200, s3Probe ? { task: backupTaskShape(updated), s3Probe } : { task: backupTaskShape(updated) });
   }
@@ -11116,13 +11126,17 @@ async function main() {
 
   const shutdown = signal => {
     logInfo(`${signal} received, shutting down`);
-    /* D-13 (86-02) + WR-03: an active export run is CANCELLED via the
-       token — the exporter's own catch path then marks it failed and owns
-       staging removal (no rmSync-while-streaming, no state flip back to
-       done mid-shutdown). The boot sweep remains the backstop for a hard
-       crash that never reaches this handler. */
+    /* D-13 (86-02) + WR-03 + Phase 88 MIN-04: an active export run is
+       CANCELLED via the token — including an `uploading` run, whose
+       cancellation lands at the next multipart part boundary (the
+       executor's isCancelled seam aborts the multipart transaction) and
+       routes into upload_failed (the local archive already published —
+       the exporter's own catch path owns staging removal and the outcome
+       flip; no rmSync-while-streaming, no state flip back to done
+       mid-shutdown). The boot sweep remains the backstop for a hard crash
+       that never reaches this handler. */
     const activeRun = getRunState();
-    if (activeRun && (activeRun.stage === 'collecting' || activeRun.stage === 'archiving' || activeRun.stage === 'verifying')) {
+    if (activeRun && (activeRun.stage === 'collecting' || activeRun.stage === 'archiving' || activeRun.stage === 'verifying' || activeRun.stage === 'uploading')) {
       cancelRun();
     }
     server.close(async () => {

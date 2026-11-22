@@ -5049,6 +5049,7 @@ A.backupTaskSave = async () => {
     else if (probe.key === 'badCreds') toast(t('toast.s3ProbeBadCreds'), { kind: 'err' });
     else if (probe.key === 'unreachable') toast(t('toast.s3ProbeUnreachable'), { kind: 'err' });
     else if (probe.key === 's3ClockSkew') toast(tErr('s3ClockSkew', null, t('toast.s3ProbeUnreachable')), { kind: 'err' });
+    else if (probe.key === 's3NoBucket') toast(tErr('s3NoBucket', null, t('toast.s3ProbeUnreachable')), { kind: 'err' }); // MIN-01: bucket-name typo gets its own keyed message
     if (probe.httpWarning) toast(t('toast.s3ProbeHttpWarning'));
   }
   toast(t(form.editing ? 'page.backup.taskUpdated' : 'page.backup.taskSaved'), { ms: 1500 });
