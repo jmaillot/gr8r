@@ -266,8 +266,11 @@ test86('the poll loop rides the seq + AbortController anti-stale pattern and sto
   assert.match(a, /backupPollInflight\?\.abort\(\);/, 'the in-flight abort is missing');
   assert.match(a, /api\.backupRunCurrent\(\{ signal: backupPollInflight\.signal \}\)/, 'the poll does not ride the abort signal');
   assert.match(a, /clearInterval\(backupPollTimer\)/, 'the interval stop is missing');
-  /* the trigger goes through api.backupRun (call()) and toasts keyed refusals */
-  assert.match(a, /api\.backupRun\(scope\)/, 'the trigger does not ride api.backupRun');
+  /* the trigger goes through api.backupRun (call()) and toasts keyed refusals.
+     UAT fix 2026-11-22: the wire scope is normalized first (instance omits the
+     id, workspace falls back to api.workspace) — the call itself keeps the
+     frozen shape with the normalized object. */
+  assert.match(a, /api\.backupRun\(wire\)/, 'the trigger does not ride api.backupRun');
   assert.match(a, /tErr\(code, null, res\.error \|\| t\('err\.serverUnreachable'\)\), \{ kind: 'err' \}/, 'the keyed refusal toast pipeline moved');
   /* the trigger never derives authority client-side — no canBackup pre-gate before the call */
   const runNow = a.match(/A\.backupRunNow = async \(\) => \{[\s\S]*?\n\};/);

@@ -47,7 +47,7 @@ test('A.backupTaskSave follows the handler discipline and refills through refres
   assert.match(actionsSrc, /A\.backupTaskSave =/, 'the save handler exists');
   assert.match(actionsSrc, /A\.backupTaskNew =/, 'the new-task action exists');
   assert.match(actionsSrc, /A\.backupTaskCancel =/, 'the cancel action exists');
-  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 1600);
+  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 2200);
   assert.ok(handler.includes('refreshBackupTasks'), 'the save path refills the task list (fill-loop reuse)');
   assert.ok(handler.includes('api.backupTaskCreate') && handler.includes('api.backupTaskUpdate'), 'create vs update both wired');
   assert.ok(handler.includes('tErr('), 'refusals surface as keyed toasts (tErr)');
