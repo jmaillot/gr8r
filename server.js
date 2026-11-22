@@ -86,7 +86,7 @@ import { buildMspdi } from './export/mspdi.js';
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
-import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, setRestoreRunEmitter } from './export/restore.js';
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -9287,6 +9287,89 @@ async function handleApi(req, res, url) {
     }).catch(err => logWarn(`restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:import_new', null, scope.kind);
     logInfo(`restore run started: ${restoreRunId} (${scope.kind}) by ${user.email}`);
+    return json(res, 200, { runId: restoreRunId });
+  }
+
+  /* -------------- instance disaster-recovery trigger (Phase 89, plan 89-05, BKRST-04) --------------
+     POST /api/backup/restore/instance { runId, confirmPhrase } — replaces
+     the instance's DATA tables with an INSTANCE-scope archive's. Guard
+     chain copied VERBATIM from the import-as-new funnel above (never
+     reordered — sameOrigin first, house rule), with DR-specific gates:
+     - the throttle is TIGHTER (D-89-22: restoreinstance|<id> 3/15min —
+       the most destructive surface on the instance consumes a try per
+       refused attempt);
+     - the capability gate is CAP.INSTANCE_ROLES_MANAGE — deliberately
+       absent from every role map (roles.js D-09/D-11), so the gate IS
+       Super-Admin-only; refusal keyed operatorOnly (the existing
+       instance-roles family code — NO new refusal code) + audited
+       restore_refused:instanceAdminRequired;
+     - the confirm phrase is re-validated SERVER-side (D-89-27/P8 — the
+       client checkbox is never trusted): !== 'RESTORE-INSTANCE' exactly →
+       keyed confirmPhraseMismatch + audited, checked BEFORE archive
+       resolution so a refused phrase is a zero-read trigger;
+     - concurrency slot + claimRestoreLock identical to import-as-new
+       (D-89-1/D-89-31: one global restore pipeline, ever).
+     The pipeline is fire-and-forget (resolve-by-design); the unit's
+     events ride the SAME restore_runs row writer — start here with
+     trigger 'instance', snapshot/stage/summary updates from the unit.
+     The unit's finally ALWAYS releases the lock; D-89-25 global session
+     revocation (including the initiator) is strictly post-commit inside
+     the unit; DR emits NO email claims (D-89-28 — the re-login wall is
+     the notification). */
+  if (pathname === '/api/backup/restore/instance' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`restoreinstance|${user.id}`, 3, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.INSTANCE_ROLES_MANAGE))) {
+      await auditBackupTask(user, 'restore_refused:instanceAdminRequired');
+      return fail(res, 403, 'operatorOnly', 'Only a Super Admin can trigger an instance restore');
+    }
+    const body = await readJson(req);
+    const backupRunId = typeof body?.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.runId) ? body.runId : null;
+    if (!backupRunId) {
+      return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
+    }
+    if (body?.confirmPhrase !== 'RESTORE-INSTANCE') {
+      await auditBackupTask(user, 'restore_refused:confirmPhraseMismatch');
+      return fail(res, 400, 'confirmPhraseMismatch', 'Confirmation phrase does not match');
+    }
+    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
+    if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
+      await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    let scope = null;
+    try {
+      scope = JSON.parse(row.scope);
+    } catch {
+      scope = null;
+    }
+    if (!scope || scope.kind !== 'instance') {
+      await auditBackupTask(user, 'restore_refused:restoreTargetMismatch');
+      return fail(res, 400, 'restoreTargetMismatch', 'An instance restore needs an instance-scope archive');
+    }
+    const active = getRunState();
+    const exportActive = !!active && ['collecting', 'archiving', 'verifying', 'uploading'].includes(active.stage);
+    if (exportActive || (await restoreLockHeld())) {
+      await auditBackupTask(user, 'restore_refused:restoreInProgress');
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
+    }
+    const claimed = await claimRestoreLock(user.id);
+    if (!claimed) {
+      await auditBackupTask(user, 'restore_refused:restoreInProgress');
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
+    }
+    const restoreRunId = uid();
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: 'instance', id: null }, trigger: 'instance', startedAt: now() });
+    restoreInstanceUnit({
+      runId: restoreRunId,
+      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      operator: { id: user.id, email: user.email },
+      releaseLock: () => releaseRestoreLock(user.id),
+    }).catch(err => logWarn(`instance restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
+    await auditBackupTask(user, 'restore_started:instance', null, 'instance');
+    logInfo(`instance restore run started: ${restoreRunId} by ${user.email}`);
     return json(res, 200, { runId: restoreRunId });
   }
 

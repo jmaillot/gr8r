@@ -744,7 +744,20 @@ export async function runExport(scope, meta = {}) {
        archive in backups/. */
     if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     const { sha256, size } = await sha256AndSize(tarPath);
-    const filename = archiveName(scope, Date.now(), runMeta);
+    let filename = archiveName(scope, Date.now(), runMeta);
+    /* Collision guard (89-05, Rule 1): archiveName is second-granular, so
+       two same-scope exports in the same second produce the same name and
+       renameSync would silently CLOBBER the earlier archive — the earlier
+       backup_runs row then points at bytes that no longer exist (backup
+       loss, caught only later by a restore's sha check). Uniquify with an
+       inert numeric suffix; the D-14 format is unchanged for the first
+       archive of a second and rotation matches by prefix/regex (the
+       suffix segment is inert to it, per the 87-02 note above). */
+    let uniquifier = 0;
+    while (fs.existsSync(path.join(dirs.backupsDir, filename)) && uniquifier < 100) {
+      uniquifier += 1;
+      filename = archiveName(scope, Date.now(), runMeta).replace(/\.tar\.gz$/, `-${uniquifier}.tar.gz`);
+    }
     const destination = path.join(dirs.backupsDir, filename);
     const sidecarStaged = path.join(stagingDir, 'archive.sha256.staged');
     fs.writeFileSync(sidecarStaged, `${sha256}  ${filename}\n`);

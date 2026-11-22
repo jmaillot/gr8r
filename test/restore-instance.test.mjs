@@ -133,11 +133,12 @@ async function resetWorld() {
   sourceRun = await backup.runExport({ kind: 'instance' }, { trigger: 'manual' });
   assert.equal(sourceRun.ok, true, `source export failed: ${sourceRun.error}`);
 
-  /* Post-export drift: a NEW workspace + a revision bump — both must be
-     gone/reverted after DR (replacement, never a merge). */
+  /* Post-export drift: a NEW workspace (referencing blobs the archive
+     never carried — DR must unlink them post-commit) + a revision bump —
+     both must be gone/reverted after DR (replacement, never a merge). */
   await db.run(
     'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)',
-    ['ws-extra', 'extra', 'Extra WS', '#123456', JSON.stringify(wsDoc('ws-extra', { projectId: 'px' })), 1, T, T, 0],
+    ['ws-extra', 'extra', 'Extra WS', '#123456', JSON.stringify(wsDoc('ws-extra', { projectId: 'px', fileId: 'f-old', logo: 'lg-old' })), 1, T, T, 0],
   );
   await db.run('update workspaces set revision = 9 where id = ?', ['ws-a']);
   await db.run('pragma foreign_keys = on');
@@ -383,13 +384,15 @@ test('89-05 DR route role-gate matrix: backup_operator / restore_operator / plai
   }
 });
 
-test('89-05 DR route phrase matrix: missing / wrong / near-miss confirmPhrase → keyed confirmPhraseMismatch, ZERO state change; exact RESTORE-INSTANCE triggers (D-89-27/P8)', async () => {
+test('89-05 DR route phrase matrix: missing / wrong / near-miss confirmPhrase → keyed confirmPhraseMismatch, ZERO state change (D-89-27/P8); exact RESTORE-INSTANCE triggers — on a fresh boot, refused attempts consume throttle tries (D-89-22)', async () => {
+  /* Boot A — the 3 near-misses burn the 3/15min budget (every refusal
+     consumes a try), so the exact-phrase trigger pins on boot B. */
   const { dataDir, srv, admin, runId } = await bootWithInstanceArchive();
   const ro = openReader(srv);
   try {
     const wsBefore = ro.get('select count(*) as n from workspaces').n;
 
-    for (const phrase of [undefined, 'restore-instance', 'RESTORE-INSTANCE ', 'RESTORE INSTANCE']) {
+    for (const phrase of [undefined, 'restore-instance', 'RESTORE-INSTANCE ']) {
       const res = await admin.post('/api/backup/restore/instance', { runId, confirmPhrase: phrase });
       assert.equal(res.status, 400, `phrase ${JSON.stringify(phrase)}: ${JSON.stringify(res.data)}`);
       assert.equal(res.data.code, 'confirmPhraseMismatch', `keyed: ${JSON.stringify(res.data)}`);
@@ -397,19 +400,34 @@ test('89-05 DR route phrase matrix: missing / wrong / near-miss confirmPhrase �
     assert.equal(ro.get('select count(*) as n from workspaces').n, wsBefore, 'zero state change on near-misses');
     assert.equal(ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock untouched by refused phrases');
     assert.equal(ro.get("select count(*) as n from restore_runs where trigger = 'instance'").n, 0);
-
-    /* The exact phrase triggers — runId leaves before the pipeline (D-89-2). */
-    const ok = await admin.post('/api/backup/restore/instance', { runId, confirmPhrase: 'RESTORE-INSTANCE' });
-    assert.equal(ok.status, 200, `trigger: ${JSON.stringify(ok.data)}`);
-    assert.match(ok.data.runId, UUID_RE, 'a fresh run id');
-    const row = await pollDb(ro, db => db.get("select * from restore_runs where id = ? and trigger = 'instance'", ok.data.runId) ?? null);
-    assert.ok(row, 'the start row exists with trigger instance');
-    assert.equal(row.snapshot_tag, 'pre_restore', 'flag 1: the pre_restore tag rides the restore_runs row');
-    assert.ok(row.snapshot_run_id, 'the snapshot run link');
+    assert.equal(ro.get("select count(*) as n from restore_runs where trigger = 'instance'").n, 0);
   } finally {
     ro.close();
     await srv.stop();
     fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+
+  /* Boot B — the exact phrase (case-sensitive, whitespace-exact) triggers. */
+  const boot2 = await bootWithInstanceArchive();
+  const ro2 = openReader(boot2.srv);
+  try {
+    const ok = await boot2.admin.post('/api/backup/restore/instance', { runId: boot2.runId, confirmPhrase: 'RESTORE-INSTANCE' });
+    assert.equal(ok.status, 200, `trigger: ${JSON.stringify(ok.data)}`);
+    assert.match(ok.data.runId, UUID_RE, 'a fresh run id');
+    /* Poll past the snapshot write — the row's pre_restore tag is the
+       readiness predicate, not mere row existence (the start row lands
+       first, the snapshot event updates it moments later). */
+    const row = await pollDb(ro2, db => {
+      const r = db.get("select * from restore_runs where id = ? and trigger = 'instance'", ok.data.runId) ?? null;
+      return r?.snapshot_tag === 'pre_restore' ? r : null;
+    });
+    assert.ok(row, 'the start row exists with trigger instance');
+    assert.equal(row.snapshot_tag, 'pre_restore', 'flag 1: the pre_restore tag rides the restore_runs row');
+    assert.ok(row.snapshot_run_id, 'the snapshot run link');
+  } finally {
+    ro2.close();
+    await boot2.srv.stop();
+    fs.rmSync(boot2.dataDir, { recursive: true, force: true });
   }
 });
 
@@ -445,7 +463,9 @@ test('89-05 DR route E2E: the run lands done; every session INCLUDING the Super-
     const done = await pollDb(ro, db => db.get('select * from restore_runs where id = ? and status = ?', ok.data.runId, 'done') ?? null);
     assert.ok(done, 'the DR run lands done');
     const summary = JSON.parse(done.summary);
-    assert.ok(Array.isArray(summary.skipped) && summary.skipped.some(s => s.table === 'saved_views'), 'the summary skip report carries the operational tables');
+    /* Shape-level: the fresh route world carries NO operational rows
+       (nothing to list) — the populated skip report is pinned engine-side. */
+    assert.ok(Array.isArray(summary.skipped), 'the summary carries the skip report array');
 
     /* Post-commit revocation: EVERY client 401s — initiator first (D-89-25). */
     const revokedAdmin = await admin.get('/api/backup/restore/runs');
