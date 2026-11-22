@@ -3,7 +3,7 @@ status: testing
 phase: 87-scheduler-tasks-run-history-rotation
 source: [87-VERIFICATION.md]
 started: 2026-11-22T05:05:00Z
-updated: 2026-11-22T06:20:00Z
+updated: 2026-11-22T09:20:00Z
 ---
 
 ## Current Test
@@ -68,3 +68,7 @@ Defects found by the human UAT pass and fixed same-day (commit f80b0cad):
 
 Instance and workspace Run-now verified end-to-end in a real browser
 (Playwright against a live server): archives + sidecars produced.
+
+## Round-2 retest (2026-11-22) — human verified: all 4 PASS
+New-task form renders ✓ | Run-now instance default fires ✓ | friendly
+archive filenames ✓ | Run progress panel spacing ✓. Ready for Test 1.
