@@ -128,12 +128,22 @@ Plans:
 
 **Plans**: 6 plans
 Plans:
+**Wave 1**
 - [ ] 89-01-PLAN.md — Restore engine foundations: ustar+gzip stream reader (86-writer layout spec), frozen entry allow-list, bounded staged extraction + restore-staging sweep (tracer: golden round-trip vs 86-written archives)
 - [ ] 89-02-PLAN.md — Persistence substrate: restore_runs + restore_lock on both engines (SQLITE_SCHEMA twins, PG_EPOCH_COLUMNS), writer seam, boot sweeps, mutual-exclusion export-side half (D-89-1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 89-03-PLAN.md — BKRST-01 read surface: dual-location list with honest uploaded badge, manifest preview with on-pipe sha256 re-verify + S3 fetch via the 88-01 download seam, keyed refusals + preview throttle
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 89-04-PLAN.md — BKRST-02 import-as-new: remap totality gate, doc-splice restore unit (one tx per unit), POST trigger + D-89-29 stage pipeline, `-restored` name counter, skip report, outcome emails
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 89-05-PLAN.md — BKRST-03/04 destructive paths: guarded overwrite (server-revalidated confirm, pre_restore snapshot, staged blob swap, repair net) + Super-Admin DR (instance_roles rebuild exception, post-commit global session revocation)
+
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 89-06-PLAN.md — Client restore surface + ×5 locale copy: list/preview drawer, confirm flows (D-89-27), poll/stage panel, history + skip report, all 22 UI-SPEC consideration rows pinned
+
 **Gaps for discuss-phase**: overwrite-restore concurrency model (maintenance banner / read-only window / applies-next-restart); row-shaped tables (saved_views, webhooks) vs doc-splice-only for project-scope restore; MCP mirror for backup endpoints in/out of v1.
 **UI hint**: yes
 

@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 89
-current_phase_name: Restore
+current_phase_name: restore
 current_plan: Not started
-status: planning
-stopped_at: Phase 89 context gathered
-last_updated: "2026-11-22T16:36:47.865Z"
+status: executing
+stopped_at: Phase 89 UI-SPEC approved
+last_updated: "2026-11-22T18:16:51.200Z"
 last_activity: 2026-11-22
 last_activity_desc: Phase 88 complete, transitioned to Phase 89
-state_head: 35558536ecfae0da448d4729c9d7a93e65016f8d
+state_head: ccca91aaae6242d80329282546766feac818b8b3
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 11
+  total_plans: 17
   completed_plans: 11
 ---
 
@@ -30,10 +30,10 @@ before features.
 
 ## Current Position
 
-Phase: 89 — Restore
+Phase: 89 (restore) — READY TO EXECUTE
 Current Plan: Not started
-Total Plans in Phase: 3
-Status: Ready to plan
+Total Plans in Phase: 6
+Status: Ready to execute
 Last activity: 2026-11-22 — Phase 88 complete, transitioned to Phase 89
 
 ## Milestone v3.3 Phase Map
@@ -152,9 +152,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-22T16:36:47.760Z
-Stopped at: Phase 89 context gathered
-Resume file: .planning/phases/89-restore/89-CONTEXT.md
+Last session: 2026-11-22T16:49:22.936Z
+Stopped at: Phase 89 UI-SPEC approved
+Resume file: .planning/phases/89-restore/89-UI-SPEC.md
 
 ## Operator Next Steps
 
