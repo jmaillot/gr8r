@@ -167,22 +167,32 @@ Import-as-new is NOT destructive: single click from the preview drawer, no confi
 
 ## UI Considerations
 
-State coverage resolved from CONTEXT.md decisions (D-89-14..29) — copy lives in the Copywriting Contract above:
+State coverage resolved from the UI-consideration probe (2026-11-22: 41 applicable, kinds user-confirmed complete; E7 toasts / E8 fullstates are prose-classifier misses — their error states are covered by the rows below) and CONTEXT.md decisions (D-89-14..29) — copy lives in the Copywriting Contract above:
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
-| empty | restore list | ✅ covered | Zero backup runs renders `page.restore.listEmptyTitle/Body` via the `empty()` helper, mirroring `page.backup.emptyTitle` (backup.js:341) |
-| empty | restore history | ✅ covered | "No restores yet." faint row, mirroring `page.backup.historyEmpty` (backup.js:168) |
-| loading | restore list + history + preview | ✅ covered | `aria-busy` faint rows (`listLoading`, `historyLoading`); preview drawer shows a loading body while the manifest streams — never a fabricated table |
-| error | page load / 403 | ✅ covered | `full403` / `fullErr` fullstates reused verbatim (backup.js:45-48) — role gate stays `err.backupRoleRequired` |
-| error | corrupt manifest | ✅ covered | Keyed error toast + drawer closes; entry not restore-eligible (D-89-17) |
-| error | dual-location missing | ✅ covered | `locMissing` badge + keyed refusal `err.restoreArchiveMissing` (D-89-15) |
-| pending | trigger accepted, first poll not landed | ✅ covered | Pending panel with `aria-busy`, no fabricated stage (render-only, backup.js:84-85 idiom) |
-| active-run re-entry | mid-restore page load | ✅ covered | Stage panel re-renders from payload on page entry (backupPollTick kick idiom, backup.js:336) |
-| zero-one-many | S3-located entries | ✅ covered | `locS3` badge; restore triggers the `fetching` stage which covers the 88-01 download seam — no separate download UI (D-89-29) |
-| long-text | workspace names, filenames, sha256 | 🧪 backstop | Names truncate via `.trunc` + `title` attr; sha256 renders 12-char slice + full in `title` (runRow idiom backup.js:148); held-out UI-state test for `-restored-2` counter name rendering |
-| overflow | confirm consequence text in 5 locales | 🧪 backstop | Longest locale (de/fr) consequence copy must not overflow `.modal-b` — text wraps, modal scrolls (existing modal behavior); visual UI-state test |
-| partial | skipped-operational-tables report | ✅ covered | History + summary render the payload's skipped list verbatim under `skipReportLabel` (D-89-7) — report-only, never hidden |
+| empty | restore list | ✅ covered (explicit) | Zero backup runs renders `page.restore.listEmptyTitle/Body` via the `empty()` helper, mirroring `page.backup.emptyTitle` (backup.js:341) |
+| empty | restore history | ✅ covered (explicit) | "No restores yet." faint row, mirroring `page.backup.historyEmpty` (backup.js:168) |
+| empty | preview drawer + confirm modal | ✅ covered (explicit) | Drawer never opens without a manifest (corrupt → keyed toast, drawer stays closed); confirm modal is always invoked with a target name — zero-data shape unreachable |
+| loading | restore list + history + preview | ✅ covered (explicit) | `aria-busy` faint rows (`listLoading`, `historyLoading`); preview drawer shows a loading body while the manifest streams — never a fabricated table |
+| error | page load / 403 | ✅ covered (explicit) | `full403` / `fullErr` fullstates reused verbatim (backup.js:45-48) — role gate stays `err.backupRoleRequired` (covers E8 fullpage states) |
+| error | corrupt manifest | ✅ covered (explicit) | Keyed error toast + drawer closes; entry not restore-eligible (D-89-17) |
+| error | dual-location missing | ✅ covered (explicit) | `locMissing` badge + keyed refusal `err.restoreArchiveMissing` (D-89-15) |
+| error | refusals (lock, membership, throttle, authority) | ✅ covered (explicit) | Keyed toasts `tErr(code)` (covers E7) — `err.backupRestoreInProgress`, `err.restoreNoWorkspace`, `err.tooMany`, `err.backupRoleRequired` |
+| pending | trigger accepted, first poll not landed | ✅ covered (explicit) | Pending panel with `aria-busy`, no fabricated stage (render-only, backup.js:84-85 idiom) |
+| active-run re-entry | mid-restore page load | ✅ covered (explicit) | Stage panel re-renders from payload on page entry (backupPollTick kick idiom, backup.js:336) |
+| populated | restore list | ✅ covered (explicit) | Run rows render verbatim from the run-row payload (location badge, name, size, date) at typical volume (≤ history cap), mirroring the backup page task-list density — no pagination chrome in v1 |
+| populated | restore history | ✅ covered (explicit) | Up-to-50 restore-run rows (D-89-20, `historyCap` note rendered), each with status badge + skipped-tables report; rows beyond 50 are server-capped, never client-paged |
+| populated | preview drawer + confirm modal | ✅ covered (explicit) | Drawer shows manifest scope/tables/files/checksum verbatim (D-89-17); modal shows target name + consequence text + snapshot info (D-89-27) |
+| partial | skipped-operational-tables report | ✅ covered (explicit) | History + summary render the payload's skipped list verbatim under `skipReportLabel` (D-89-7) — report-only, never hidden |
+| partial | missing-blob files in preview | ✅ covered (explicit) | Manifest file rows with the missing-blob flag render flagged (86-D-4 mirrored, D-89-12) — count shown, restore proceeds |
+| long-text | workspace names, filenames, sha256 | 🧪 backstop | { statement: Names truncate via `.trunc` + `title` attr; sha256 renders 12-char slice + full in `title` (runRow idiom backup.js:148); `-restored-2` counter name renders fully, verification: backstop } — held-out UI-state test |
+| long-text | typed confirm text (near-miss input) | 🧪 backstop | { statement: Near-miss typed names keep OK disabled with no error chrome (confirmModal idiom); `RESTORE-INSTANCE` phrase renders in `--mono` untranslated, verification: backstop } — held-out UI-state test |
+| overflow | confirm consequence text in 5 locales | 🧪 backstop | { statement: Longest locale (de/fr) consequence copy must not overflow `.modal-b` — text wraps, modal scrolls (existing modal behavior), verification: backstop } — visual UI-state test |
+| overflow | stage panel + history rows | 🧪 backstop | { statement: Long final names in done/failed bodies and history rows wrap within the panel (`.trunc` + `title` for row titles), verification: backstop } — visual UI-state test |
+| zero-one-many | restore list entries | ✅ covered (explicit) | One entry renders identically to many (no singular/plural copy divergence, no special one-item chrome); zero → empty state row above |
+| zero-one-many | S3-located entries | ✅ covered (explicit) | `locS3` badge; restore triggers the `fetching` stage which covers the 88-01 download seam — no separate download UI (D-89-29) |
+| zero-one-many | workspace picker options | ✅ covered (explicit) | Picker lists live memberships verbatim; zero memberships → picker hidden + keyed refusal `err.restoreNoWorkspace` (D-89-23) — never an empty dropdown |
 
 ---
 
