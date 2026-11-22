@@ -364,6 +364,102 @@ export async function readArchiveEntries(archivePath, { onHash, onEntry, onWalke
   return { entries: walker.entries, sha256 };
 }
 
+/* ---- 89-03 (BKRST-01, D-89-17/18): stream-verify an archive for preview.
+   ONE pass through the 89-01 reader: entry bytes are counted past (never
+   retained — P3) EXCEPT entry 0's manifest.json, whose body is the only
+   retained payload and only long enough to parse (bounded by
+   MANIFEST_MAX_BYTES — a corruption bound, not a feature). The
+   whole-archive sha256 is recomputed on the SAME hash tap and compared
+   against expectedSha256; a mismatch refuses keyed restoreShaMismatch —
+   the archive is not restore-eligible (D-89-18). The manifest must parse
+   AND match the frozen 86 entry-0 contract (formatVersion 1, tables with
+   name/classification/rows, files, scope.kind, numeric createdAt —
+   export/backup.js:697-704); anything else refuses keyed
+   restoreManifestCorrupt (D-89-17). Every other reader refusal class
+   (restoreArchiveHeaderInvalid/Checksum/Oversize/Truncated/Duplicate,
+   restoreEntryRejected with .reason) propagates keyed for the route to
+   map — never a bare 500 (D-89-33 families 2/3). Returns
+   { manifest, sha256 }. ---- */
+const MANIFEST_MAX_BYTES = 1024 * 1024; // writer manifests are ~KBs; 1 MiB is a generous corruption bound
+
+export async function streamVerifyArchive(archivePath, expectedSha256) {
+  let manifestBody = null;
+  let overflow = false;
+  const skippedEntries = [];
+  const onEntry = entry => {
+    /* The 89-01 entry gate runs HERE too (D-89-33), with extraction's own
+       posture (extractArchive:515-526): the PATH-ESCAPE threats — absolute,
+       traversal, backslash — refuse FATALLY during the walk, before any
+       payload is built; shape-misses (unknownTable/badFileId/badLogoName/
+       unexpectedEntry) skip-and-record exactly like extraction does, so an
+       archive that previews is an archive that restores (instance archives
+       legitimately carry DATA_DIR-relative entries — projects.db et al. —
+       which extraction skips and records, never extracts). */
+    try {
+      gateEntryName(entry.name);
+    } catch (err) {
+      if (err.reason === 'absolute' || err.reason === 'traversal') throw err;
+      skippedEntries.push({ name: entry.name, reason: err.reason ?? 'unexpectedEntry' });
+      return null;
+    }
+    if (entry.name !== 'manifest.json') return null; // bodies counted past, never retained (P3)
+    let chunks = [];
+    let total = 0;
+    const stream = new Writable({
+      write(chunk, _enc, cb) {
+        total += chunk.length;
+        if (total > MANIFEST_MAX_BYTES) {
+          overflow = true; // note and keep draining — throwing mid-sink would leave the walk half-torn
+          cb();
+          return;
+        }
+        chunks.push(chunk);
+        cb();
+      },
+    });
+    return {
+      stream,
+      hash: crypto.createHash('sha256'), // drained by finishSink; the whole-archive tap already covers these bytes
+      expected: null, // the entry-level check belongs to extraction (plan 04) — preview trusts only the whole-archive digest
+      name: entry.name,
+      onDone: () => {
+        manifestBody = Buffer.concat(chunks);
+      },
+    };
+  };
+  const { sha256 } = await readArchiveEntries(archivePath, { onEntry });
+  if (overflow || !manifestBody) {
+    throw keyed('restoreManifestCorrupt', `restore: manifest.json is ${overflow ? `over the ${MANIFEST_MAX_BYTES}-byte sanity bound` : 'missing (entry 0 is not a manifest)'} in ${archivePath}`);
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(manifestBody.toString('utf8'));
+  } catch {
+    throw keyed('restoreManifestCorrupt', `restore: manifest.json is not valid JSON in ${archivePath}`);
+  }
+  /* Structural validation — the frozen 86 entry-0 contract. */
+  const bad = why => keyed('restoreManifestCorrupt', `restore: manifest.json ${why} in ${archivePath}`);
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) throw bad('is not an object');
+  if (manifest.formatVersion !== 1) throw bad(`carries formatVersion ${JSON.stringify(manifest.formatVersion)} — only 1 is known`);
+  if (
+    !Array.isArray(manifest.tables)
+    || manifest.tables.some(t => !t || typeof t !== 'object' || typeof t.name !== 'string' || typeof t.classification !== 'string' || !Number.isSafeInteger(t.rows))
+  ) {
+    throw bad('carries a malformed tables array (entries need name/classification/rows)');
+  }
+  if (!Array.isArray(manifest.files) || manifest.files.some(f => !f || typeof f !== 'object' || typeof f.name !== 'string')) {
+    throw bad('carries a malformed files array');
+  }
+  if (!manifest.scope || typeof manifest.scope !== 'object' || typeof manifest.scope.kind !== 'string') throw bad('carries no scope.kind');
+  if (!Number.isSafeInteger(manifest.createdAt)) throw bad('carries no numeric createdAt');
+  /* D-89-18: the digest comparison is LAST — a structurally sound archive
+     still refuses when the streamed bytes disagree with the run row. */
+  if (sha256 !== expectedSha256) {
+    throw keyed('restoreShaMismatch', `restore: whole-archive sha256 mismatch for ${archivePath} (expected ${expectedSha256}, streamed ${sha256})`);
+  }
+  return { manifest, sha256, skippedEntries };
+}
+
 /* ---- D-89-32: restore staging lives under BACKUPS_DIR (same fs as the
    archives) so plans 03/04 can move verified trees atomically. ---- */
 export function restoreStagingDir() {

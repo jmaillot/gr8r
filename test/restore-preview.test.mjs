@@ -18,6 +18,7 @@
    set BEFORE the module graph imports). */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -310,7 +311,7 @@ async function makeBackupOpAndRun(server, email) {
   for (;;) {
     const poll = await backupOp.get('/api/backup/runs/current');
     assert.equal(poll.status, 200, `poll failed: ${JSON.stringify(poll.data)}`);
-    if (poll.data.stage === 'done') return poll.data;
+    if (poll.data.stage === 'done') return { ...poll.data, runId: post.data.runId }; // the /current payload carries no runId — the POST's D-18 UUID is the row id
     if (poll.data.stage === 'failed') throw new Error(`run failed: ${JSON.stringify(poll.data)}`);
     if (Date.now() > deadline) throw new Error(`run poll timeout: ${JSON.stringify(poll.data)}`);
     await sleep(50);
@@ -561,3 +562,261 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
   }
 });
 
+/* =====================================================================
+   89-03 Task 3 (BKRST-01) — streamVerifyArchive engine pins (in-process).
+   ONE streaming pass: entry 0's manifest parsed + structurally validated
+   (D-89-17), the whole-archive sha256 recomputed on the SAME pipe and
+   compared against the expected digest (D-89-18). Every refusal keyed.
+   ===================================================================== */
+
+test('89-03 streamVerifyArchive: a clean archive returns the validated manifest + the streaming sha256 on one pass', async () => {
+  const manifestViaHost = manifestViaHostTar();
+  const res = await restore.streamVerifyArchive(tarPath(), RUN.sha256);
+  assert.equal(res.sha256, RUN.sha256, 'the streaming digest equals the run-row digest');
+  assert.equal(res.manifest.formatVersion, 1);
+  assert.equal(res.manifest.generator, manifestViaHost.generator);
+  assert.deepEqual(res.manifest.scope, manifestViaHost.scope);
+  assert.deepEqual(res.manifest.tables.map(t => t.name), manifestViaHost.tables.map(t => t.name));
+  assert.equal(res.manifest.files.length, manifestViaHost.files.length);
+});
+
+test('89-03 streamVerifyArchive: tampered payload bytes keep the structure valid but refuse keyed restoreShaMismatch', async () => {
+  /* Flip one byte inside the workspaces.ndjson payload region (located by
+     a content marker) and re-gzip — the ustar structure stays valid, the
+     manifest still parses, but the whole-archive digest differs. */
+  const raw = zlib.gunzipSync(fs.readFileSync(tarPath()));
+  const marker = Buffer.from('hello restore');
+  const idx = raw.indexOf(marker);
+  assert.ok(idx > 0, 'fixture sanity: the marker bytes are in the tar payload');
+  raw[idx] ^= 0x01;
+  const tampered = path.join(BACKUPS_DIR, 'tampered-sha.tar.gz');
+  fs.writeFileSync(tampered, zlib.gzipSync(raw));
+  await assert.rejects(
+    () => restore.streamVerifyArchive(tampered, RUN.sha256),
+    err => err.code === 'restoreShaMismatch',
+    'a digest mismatch refuses keyed restoreShaMismatch — the archive is not restore-eligible',
+  );
+  fs.rmSync(tampered, { force: true });
+});
+
+test('89-03 streamVerifyArchive: a corrupt manifest refuses keyed restoreManifestCorrupt (parse + structural validation)', async () => {
+  /* Craft a minimal archive whose ONLY entry is a manifest.json with
+     broken JSON — the sha expectation is the CRAFTED archive's true
+     digest, so the manifest is the only defect. */
+  const craftDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-craft-'));
+  fs.writeFileSync(path.join(craftDir, 'manifest.json'), '{ this is not json');
+  const crafted = path.join(craftDir, 'corrupt-manifest.tar.gz');
+  execFileSync('tar', ['czf', crafted, '--format=ustar', '-C', craftDir, 'manifest.json']);
+  const sha = crypto.createHash('sha256').update(fs.readFileSync(crafted)).digest('hex');
+  await assert.rejects(
+    () => restore.streamVerifyArchive(crafted, sha),
+    err => err.code === 'restoreManifestCorrupt',
+  );
+  /* Structural (parseable but wrong-shaped) variants refuse too. */
+  const variant = (content, why) => {
+    fs.writeFileSync(path.join(craftDir, 'manifest.json'), content);
+    execFileSync('tar', ['czf', crafted, '--format=ustar', '-C', craftDir, 'manifest.json']);
+    const s = crypto.createHash('sha256').update(fs.readFileSync(crafted)).digest('hex');
+    return assert.rejects(
+      () => restore.streamVerifyArchive(crafted, s),
+      err => err.code === 'restoreManifestCorrupt',
+      why,
+    );
+  };
+  await variant(JSON.stringify({ formatVersion: 2, tables: [], files: [], scope: { kind: 'instance' }, createdAt: 1 }), 'unknown formatVersion refuses');
+  await variant(JSON.stringify({ formatVersion: 1, tables: 'nope', files: [], scope: { kind: 'instance' }, createdAt: 1 }), 'non-array tables refuse');
+  await variant(JSON.stringify({ formatVersion: 1, tables: [{ name: 'workspaces' }], files: [], scope: { kind: 'instance' }, createdAt: 1 }), 'a table missing classification/rows refuses');
+  fs.rmSync(craftDir, { recursive: true, force: true });
+});
+
+
+/* =====================================================================
+   89-03 Task 3 (BKRST-01) — GET /api/backup/restore/preview?runId=
+   route pins (server harness). Guard chain VERBATIM (sameOrigin →
+   requireUser → operator-keyed throttle → RESTORE_USE gate → runId
+   regex gate → row read), the keyed refusal mapping for EVERY 89-01
+   producer class (D-89-33 families 2/3), manifest-derived payload only
+   (P2: never raw archive bytes), and the D-89-32 boot sweep wiring.
+   ===================================================================== */
+
+const restoreAuditActions = srv =>
+  withDb(srv.dbPath, db => db.prepare("select action from audit_log where action like 'restore_refused:%' order by created_at, id").all().map(r => r.action));
+
+/* Craft an archive under dataDir/backups with host tar (independent of
+   the reader under test). Entries: list of { name, content }. Returns
+   { filename, sha256 } for row planting. */
+function craftArchive(dataDir, filename, entries) {
+  const craftDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-craft-'));
+  for (const e of entries) fs.writeFileSync(path.join(craftDir, e.name), e.content);
+  const out = path.join(dataDir, 'backups', filename);
+  execFileSync('tar', ['czf', out, '--format=ustar', '-C', craftDir, ...entries.map(e => e.name)]);
+  const sha256 = crypto.createHash('sha256').update(fs.readFileSync(out)).digest('hex');
+  fs.rmSync(craftDir, { recursive: true, force: true });
+  return { filename, sha256 };
+}
+
+test('89-03 preview: a local archive streams the manifest — payload is manifest-derived counts + the re-verified checksum (D-89-17/18)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-restore-prev-'));
+  // plant one real blob so the manifest's files[] is non-empty
+  fs.mkdirSync(path.join(dataDir, 'files'), { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'files', 'blob-0'), crypto.randomBytes(8 * 1024));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-prev@test.local');
+    const done = await makeBackupOpAndRun(server, 'bop-prev@test.local');
+
+    const res = await restoreOp.get(`/api/backup/restore/preview?runId=${done.runId}`);
+    assert.equal(res.status, 200, `preview: ${JSON.stringify(res.data)}`);
+    const p = res.data;
+    assert.equal(p.runId, done.runId);
+    assert.equal(p.checksum, done.sha256, 'checksum = the whole-archive sha256 re-verified ON the streaming pass (D-89-18)');
+    assert.equal(p.scope.kind, 'instance');
+    assert.equal(typeof p.createdAt, 'number', 'createdAt rides the manifest verbatim');
+    assert.ok(Array.isArray(p.tables) && p.tables.length >= 1, 'manifest-derived tables');
+    const ws = p.tables.find(t => t.name === 'workspaces');
+    assert.ok(ws && ws.rows >= 1 && typeof ws.classification === 'string', 'workspaces row-count present with its classification');
+    assert.ok(p.tables.every(t => Object.keys(t).sort().join(',') === 'classification,name,rows'), 'tables carry ONLY name/classification/rows');
+    assert.ok(Array.isArray(p.files) && p.files.length >= 1, 'manifest-derived files');
+    assert.deepEqual(p.files.map(f => Object.keys(f).sort()), p.files.map(() => ['ext', 'flagged', 'name', 'size'].sort()), 'files carry ONLY name/ext/size/flagged');
+    assert.equal(p.fileCount, p.files.length);
+    assert.equal(p.missingBlobCount, 0, 'a clean archive has zero missing blobs');
+    assert.ok(p.files.every(f => f.flagged === false), 'clean blobs are unflagged');
+    assert.ok(p.skippedEntries.some(s => s.name === 'projects.db'), 'instance archives skip-and-record DATA_DIR-relative entries (extraction parity)');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-03 preview: tampered local bytes → keyed 400 restoreShaMismatch, audited (D-89-18)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-restore-prev-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-sha@test.local');
+    const done = await makeBackupOpAndRun(server, 'bop-sha@test.local');
+    // flip one byte in the published local archive (test-side fs)
+    const archive = path.join(dataDir, 'backups', done.filename);
+    const raw = zlib.gunzipSync(fs.readFileSync(archive));
+    const idx = raw.indexOf(Buffer.from('Acme'));
+    assert.ok(idx > 0, 'fixture sanity: seed workspace bytes present in the archive');
+    raw[idx] ^= 0x01;
+    fs.writeFileSync(archive, zlib.gzipSync(raw));
+    const res = await restoreOp.get(`/api/backup/restore/preview?runId=${done.runId}`);
+    assert.equal(res.status, 400, `tampered preview: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'restoreShaMismatch');
+    assert.ok(restoreAuditActions(server).includes('restore_refused:restoreShaMismatch'), 'the refusal is audited');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-03 preview: a corrupt manifest refuses keyed restoreManifestCorrupt; an attacker entry name refuses keyed restoreEntryRejected with the reason variant (D-89-33)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-restore-prev-'));
+  fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-craft@test.local');
+
+    // corrupt manifest: real digest in the row, broken JSON inside
+    const corrupt = craftArchive(dataDir, 'corrupt-manifest.tar.gz', [
+      { name: 'manifest.json', content: '{ this is not json' },
+    ]);
+    insertRun(server, { id: 'run-corrupt', status: 'succeeded', filename: corrupt.filename, sha256: corrupt.sha256, createdAt: 2000 });
+    const bad = await restoreOp.get('/api/backup/restore/preview?runId=run-corrupt');
+    assert.equal(bad.status, 400, `corrupt manifest: ${JSON.stringify(bad.data)}`);
+    assert.equal(bad.data.code, 'restoreManifestCorrupt');
+    assert.ok(restoreAuditActions(server).includes('restore_refused:restoreManifestCorrupt'), 'the manifest refusal is audited');
+
+    // traversal entry: the gate refuses DURING the walk, keyed with the reason variant
+    const evilDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-evil-'));
+    fs.writeFileSync(path.join(evilDir, 'escape.txt'), 'attacker bytes');
+    const evil = path.join(dataDir, 'backups', 'evil-traversal.tar.gz');
+    execFileSync('tar', ['czf', evil, '--format=ustar', '-C', evilDir, '--transform', 's,^,../,', 'escape.txt']);
+    const evilSha = crypto.createHash('sha256').update(fs.readFileSync(evil)).digest('hex');
+    fs.rmSync(evilDir, { recursive: true, force: true });
+    insertRun(server, { id: 'run-evil', status: 'succeeded', filename: 'evil-traversal.tar.gz', sha256: evilSha, createdAt: 3000 });
+    const rejected = await restoreOp.get('/api/backup/restore/preview?runId=run-evil');
+    assert.equal(rejected.status, 400, `traversal entry: ${JSON.stringify(rejected.data)}`);
+    assert.equal(rejected.data.code, 'restoreEntryRejected', 'the 89-01 producer class named on the consumer side');
+    assert.match(JSON.stringify(rejected.data), /traversal/, 'the reason variant rides the keyed detail');
+    assert.ok(restoreAuditActions(server).includes('restore_refused:restoreEntryRejected'), 'the entry refusal is audited (D-89-33)');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-03 preview: runId regex gate refuses BEFORE any row read (no oracle); unknown runId and gone-both-destinations refuse keyed restoreArchiveMissing (D-89-15)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-restore-prev-'));
+  fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-miss@test.local');
+
+    // regex-violating shapes → 404 taskNotFound-class, never a row probe
+    for (const badId of ['../escape', 'a'.repeat(65), 'has%20space', 'x.y']) {
+      const res = await restoreOp.get(`/api/backup/restore/preview?runId=${encodeURIComponent(badId)}`);
+      assert.equal(res.status, 404, `regex-violating runId ${badId}: ${JSON.stringify(res.data)}`);
+      assert.equal(res.data.code, 'taskNotFound');
+    }
+    assert.ok(!restoreAuditActions(server).length, 'regex refusals are shape refusals, not audited archive refusals');
+
+    // unknown but well-shaped runId → keyed restoreArchiveMissing + audited
+    const unknown = await restoreOp.get('/api/backup/restore/preview?runId=00000000-0000-4000-8000-000000000000');
+    assert.equal(unknown.status, 404);
+    assert.equal(unknown.data.code, 'restoreArchiveMissing');
+
+    // planted row, no local file, uploaded = 0 → the honest missing refusal
+    insertRun(server, { id: 'run-gone', status: 'succeeded', uploaded: 0, filename: 'vanished.tar.gz', createdAt: 2000 });
+    const gone = await restoreOp.get('/api/backup/restore/preview?runId=run-gone');
+    assert.equal(gone.status, 404, `gone-both: ${JSON.stringify(gone.data)}`);
+    assert.equal(gone.data.code, 'restoreArchiveMissing', 'an archive gone from both destinations is not restore-eligible (D-89-15)');
+    const actions = restoreAuditActions(server);
+    assert.equal(actions.filter(a => a === 'restore_refused:restoreArchiveMissing').length, 2, 'both archive-missing refusals audited');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-03 preview: plain member 403 + audited; the operator-keyed throttle consumes a try and the 11th preview in the window is 429 (D-89-22, OQ5)', async () => {
+  const server = await startServer({});
+  try {
+    const joined = await signup(server.base, { name: 'Plain', email: 'plain-prev@test.local' });
+    assert.equal(joined.status, 201);
+    const plain = (await login(server.base, 'plain-prev@test.local', 'password-1234')).client;
+    const refused = await plain.get('/api/backup/restore/preview?runId=whatever');
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'backupRoleRequired');
+    assert.ok(restoreAuditActions(server).includes('restore_refused:restoreRoleRequired'));
+
+    const restoreOp = await makeRestoreOp(server, 'rop-throttle@test.local');
+    for (let i = 0; i < 10; i++) {
+      const res = await restoreOp.get('/api/backup/restore/preview?runId=no-such-run');
+      assert.equal(res.status, 404, `cheap refusal ${i + 1} still consumed a throttle try`);
+    }
+    const eleventh = await restoreOp.get('/api/backup/restore/preview?runId=no-such-run');
+    assert.equal(eleventh.status, 429, `the 11th preview in the 15-min window: ${JSON.stringify(eleventh.data)}`);
+    assert.equal(eleventh.data.code, 'tooManyAttempts');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('89-03 preview: the D-89-32 boot sweep clears planted restore-staging orphans beside the backup sweep', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-restore-sweep-'));
+  const staging = path.join(dataDir, 'backups', 'restore-staging');
+  fs.mkdirSync(path.join(staging, 'orphan-run', 'nested'), { recursive: true });
+  fs.writeFileSync(path.join(staging, 'orphan-run', 'nested', 'blob.bin'), 'x');
+  fs.writeFileSync(path.join(staging, 'orphan-file.bin'), 'y');
+  const server = await startServer({ dataDir });
+  try {
+    assert.ok(!fs.existsSync(path.join(staging, 'orphan-run')), 'the boot sweep removed the planted restore-staging orphan dir');
+    assert.ok(!fs.existsSync(path.join(staging, 'orphan-file.bin')), 'the boot sweep removed the planted restore-staging orphan file');
+    assert.match(server.output(), /restore staging sweep: removed 2 orphan/, 'the sweep rides the boot log beside the backup sweep');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

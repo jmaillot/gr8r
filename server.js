@@ -85,7 +85,8 @@ import { buildMspdi } from './export/mspdi.js';
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
-import { probeS3 } from './export/s3.js';
+import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -9116,6 +9117,131 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* -------------- restore preview (Phase 89, 89-03, BKRST-01/D-89-16..18) --------------
+     GET /api/backup/restore/preview?runId=<id> — what would I be restoring?
+     Guard chain copied VERBATIM from the family (never reordered): sameOrigin
+     → requireUser → operator-keyed throttle → capability gate → runId regex
+     gate → row read. The throttle deviation from the history-GET no-throttle
+     precedent is DELIBERATE and documented (research OQ5): preview streams
+     AND hashes the whole archive (T-89-06 DoS cost), so
+     tooMany(`restorepreview|<user>`, 10, 15min) sits BEFORE the gate and
+     consumes a try even on refusal (D-89-22). Gate = RESTORE_USE only
+     (D-89-21), refusal keyed + audited. runId regex gate BEFORE any row
+     read — no 404-vs-400 existence oracle (T-86-06 shape). Archive
+     resolution from run-row truth ONLY (D-89-14/15): local file → stream-
+     verify in place; else uploaded = 1 → the 88-01 downloadToStaged seam
+     into restore-staging (D-89-16), temp removed in finally; else keyed
+     restoreArchiveMissing. Every 89-01 reader refusal class is named on
+     the consumer side (D-89-33 families 2/3): entry-gate rejections →
+     restoreEntryRejected (reason variant in the detail, audited);
+     structural reader corruption AND manifest parse/validation failures →
+     restoreManifestCorrupt (the specific class named in the detail);
+     digest mismatch → restoreShaMismatch. The response carries
+     manifest-derived counts ONLY — no archive bytes, no client-side
+     parsing, and no download endpoint exists (prohibition P2; Phase 90
+     owns download tiering + ARCHIVE_READ). No MCP mirror (D-89-19). */
+  if (pathname === '/api/backup/restore/preview' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    /* D-89-22/OQ5: the streaming+hashing cost is the resource being
+       guarded — a refused attempt still consumed a try. */
+    if (tooMany(`restorepreview|${user.id}`, 10, 15 * 60 * 1000)) {
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    }
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      await auditBackupTask(user, 'restore_refused:restoreRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can preview restorable backups');
+    }
+    const runId = url.searchParams.get('runId') ?? '';
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(runId)) {
+      return fail(res, 404, 'taskNotFound', 'That backup run does not exist');
+    }
+    const row = await db.get(
+      'select id, task_id, scope, status, size_bytes, sha256, filename, uploaded, created_at from backup_runs where id = ?',
+      [runId],
+    );
+    if (!row) {
+      await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    const localPath = row.filename ? path.join(backupsRoot(), row.filename) : null;
+    const hasLocal = !!localPath && fs.existsSync(localPath);
+    if (!hasLocal && row.uploaded !== 1) {
+      await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    let stagedPath = null;
+    try {
+      let archivePath = localPath;
+      if (!hasLocal) {
+        /* D-89-16: S3-located archive — fetch through the 88-01 seam into
+           restore-staging (same-fs with the archives); downloadToStaged
+           itself refuses keyed on a stream-back digest mismatch. The key
+           reconstructs from the run row exactly as the upload built it
+           (D-88-6 task prefix / D-88-9 backup-manual/). */
+        if (!S3.enabled) {
+          await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+          return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
+        }
+        const back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+        stagedPath = back.tmpPath;
+        archivePath = back.tmpPath;
+      }
+      let verified;
+      try {
+        verified = await streamVerifyArchive(archivePath, row.sha256);
+      } catch (err) {
+        const code = typeof err?.code === 'string' ? err.code : '';
+        if (code === 'restoreEntryRejected') {
+          /* D-89-33 families 2/3: attacker-supplied entry names get their
+             own keyed code with the reason variant — never a bare 500. */
+          await auditBackupTask(user, 'restore_refused:restoreEntryRejected');
+          return fail(res, 400, 'restoreEntryRejected', `Archive entry rejected (${err.reason ?? 'unknown'}): ${err.message}`);
+        }
+        if (code === 'restoreShaMismatch') {
+          await auditBackupTask(user, 'restore_refused:restoreShaMismatch');
+          return fail(res, 400, 'restoreShaMismatch', 'Archive checksum mismatch — this archive is not restore-eligible');
+        }
+        /* Structural reader corruption (chksum / oversize / truncated /
+           duplicate / magic) and a manifest failing parse/validation both
+           land here — the specific reader class rides the detail. */
+        if (code.startsWith('restore')) {
+          await auditBackupTask(user, 'restore_refused:restoreManifestCorrupt');
+          return fail(res, 400, 'restoreManifestCorrupt', `Archive unreadable (${code}): ${err.message}`);
+        }
+        throw err; // not a keyed reader refusal — the generic 500 path owns it
+      }
+      const m = verified.manifest;
+      const files = m.files.map(f => ({
+        name: f.name,
+        ext: f.ext ?? null,
+        size: Number.isSafeInteger(f.size) ? f.size : 0,
+        flagged: !!(f.missingBlob || f.pathEscaped || f.nameReserved || f.symlinkSkipped),
+      }));
+      /* Manifest-derived counts ONLY (prohibition P2) — the archive bytes
+         never leave the server. checksum = the digest re-verified ON the
+         streaming pass (D-89-18), which equals the run-row sha256 (the
+         comparison above already refused a mismatch). */
+      return json(res, 200, {
+        runId: row.id,
+        scope: m.scope,
+        createdAt: m.createdAt,
+        tables: m.tables.map(t => ({ name: t.name, classification: t.classification, rows: t.rows })),
+        fileCount: files.length,
+        missingBlobCount: m.files.filter(f => f.missingBlob).length,
+        files,
+        /* D-89-33 consumer-side honesty: non-allow-listed entry names the
+           walk skipped (extraction will skip them too) ride the payload —
+           render-only, the client never derives anything from them. */
+        skippedEntries: verified.skippedEntries,
+        checksum: verified.sha256,
+      });
+    } finally {
+      if (stagedPath) fs.rmSync(stagedPath, { force: true }); // D-89-16: the staged temp never outlives the response
+    }
+  }
+
   if (pathname === '/api/auth/signup' && method === 'POST') {
     /* Same origin guard as every other mutation — before the body read AND before the
        throttle, so a cross-origin POST cannot consume the victim IP's attempt budget. */
@@ -11256,6 +11382,11 @@ async function main() {
   const restoreSweep = await sweepStaleRestoreRuns();
   if (restoreSweep.marked) logInfo(`restore run sweep: marked ${restoreSweep.marked} stale running restore(s) interrupted`);
   if (restoreSweep.released) logInfo(`restore lock sweep: released ${restoreSweep.released} stale claim(s)`);
+  /* D-89-32 (89-03): crash hygiene mirrors the backup-staging sweep — boot
+     clears BACKUPS_DIR/restore-staging orphans left by a crashed preview/
+     restore before the first one can observe them. */
+  const sweptRestoreStaging = sweepStaleRestoreStaging();
+  if (sweptRestoreStaging) logInfo(`restore staging sweep: removed ${sweptRestoreStaging} orphan(s)`);
   /* PUSH-05: VAPID custody runs after the migrations so DATA_DIR is settled —
      env → persisted file → generate-once ladder (feature absent on failure). */
   await initPushCustody();
