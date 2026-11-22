@@ -85,6 +85,11 @@ services:
       DB_URL: ${DB_URL:-}
     volumes:
       - projects-studio-data:/data
+      # Phase 87: backup task archives on a SEPARATE host path — a failed/rotated
+      # data volume must never take the backups with it (BKBCK-03). Bind-mount
+      # keeps archives visible to host-side backup routines; GFS retention prunes
+      # them in-app (Phase 87 rotation). Override with BACKUPS_HOST_DIR in .env.
+      - ${BACKUPS_HOST_DIR:-./data-backups}:/data/backups
     # No published port: Traefik reaches the container over the shared network.
     expose:
       - '8080'
