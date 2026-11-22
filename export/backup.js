@@ -63,7 +63,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { DatabaseSync } from 'node:sqlite';
-import { backendKind, toPgSql, pgPoolRef, run as dbRun } from '../db-adapter.mjs';
+import { backendKind, toPgSql, pgPoolRef, run as dbRun, get as dbGet, all as dbAll } from '../db-adapter.mjs';
 
 /* ---- Paths (same derivation as server.js:126-132) ----
    BACKUPS_DIR (D-08 amendment, post-87): completed archives live at
@@ -531,15 +531,51 @@ function collectInstanceFiles(dirs, stagingDir, files) {
 /* ---- Filename (D-14): backup-<scope-kind>-<scope-id>-<YYYYMMDD-HHMMSS>.tar.gz ---- */
 /* 87-02 (D-11): scheduled fires pass { taskId } through meta — the archive is
    named backup-task-<taskId>-<ts>.tar.gz (greppable on disk for rotation and
-   restore); manual run names stay frozen per 86-D-14. */
+   restore); manual run names stay frozen per 86-D-14.
+   UAT feedback 2026-11-22: a human-readable SLUG of the scope's name rides in
+   the filename when one resolves (backup-instance-… / backup-workspace-<slug>-… /
+   backup-project-<slug>-…). Ids stay as a fallback (label is best-effort —
+   lookup failure never fails a run). Rotation matches by prefix/regex on the
+   recorded filename in backup_runs, so the extra segment is inert to it. */
+const slugify = s =>
+  String(s || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+/* Best-effort friendly label for the archive filename: workspace name from the
+   row, project name from the workspace doc (the same source the 86-01 collector
+   and the server's scope-existence probe read). */
+async function scopeLabel(scope) {
+  try {
+    if (scope?.kind === 'workspace' && scope.id) {
+      const row = await dbGet('select name from workspaces where id = ?', [scope.id]);
+      return row?.name || '';
+    }
+    if (scope?.kind === 'project' && scope.id) {
+      for (const ws of await dbAll('select doc from workspaces')) {
+        let doc;
+        try { doc = JSON.parse(ws.doc)?.data ?? {}; } catch { continue; }
+        const p = (Array.isArray(doc.projects) ? doc.projects : []).find(x => x?.id === scope.id);
+        if (p) return p.name || '';
+      }
+    }
+  } catch { /* filename nicety only */ }
+  return '';
+}
+
 function archiveName(scope, now, meta = {}) {
   const d = new Date(now);
   const p = n => String(n).padStart(2, '0');
   const ts = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
-  if (meta.taskId) return `backup-task-${meta.taskId}-${ts}.tar.gz`;
+  const label = slugify(meta.label);
+  if (meta.taskId) return `backup-task-${label ? `${label}-` : ''}${meta.taskId}-${ts}.tar.gz`;
   return scope.kind === 'instance'
     ? `backup-instance-${ts}.tar.gz`
-    : `backup-${scope.kind}-${scope.id}-${ts}.tar.gz`;
+    : `backup-${scope.kind}-${label || scope.id}-${ts}.tar.gz`;
 }
 
 function rmStaging(stagingDir) {
@@ -572,9 +608,14 @@ export async function runExport(scope, meta = {}) {
   const runMeta = {
     taskId: typeof meta.taskId === 'string' && meta.taskId ? meta.taskId : null,
     trigger: meta.trigger === 'scheduled' ? 'scheduled' : 'manual',
+    label: '', // UAT 2026-11-22: friendly slug for the filename — resolved below, best-effort
   };
   const runId = claimRun(scope);
   if (!runId) return { ok: false, code: 'backupRunInProgress' };
+  /* Filename label AFTER the claim (UAT 2026-11-22): never insert an await
+     between the request and claimRun — that widens the D-10 race window the
+     claim-race test pins. Inside the claim it's pure filename nicety. */
+  runMeta.label = await scopeLabel(scope);
   const startedAtMs = currentRun.startedAt;
   await emitRunEvent({ kind: 'start', runId, ...runMeta, scope, startedAt: startedAtMs });
   const dirs = dataDirs();

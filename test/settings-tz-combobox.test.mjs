@@ -74,7 +74,7 @@ test('D-03: no runtime zone enumeration under src/, and the static list is impor
   for (const f of walk(path.join(REPO, 'src'))) {
     assert.ok(!fs.readFileSync(f, 'utf8').includes('supportedValuesOf'), `supportedValuesOf leaked into ${path.relative(REPO, f)}`);
   }
-  assert.match(settingsSrc, /import\s*\{\s*TIMEZONES\s*\}\s*from\s*'\.\.\/lib\/timezones\.js'/);
+  assert.match(settingsSrc, /import\s*\{\s*TIMEZONES,\s*tzPreselect\s*\}\s*from\s*'\.\.\/lib\/timezones\.js'/);
 });
 
 test('preselect chain ordering (D-04 → D-05 → D-07), pinned structurally: stored → resolveTz → browser → Paris', () => {

@@ -79,20 +79,22 @@ const runNowCard = flags => {
 /* D-07 stage progress: rendered verbatim from the run payload — stage badge,
    and on done the archive filename + whole-archive sha256 as text (no download
    action — Phase 90). The pending flag means "trigger accepted, first poll has
-   not landed yet": no stage is fabricated client-side (render-only doctrine). */const runProgress = () => {
-  if (S.ui.backupPending && !S.ui.backupRun) return `<div class="panel" style="margin-top:12px"><div class="panel-b faint" aria-busy="true">${t('page.backup.pending')}</div></div>`;
+   not landed yet": no stage is fabricated client-side (render-only doctrine). */
+const runProgress = () => {
+  if (S.ui.backupPending && !S.ui.backupRun)
+    return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.backup.stageLabel')}</h2></div><div class="panel-b faint" aria-busy="true">${t('page.backup.pending')}</div></div>`;
   const run = S.ui.backupRun;
   if (!run || run.stage === 'idle') return '';
   let detail = '';
   if (run.stage === 'done') {
-    detail = `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><span class="faint">${t('page.backup.archiveLabel')}</span><span class="mono">${esc(run.filename || '')}</span><span class="faint mono trunc" style="display:inline-block;max-width:360px" title="${esc(run.sha256 || '')}">${esc(run.sha256 || '')}</span></div>`;
+    detail = `<div class="row" style="gap:8px;flex-wrap:wrap"><span class="faint">${t('page.backup.archiveLabel')}</span><span class="mono">${esc(run.filename || '')}</span><span class="faint mono trunc" style="display:inline-block;max-width:360px" title="${esc(run.sha256 || '')}">${esc(run.sha256 || '')}</span></div>`;
   } else if (run.stage === 'failed') {
-    detail = `<p class="faint" style="margin:8px 0 0">${t('page.backup.runFailed')}</p>`;
+    detail = `<p class="faint" style="margin:0">${t('page.backup.runFailed')}</p>`;
   }
-  return `<div class="panel" style="margin-top:12px"><div class="panel-b">
-    <div class="row" style="gap:8px;align-items:center"><span class="badge">${esc(run.stage)}</span><span class="faint">${t('page.backup.stageLabel')}</span></div>
-    ${detail}
-  </div></div>`;
+  /* UAT spacing feedback 2026-11-22: proper panel header ("Run progress" as an
+     h2 in panel-h, stage badge beside it) instead of the badge+label row mashed
+     at the top of the body. */
+  return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.backup.stageLabel')}</h2><span class="badge">${esc(run.stage)}</span></div><div class="panel-b">${detail}</div></div>`;
 };
 
 /* =====================================================================

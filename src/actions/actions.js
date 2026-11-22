@@ -4827,7 +4827,12 @@ function backupStopPolling() {
 }
 
 A.backupRunNow = async () => {
-  const scope = S.ui.backupScope;
+  /* UAT fix 2026-11-22 (2nd half): the card renders the instance default with a
+     fallback (`S.ui.backupScope || {kind:'instance'}`) but the action used to
+     read S.ui.backupScope raw and return on null — so the untouched default
+     select made "Run backup" do NOTHING until the operator touched the
+     dropdown. Mirror the render fallback here. */
+  const scope = S.ui.backupScope || { kind: 'instance', id: null };
   if (!scope) return;
   if (scope.kind === 'project' && !scope.id) return toast(t('err.backupPickProject'), { kind: 'err' });
   /* UAT fix 2026-11-22: scope-shape normalization per 86-D-17.

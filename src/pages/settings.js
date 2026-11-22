@@ -13,7 +13,7 @@ import { teamsGrid, visReasonLabel } from './members.js';
 import { page404 } from './errors.js';
 import { SHORTCUTS } from '../overlays/modals.js';
 import { render } from '../shell/render.js';
-import { TIMEZONES } from '../lib/timezones.js';
+import { TIMEZONES, tzPreselect } from '../lib/timezones.js';
 import { resolveTz } from '../../tz.js';
 
 /* The samples the format previews are computed from: a fixed day and a fixed
