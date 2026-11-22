@@ -5902,7 +5902,15 @@ async function handleApi(req, res, url) {
       const isPinnedTenant = claims.tid === OIDC.config.tenantId;
       const guestShape = (typeof claims.idp === 'string' && claims.idp !== '' && claims.idp !== OIDC.config.issuer) || String(claims.acct ?? '') === '1';
       const canLink = isPinnedTenant && !guestShape;
-      const verifiedEmail = claims.email_verified === true;
+      /* OIDC_TRUST_TENANT_EMAIL (opt-in, default off): Azure AD work/school
+         accounts routinely omit the MSA-style `email_verified` claim, which
+         fail-closed blocks linking AND JIT provisioning for genuine tenant
+         members. When the operator sets the flag, a PINNED-TENANT member
+         (tid matches, non-guest shape) substitutes for the claim — the IdP
+         vouches for its own members' mailboxes. Guests and cross-tenant
+         identities still require literal email_verified === true. */
+      const trustTenantEmail = ['true', '1', 'yes', 'on'].includes(String(process.env.OIDC_TRUST_TENANT_EMAIL ?? '').trim().toLowerCase());
+      const verifiedEmail = claims.email_verified === true || (trustTenantEmail && isPinnedTenant && !guestShape);
       let row = await db.get('select u.* from oidc_identities i join users u on u.id = i.user_id where i.issuer = ? and i.subject = ?', [
         OIDC.config.issuer,
         subject,
