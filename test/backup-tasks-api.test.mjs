@@ -19,6 +19,8 @@
    ===================================================================== */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -282,4 +284,134 @@ test('every 87-01 refusal key exists in all five locale catalogues (no duplicate
       assert.ok(cat['err.' + key] && typeof cat['err.' + key] === 'string' && cat['err.' + key].length > 0, `${loc}.err.${key}`);
     }
   }
+});
+
+/* ---------- Phase 88 (88-02): additive S3 migration (BKBCK-05, D-88-2/12) ---------- */
+
+const runsDdl = srv =>
+  withDb(srv.dbPath, db => db.prepare("select sql from sqlite_master where type = 'table' and name = 'backup_runs'").get()?.sql);
+
+test('fresh boot: backup_tasks.s3_enabled exists defaulting false; backup_runs status CHECK carries upload_failed', async () => {
+  const server = await startServer({});
+  try {
+    const cols = withDb(server.dbPath, db => db.prepare('pragma table_info(backup_tasks)').all().map(c => c.name));
+    assert.ok(cols.includes('s3_enabled'), 's3_enabled column present on a fresh install');
+    const def = withDb(server.dbPath, db => db.prepare("pragma table_info(backup_tasks)").all().find(c => c.name === 's3_enabled'));
+    assert.equal(String(def.dflt_value), '0', 'defaults to 0 (D-88-12)');
+
+    /* The widened CHECK accepts upload_failed and still rejects typos. */
+    withDb(server.dbPath, db =>
+      db.prepare("insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values ('run-upf', NULL, '{}', 'manual', 'upload_failed', 1, 1)").run(),
+    );
+    assert.throws(
+      () =>
+        withDb(server.dbPath, db =>
+          db.prepare("insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values ('run-typo', NULL, '{}', 'manual', 'uploaded', 1, 1)").run(),
+        ),
+      'a typo status is still refused by the CHECK',
+    );
+    /* 'uploading' is a STAGE, not a status (D-88-2): it must NOT be accepted. */
+    assert.throws(
+      () =>
+        withDb(server.dbPath, db =>
+          db.prepare("insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values ('run-stg', NULL, '{}', 'manual', 'uploading', 1, 1)").run(),
+        ),
+      "'uploading' stays out of the status enum (stage rides the D-19 payload)",
+    );
+    const row = withDb(server.dbPath, db => db.prepare("select * from backup_tasks where id = 'none'").get());
+    assert.equal(row, undefined);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('legacy DB reboot: s3_enabled added additively and the status CHECK rebuilt carrying every row verbatim (T-88-08)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-s3-mig-'));
+  try {
+    const server = await startServer({ dataDir: dir });
+    await server.stop();
+
+    /* Rewind the two S3-era changes to their Phase 87 shapes: the legacy
+       backup_tasks without s3_enabled and the legacy backup_runs CHECK.
+       Real rows are planted to prove the rebuild carries them verbatim. */
+    withDb(server.dbPath, db => {
+      db.exec('drop table backup_tasks');
+      db.exec(`create table backup_tasks (
+    id                  text primary key,
+    name                text not null,
+    scope               text not null default '{}',
+    cron                text not null,
+    tz                  text not null default 'Europe/Paris',
+    enabled             integer not null default 1,
+    retention_daily     integer not null default 7,
+    retention_weekly    integer not null default 4,
+    retention_monthly   integer not null default 12,
+    retention_yearly    integer not null default 5,
+    next_run_at         integer,
+    last_notified_state text,
+    created_at          integer not null,
+    updated_at          integer not null
+  )`);
+      db.prepare(
+        "insert into backup_tasks (id, name, scope, cron, enabled, next_run_at, created_at, updated_at) values ('t-legacy', 'Legacy', '{}', '30 2 * * *', 0, NULL, 1, 1)",
+      ).run();
+      db.exec('drop table backup_runs');
+      db.exec(`create table backup_runs (
+    id           text primary key,
+    task_id      text,
+    scope        text not null default '{}',
+    trigger      text not null check (trigger in ('manual','scheduled')),
+    status       text not null check (status in ('running','succeeded','failed','interrupted','skipped_overlap','deleted')),
+    started_at   integer not null,
+    finished_at  integer,
+    duration_ms  integer,
+    size_bytes   integer,
+    sha256       text,
+    filename     text,
+    error        text,
+    created_at   integer not null
+  )`);
+      db.prepare(
+        "insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at) values ('run-old-1', 't-legacy', '{}', 'scheduled', 'succeeded', 10, 20, 10, 123, 'abc', 'backup-task-t-legacy.tar.gz', NULL, 10)",
+      ).run();
+    });
+
+    const rebooted = await startServer({ dataDir: dir });
+    try {
+      const cols = withDb(rebooted.dbPath, db => db.prepare('pragma table_info(backup_tasks)').all().map(c => c.name));
+      assert.ok(cols.includes('s3_enabled'), 'ensureColumn added s3_enabled to the legacy table');
+      const legacyTask = withDb(rebooted.dbPath, db => db.prepare('select * from backup_tasks where id = ?').get('t-legacy'));
+      assert.equal(legacyTask?.s3_enabled, 0, 'the carried row defaults to 0 (D-88-12)');
+      assert.ok(runsDdl(rebooted).includes("'upload_failed'"), 'status CHECK widened by the rebuild');
+
+      /* Every legacy row carried verbatim across the drop/recreate. */
+      const old = withDb(rebooted.dbPath, db => db.prepare('select * from backup_runs where id = ?').get('run-old-1'));
+      assert.equal(old.status, 'succeeded');
+      assert.equal(old.task_id, 't-legacy');
+      assert.equal(old.sha256, 'abc');
+      assert.equal(old.size_bytes, 123);
+      assert.equal(old.filename, 'backup-task-t-legacy.tar.gz');
+      assert.equal(withDb(rebooted.dbPath, db => db.prepare('select count(*) as n from backup_runs').get()).n, 1, 'exactly the planted rows survived');
+
+      /* The rebuilt CHECK accepts the new terminal state. */
+      withDb(rebooted.dbPath, db =>
+        db.prepare("insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values ('run-old-2', 't-legacy', '{}', 'manual', 'upload_failed', 11, 11)").run(),
+      );
+    } finally {
+      await rebooted.stop();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('dual-engine lockstep: the adapter mirror carries s3_enabled and the widened CHECK (pg gets it from pgSchemaVariant each boot)', async () => {
+  const { SQLITE_SCHEMA } = await import('../db-adapter.mjs');
+  assert.match(SQLITE_SCHEMA, /create table if not exists backup_tasks \([\s\S]*?s3_enabled\s+integer not null default 0/);
+  assert.match(SQLITE_SCHEMA, /status\s+text not null check \(status in \('running','succeeded','failed','upload_failed'/);
+  assert.doesNotMatch(
+    SQLITE_SCHEMA.match(/status\s+text not null check \(status in \([^)]*\)\)/)?.[0] || '',
+    /'uploading'/,
+    "'uploading' never becomes a status in the mirror either (comments may mention it)",
+  );
 });

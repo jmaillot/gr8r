@@ -709,6 +709,10 @@ const SCHEMA = `
     retention_yearly    integer not null default 5,
     next_run_at         integer,
     last_notified_state text,
+    /* Phase 88 (D-88-12): per-task S3 opt-in — boolean only; credentials stay
+       in the boot-frozen S3_* env pair (D-88-11 custody), never in the row.
+       Existing rows default 0 via the additive ensureColumn in initDb. */
+    s3_enabled          integer not null default 0,
     created_at          integer not null,
     updated_at          integer not null
   );
@@ -722,13 +726,18 @@ const SCHEMA = `
      status is CHECK-constrained (instance_roles precedent) so a typo can
      never become a silent state; 'skipped_overlap' records the D-10
      single-run invariant refusal; 'deleted' marks rotation-removed rows —
-     run rows are history and NEVER cascade on task delete. */
+     run rows are history and NEVER cascade on task delete.
+     Phase 88 (D-88-2): 'upload_failed' joins the terminal set — a failed
+     upload keeps the local archive and lands as its own status. 'uploading'
+     is deliberately NOT a status: it is a stage inside 'running' whose
+     progress rides the D-19 payload. Pre-existing installs migrate via the
+     invites-rebuild idiom (sqliteOnly, initDb). */
   create table if not exists backup_runs (
     id           text primary key,
     task_id      text,
     scope        text not null default '{}',
     trigger      text not null check (trigger in ('manual','scheduled')),
-    status       text not null check (status in ('running','succeeded','failed','interrupted','skipped_overlap','deleted')),
+    status       text not null check (status in ('running','succeeded','failed','upload_failed','interrupted','skipped_overlap','deleted')),
     started_at   integer not null,
     finished_at  integer,
     duration_ms  integer,
@@ -823,6 +832,46 @@ async function initDb() {
       await db.run('create index if not exists invites_expiry on invites(expires_at)');
     }
   }, 'invites role-CHECK widening rebuild');
+  /* Phase 88 (D-88-12): per-task S3 opt-in — additive, def byte-identical to
+     the SCHEMA declaration (Pitfall P-B); existing rows default 0 (D-88-12:
+     env pair set or not, no task uploads until opted in). */
+  await adapterEnsureColumn('backup_tasks', 's3_enabled', 'integer not null default 0');
+  /* Phase 88 (D-88-2): backup_runs status CHECK widening — 'upload_failed'
+     joins the terminal set ('uploading' deliberately NOT a status: it is a
+     stage inside 'running', the progress rides the D-19 payload). SQLite
+     cannot alter a CHECK in place — rebuild the table when the stored
+     definition predates the widened constraint (sqliteOnly: sqlite_master is
+     a SQLite concept; pg tables are created fresh from the variant schema
+     each boot). Additive-safe: every column and index is carried verbatim —
+     no data loss path (T-88-08). The `error` column already carries the
+     run-level error text plan 03 needs for the upload failure, so no
+     additional upload column is required. */
+  await sqliteOnly(async () => {
+    const runsTbl = await db.get("select sql from sqlite_master where type = 'table' and name = 'backup_runs'");
+    if (runsTbl?.sql && !runsTbl.sql.includes("'upload_failed'")) {
+      await db.run(`create table backup_runs_rebuild (
+    id           text primary key,
+    task_id      text,
+    scope        text not null default '{}',
+    trigger      text not null check (trigger in ('manual','scheduled')),
+    status       text not null check (status in ('running','succeeded','failed','upload_failed','interrupted','skipped_overlap','deleted')),
+    started_at   integer not null,
+    finished_at  integer,
+    duration_ms  integer,
+    size_bytes   integer,
+    sha256       text,
+    filename     text,
+    error        text,
+    created_at   integer not null
+  )`);
+      await db.run(
+        'insert into backup_runs_rebuild (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at) select id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs',
+      );
+      await db.run('drop table backup_runs');
+      await db.run('alter table backup_runs_rebuild rename to backup_runs');
+      await db.run('create index if not exists backup_runs_task on backup_runs(task_id, created_at)');
+    }
+  }, 'backup_runs status-CHECK widening rebuild (D-88-2 upload_failed)');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).

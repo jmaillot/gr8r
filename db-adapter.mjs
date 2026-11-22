@@ -433,6 +433,7 @@ export const SQLITE_SCHEMA = `
     retention_yearly    integer not null default 5,
     next_run_at         integer,
     last_notified_state text,
+    s3_enabled          integer not null default 0,
     created_at          integer not null,
     updated_at          integer not null
   );
@@ -440,13 +441,16 @@ export const SQLITE_SCHEMA = `
   /* BACKUP RUNS (Phase 87, 87-01): pg twin — task_id NULL = manual Run-now
      archive outside rotation (D-11, ratified 2026-11-21); CHECK-constrained
      trigger/status enums; run rows are history and never cascade on task
-     delete ('deleted' status marks rotation-removed rows). */
+     delete ('deleted' status marks rotation-removed rows). Phase 88
+     (D-88-2): 'upload_failed' joins the terminal status set ('uploading' is
+     a stage inside 'running', not a status — the stage rides the D-19
+     payload); pg tables are created fresh from this variant each boot. */
   create table if not exists backup_runs (
     id           text primary key,
     task_id      text,
     scope        text not null default '{}',
     trigger      text not null check (trigger in ('manual','scheduled')),
-    status       text not null check (status in ('running','succeeded','failed','interrupted','skipped_overlap','deleted')),
+    status       text not null check (status in ('running','succeeded','failed','upload_failed','interrupted','skipped_overlap','deleted')),
     started_at   integer not null,
     finished_at  integer,
     duration_ms  integer,
