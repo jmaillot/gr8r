@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 89
 current_phase_name: restore
-current_plan: Not started
+current_plan: 2
 status: executing
-stopped_at: Phase 89 UI-SPEC approved
-last_updated: "2026-11-22T18:16:51.200Z"
+stopped_at: Completed 89-01-PLAN.md
+last_updated: "2026-11-22T18:55:36.907Z"
 last_activity: 2026-11-22
-last_activity_desc: Phase 88 complete, transitioned to Phase 89
-state_head: ccca91aaae6242d80329282546766feac818b8b3
+last_activity_desc: Phase 89 execution started
+state_head: eb8f7347b6ebb44294f6d8c14bc2bf21c05ba6b3
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -26,15 +26,15 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 88 — S3 Destination
+**Current focus:** Phase 89 — restore
 
 ## Current Position
 
-Phase: 89 (restore) — READY TO EXECUTE
-Current Plan: Not started
+Phase: 89 (restore) — EXECUTING
+Current Plan: 2
 Total Plans in Phase: 6
 Status: Ready to execute
-Last activity: 2026-11-22 — Phase 88 complete, transitioned to Phase 89
+Last activity: 2026-11-22 — Phase 89 execution started
 
 ## Milestone v3.3 Phase Map
 
@@ -94,6 +94,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 87 P4 | 49m | 3 tasks | 15 files |
 | Phase 87 P87-03 | 4h | 2 tasks | 5 files |
 | Phase 87 P87-03 | 4h | 2 tasks | 5 files |
+| Phase 89 P01 | 31min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -131,6 +132,8 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 87]: 87-03: backup alerts are transition-only via third outbox claim site (backup-alert:<runId>:<email> dedup); locale keys delegated to 87-04 via 87-03-LOCALE-HANDOFF.md (SC-5 EN fallback meanwhile)
 - [Phase 87]: 87-03: GFS rotation uses exactly-one-bucket assignment (UTC calendar position, oldest-first, all positions marked seen); newest verified run excluded by explicit id<>?
 - [Phase 87]: 87-03: backup alerts are transition-only via third outbox claim site (backup-alert:<runId>:<email> dedup); locale keys delegated to 87-04 via 87-03-LOCALE-HANDOFF.md (SC-5 EN fallback meanwhile)
+- [Phase 89]: 89-01: restore gate = exported gateEntryName() at extraction decision time; readArchiveEntries stays a pure preview enumerator (instance-scope names enumerate, restore never writes them)
+- [Phase 89]: 89-01: keyed refusal vocabulary (restoreArchive*/restoreEntryRejected/restoreShaMismatch/restoreContainmentViolated/restoreArchiveIncomplete) documented in export/restore.js module header for plans 03/04 fail() mapping
 
 ### Pending Todos
 
@@ -152,9 +155,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-22T16:49:22.936Z
-Stopped at: Phase 89 UI-SPEC approved
-Resume file: .planning/phases/89-restore/89-UI-SPEC.md
+Last session: 2026-11-22T18:55:36.531Z
+Stopped at: Completed 89-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
