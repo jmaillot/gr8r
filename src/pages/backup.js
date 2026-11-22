@@ -300,6 +300,7 @@ const taskFormCard = () => {
       <div class="field"><label class="label">${t('page.backup.retentionDaily')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.daily))}" data-in="backupTaskRetention" data-f="daily"></div>
       <div class="field"><label class="label">${t('page.backup.retentionWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
     </div>
+    ${api.s3Enabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskS3"${form.s3Enabled ? ' checked' : ''}><span>${esc(t('page.backup.s3Toggle'))}</span></label></div>` : ''}
     <div class="hint" style="margin-top:8px">${t('page.backup.scheduleSummaryPrefix')}: ${esc(summary)}</div>
     <div class="row" style="gap:8px;margin-top:10px">
       <button class="btn btn-primary" data-a="backupTaskSave">${ic('check', 14)}${t('page.backup.taskSaveAction')}</button>

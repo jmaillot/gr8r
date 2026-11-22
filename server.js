@@ -8455,6 +8455,20 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_task_refused:s3NotConfigured');
       return fail(res, 400, 's3NotConfigured', 'S3 destination is not configured on this instance');
     }
+    /* SC-1 probe-at-save (D-88-15, post-merge gate fix): a task enabled for
+       S3 runs the SAME write+delete marker probe the manual route uses,
+       BEFORE the write — it exercises the exact operations uploads use.
+       unreachable / badCreds / s3ClockSkew refuse the save keyed (D-88-17);
+       deleteFailed ACCEPTS with warning:true (D-88-15: the write path —
+       the one uploads need — is proven; the marker delete is not). */
+    let s3Probe = null;
+    if (body?.s3Enabled === true && S3.enabled) {
+      s3Probe = await probeS3(S3.config());
+      if (!s3Probe.ok && s3Probe.key !== 'deleteFailed') {
+        await auditBackupTask(user, `backup_task_refused:s3Probe:${s3Probe.key}`);
+        return fail(res, 400, s3Probe.key, 'S3 destination probe failed — the task was not saved');
+      }
+    }
     /* D-04: the raw string is stored verbatim; next_run_at is the persisted
        cache computed in the SAME write (never re-parsed at tick). */
     const nextRun = nextRunAt(cron, tz, now());
@@ -8485,7 +8499,9 @@ async function handleApi(req, res, url) {
     );
     await auditBackupTask(user, 'backup_task_created', task.id, task.name);
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
-    return json(res, 200, { task: backupTaskShape(task) });
+    /* s3Probe rides the response so the client can toast the keyed outcome
+       (SC-1: probe-at-save is visible, not silent). */
+    return json(res, 200, s3Probe ? { task: backupTaskShape(task), s3Probe } : { task: backupTaskShape(task) });
   }
 
   const backupTaskMatch = pathname.match(/^\/api\/backup\/tasks\/([A-Za-z0-9_-]{1,64})$/);
@@ -8589,6 +8605,18 @@ async function handleApi(req, res, url) {
       }
       s3Enabled = body.s3Enabled;
     }
+    /* SC-1 probe-at-save on edit (same contract as create): the save only
+       probes when the resulting row keeps S3 enabled and the env pair is
+       live. Refusal keys identical to the create path; deleteFailed warns
+       and accepts (D-88-15). */
+    let s3Probe = null;
+    if (s3Enabled && S3.enabled) {
+      s3Probe = await probeS3(S3.config());
+      if (!s3Probe.ok && s3Probe.key !== 'deleteFailed') {
+        await auditBackupTask(user, `backup_task_refused:s3Probe:${s3Probe.key}`, id);
+        return fail(res, 400, s3Probe.key, 'S3 destination probe failed — the task was not saved');
+      }
+    }
     const cronChanged = cron !== row.cron;
     const tzChanged = tz !== row.tz;
     const wasEnabled = row.enabled === 1;
@@ -8625,7 +8653,7 @@ async function handleApi(req, res, url) {
     );
     await auditBackupTask(user, 'backup_task_updated', id, updated.name);
     logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
-    return json(res, 200, { task: backupTaskShape(updated) });
+    return json(res, 200, s3Probe ? { task: backupTaskShape(updated), s3Probe } : { task: backupTaskShape(updated) });
   }
 
   /* -------------- S3 probe-at-save (Phase 88, D-88-15, SC-1) --------------

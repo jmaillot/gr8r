@@ -28,6 +28,10 @@ const state = {
      both default false so the SSO button stays hidden until the config lands. */
   oidcEnabled: false,
   oidcSsoOnly: false, // D-07 client side: hides the password form when SSO is the only door
+  /* Phase 88 (D-88-12): S3 toggle visibility is SERVER ground truth from
+     /api/config — the boolean only (D-88-11: never endpoint/bucket names).
+     Default false fail-closed: the toggle stays hidden until the config lands. */
+  s3Enabled: false,
 };
 
 /* Base URL for links the user can share. Set by the server (APP_URL or the
@@ -145,6 +149,9 @@ export const api = {
   get oidcSsoOnly() {
     return state.oidcSsoOnly;
   },
+  get s3Enabled() {
+    return state.s3Enabled;
+  },
   get user() {
     return state.user;
   },
@@ -207,6 +214,9 @@ export const api = {
     state.maxUploadMb = Number(r.data?.maxUploadMb) || 25;
     state.oidcEnabled = !!r.data?.oidcEnabled;
     state.oidcSsoOnly = !!r.data?.oidcSsoOnly; // the server already composes ssoOnly ⊆ enabled
+    /* Phase 88: strict boolean gate value (V5 idiom) — the S3 toggle renders
+       ONLY when the server says the destination exists (render-only doctrine). */
+    state.s3Enabled = !!r.data?.s3Enabled;
     return state.enabled;
   },
   async me() {

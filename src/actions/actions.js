@@ -4901,6 +4901,9 @@ const backupTaskFormDefaults = () => ({
   tz: '', // '' → the server's resolveTz(null) default (Europe/Paris, D-02)
   tzDirty: false,
   cronDirty: false, // edit mode: an untouched schedule is NOT re-sent (server keeps the stored cron)
+  /* Phase 88 (D-88-12): S3 opt-in stages in the form like every other field;
+     the checkbox itself renders only when api.s3Enabled is true (render-only). */
+  s3Enabled: false,
 });
 /* Preset + fields → the raw 5-field cron string (D-04 serialization).
    Custom sends all five fields verbatim — including `*` — so a Custom
@@ -4950,6 +4953,11 @@ IN.backupTaskRetention = el => {
   const n = Number.parseInt(el.value, 10);
   form.retention[el.dataset.f] = Number.isInteger(n) && n >= 0 ? n : 0;
 };
+/* Phase 88 (D-88-12): the S3 checkbox stages like the retention inputs — no
+   re-render on toggle (the checkbox IS the state). */
+IN.backupTaskS3 = el => {
+  if (S.ui.backupTaskForm) S.ui.backupTaskForm.s3Enabled = el.checked;
+};
 A.backupTaskNew = () => {
   S.ui.backupTaskForm = backupTaskFormDefaults();
   render();
@@ -4979,6 +4987,9 @@ A.backupTaskEdit = el => {
     tz: task.tz || '',
     tzDirty: false,
     cronDirty: false,
+    /* Edit mode: the checkbox shows the stored opt-in (task list rows carry
+       s3_enabled verbatim through backupTaskShape). */
+    s3Enabled: task.s3_enabled === 1,
   };
   render();
 };
@@ -5016,6 +5027,11 @@ A.backupTaskSave = async () => {
   /* UAT r3: retention always rides the write — the displayed inputs are the
      intent (server re-validates small non-negative ints, keyed invalidRetention). */
   body.retention = { daily: form.retention.daily, weekly: form.retention.weekly };
+  /* SC-1 (D-88-12/15): the S3 flag rides the write whenever the server says
+     the destination exists — absent flag would keep a stored value, so the
+     displayed checkbox state is ALWAYS serialized (on AND off). The server
+     probes at save (SC-1): unreachable/badCreds/s3ClockSkew refuse keyed. */
+  if (api.s3Enabled) body.s3Enabled = form.s3Enabled === true;
   const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
@@ -5023,6 +5039,18 @@ A.backupTaskSave = async () => {
   }
   S.ui.backupTaskForm = null;
   S.ui.tzPick = null;
+  /* SC-1 probe visibility: a response carrying s3Probe toasts the keyed
+     outcome on top of the save confirmation (D-88-15: deleteFailed is a
+     warning, not an error — the write path uploads use is proven). */
+  const probe = res.data?.s3Probe;
+  if (probe) {
+    if (probe.key === 'success') toast(t('toast.s3ProbeSuccess'));
+    else if (probe.key === 'deleteFailed') toast(t('toast.s3ProbeDeleteFailed'));
+    else if (probe.key === 'badCreds') toast(t('toast.s3ProbeBadCreds'), { kind: 'err' });
+    else if (probe.key === 'unreachable') toast(t('toast.s3ProbeUnreachable'), { kind: 'err' });
+    else if (probe.key === 's3ClockSkew') toast(tErr('s3ClockSkew', null, t('toast.s3ProbeUnreachable')), { kind: 'err' });
+    if (probe.httpWarning) toast(t('toast.s3ProbeHttpWarning'));
+  }
   toast(t(form.editing ? 'page.backup.taskUpdated' : 'page.backup.taskSaved'), { ms: 1500 });
   render();
   await refreshBackupTasks();

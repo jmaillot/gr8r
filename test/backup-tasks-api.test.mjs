@@ -621,6 +621,114 @@ test('5-locale parity: every 88-02 S3 key exists in all five catalogues', () => 
   }
 });
 
+/* ---------- Phase 88 post-merge gate fix: probe-at-save wiring (SC-1) ----------
+   The save path itself probes: create AND update with s3Enabled run the
+   marker probe BEFORE the write. unreachable / badCreds / s3ClockSkew
+   refuse keyed + audited; deleteFailed accepts with warning:true (D-88-15);
+   ok accepts and the s3Probe result rides the JSON response. */
+test('probe-at-save (SC-1): unreachable/badCreds/s3ClockSkew refuse the save keyed+audited, deleteFailed accepts with warning, ok accepts with s3Probe', async () => {
+  /* Clock-skew sink: HEAD → 403 RequestTimeTooSkewed (SC-3/D-88-17). */
+  const skewSink = await startSink(() => ({
+    HEAD: { status: 403, headers: { 'x-amz-error-code': 'RequestTimeTooSkewed' } },
+  }));
+  const skewServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${skewSink.port}`) });
+  try {
+    const op = await makeBackupOp(skewServer, 'op-save-skew@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Skew task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 400, `create: ${JSON.stringify(created.data)}`);
+    assert.equal(created.data.code, 's3ClockSkew', 'D-88-17: the self-host trap names the refusal');
+    assert.ok(taskAuditRows(skewServer).some(r => r.action === 'backup_task_refused:s3Probe:s3ClockSkew'), 'refusal audited');
+    const listed = await op.get('/api/backup/tasks');
+    assert.ok(!listed.data.tasks.some(t => t.name === 'Skew task'), 'the refused create wrote no row');
+
+    /* Edit path: the same refusal keyed the same way. */
+    const plain = await op.post('/api/backup/tasks', { name: 'Skew edit', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+    assert.equal(plain.status, 200);
+    const edited = await op.put(`/api/backup/tasks/${plain.data.task.id}`, { s3Enabled: true });
+    assert.equal(edited.status, 400);
+    assert.equal(edited.data.code, 's3ClockSkew');
+    const after = await op.get('/api/backup/tasks');
+    assert.equal(after.data.tasks.find(t => t.id === plain.data.task.id).s3_enabled, 0, 'the refused edit kept the stored opt-in');
+  } finally {
+    await skewServer.stop();
+    skewSink.server.close();
+  }
+
+  /* Bad-creds sink: the same funnel, a different key. */
+  const badSink = await startSink(() => ({
+    HEAD: { status: 403, headers: { 'x-amz-error-code': 'InvalidAccessKeyId' } },
+  }));
+  const badServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${badSink.port}`) });
+  try {
+    const op = await makeBackupOp(badServer, 'op-save-bad@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Bad task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 400);
+    assert.equal(created.data.code, 'badCreds');
+    assert.ok(taskAuditRows(badServer).some(r => r.action === 'backup_task_refused:s3Probe:badCreds'));
+  } finally {
+    await badServer.stop();
+    badSink.server.close();
+  }
+
+  /* Unreachable sink: a CLOSED port — probeS3 reports `unreachable` with the
+     sliced error text (never the refusal message the save would carry). */
+  const deadSink = await startSink(() => ({}));
+  const deadPort = deadSink.port;
+  deadSink.server.close();
+  const deadServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${deadPort}`) });
+  try {
+    const op = await makeBackupOp(deadServer, 'op-save-unreach@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Unreach task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 400);
+    assert.equal(created.data.code, 'unreachable');
+    assert.ok(taskAuditRows(deadServer).some(r => r.action === 'backup_task_refused:s3Probe:unreachable'));
+  } finally {
+    await deadServer.stop();
+  }
+
+  /* deleteFailed sink: HEAD 200, PUT 200, DELETE 403 — D-88-15: the WRITE
+     path (the one uploads use) is proven, so the save ACCEPTS with the
+     warning-carrying probe result in the response. */
+  const delSink = await startSink(() => ({
+    DELETE: { status: 403, headers: { 'x-amz-error-code': 'AccessDenied' } },
+  }));
+  const delServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${delSink.port}`) });
+  try {
+    const op = await makeBackupOp(delServer, 'op-save-delfail@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'DelFail task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 200, `create: ${JSON.stringify(created.data)}`);
+    assert.equal(created.data.s3Probe.key, 'deleteFailed');
+    assert.equal(created.data.s3Probe.warning, true, 'deleteFailed carries warning:true (D-88-15)');
+    assert.equal(created.data.s3Probe.ok, false);
+    assert.equal(created.data.task.s3_enabled, 1, 'the warned save persisted the opt-in');
+
+    /* The ok path on edit: HEAD/PUT/DELETE all 200 → s3Probe.key 'success'. */
+    const edited = await op.put(`/api/backup/tasks/${created.data.task.id}`, { s3Enabled: false });
+    assert.equal(edited.status, 200);
+    assert.ok(!edited.data.s3Probe, 'a save that leaves S3 off does not probe');
+  } finally {
+    await delServer.stop();
+    delSink.server.close();
+  }
+
+  /* Full success sink: both create and edit carry the success probe. */
+  const okSink = await startSink(() => ({}));
+  const okServer = await startServer({ env: S3_ENV(`http://127.0.0.1:${okSink.port}`) });
+  try {
+    const op = await makeBackupOp(okServer, 'op-save-ok@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Ok task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 200);
+    assert.equal(created.data.s3Probe.ok, true);
+    assert.equal(created.data.s3Probe.key, 'success');
+    const edited = await op.put(`/api/backup/tasks/${created.data.task.id}`, { s3Enabled: true });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.data.s3Probe.key, 'success');
+  } finally {
+    await okServer.stop();
+    okSink.server.close();
+  }
+});
+
 /* =====================================================================
    88-03: upload_failed rides the D-15/D-17 transition-email gate (D-88-3).
    A real spawned server with the S3_* env pair pointed at a failing sink:
@@ -640,6 +748,9 @@ function startS3RideSink() {
       if (req.method === 'POST' && url.searchParams.has('uploadId')) return res.writeHead(200).end('<CompleteMultipartUploadResult></CompleteMultipartUploadResult>');
       if (req.method === 'PUT' && url.searchParams.has('uploadId')) return res.writeHead(200, { etag: '"p"' }).end();
       if (req.method === 'PUT') {
+        /* The SC-1 marker probe (gr8r-probe/) must SUCCEED at save time —
+           the `fail` gate simulates upload-PUT failures only. */
+        if (url.pathname.includes('gr8r-probe/')) return res.writeHead(200).end();
         if (state.fail) return res.writeHead(503, { 'content-type': 'application/xml' }).end('<?xml version="1.0"?><Error><Code>ServiceUnavailable</Code></Error>');
         state.objects.set(decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, '')), Buffer.concat(chunks));
         return res.writeHead(200).end();
@@ -650,6 +761,8 @@ function startS3RideSink() {
         if (!obj) return res.writeHead(404).end();
         return res.writeHead(200).end(obj);
       }
+      if (req.method === 'HEAD') return res.writeHead(200, { etag: '"h"' }).end();
+      if (req.method === 'DELETE') return res.writeHead(204).end();
       res.writeHead(400).end();
     });
   });

@@ -47,7 +47,7 @@ test('A.backupTaskSave follows the handler discipline and refills through refres
   assert.match(actionsSrc, /A\.backupTaskSave =/, 'the save handler exists');
   assert.match(actionsSrc, /A\.backupTaskNew =/, 'the new-task action exists');
   assert.match(actionsSrc, /A\.backupTaskCancel =/, 'the cancel action exists');
-  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 2600);
+  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 4200);
   assert.ok(handler.includes('refreshBackupTasks'), 'the save path refills the task list (fill-loop reuse)');
   assert.ok(handler.includes('api.backupTaskCreate') && handler.includes('api.backupTaskUpdate'), 'create vs update both wired');
   assert.ok(handler.includes('tErr('), 'refusals surface as keyed toasts (tErr)');
@@ -150,4 +150,49 @@ test('5-locale key parity for every 87-04 backup page key', () => {
   for (const code of ['taskNameRequired', 'invalidSchedule', 'invalidTimezone', 'backupInvalidScope', 'invalidRetention', 'taskNotFound', 'backupManageRequired']) {
     assert.ok(Object.hasOwn(en, `err.${code}`), `err.${code} resolves in the refusal catalogue`);
   }
+});
+
+/* =====================================================================
+   Phase 88 post-merge gate fix: probe-at-save client wiring (SC-1,
+   D-88-12/15/17). The S3 toggle is RENDER-ONLY (config flag ground
+   truth), stages into S.ui.backupTaskForm, rides the save body, and a
+   response carrying s3Probe toasts the keyed outcome.
+   ===================================================================== */
+test('Phase 88 SC-1 wiring: the S3 checkbox renders only with the config flag, stages like every field, and rides the save body', () => {
+  /* Render-only doctrine: the toggle markup is behind the server's config
+     boolean (api.s3Enabled), never an unconditional render. */
+  assert.match(pagesSrc, /api\.s3Enabled \? `<div class="row"[\s\S]*?data-in="backupTaskS3"/, 'the checkbox renders ONLY when /api/config says s3Enabled (render-only)');
+  assert.match(pagesSrc, /page\.backup\.s3Toggle/, 'the toggle label resolves from the catalogue');
+  assert.ok(pagesSrc.includes('esc(t(\'page.backup.s3Toggle\'))'), 'the rendered label goes through esc()');
+
+  /* Staged-state discipline: the checkbox is the state, like the retention
+     inputs — no re-render on toggle. */
+  assert.match(actionsSrc, /IN\.backupTaskS3 = el => \{[\s\S]*?backupTaskForm\.s3Enabled = el\.checked/, 'the checkbox stages into S.ui.backupTaskForm');
+  assert.match(actionsSrc, /s3Enabled: task\.s3_enabled === 1/, 'edit mode presets the stored opt-in');
+  assert.match(actionsSrc, /s3Enabled: false,/, 'create mode defaults to unchecked (fail-closed)');
+
+  /* The save always serializes the DISPLAYED state (on AND off) when the
+     destination exists — an absent flag would silently keep a stored value. */
+  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 4000);
+  assert.ok(handler.includes('if (api.s3Enabled) body.s3Enabled = form.s3Enabled === true;'), 'the save serializes the flag whenever the server exposes the destination');
+
+  /* The config flag rides api.js state from /api/config (server ground truth). */
+  assert.match(apiSrc, /state\.s3Enabled = !!r\.data\?\.s3Enabled/, 'init() reads the strict boolean from /api/config');
+  assert.match(apiSrc, /get s3Enabled\(\)/, 'the getter exposes the flag to the page');
+});
+
+test('Phase 88 SC-1 wiring: a successful save carrying s3Probe toasts the keyed outcome', () => {
+  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 4000);
+  /* Mapping contract (D-88-15/17): success is neutral, deleteFailed is the
+     warned-but-accepted path, badCreds/unreachable are errors, s3ClockSkew
+     rides the keyed refusal catalogue with the unreachable fallback. */
+  assert.ok(handler.includes("probe.key === 'success'") && handler.includes("t('toast.s3ProbeSuccess')"), 'success → toast.s3ProbeSuccess');
+  assert.ok(handler.includes("probe.key === 'deleteFailed'") && handler.includes("t('toast.s3ProbeDeleteFailed')"), 'deleteFailed → toast.s3ProbeDeleteFailed (warning, not error)');
+  assert.ok(handler.includes("probe.key === 'badCreds'") && handler.includes("t('toast.s3ProbeBadCreds')"), 'badCreds → toast.s3ProbeBadCreds');
+  assert.ok(handler.includes("probe.key === 'unreachable'") && handler.includes("t('toast.s3ProbeUnreachable')"), 'unreachable → toast.s3ProbeUnreachable');
+  assert.ok(handler.includes("probe.key === 's3ClockSkew'") && handler.includes("tErr('s3ClockSkew', null, t('toast.s3ProbeUnreachable'))"), 's3ClockSkew → keyed catalogue with the unreachable fallback (D-88-17)');
+  assert.ok(handler.includes('probe.httpWarning') && handler.includes("t('toast.s3ProbeHttpWarning')"), 'a plain-http endpoint adds the http warning toast (D-88-14)');
+  /* The probe toasts ride a 200 — a refusal still goes through the central
+     tErr funnel, never through the probe mapping. */
+  assert.ok(handler.indexOf('res.data?.s3Probe') > handler.indexOf('!res.ok'), 'the probe mapping reads only successful saves');
 });

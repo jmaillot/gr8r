@@ -2156,6 +2156,7 @@
   "page.backup.nextRunLabel": "Nächste Ausführung",
   "page.backup.retentionLabel": "Aufbewahrung",
   "page.backup.retentionWeekly": "Behalten pro Woche",
+  "page.backup.s3Toggle": "Archive in S3 hochladen",
   "page.backup.retentionDaily": "Behalten pro Tag",
   "page.backup.presetDaily": "Täglich",
   "page.backup.presetWeekly": "Wöchentlich",
