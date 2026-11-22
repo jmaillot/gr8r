@@ -36,20 +36,34 @@
    - restoreArchiveChecksum      header chksum mismatch
    - restoreArchiveOversize      size field over the writer's own bound, refused BEFORE any data read (T-89-02)
    - restoreArchiveTruncated     EOF before the two-zero-block end marker, or an unreadable gzip stream (cause kept in the message)
-   (Task 89-02 adds restoreEntryRejected + restoreArchiveDuplicate on
-   top of this set.) ---- */
+   - restoreArchiveDuplicate     the same entry name twice in one archive
+   - restoreEntryRejected        entry-name allow-list gate (reason: traversal | absolute | unknownTable |
+                                 badFileId | badLogoName | unexpectedEntry) — D-89-33 families 2+3
+   The gate (gateEntryName) runs BEFORE any extraction decision: the only
+   valid entry names are exactly `manifest.json`, `<table>.ndjson` where
+   the table ∈ the frozen TABLES set imported from export/backup.js (the
+   archive supplies table names as untrusted input — single allow-list
+   source of truth, never a second classification table), flat
+   `files/<[A-Za-z0-9_-]{1,64}>` (D-89-12, 86 A6) and
+   `logos/<[A-Za-z0-9_-]{1,64}>`. ---- */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
-import { backupsRoot } from './backup.js';
+import { backupsRoot, TABLES } from './backup.js';
 
 const BLOCK = 512;
 const MAX_USTAR_SIZE = 0o77777777777; // 8 GiB - 1 — the writer's own ceiling (ustarHeader)
 const USTAR_MAGIC = Buffer.from('ustar\0', 'ascii');
 const EMPTY = Buffer.alloc(0);
+
+/* D-89-33 family 2: the table allow-list is the 86 T-86-02 posture
+   mirrored — imported frozen from the writer, never re-declared. */
+const ALLOWED_TABLE_NAMES = Object.freeze(new Set(TABLES.map(t => t.name)));
+const FILE_ENTRY_RE = /^files\/([A-Za-z0-9_-]{1,64})$/; // flat blob layout (86 A6)
+const LOGO_ENTRY_RE = /^logos\/([A-Za-z0-9_-]{1,64})$/; // logo blobs carry the same uid shape
 
 /* Keyed refusal — every refusal crossing the API boundary carries a
    stable .code (+ optional structured extras) for fail() mapping. */
@@ -58,6 +72,39 @@ function keyed(code, message, extra = {}) {
   err.code = code;
   Object.assign(err, extra);
   return err;
+}
+
+/* ---- D-89-33 entry gate (T-89-01/T-89-03): the ONLY accepted entry
+   names. Runs BEFORE any extraction decision — a rejected name never
+   reaches a write. Returns the entry kind (manifest | table | file |
+   logo) so the extraction loop can route, throws keyed
+   restoreEntryRejected on everything else. Traversal/absolute shapes
+   are checked first so `files/../../escape` refuses as traversal, not
+   as a shape miss. ---- */
+export function gateEntryName(name) {
+  const reject = (reason, message) => {
+    throw keyed('restoreEntryRejected', `restore: entry "${name}" rejected — ${message}`, { reason, name });
+  };
+  if (typeof name !== 'string' || name.length === 0) reject('unexpectedEntry', 'empty entry name');
+  if (name.startsWith('/')) reject('absolute', 'absolute paths are never valid inside an archive');
+  if (name.includes('\\')) reject('traversal', 'backslash separators are refused');
+  const segments = name.split('/');
+  if (segments.some(seg => seg === '..')) reject('traversal', 'parent-directory segments are refused');
+  if (name === 'manifest.json') return { name, kind: 'manifest' };
+  if (segments[0] === 'files') {
+    if (FILE_ENTRY_RE.test(name)) return { name, kind: 'file' };
+    reject('badFileId', 'file entries must be exactly files/<id> with a flat 1-64 char [A-Za-z0-9_-] id (86 A6)');
+  }
+  if (segments[0] === 'logos') {
+    if (LOGO_ENTRY_RE.test(name)) return { name, kind: 'logo' };
+    reject('badLogoName', 'logo entries must be exactly logos/<name> with a flat 1-64 char [A-Za-z0-9_-] name');
+  }
+  if (name.endsWith('.ndjson')) {
+    const table = name.slice(0, -'.ndjson'.length);
+    if (ALLOWED_TABLE_NAMES.has(table)) return { name, kind: 'table' };
+    reject('unknownTable', `"${table}" is not in the frozen TABLES allow-list from export/backup.js`);
+  }
+  reject('unexpectedEntry', 'outside every allow-listed entry family');
 }
 
 /* Octal ASCII field — NUL/space padded on either side (the writer emits
@@ -146,6 +193,7 @@ class TarWalker extends Writable {
     this.archivePath = archivePath;
     this.buf = EMPTY;
     this.entries = [];
+    this.seen = new Set(); // duplicate entry names are archive corruption — refuse (walk-level)
     this.zeroBlocks = 0;
     this.done = false;
     this.state = 'header'; // 'header' | 'data'
@@ -205,6 +253,10 @@ class TarWalker extends Writable {
       }
       this.zeroBlocks = 0;
       const entry = parseHeader(block, this.archivePath); // keyed refusals propagate
+      if (this.seen.has(entry.name)) {
+        throw keyed('restoreArchiveDuplicate', `restore: duplicate entry name "${entry.name}" in ${this.archivePath}`, { name: entry.name });
+      }
+      this.seen.add(entry.name);
       this.entries.push(entry);
       this.skip = Math.ceil(entry.size / BLOCK) * BLOCK; // data rounded to the block boundary
       this.state = 'data';
