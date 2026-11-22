@@ -2178,6 +2178,7 @@
   "page.backup.taskEnable": "Aktivieren",
   "page.backup.taskDisable": "Deaktivieren",
   "page.backup.taskRunNow": "Jetzt ausführen",
+  "page.backup.taskEdit": "Aufgabe bearbeiten",
   "page.backup.taskDelete": "Aufgabe löschen",
   "page.backup.taskDeleteBody": "Aufgabe und Zeitplan werden entfernt. Vorhandene Archive bleiben erhalten.",
   "page.backup.taskDeleted": "Sicherungsaufgabe gelöscht.",

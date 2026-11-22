@@ -2178,6 +2178,7 @@
   "page.backup.taskEnable": "Inschakelen",
   "page.backup.taskDisable": "Uitschakelen",
   "page.backup.taskRunNow": "Nu uitvoeren",
+  "page.backup.taskEdit": "Taak bewerken",
   "page.backup.taskDelete": "Taak verwijderen",
   "page.backup.taskDeleteBody": "De taak en de planning worden verwijderd. Bestaande archieven blijven bewaard.",
   "page.backup.taskDeleted": "Back-uptaak verwijderd.",

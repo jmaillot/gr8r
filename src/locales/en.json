@@ -2178,6 +2178,7 @@
   "page.backup.taskEnable": "Enable",
   "page.backup.taskDisable": "Disable",
   "page.backup.taskRunNow": "Run now",
+  "page.backup.taskEdit": "Edit task",
   "page.backup.taskDelete": "Delete task",
   "page.backup.taskDeleteBody": "The task and its schedule will be removed. Existing archives are kept.",
   "page.backup.taskDeleted": "Backup task deleted.",

@@ -187,23 +187,26 @@ const taskCard = (task, manage) => {
   const nextRun = Number.isFinite(nextRunMs) && nextRunMs > 0 ? fmtDate(new Date(nextRunMs).toISOString()) : '—';
   const actions = manage
     ? `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" data-a="backupTaskToggle" data-id="${esc(task.id)}">${task.enabled ? t('page.backup.taskDisable') : t('page.backup.taskEnable')}</button>
         <button class="btn btn-sm" data-a="backupTaskRunNow" data-id="${esc(task.id)}">${ic('play', 13)}${t('page.backup.taskRunNow')}</button>
+        <button class="btn btn-sm" data-a="backupTaskEdit" data-id="${esc(task.id)}">${ic('pencil', 13)}${t('page.backup.taskEdit')}</button>
         <button class="btn btn-sm" data-a="backupTaskHistory" data-id="${esc(task.id)}">${ic('history', 13)}${t('page.backup.historyAction')}</button>
+        <button class="btn btn-sm" data-a="backupTaskToggle" data-id="${esc(task.id)}">${task.enabled ? t('page.backup.taskDisable') : t('page.backup.taskEnable')}</button>
         <button class="btn btn-sm btn-danger" data-a="backupTaskDelete" data-id="${esc(task.id)}">${ic('trash', 13)}${t('page.backup.taskDelete')}</button>
       </div>`
     : '';
-  return `<div class="panel" style="margin-top:12px"><div class="panel-b">
-    <div class="row" style="gap:8px;align-items:center;flex-wrap:wrap">
-      <strong>${esc(task.name)}</strong>
-      <span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span>
-    </div>
-    <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap;font-size:13px">
-      <span class="faint">${scopeLabel}${scopeName ? ` · ${esc(scopeName)}` : ''}</span>
-      <span class="faint">${t('page.backup.scheduleLabel')}: <span class="mono">${esc(task.cron)}</span></span>
-      <span class="faint">${t('page.backup.tzLabel')}: <span class="mono">${esc(task.tz)}</span></span>
-      <span class="faint">${t('page.backup.retentionLabel')}: <span class="mono">${esc(String(task.retention_daily))}/${esc(String(task.retention_weekly))}/${esc(String(task.retention_monthly))}/${esc(String(task.retention_yearly))}</span></span>
-      <span class="faint">${t('page.backup.nextRunLabel')}: <span class="mono">${esc(nextRun)}</span></span>
+  /* UAT 2026-11-22: the five meta fields were one wrapped row — on narrow
+     screens they mashed together. A definition grid gives each field its own
+     label line, matching the rest of the app's panel typography. */
+  const detail = (label, value) =>
+    `<div><div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${label}</div><div class="mono" style="font-size:13px;margin-top:2px">${value}</div></div>`;
+  const wsName = scope.kind === 'workspace' ? (scope.id === api.workspace?.id ? api.workspace?.name || scope.id : scope.id) : '';
+  return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${esc(task.name)}</h2><span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span></div><div class="panel-b">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px">
+      ${detail(scopeLabel, esc(scopeName))}
+      ${detail(t('page.backup.scheduleLabel'), esc(task.cron))}
+      ${detail(t('page.backup.tzLabel'), esc(task.tz))}
+      ${detail(t('page.backup.retentionLabel'), esc(String(task.retention_daily)) + '/' + esc(String(task.retention_weekly)) + '/' + esc(String(task.retention_monthly)) + '/' + esc(String(task.retention_yearly)))}
+      ${detail(t('page.backup.nextRunLabel'), esc(nextRun))}
     </div>
     ${actions}
     ${manage && S.ui.backupHistoryOpen?.has(task.id) ? historyCard(task) : ''}
@@ -213,8 +216,12 @@ const taskCard = (task, manage) => {
 /* Builder form (D-01): 4 presets — Daily, Weekly, Monthly — plus Custom,
    which reveals the five per-field dropdowns. The per-field selects are the
    ONLY schedule inputs; the form stages into S.ui.backupTaskForm (never the
-   DOM). Custom per-field selects default to `*` so a Custom save always
-   serializes a well-formed string; minute/hour always carry concrete values. */
+   Custom per-field selects default to `*` so a Custom save always
+   serializes a well-formed string; minute/hour offer `*` too (UAT 2026-11-22:
+   the server cron grammar accepts star in every field — the dropdowns now
+   expose it so every-minute/every-hour schedules are buildable; their
+   DEFAULTS stay concrete 0/3 so an accidental all-star save is a deliberate
+   act, not a slip). */
 const fieldSel = (form, name, labelKey, min, max, star) => {
   const cur = String(form.fields[name] ?? (star ? '*' : min));
   const opts = [];
@@ -269,8 +276,8 @@ const taskFormCard = () => {
     </div>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
       <div class="field"><label class="label">${t('page.backup.scheduleLabel')}</label><select class="input" data-in="backupTaskPreset">${presetOpt('daily', 'page.backup.presetDaily')}${presetOpt('weekly', 'page.backup.presetWeekly')}${presetOpt('monthly', 'page.backup.presetMonthly')}${presetOpt('custom', 'page.backup.presetCustom')}</select></div>
-      <div class="field"><label class="label">${t('page.backup.fieldMinute')}</label>${fieldSel(form, 'minute', 'page.backup.fieldMinute', 0, 59, false)}</div>
-      <div class="field"><label class="label">${t('page.backup.fieldHour')}</label>${fieldSel(form, 'hour', 'page.backup.fieldHour', 0, 23, false)}</div>
+      <div class="field"><label class="label">${t('page.backup.fieldMinute')}</label>${fieldSel(form, 'minute', 'page.backup.fieldMinute', 0, 59, true)}</div>
+      <div class="field"><label class="label">${t('page.backup.fieldHour')}</label>${fieldSel(form, 'hour', 'page.backup.fieldHour', 0, 23, true)}</div>
       ${show.dom ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfMonth')}</label>${fieldSel(form, 'dom', 'page.backup.fieldDayOfMonth', 1, 31, true)}</div>` : ''}
       ${show.mon ? `<div class="field"><label class="label">${t('page.backup.fieldMonth')}</label>${fieldSel(form, 'mon', 'page.backup.fieldMonth', 1, 12, true)}</div>` : ''}
       ${show.dow ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfWeek')}</label>${fieldSel(form, 'dow', 'page.backup.fieldDayOfWeek', 0, 6, true)}</div>` : ''}

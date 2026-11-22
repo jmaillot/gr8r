@@ -2218,6 +2218,7 @@
   "page.backup.taskEnable": "Activer",
   "page.backup.taskDisable": "Désactiver",
   "page.backup.taskRunNow": "Exécuter maintenant",
+  "page.backup.taskEdit": "Modifier la tâche",
   "page.backup.taskDelete": "Supprimer la tâche",
   "page.backup.taskDeleteBody": "La tâche et sa planification seront supprimées. Les archives existantes sont conservées.",
   "page.backup.taskDeleted": "Tâche de sauvegarde supprimée.",
