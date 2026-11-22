@@ -168,10 +168,14 @@ export async function signup(base, { name, email, password = 'password-1234' }) 
   return { client: account, status: res.status, data: res.data };
 }
 
-/* Open the suite's database read/write, and always close it. */
+/* Open the suite's database read/write, and always close it. The 5s busy
+   timeout mirrors db-adapter.mjs:925 — a raw handle without it intermittently
+   throws "database is locked" when the server holds a write tx (T-45 harness,
+   observed at --test-concurrency=2 across the backup family, 2026-11-22). */
 export function withDb(dbPath, fn) {
   const db = new DatabaseSync(dbPath);
   try {
+    db.exec('pragma busy_timeout = 5000');
     return fn(db);
   } finally {
     db.close();

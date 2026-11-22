@@ -1068,7 +1068,7 @@ function buildInviteMessage(config, invite) {
    verifyUnsubscribeToken exported pure — the token contract Phase 42's
    endpoint consumes, frozen by test/unsubscribe-token.test.mjs. Keys are
    arguments; the mailer module itself never touches MASTER_KEY. */
-export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage };
+export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage, buildBackupAlertMessage };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);

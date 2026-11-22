@@ -2220,5 +2220,9 @@
   "page.governance.rolesVerbGranted": "Toegekend",
   "page.governance.rolesVerbRevoked": "Ingetrokken",
   "toast.governanceRoleGranted": "Rol toegekend.",
-  "toast.governanceRoleRevoked": "Rol ingetrokken."
+  "toast.governanceRoleRevoked": "Rol ingetrokken.",
+  "backup.alert.failed.subject": "Back-up mislukt: {task}",
+  "backup.alert.failed.body": "De laatste uitvoering van de back-up van „{task}” is mislukt. Bekijk de back-upgeschiedenis voor details.",
+  "backup.alert.recovered.subject": "Back-up hersteld: {task}",
+  "backup.alert.recovered.body": "De laatste uitvoering van de back-up van „{task}” is weer geslaagd — de eerdere storing is opgelost."
 }

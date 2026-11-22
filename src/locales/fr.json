@@ -2260,5 +2260,9 @@
   "page.governance.rolesVerbGranted": "Attribution",
   "page.governance.rolesVerbRevoked": "Révocation",
   "toast.governanceRoleGranted": "Rôle attribué.",
-  "toast.governanceRoleRevoked": "Rôle révoqué."
+  "toast.governanceRoleRevoked": "Rôle révoqué.",
+  "backup.alert.failed.subject": "Sauvegarde en échec : {task}",
+  "backup.alert.failed.body": "La dernière exécution de la sauvegarde « {task} » a échoué. Consultez l’historique des sauvegardes pour plus de détails.",
+  "backup.alert.recovered.subject": "Sauvegarde rétablie : {task}",
+  "backup.alert.recovered.body": "La dernière exécution de la sauvegarde « {task} » a de nouveau réussi — l’échec précédent est résolu."
 }

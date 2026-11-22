@@ -142,8 +142,17 @@ test('end-to-end: a doc-PUT notification is claimed into the outbox, delivered b
 
   /* The post-commit kick fired the pass immediately against the dead SMTP
      port (SMTP_PORT 1) — the claim already made attempt 1 and scheduled a
-     retry via D-06 math. Delivery is retried through the injected send. */
-  const attempted = withDb(server.dbPath, db => db.prepare("select * from email_outbox where dedup_key = 'notif:n-e2e-1'").get());
+     retry via D-06 math. Delivery is retried through the injected send.
+     The kick is fire-and-forget, so poll briefly for its terminal state
+     instead of assuming it won the race against this read (flake observed
+     2026-11-22 under --test-concurrency=2). */
+  let attempted;
+  for (let i = 0; ; i++) {
+    attempted = withDb(server.dbPath, db => db.prepare("select * from email_outbox where dedup_key = 'notif:n-e2e-1'").get());
+    if (attempted.attempt >= 1 && attempted.status !== 'pending') break;
+    assert.ok(i < 100, 'post-commit kick reached its terminal attempt-1 state within 5s');
+    await new Promise(r => setTimeout(r, 50));
+  }
   assert.equal(attempted.attempt, 1, 'the post-commit kick consumed attempt 1');
   assert.equal(attempted.status, 'failed');
   assert.ok(attempted.next_attempt_at > Date.now(), 'retry scheduled ~1 minute out (BACKOFF_MS[0])');

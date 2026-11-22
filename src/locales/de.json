@@ -2220,5 +2220,9 @@
   "page.governance.rolesVerbGranted": "Vergeben",
   "page.governance.rolesVerbRevoked": "Widerrufen",
   "toast.governanceRoleGranted": "Rolle vergeben.",
-  "toast.governanceRoleRevoked": "Rolle widerrufen."
+  "toast.governanceRoleRevoked": "Rolle widerrufen.",
+  "backup.alert.failed.subject": "Backup fehlgeschlagen: {task}",
+  "backup.alert.failed.body": "Die letzte Ausführung der Sicherung „{task}“ ist fehlgeschlagen. Details finden Sie im Sicherungsverlauf.",
+  "backup.alert.recovered.subject": "Backup wiederhergestellt: {task}",
+  "backup.alert.recovered.body": "Die letzte Ausführung der Sicherung „{task}“ war wieder erfolgreich — der frühere Fehler ist behoben."
 }

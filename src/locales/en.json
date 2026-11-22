@@ -2220,5 +2220,9 @@
   "page.governance.rolesVerbGranted": "Granted",
   "page.governance.rolesVerbRevoked": "Revoked",
   "toast.governanceRoleGranted": "Role granted.",
-  "toast.governanceRoleRevoked": "Role revoked."
+  "toast.governanceRoleRevoked": "Role revoked.",
+  "backup.alert.failed.subject": "Backup failed: {task}",
+  "backup.alert.failed.body": "The last backup run of “{task}” failed. Check the backup run history for details.",
+  "backup.alert.recovered.subject": "Backup recovered: {task}",
+  "backup.alert.recovered.body": "The last backup run of “{task}” succeeded again — the earlier failure has cleared."
 }

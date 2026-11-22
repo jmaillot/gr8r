@@ -2220,5 +2220,9 @@
   "page.governance.rolesVerbGranted": "Concedido",
   "page.governance.rolesVerbRevoked": "Revocado",
   "toast.governanceRoleGranted": "Rol concedido.",
-  "toast.governanceRoleRevoked": "Rol revocado."
+  "toast.governanceRoleRevoked": "Rol revocado.",
+  "backup.alert.failed.subject": "Copia de seguridad fallida: {task}",
+  "backup.alert.failed.body": "La última ejecución de la copia de seguridad de «{task}» falló. Consulta el historial de copias para más detalles.",
+  "backup.alert.recovered.subject": "Copia de seguridad recuperada: {task}",
+  "backup.alert.recovered.body": "La última ejecución de la copia de seguridad de «{task}» volvió a tener éxito — el fallo anterior se ha resuelto."
 }
