@@ -40,7 +40,7 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 ### Restore (BKRST)
 
 - [x] **BKRST-01**: A Restore Operator can list available backups across destinations and preview a backup's contents (scopes, tables, file counts, checksum) from the manifest without downloading or unpacking it.
-- [ ] **BKRST-02**: A Restore Operator can restore a workspace or project from a backup as a new workspace/project with a `-restored` suffix (full ID remap, containing only the restoring operator as member), with the whole restore in one transaction.
+- [x] **BKRST-02**: A Restore Operator can restore a workspace or project from a backup as a new workspace/project with a `-restored` suffix (full ID remap, containing only the restoring operator as member), with the whole restore in one transaction.
 - [ ] **BKRST-03**: A Backup Operator or Super Admin can overwrite an existing workspace/project from a backup — gated by type-to-confirm, preceded by an automatic pre-restore snapshot, executed in a single transaction; operational tables (users, roles, sessions, tasks) are never overwritten by selective restore.
 - [ ] **BKRST-04**: A Super Admin can restore a full instance from an instance-scope backup (disaster-recovery path) — Super-Admin-only, type-to-confirm, with global session revocation and a security contract (threats_open: 0) covering privilege-escalation-via-restore.
 
@@ -77,7 +77,7 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 | BKBCK-04 | Phase 87 | Complete |
 | BKBCK-05 | Phase 88 | Complete |
 | BKRST-01 | Phase 89 | Complete |
-| BKRST-02 | Phase 89 | Pending |
+| BKRST-02 | Phase 89 | Complete |
 | BKRST-03 | Phase 89 | Pending |
 | BKRST-04 | Phase 89 | Pending |
 | SACON-01 | Phase 90 | Pending |

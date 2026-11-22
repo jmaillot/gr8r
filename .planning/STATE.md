@@ -31,10 +31,10 @@ before features.
 ## Current Position
 
 Phase: 89 (restore) — EXECUTING
-Current Plan: 4
+Current Plan: 5
 Total Plans in Phase: 6
 Status: Ready to execute
-Last activity: 2026-11-22 — Phase 89 execution started
+Last activity: 2026-11-22 — 89-04 complete (import-as-new engine + trigger routes + outcome emails)
 
 ## Milestone v3.3 Phase Map
 
@@ -56,6 +56,8 @@ Standing constraints for v3.3:
 - Restore authority is scoped by LIVE rights, never archive contents (D-33-10); download tiered above run rights
 - One destination per task (D-33-12 anti-features ratified)
 - Continuous phase numbering: v3.3 starts at Phase 85 (v3.2 ended at 84)
+- 89-04: keyed refusal classes persist verbatim into restore_runs.error as `<code>: <message>` (D-89-33 consumer contract)
+- 89-04: D-89-28 restore outcome emails claim through the outbox transition gate — compare-in-UPDATE on the run row's terminal write + dedup key `restore-alert:<runId>:<email>`; EN fallback fires on tFor's key-shaped return (tFor never throws for missing keys) pending plan 06 locale keys
 
 Research flags carried into planning (do not resolve at roadmap level):
 
@@ -97,6 +99,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 89 P01 | 31min | 3 tasks | 3 files |
 | Phase 89 P02 | 13min | 3 tasks | 5 files |
 | Phase 89 P03 | 26m | 3 tasks | 6 files |
+| Phase 89 P04 | 77m | 3 tasks | 6 files |
 
 ## Accumulated Context
 

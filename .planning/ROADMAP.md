@@ -126,7 +126,7 @@ Plans:
 4. A Super Admin can restore a full instance from an instance-scope backup — Super-Admin-only, type-to-confirm, global session revocation — and the phase ships an explicit security contract (Phase 30 pattern) with threats_open: 0 covering privilege-escalation-via-restore.
 5. Restore authority is scoped by LIVE rights, never archive contents; instance-scope archive download stays instance-admin-only (the Phase 85 tiering, now enforced).
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 Plans:
 **Wave 1**
 - [x] 89-01-PLAN.md — Restore engine foundations: ustar+gzip stream reader (86-writer layout spec), frozen entry allow-list, bounded staged extraction + restore-staging sweep (tracer: golden round-trip vs 86-written archives)
@@ -136,7 +136,7 @@ Plans:
 - [x] 89-03-PLAN.md — BKRST-01 read surface: dual-location list with honest uploaded badge, manifest preview with on-pipe sha256 re-verify + S3 fetch via the 88-01 download seam, keyed refusals + preview throttle
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 89-04-PLAN.md — BKRST-02 import-as-new: remap totality gate, doc-splice restore unit (one tx per unit), POST trigger + D-89-29 stage pipeline, `-restored` name counter, skip report, outcome emails
+- [x] 89-04-PLAN.md — BKRST-02 import-as-new: remap totality gate, doc-splice restore unit (one tx per unit), POST trigger + D-89-29 stage pipeline, `-restored` name counter, skip report, outcome emails
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 89-05-PLAN.md — BKRST-03/04 destructive paths: guarded overwrite (server-revalidated confirm, pre_restore snapshot, staged blob swap, repair net) + Super-Admin DR (instance_roles rebuild exception, post-commit global session revocation)
