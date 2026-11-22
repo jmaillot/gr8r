@@ -20,3 +20,6 @@ blob-report/
 # GSD research scratch cache (tooling artifacts)
 .planning/research/.cache/
 .~lock.*
+
+# path.join() with an unresolved Promise produced this literal dirname once — never track it
+"**/[object Promise]/"
