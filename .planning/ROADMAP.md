@@ -23,7 +23,7 @@
 
 - [x] **Phase 85: Roles Foundation** — instance_roles table, hasInstanceRole funnel, Instance Roles governance tab, restore-authority ≠ archive-read-authority encoding (completed 2026-11-21)
 - [x] **Phase 86: Export Core ("gr8r backup v1")** — pure backup.js fence, snapshot fence, archive format freeze + manifest + table classification, local destination, manual Run now (completed 2026-11-21)
-- [ ] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email
+- [x] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email (completed 2026-11-22)
 - [ ] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify
 - [ ] **Phase 89: Restore** — preview-from-manifest, import-as-new (-restored) default, guarded overwrite with pre-restore snapshot, Super-Admin-only instance DR restore + security contract
 - [ ] **Phase 90: Polish & Verification Sweep** — Super Admin console role-first listing, verify-checksum action, archive download tiering, PG parity e2e, DST cron tests
@@ -82,7 +82,7 @@ Plans:
 4. Every run (manual or scheduled) is recorded with status, trigger, duration, size, error and checksum in a history the Backup Operator can consult, with a Run now action per task.
 5. A failure email is sent only on failure-state transitions (last_notified_state on the task row) to Super Admins + Backup Operators via email_outbox — never per-run success emails.
 
-**Plans**: 4/4 plans executed
+**Plans**: 4/4 plans executed — **completed 2026-11-22** (code review closed, 21/21 verified, UAT 2/2 passed)
 
 Plans:
 - [x] 87-01-PLAN.md — Schema + cron evaluator + task CRUD API (D-04 one-way checkpoint, keyed refusals, Wave-0 tests)
