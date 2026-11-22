@@ -4830,7 +4830,21 @@ A.backupRunNow = async () => {
   const scope = S.ui.backupScope;
   if (!scope) return;
   if (scope.kind === 'project' && !scope.id) return toast(t('err.backupPickProject'), { kind: 'err' });
-  const res = await api.backupRun(scope);
+  /* UAT fix 2026-11-22: scope-shape normalization per 86-D-17.
+     1. instance: the id must be OMITTED (server: scope?.id === undefined —
+        JSON keeps null and the existence gate reads it as a bad id → silent
+        scopeNotFound).
+     2. workspace: the single-option select arrives PRESELECTED, so
+        IN.backupScopeId never fires — take the id from api.workspace here
+        instead of relying on a change event that never happens. */
+  const wire =
+    scope.kind === 'instance'
+      ? { kind: 'instance' }
+      : scope.kind === 'workspace'
+        ? { kind: 'workspace', id: scope.id || api.workspace?.id }
+        : scope;
+  if (wire.kind === 'workspace' && !wire.id) return toast(tErr('scopeNotFound', null, t('err.serverUnreachable')), { kind: 'err' });
+  const res = await api.backupRun(wire);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
     const code = res.data?.code; // backupManageRequired / backupRunInProgress / scopeNotFound / tooManyAttempts — keyed
@@ -4954,8 +4968,17 @@ A.backupTaskSave = async () => {
   if (!form) return;
   const name = form.name.trim();
   if (!name) return toast(t('err.taskNameRequired'), { kind: 'err' });
-  if (form.scopeKind === 'project' && !form.scopeId) return toast(t('err.backupPickProject'), { kind: 'err' });
-  const scope = form.scopeKind === 'instance' ? { kind: 'instance' } : { kind: form.scopeKind, id: form.scopeId };
+  /* UAT fix 2026-11-22: workspace scope's single-option select arrives
+     PRESELECTED — IN.backupTaskScopeId never fires, so stage the workspace id
+     here (mirrors the Run-now fix). Instance omits the id (86-D-17). */
+  const scope =
+    form.scopeKind === 'instance'
+      ? { kind: 'instance' }
+      : form.scopeKind === 'workspace'
+        ? { kind: 'workspace', id: form.scopeId || api.workspace?.id }
+        : { kind: 'project', id: form.scopeId };
+  if (form.scopeKind === 'project' && !scope.id) return toast(t('err.backupPickProject'), { kind: 'err' });
+  if (form.scopeKind === 'workspace' && !scope.id) return toast(tErr('scopeNotFound', null, t('err.serverUnreachable')), { kind: 'err' });
   /* D-04: on CREATE the serialized raw string always rides the write (there
      is no stored cron to keep); on EDIT only when the operator touched the
      builder — the server keeps the stored cron otherwise. */
