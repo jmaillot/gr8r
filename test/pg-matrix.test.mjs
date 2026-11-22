@@ -53,6 +53,8 @@ const COUNT_TABLES = Object.freeze([
   'audit_log',
   'reminders_sent',
   'user_notif_prefs',
+  'restore_runs', // Phase 89 (89-02): restore run history — static after boot
+  'restore_lock', // Phase 89 (89-02): the seeded single-row CAS claim
 ]);
 
 async function tableCounts() {
@@ -372,5 +374,73 @@ maybe('pg matrix: backup export parity — identical manifest row counts + per-t
   } finally {
     await db.close().catch(() => {});
     fs.rmSync(backupDataDir, { recursive: true, force: true });
+  }
+});
+
+/* ==================== Phase 89 (89-02): restore persistence parity ==================== */
+
+/* The D-89-2/D-89-31 restore column contract (mirrors
+   test/restore-routes.test.mjs). */
+const RESTORE_RUN_COLUMNS = [
+  'id',
+  'scope',
+  'trigger',
+  'status',
+  'stage',
+  'final_name',
+  'summary',
+  'snapshot_run_id',
+  'snapshot_tag',
+  'error',
+  'started_at',
+  'finished_at',
+  'created_at',
+];
+
+maybe('pg matrix: restore_runs + restore_lock exist on pg; stale sweep interrupts running rows and releases the lock (89-02)', async () => {
+  const srv = await bootPg();
+  try {
+    const shape = await withPg(url, async pool => ({
+      runCols: (await pool.query("select column_name from information_schema.columns where table_name = 'restore_runs'")).rows.map(r => r.column_name),
+      lockCols: (await pool.query("select column_name from information_schema.columns where table_name = 'restore_lock'")).rows.map(r => r.column_name),
+      locks: (await pool.query('select * from restore_lock')).rows,
+    }));
+    for (const col of RESTORE_RUN_COLUMNS) assert.ok(shape.runCols.includes(col), `restore_runs.${col} missing on pg`);
+    assert.equal(shape.lockCols.length, 3, 'restore_lock carries id/claimed_by/claimed_at on pg');
+    assert.equal(shape.locks.length, 1, 'exactly one seeded lock row');
+    assert.equal(shape.locks[0].id, 1);
+    assert.equal(shape.locks[0].claimed_by, null);
+
+    // Plant a stale running restore + a held lock, then reboot WITHOUT a
+    // schema drop — the boot sweeps must heal both (D-89-31).
+    const t0 = Date.now() - 60_000;
+    await withPg(url, async pool => {
+      await pool.query(
+        "insert into restore_runs (id, scope, trigger, status, stage, started_at, created_at) values ('run-pg-stale', '{}', 'import_new', 'running', 'restoring', $1, $1)",
+        [t0],
+      );
+      await pool.query('update restore_lock set claimed_by = $1, claimed_at = $2 where id = 1', ['user-pg-stale', t0]);
+    });
+    await srv.stop();
+    const srv2 = await startServer({ env: PG_ENV });
+    try {
+      const after = await withPg(url, async pool => ({
+        stale: (await pool.query("select * from restore_runs where id = 'run-pg-stale'")).rows[0],
+        lock: (await pool.query('select * from restore_lock where id = 1')).rows[0],
+      }));
+      assert.equal(after.stale.status, 'interrupted', 'stale running restore interrupted on pg');
+      assert.equal(after.stale.stage, 'failed', 'stage failed (D-89-29 vocabulary)');
+      assert.ok(/interrupted at boot/.test(after.stale.error || ''), 'honest boot-interruption error text');
+      assert.ok(after.stale.finished_at, 'finished_at stamped');
+      assert.equal(after.lock.claimed_by, null, 'stale claim released on pg');
+      assert.equal(after.lock.claimed_at, null, 'claimed_at cleared with the claim');
+    } finally {
+      await srv2.stop();
+    }
+  } finally {
+    await dropPgSchema(url);
+    await withPg(url, async pool => {
+      for (const table of ['restore_runs', 'restore_lock']) await pool.query(`drop table if exists ${table}`);
+    });
   }
 });

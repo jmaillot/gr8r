@@ -461,6 +461,40 @@ export const SQLITE_SCHEMA = `
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);
+  /* RESTORE RUNS (Phase 89, 89-02, BKRST-02/D-89-2): pg twin of server.js
+     SCHEMA — background restore run rows (created running → done|failed,
+     D-89-2) with stage the D-89-29 coarse vocabulary CHECK-constrained —
+     summary carries the D-89-7 skip report while snapshot_run_id/tag
+     carry the D-89-5 pre-restore snapshot link. runSchema splits
+     statements on ';-newline', so comments here never end a line with a
+     semicolon. started_at/finished_at/created_at are registered in
+     PG_EPOCH_COLUMNS below. */
+  create table if not exists restore_runs (
+    id               text primary key,
+    scope            text not null default '{}',
+    trigger          text not null check (trigger in ('import_new','overwrite','instance')),
+    status           text not null check (status in ('running','done','failed','interrupted')),
+    stage            text not null default 'fetching' check (stage in ('fetching','validating','restoring','verifying','done','failed')),
+    final_name       text,
+    summary          text,
+    snapshot_run_id  text,
+    snapshot_tag     text,
+    error            text,
+    started_at       integer not null,
+    finished_at      integer,
+    created_at       integer not null
+  );
+  create index if not exists restore_runs_created on restore_runs(created_at);
+  /* RESTORE LOCK (Phase 89, 89-02, D-89-31): pg twin — the engine-neutral
+     global restore claim, single-row CAS (claimed_by is null is the
+     compare-and-set); seed insert-or-ignore idempotent so a second boot
+     writes nothing. claimed_at is registered in PG_EPOCH_COLUMNS below. */
+  create table if not exists restore_lock (
+    id          integer primary key check (id = 1),
+    claimed_by  text,
+    claimed_at  integer
+  );
+  insert or ignore into restore_lock (id, claimed_by, claimed_at) values (1, null, null);
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);
@@ -482,6 +516,7 @@ const PG_EPOCH_COLUMNS = new Set([
   'next_run_at',
   'started_at',
   'finished_at',
+  'claimed_at', // Phase 89 (89-02, D-89-31): restore_lock claim stamp
 ]);
 
 export function pgSchemaVariant(schema = SQLITE_SCHEMA) {

@@ -798,6 +798,49 @@ const SCHEMA = `
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);
+  /* RESTORE RUNS (Phase 89, 89-02, BKRST-02/D-89-2): background restore run
+     rows — the same lifecycle idioms as 87's backup_runs (created running
+     → done|failed). trigger is the restore unit family (import_new /
+     overwrite / instance) and stage is the D-89-29 coarse render-only
+     vocabulary (fetching → validating → restoring → verifying →
+     done|failed) CHECK-constrained so a stage outside it can never
+     persist — summary carries the D-89-7 skip-report payload while
+     snapshot_run_id/snapshot_tag carry the D-89-5 pre-restore snapshot
+     link (tag 'pre_restore'). A crash mid-restore is healed at boot by
+     sweepStaleRestoreRuns (interrupted, D-89-31).
+     pg twin: db-adapter.mjs SQLITE_SCHEMA (pgSchemaVariant widens
+     started_at/finished_at/created_at via PG_EPOCH_COLUMNS — already
+     registered). */
+  create table if not exists restore_runs (
+    id               text primary key,
+    scope            text not null default '{}',
+    trigger          text not null check (trigger in ('import_new','overwrite','instance')),
+    status           text not null check (status in ('running','done','failed','interrupted')),
+    stage            text not null default 'fetching' check (stage in ('fetching','validating','restoring','verifying','done','failed')),
+    final_name       text,
+    summary          text,
+    snapshot_run_id  text,
+    snapshot_tag     text,
+    error            text,
+    started_at       integer not null,
+    finished_at      integer,
+    created_at       integer not null
+  );
+  create index if not exists restore_runs_created on restore_runs(created_at);
+  /* RESTORE LOCK (Phase 89, 89-02, D-89-31): the engine-neutral global
+     restore claim — a single-row CAS (update ... where id = 1 and
+     claimed_by is null) is the ONLY serialization point for the whole
+     D-89-1 mutual exclusion (restore ↔ backup), on BOTH engines — no
+     per-engine advisory locks. Released at boot by the stale sweep and in
+     the holder's finally. The seed is insert-or-ignore idempotent so a
+     second boot writes nothing (the pg-matrix row-count discipline
+     holds). claimed_at is registered in PG_EPOCH_COLUMNS. */
+  create table if not exists restore_lock (
+    id          integer primary key check (id = 1),
+    claimed_by  text,
+    claimed_at  integer
+  );
+  insert or ignore into restore_lock (id, claimed_by, claimed_at) values (1, null, null);
 `;
 
 async function initDb() {
@@ -3540,6 +3583,22 @@ export async function runBackupSchedulerPass({ now: at } = {}) {
 async function sweepStaleBackupRuns() {
   const marked = (await db.run('update backup_runs set status = ? where status = ?', ['interrupted', 'running']))?.changes || 0;
   return marked;
+}
+
+/* Boot-time restore sweeps (Phase 89, 89-02, D-89-31): a crash mid-restore
+   leaves status='running' restore_runs rows AND a held restore_lock behind;
+   boot marks the rows interrupted (stage 'failed', honest error text — the
+   87 stale-sweep idiom) and releases the claim, BEFORE the first restore
+   trigger or scheduler tick can observe either. Both writes are plain
+   UPDATEs (no DDL — D-89-31: schema comes from boot runSchema only). */
+async function sweepStaleRestoreRuns() {
+  const marked =
+    (await db.run(
+      "update restore_runs set status = 'interrupted', stage = 'failed', error = 'interrupted at boot', finished_at = ? where status = 'running'",
+      [now()],
+    ))?.changes || 0;
+  const released = (await db.run('update restore_lock set claimed_by = null, claimed_at = null where claimed_by is not null'))?.changes || 0;
+  return { marked, released };
 }
 
 /* 87-03 failure/recovery email transitions (D-14..D-17). Called from the
@@ -10998,6 +11057,12 @@ async function main() {
      'interrupted' at boot, BEFORE the first sweep tick (history never lies). */
   const interruptedRuns = await sweepStaleBackupRuns();
   if (interruptedRuns) logInfo(`backup run sweep: marked ${interruptedRuns} stale running run(s) interrupted`);
+  /* BKRST-02/D-89-31 (89-02): stale running restore runs become interrupted
+     and a held restore_lock is released at boot — the same stale-sweep
+     idiom as the backup sweep, before the first trigger can observe them. */
+  const restoreSweep = await sweepStaleRestoreRuns();
+  if (restoreSweep.marked) logInfo(`restore run sweep: marked ${restoreSweep.marked} stale running restore(s) interrupted`);
+  if (restoreSweep.released) logInfo(`restore lock sweep: released ${restoreSweep.released} stale claim(s)`);
   /* PUSH-05: VAPID custody runs after the migrations so DATA_DIR is settled —
      env → persisted file → generate-once ladder (feature absent on failure). */
   await initPushCustody();
