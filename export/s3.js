@@ -51,6 +51,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
+import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 
 /* ---- Error slicing (V14: no headers, no secrets in error text) ---- */
 export function sliceError(error) {
@@ -238,10 +240,10 @@ export function s3Request(config, opts) {
    generic    — anything unmapped
    Message is sliced (300 chars) and NEVER carries request headers or
    secrets. */
-export function s3ErrorFrom(status, bodyText) {
+export function s3ErrorFrom(status, bodyText, fallbackCode = null) {
   const text = String(bodyText ?? '');
   const codeMatch = /<Code>([^<]+)<\/Code>/.exec(text);
-  const s3Code = codeMatch ? codeMatch[1] : null;
+  const s3Code = codeMatch ? codeMatch[1] : fallbackCode;
   const CLASSES = {
     RequestTimeTooSkewed: 'clockSkew',
     InvalidAccessKeyId: 'badCreds',
@@ -266,7 +268,10 @@ function consumeAndThrowS3Error(res, reject) {
   res.on('error', () => reject(new Error('s3: error response body unreadable')));
   res.on('end', () => {
     const text = Buffer.concat(chunks).toString('utf8');
-    reject(s3ErrorFrom(res.statusCode, text));
+    /* HEAD responses carry no body — AWS S3 puts the code in the
+       x-amz-error-code header instead. */
+    const fallbackCode = res.headers['x-amz-error-code'] || null;
+    reject(s3ErrorFrom(res.statusCode, text, fallbackCode));
   });
 }
 
@@ -300,4 +305,79 @@ export async function getObject(config, key) {
 export async function deleteObject(config, key) {
   await s3Request(config, { method: 'DELETE', key });
   return true;
+}
+
+/* ---- Probe (D-88-15, Pitfall 7) ----
+   HeadBucket AND a small PUT under `gr8r-probe/` AND its DELETE.
+   Keyed result — the contract plans 02/03 map into toasts/refusals:
+   { ok: true,  key: 'success',    httpWarning }          — all three OK
+   { ok: false, key: 'deleteFailed', warning: true, httpWarning } — put OK, delete refused:
+       a WARNING, never success — probe is the ONLY sanctioned delete (D-88-7 carve-out)
+   { ok: false, key: 's3ClockSkew' }                      — D-88-17 (SC-3)
+   { ok: false, key: 'badCreds' }                         — InvalidAccessKeyId/SignatureDoesNotMatch/AccessDenied
+   { ok: false, key: 'unreachable', error }               — network/other; error text sliced (V14)
+   httpWarning: true when the endpoint is plain http:// (D-88-14). */
+export async function probeS3(config) {
+  const httpWarning = String(config.endpoint).startsWith('http://');
+  const base = { ok: false, key: null, warning: false, httpWarning };
+  try {
+    await headBucket(config);
+  } catch (e) {
+    return mapProbeError(e, base);
+  }
+  const marker = `gr8r-probe/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
+  try {
+    await putObject(config, marker, Buffer.from('gr8r probe'), { contentType: 'text/plain' });
+  } catch (e) {
+    return mapProbeError(e, base);
+  }
+  try {
+    await deleteObject(config, marker);
+  } catch (e) {
+    return { ...base, key: 'deleteFailed', warning: true };
+  }
+  return { ...base, ok: true, key: 'success' };
+}
+
+function mapProbeError(e, base) {
+  if (e?.s3Class === 'clockSkew') return { ...base, key: 's3ClockSkew' };
+  if (e?.s3Class === 'badCreds' || e?.s3Class === 'forbidden') return { ...base, key: 'badCreds' };
+  return { ...base, key: 'unreachable', error: sliceError(e) };
+}
+
+/* ---- Download seam (SC-5, Phase 89 consumes) ----
+   GETs the object, writes to a staged temp file in `stagingDir`
+   (same-filesystem staging convention — an eventual atomic move works)
+   while hashing sha256 ON THE PIPE (one pass, memory-bounded — the
+   temp file is never re-read), then compares against expectedSha256
+   and refuses with a keyed mismatch error, removing the temp file.
+   Sidecar comparison happens at callers (plan 03). */
+export async function downloadToStaged(config, key, expectedSha256, stagingDir) {
+  const res = await getObject(config, key);
+  fs.mkdirSync(stagingDir, { recursive: true });
+  const tmpPath = path.join(stagingDir, `s3-download-${process.pid}-${crypto.randomUUID().slice(0, 8)}.tmp`);
+  const hash = crypto.createHash('sha256');
+  const hashTap = new Transform({
+    transform(chunk, _enc, cb) {
+      hash.update(chunk);
+      cb(null, chunk);
+    },
+  });
+  const out = fs.createWriteStream(tmpPath);
+  try {
+    await pipeline(res.stream, hashTap, out);
+  } catch (e) {
+    fs.rmSync(tmpPath, { force: true });
+    throw e;
+  }
+  const sha256 = hash.digest('hex');
+  if (sha256 !== expectedSha256) {
+    fs.rmSync(tmpPath, { force: true });
+    const err = new Error(
+      sliceError(new Error(`s3 download: sha256 mismatch for ${key}: expected ${expectedSha256}, got ${sha256}`)),
+    );
+    err.s3Class = 'sha256Mismatch';
+    throw err;
+  }
+  return { tmpPath, sha256 };
 }

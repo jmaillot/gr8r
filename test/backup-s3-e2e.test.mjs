@@ -20,7 +20,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { createBucket, putObject, getObject } from '../export/s3.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createBucket, putObject, getObject, probeS3, downloadToStaged } from '../export/s3.js';
 
 /* D-08 gate idiom — the whole e2e is opt-in. */
 const minioUrl = process.env.MINIO_TEST_URL;
@@ -50,4 +53,24 @@ maybeMinio('e2e: signed PUT → GET roundtrip is byte-identical (SC-2 tracer)', 
   assert.equal(res.status, 200);
   assert.equal(got.length, bytes.length);
   assert.equal(crypto.createHash('sha256').update(got).digest('hex'), expectedSha);
+});
+
+maybeMinio('e2e: probe returns success + download seam roundtrips from MinIO (D-88-15, SC-5)', async () => {
+  const bucket = `gr8r-e2e-${crypto.randomUUID().slice(0, 8)}`;
+  const config = { ...CONFIG, bucket };
+  await createBucket(config);
+
+  const probe = await probeS3(config);
+  assert.equal(probe.ok, true);
+  assert.equal(probe.key, 'success');
+
+  const bytes = crypto.randomBytes(2048);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const key = 'backup-task-t1/download seam.tar.gz';
+  await putObject(config, key, bytes);
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-s3-e2e-'));
+  const result = await downloadToStaged(config, key, sha, stagingDir);
+  assert.equal(result.sha256, sha);
+  assert.equal(fs.readFileSync(result.tmpPath).length, bytes.length);
+  fs.rmSync(result.tmpPath, { force: true });
 });
