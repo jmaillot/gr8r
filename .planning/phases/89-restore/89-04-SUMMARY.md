@@ -103,3 +103,4 @@ plan_head_after: 511e3249258fb7f99e314f8778cec6fa7cde5031
 - All 4 task commits + 2 RED commits verified present (`git log 4a3ab32a..511e3249`).
 - Files on disk: export/restore.js (planRemap/restoreImportAsNew/runRestore), server.js routes + hook, mailer.js builder, 2 new + 1 extended test files — all present.
 - Test evidence: 7/7 + 18/18 + 14/14 + 98/98 regression runs recorded above.
+- Post-close-out re-verification: 39/39 across restore-import + restore-routes + email-outbox at `f647c8ed`.
