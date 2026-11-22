@@ -150,3 +150,253 @@ test('download seam: corrupted body refuses with keyed sha256Mismatch and remove
     server.close();
   }
 });
+
+/* =====================================================================
+   UPLOAD EXECUTOR (88-03, SC-2) — thresholded single PUT / multipart
+   mechanics against the same in-process sink. Stateful sink: stores
+   objects + parts, records aborts and per-part attempt bytes so the
+   retry-from-offset contract (D-88-16) is pinned byte-exactly.
+   ===================================================================== */
+import { uploadArchive, s3BackupKey, S3_MULTIPART_THRESHOLD, S3_PART_SIZE } from '../export/s3.js';
+
+/* Stateful S3-shaped sink. opts.failPart: { partNumber, failTimes } makes
+   that part's PUT return 503 the first N times it is attempted. */
+function startS3Sink({ failPart = null, discard = false } = {}) {
+  const state = {
+    objects: new Map(), // key -> Buffer
+    parts: new Map(), // uploadId -> Map(partNumber -> [Buffer, ...] per attempt)
+    partAttempts: new Map(), // `${uploadId}:${partNumber}` -> count
+    aborted: [],
+    completed: [],
+    initUploadIds: [],
+  };
+  let uploadIdCounter = 0;
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://sink');
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      const body = Buffer.concat(chunks);
+      const path = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+      const respond = (status, payload = '', headers = {}) => {
+        res.writeHead(status, headers);
+        res.end(payload);
+      };
+      // CreateMultipartUpload: POST <key>?uploads=
+      if (req.method === 'POST' && url.searchParams.has('uploads')) {
+        const id = `upload-${++uploadIdCounter}`;
+        state.initUploadIds.push(id);
+        state.parts.set(id, new Map());
+        return respond(200, `<?xml version="1.0"?><InitiateMultipartUploadResult><Bucket>gr8r</Bucket><Key>${path}</Key><UploadId>${id}</UploadId></InitiateMultipartUploadResult>`);
+      }
+      // CompleteMultipartUpload: POST <key>?uploadId=
+      if (req.method === 'POST' && url.searchParams.has('uploadId')) {
+        const id = url.searchParams.get('uploadId');
+        state.completed.push({ uploadId: id, body });
+        return respond(200, `<?xml version="1.0"?><CompleteMultipartUploadResult><Location>lo</Location><Bucket>gr8r</Bucket><Key>${path}</Key><ETag>"etag"</ETag></CompleteMultipartUploadResult>`);
+      }
+      // UploadPart: PUT <key>?partNumber=&uploadId=
+      if (req.method === 'PUT' && url.searchParams.has('uploadId')) {
+        const id = url.searchParams.get('uploadId');
+        const n = Number(url.searchParams.get('partNumber'));
+        const attemptKey = `${id}:${n}`;
+        const attempt = (state.partAttempts.get(attemptKey) || 0) + 1;
+        state.partAttempts.set(attemptKey, attempt);
+        state.parts.get(id)?.set(n, [...(state.parts.get(id)?.get(n) || []), discard ? Buffer.alloc(0) : body]);
+        if (failPart && failPart.partNumber === n && attempt <= failPart.failTimes) {
+          return respond(503, XML('ServiceUnavailable'));
+        }
+        return respond(200, '', { etag: `"part-${n}-${attempt}"` });
+      }
+      // AbortMultipartUpload: DELETE <key>?uploadId=
+      if (req.method === 'DELETE' && url.searchParams.has('uploadId')) {
+        state.aborted.push(url.searchParams.get('uploadId'));
+        return respond(204);
+      }
+      // Object PUT (single PUT or sidecar): PUT <key>
+      if (req.method === 'PUT') {
+        state.objects.set(path, { body, shaHeader: req.headers['x-amz-content-sha256'], contentType: req.headers['content-type'] });
+        return respond(200);
+      }
+      // Object GET (stream-back verify): GET <key>
+      if (req.method === 'GET') {
+        const obj = state.objects.get(path);
+        if (!obj) return respond(404, XML('NoSuchKey'));
+        return respond(200, obj.body);
+      }
+      respond(400, XML('InvalidRequest'));
+    });
+  });
+  return new Promise(resolve => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, state }));
+  });
+}
+
+const KB = 1024;
+
+test('executor: payload ≤ threshold goes as ONE signed PUT with explicit Content-Length + real payload hash, then the sidecar', async () => {
+  const bytes = crypto.randomBytes(64 * KB);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-up-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink();
+  try {
+    const progress = [];
+    const result = await uploadArchive(sinkConfig(port), staged, 'backup-task-t1/a.tar.gz', sha, (done, total) => progress.push([done, total]));
+    assert.equal(result.mode, 'single');
+    assert.equal(result.partsTotal, 1);
+    const obj = state.objects.get('backup-task-t1/a.tar.gz');
+    assert.ok(obj, 'object stored');
+    assert.equal(obj.body.length, bytes.length);
+    assert.equal(obj.body.toString('hex'), bytes.toString('hex'));
+    assert.equal(obj.shaHeader, sha, 'x-amz-content-sha256 carries the REAL payload hash');
+    assert.equal(obj.contentType, 'application/gzip'); // D-88-10
+    const sidecar = state.objects.get('backup-task-t1/a.tar.gz.sha256');
+    assert.ok(sidecar, 'sidecar uploaded (D-88-8)');
+    assert.match(sidecar.body.toString('utf8'), new RegExp(`^${sha}  a\\.tar\\.gz`));
+    assert.deepEqual(progress, [[1, 1]]);
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('executor: payload above threshold goes CreateMultipartUpload → serial parts → Complete (serial 1-based)', async () => {
+  const partSize = 2 * KB;
+  const bytes = crypto.randomBytes(5 * partSize);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-up-mp-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink();
+  try {
+    const progress = [];
+    const result = await uploadArchive(
+      sinkConfig(port),
+      staged,
+      'backup-task-t1/big.tar.gz',
+      sha,
+      (done, total) => progress.push([done, total]),
+      { thresholdBytes: 4 * KB, partSize, backoffMs: () => 1 },
+    );
+    assert.equal(result.mode, 'multipart');
+    assert.equal(result.partsTotal, 5);
+    assert.equal(state.initUploadIds.length, 1, 'one multipart initiated');
+    assert.equal(state.aborted.length, 0);
+    // Parts arrive serially (1-based) with exact byte ranges
+    const received = [];
+    for (let n = 1; n <= 5; n++) {
+      const attempts = state.parts.get(state.initUploadIds[0]).get(n);
+      assert.equal(attempts.length, 1, `part ${n}: exactly one attempt`);
+      received.push(attempts[0]);
+    }
+    assert.equal(Buffer.concat(received).toString('hex'), bytes.toString('hex'), 'parts reassemble byte-identical');
+    assert.equal(state.completed.length, 1, 'CompleteMultipartUpload issued');
+    const completeXml = state.completed[0].body.toString('utf8');
+    for (let n = 1; n <= 5; n++) assert.match(completeXml, new RegExp(`<PartNumber>${n}</PartNumber>`), `complete lists part ${n}`);
+    assert.ok(state.objects.get('backup-task-t1/big.tar.gz.sha256'), 'sidecar uploaded after complete');
+    assert.deepEqual(progress, [[1, 5], [2, 5], [3, 5], [4, 5], [5, 5]]);
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('executor: a part failing twice then succeeding resumes from the SAME staged-file byte range, ≤3 attempts', async () => {
+  const partSize = 2 * KB;
+  const bytes = crypto.randomBytes(4 * partSize);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-up-retry-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink({ failPart: { partNumber: 2, failTimes: 2 } });
+  try {
+    const result = await uploadArchive(
+      sinkConfig(port), staged, 'backup-task-t1/retry.tar.gz', sha,
+      () => {},
+      { thresholdBytes: 1, partSize, backoffMs: () => 1 },
+    );
+    assert.equal(result.mode, 'multipart');
+    assert.equal(state.aborted.length, 0, 'no abort when a part recovers within the attempt budget');
+    const parts = state.parts.get(state.initUploadIds[0]);
+    assert.equal(parts.get(2).length, 3, 'part 2 attempted three times');
+    const ok = parts.get(2)[2];
+    assert.equal(ok.toString('hex'), bytes.subarray(partSize, 2 * partSize).toString('hex'), 'the retried attempt re-sends the SAME byte range (D-88-16)');
+    for (const attempt of parts.get(2)) {
+      assert.equal(attempt.toString('hex'), bytes.subarray(partSize, 2 * partSize).toString('hex'), 'EVERY attempt re-sends the SAME byte range (D-88-16: re-read from the immutable file)');
+    }
+    assert.equal(state.completed.length, 1);
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('executor: a part failing 3 times triggers AbortMultipartUpload and rejects with the last error', async () => {
+  const bytes = crypto.randomBytes(8 * KB);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-up-abort-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink({ failPart: { partNumber: 1, failTimes: 99 } });
+  try {
+    await assert.rejects(
+      () => uploadArchive(
+        sinkConfig(port), staged, 'backup-task-t1/aborted.tar.gz', sha,
+        () => {},
+        { thresholdBytes: 1, partSize: 4 * KB, backoffMs: () => 1 },
+      ),
+      (err) => {
+        assert.match(err.message, /503/);
+        return true;
+      },
+    );
+    assert.equal(state.aborted.length, 1, 'AbortMultipartUpload issued (T-88-12)');
+    assert.equal(state.aborted[0], state.initUploadIds[0], 'the aborted id is the initiated upload');
+    assert.equal(state.completed.length, 0, 'no complete after abort');
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('executor: memory stays bounded — every byte path is a createReadStream slice, never a whole-file buffer', async () => {
+  /* GC-based rss probing is flaky (transient chunk garbage inflates RSS
+     nondeterministically), so the bounded-memory truth is pinned the
+     house way: a source assertion on the executor + the functional
+     part-range reconstruction tests above (a whole-file buffer would
+     make start/end slicing — and the byte-range retry pin — impossible). */
+  const src = fs.readFileSync(new URL('../export/s3.js', import.meta.url), 'utf8');
+  const executor = src.slice(src.indexOf('BACKUP UPLOAD EXECUTOR'));
+  assert.ok(!executor.includes('readFileSync'), 'no readFileSync in the executor — never a whole-file Buffer');
+  assert.ok(!executor.includes('readFile('), 'no readFile in the executor');
+  assert.match(executor, /createReadStream\(stagedPath, \{ start, end, highWaterMark: 1024 \* 1024 \}\)/, 'parts stream as 1 MiB-bounded slices of the staged file');
+  assert.match(executor, /sha256Range\(stagedPath, start, end\)/, 'part hashes stream from the same bounded ranges');
+  /* Functional backstop: a file four times the part size uploads with
+     exact serial ranges (proves slicing, not buffering, feeds the wire). */
+  const partSize = 4 * KB;
+  const bytes = crypto.randomBytes(3 * partSize);
+  const sha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(os.tmpdir(), `gr8r-s3-up-bounded-${Date.now()}.bin`);
+  fs.writeFileSync(staged, bytes);
+  const { server, port, state } = await startS3Sink();
+  try {
+    const result = await uploadArchive(
+      sinkConfig(port), staged, 'backup-task-t1/bounded.tar.gz', sha,
+      () => {},
+      { thresholdBytes: 1, partSize, backoffMs: () => 1 },
+    );
+    assert.equal(result.partsTotal, 3);
+    const received = [];
+    for (let n = 1; n <= 3; n++) received.push(state.parts.get(state.initUploadIds[0]).get(n)[0]);
+    assert.equal(Buffer.concat(received).toString('hex'), bytes.toString('hex'), 'serial sliced ranges reassemble byte-identical');
+  } finally {
+    server.close();
+    fs.rmSync(staged, { force: true });
+  }
+});
+
+test('executor: threshold constants frozen at SC-2 values; s3BackupKey prefixes per D-88-6/9', () => {
+  assert.equal(S3_MULTIPART_THRESHOLD, 512 * 1024 * 1024);
+  assert.equal(S3_PART_SIZE, 64 * 1024 * 1024);
+  assert.equal(s3BackupKey({ taskId: 't9' }, 'backup-task-slug-t9-1.tar.gz'), 'backup-task-t9/backup-task-slug-t9-1.tar.gz');
+  assert.equal(s3BackupKey({}, 'backup-instance-1.tar.gz'), 'backup-manual/backup-instance-1.tar.gz');
+  assert.equal(s3BackupKey(null, 'backup-instance-1.tar.gz'), 'backup-manual/backup-instance-1.tar.gz');
+});

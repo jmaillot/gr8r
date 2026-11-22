@@ -381,3 +381,198 @@ export async function downloadToStaged(config, key, expectedSha256, stagingDir) 
   }
   return { tmpPath, sha256 };
 }
+
+/* =====================================================================
+   BACKUP UPLOAD EXECUTOR — Phase 88 (88-03, SC-2 / BKBCK-05)
+   =====================================================================
+   Thresholded single PUT / serial multipart upload of the PUBLISHED
+   local archive (the caller passes the fs.rename-published file — it
+   is immutable, so D-88-16 retries re-read the same byte ranges).
+
+   Frozen decisions honored here:
+   - SC-2: payloads ≤ S3_MULTIPART_THRESHOLD (512 MiB) go as ONE signed
+     PUT; larger payloads go CreateMultipartUpload → SERIAL 64 MiB parts
+     (1-based) → CompleteMultipartUpload. Parts are fs.createReadStream
+     slices — the file is NEVER buffered whole (memory-bounded).
+   - D-88-8: ETag is collected ONLY as the protocol datum Complete
+     requires — integrity comes exclusively from the caller's stream-back
+     sha256 compare + the `<key>.sha256` sidecar uploaded here.
+   - D-88-10: Content-Type application/gzip + Content-Length only. No
+     SSE, no storage-class headers.
+   - D-88-16: each upload attempt pre-hashes its byte range straight
+     from the immutable file, so a retry re-sends identical bytes.
+   - T-88-12: a part exhausting its attempt budget triggers
+     AbortMultipartUpload before the error propagates.
+   - SigV4 real-payload-hash rule: stream bodies carry their computed
+     part hash; the single PUT reuses the caller's whole-file sha256
+     after verifying it against a fresh pre-hash pass (fail fast on a
+     caller mismatch — never sign a lie).
+
+   s3BackupKey(meta, filename): the D-88-6/9 key routing — task runs
+   `backup-task-<taskId>/`, manual archives `backup-manual/`. The CALLER
+   decides the key; this helper only owns the prefix contract.
+   ===================================================================== */
+
+export const S3_MULTIPART_THRESHOLD = 512 * 1024 * 1024;
+export const S3_PART_SIZE = 64 * 1024 * 1024;
+
+export function s3BackupKey(meta, filename) {
+  return meta?.taskId ? `backup-task-${meta.taskId}/${filename}` : `backup-manual/${filename}`;
+}
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/* One streaming sha256 pass over [start, end] — memory-bounded. */
+function sha256Range(filePath, start, end) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const read = fs.createReadStream(filePath, { start, end, highWaterMark: 1024 * 1024 });
+    read.on('data', chunk => hash.update(chunk));
+    read.on('error', reject);
+    read.on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+function sha256WholeFile(filePath) {
+  return sha256Range(filePath, undefined, undefined);
+}
+
+async function abortMultipart(config, key, uploadId) {
+  try {
+    await s3Request(config, { method: 'DELETE', key, query: { uploadId } });
+  } catch { /* abort is best-effort cleanup — the original error wins */ }
+}
+
+/* Upload the `<key>.sha256` sidecar (D-88-8). Same content shape as the
+   local sidecar: `<sha256>  <filename>\n`. */
+async function uploadSidecar(config, key, expectedSha256) {
+  const base = key.slice(key.lastIndexOf('/') + 1);
+  await putObject(
+    config,
+    `${key}.sha256`,
+    Buffer.from(`${expectedSha256}  ${base}\n`),
+    { contentType: 'text/plain' },
+  );
+}
+
+async function uploadSinglePut(config, stagedPath, key, expectedSha256, size, attempts, backoffMs, notify) {
+  /* Pre-hash pass: verify the caller's whole-file hash BEFORE signing —
+     the SigV4 payload hash must be the REAL body hash, and a mismatch is
+     a caller bug to fail on, not a wire round-trip to discover. */
+  const actual = await sha256WholeFile(stagedPath);
+  if (actual !== expectedSha256) {
+    const err = new Error(`s3 upload: staged file sha256 does not match the stored hash for ${key} (refusing to upload)`);
+    err.s3Class = 'sha256Mismatch';
+    throw err;
+  }
+  let lastErr = null;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const stream = fs.createReadStream(stagedPath, { highWaterMark: 1024 * 1024 });
+      await s3Request(config, {
+        method: 'PUT',
+        key,
+        headers: { 'content-type': 'application/gzip' },
+        body: stream,
+        bodyLength: size,
+        payloadHash: expectedSha256,
+      });
+      notify(1, 1);
+      return { mode: 'single', partsTotal: 1 };
+    } catch (err) {
+      lastErr = err;
+      if (attempt < attempts) await sleep(backoffMs(attempt));
+    }
+  }
+  throw lastErr;
+}
+
+async function uploadMultipart(config, stagedPath, key, size, partSize, attempts, backoffMs, notify) {
+  const init = await s3Request(config, { method: 'POST', key, query: { uploads: '' } });
+  const initBody = (await init.body()).toString('utf8');
+  const uploadId = /<UploadId>([^<]+)<\/UploadId>/.exec(initBody)?.[1];
+  if (!uploadId) throw new Error('s3 multipart: no UploadId in the initiate response');
+  const partsTotal = Math.ceil(size / partSize);
+  const parts = []; // protocol data for Complete ONLY — never integrity (D-88-8)
+  try {
+    for (let n = 1; n <= partsTotal; n++) {
+      const start = (n - 1) * partSize;
+      const end = Math.min(start + partSize, size) - 1;
+      const len = end - start + 1;
+      let lastErr = null;
+      let uploaded = false;
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          /* D-88-16: the hash AND the body are re-read from the immutable
+             staged file on EVERY attempt — identical bytes re-sent. */
+          const payloadHash = await sha256Range(stagedPath, start, end);
+          const stream = fs.createReadStream(stagedPath, { start, end, highWaterMark: 1024 * 1024 });
+          const res = await s3Request(config, {
+            method: 'PUT',
+            key,
+            query: { partNumber: String(n), uploadId },
+            headers: { 'content-type': 'application/gzip' },
+            body: stream,
+            bodyLength: len,
+            payloadHash,
+          });
+          parts.push({ PartNumber: n, ETag: res.headers.etag || '' });
+          uploaded = true;
+          break;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < attempts) await sleep(backoffMs(attempt));
+        }
+      }
+      if (!uploaded) {
+        throw lastErr; // the outer catch owns the abort (T-88-12) exactly once
+      }
+      notify(n, partsTotal);
+    }
+    const xml =
+      '<CompleteMultipartUpload>' +
+      parts
+        .sort((a, b) => a.PartNumber - b.PartNumber)
+        .map(p => `<Part><PartNumber>${p.PartNumber}</PartNumber><ETag>${p.ETag}</ETag></Part>`)
+        .join('') +
+      '</CompleteMultipartUpload>';
+    const comp = await s3Request(config, { method: 'POST', key, query: { uploadId }, body: Buffer.from(xml) });
+    const compBody = (await comp.body()).toString('utf8');
+    /* A Complete response can be HTTP 200 while still reporting an error
+       in its body (S3 quirk) — fail closed on either. */
+    if (/<Error>/.test(compBody)) throw new Error('s3 multipart: complete reported an error');
+    return { mode: 'multipart', partsTotal, uploadId };
+  } catch (err) {
+    await abortMultipart(config, key, uploadId); // belt-and-braces: abort on any post-initiate failure path
+    throw err;
+  }
+}
+
+/* ---- The executor ----
+   config:   the S3.config() request config (88-02 seam)
+   stagedPath: the PUBLISHED, immutable archive file (fs.rename-published)
+   key:      the S3 object key (s3BackupKey routing, caller-decided)
+   expectedSha256: the stored whole-archive sha256 (run row ground truth)
+   onProgress(partsDone, partsTotal): progress callback for the D-19 payload
+   opts:     { thresholdBytes, partSize, attempts, backoffMs } overrides
+             (testability; defaults are the SC-2 constants + 3 attempts)
+   After the object exists the `<key>.sha256` sidecar is uploaded.
+   Returns { mode, partsTotal }. */
+export async function uploadArchive(config, stagedPath, key, expectedSha256, onProgress, opts = {}) {
+  const thresholdBytes = opts.thresholdBytes ?? S3_MULTIPART_THRESHOLD;
+  const partSize = opts.partSize ?? S3_PART_SIZE;
+  const attempts = opts.attempts ?? 3;
+  const backoffMs = opts.backoffMs ?? (attempt => 500 * 2 ** (attempt - 1));
+  const notify = (done, total) => {
+    try { onProgress?.(done, total); } catch { /* progress must never fail an upload */ }
+  };
+  const size = fs.statSync(stagedPath).size;
+  if (size <= thresholdBytes) {
+    const result = await uploadSinglePut(config, stagedPath, key, expectedSha256, size, attempts, backoffMs, notify);
+    await uploadSidecar(config, key, expectedSha256);
+    return result;
+  }
+  const result = await uploadMultipart(config, stagedPath, key, size, partSize, attempts, backoffMs, notify);
+  await uploadSidecar(config, key, expectedSha256);
+  return result;
+}
