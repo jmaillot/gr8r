@@ -655,3 +655,23 @@ async function pollCurrent(holder, { until = null, timeoutMs = 30000 } = {}) {
   }
   throw new Error(`poll timeout — last payload: ${JSON.stringify(last)}`);
 }
+
+test('89-04 history: GET /api/backup/restore/runs is capped at 50 rows, newest-first', async () => {
+  const srv = await startServer();
+  try {
+    const op = await makeRestoreOp(srv, 'history-cap@test.local');
+    const t0 = Date.now() - 120_000;
+    withDb(srv.dbPath, db => {
+      const ins = db.prepare('insert into restore_runs (id, scope, trigger, status, stage, started_at, finished_at, created_at) values (?,?,?,?,?,?,?,?)');
+      for (let i = 0; i < 55; i++) ins.run(`h-${String(i).padStart(2, '0')}`, '{}', 'import_new', 'done', 'done', t0 + i * 1000, t0 + i * 1000 + 100, t0 + i * 1000);
+    });
+    const history = await op.get('/api/backup/restore/runs');
+    assert.equal(history.status, 200);
+    assert.ok(Array.isArray(history.data.runs));
+    assert.equal(history.data.runs.length, 50, 'capped at 50 (D-14 discipline)');
+    assert.equal(history.data.runs[0].id, 'h-54', 'newest first');
+    assert.equal(history.data.runs[49].id, 'h-05', 'the cap trims the OLDEST rows');
+  } finally {
+    await srv.stop();
+  }
+});
