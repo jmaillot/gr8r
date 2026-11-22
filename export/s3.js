@@ -229,6 +229,35 @@ export function s3Request(config, opts) {
   });
 }
 
+/* ---- Keyed error mapping (D-88-17, A4; V14/T-88-01) ----
+   Classes (the contract plans 02/03 map into refusals and run-row errors):
+   clockSkew  — RequestTimeTooSkewed (D-88-17: err.s3ClockSkew === true)
+   badCreds   — InvalidAccessKeyId / SignatureDoesNotMatch
+   forbidden  — AccessDenied
+   noBucket   — NoSuchBucket
+   generic    — anything unmapped
+   Message is sliced (300 chars) and NEVER carries request headers or
+   secrets. */
+export function s3ErrorFrom(status, bodyText) {
+  const text = String(bodyText ?? '');
+  const codeMatch = /<Code>([^<]+)<\/Code>/.exec(text);
+  const s3Code = codeMatch ? codeMatch[1] : null;
+  const CLASSES = {
+    RequestTimeTooSkewed: 'clockSkew',
+    InvalidAccessKeyId: 'badCreds',
+    SignatureDoesNotMatch: 'badCreds',
+    AccessDenied: 'forbidden',
+    NoSuchBucket: 'noBucket',
+  };
+  const s3Class = (s3Code && CLASSES[s3Code]) || 'generic';
+  const err = new Error(sliceError(new Error(`s3 ${status}: ${text.slice(0, 300)}`)));
+  err.s3Status = status;
+  err.s3Code = s3Code;
+  err.s3Class = s3Class;
+  err.s3ClockSkew = s3Class === 'clockSkew';
+  return err;
+}
+
 /* Consume an error response and reject with a keyed S3 error (Task 2
    mapping: RequestTimeTooSkewed → s3ClockSkew, D-88-17). */
 function consumeAndThrowS3Error(res, reject) {
@@ -237,12 +266,7 @@ function consumeAndThrowS3Error(res, reject) {
   res.on('error', () => reject(new Error('s3: error response body unreadable')));
   res.on('end', () => {
     const text = Buffer.concat(chunks).toString('utf8');
-    const codeMatch = /<Code>([^<]+)<\/Code>/.exec(text);
-    const err = new Error(sliceError(new Error(`s3 ${res.statusCode}: ${text.slice(0, 300)}`)));
-    err.s3Status = res.statusCode;
-    err.s3Code = codeMatch ? codeMatch[1] : null;
-    err.s3ClockSkew = err.s3Code === 'RequestTimeTooSkewed';
-    reject(err);
+    reject(s3ErrorFrom(res.statusCode, text));
   });
 }
 
