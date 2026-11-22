@@ -230,6 +230,11 @@ const fieldSel = (form, name, labelKey, min, max, star) => {
   return `<select class="input" data-in="backupTaskField" data-f="${name}" aria-label="${t(labelKey)}">${opts.join('')}</select>`;
 };
 
+/* UAT r3 2026-11-22: retention is now form-staged — two numeric inputs
+   (daily/weekly, the buckets that matter for a fast-cadence test task),
+   staged in S.ui.backupTaskForm.retention and ALWAYS sent with the save
+   (the displayed value IS the intent); monthly/yearly keep the server's
+   frozen defaults. Edit mode preloads the stored values. */
 const taskFormCard = () => {
   const form = S.ui.backupTaskForm;
   if (!form) return '';
@@ -284,6 +289,10 @@ const taskFormCard = () => {
     </div>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
       <div class="field" style="min-width:260px;max-width:340px"><label class="label">${t('page.backup.tzLabel')}</label>${tzCombobox(form.tz)}</div>
+    </div>
+    <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
+      <div class="field"><label class="label">${t('page.backup.retentionDaily')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.daily))}" data-in="backupTaskRetention" data-f="daily"></div>
+      <div class="field"><label class="label">${t('page.backup.retentionWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
     </div>
     <div class="hint" style="margin-top:8px">${t('page.backup.scheduleSummaryPrefix')}: ${esc(summary)}</div>
     <div class="row" style="gap:8px;margin-top:10px">

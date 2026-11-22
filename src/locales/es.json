@@ -2155,6 +2155,8 @@
   "page.backup.tzLabel": "Zona horaria",
   "page.backup.nextRunLabel": "Próxima ejecución",
   "page.backup.retentionLabel": "Retención",
+  "page.backup.retentionWeekly": "Conservar por semana",
+  "page.backup.retentionDaily": "Conservar por día",
   "page.backup.presetDaily": "Cada día",
   "page.backup.presetWeekly": "Cada semana",
   "page.backup.presetMonthly": "Cada mes",

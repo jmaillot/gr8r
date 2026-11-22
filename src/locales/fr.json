@@ -2195,6 +2195,8 @@
   "page.backup.tzLabel": "Fuseau horaire",
   "page.backup.nextRunLabel": "Prochaine exécution",
   "page.backup.retentionLabel": "Rétention",
+  "page.backup.retentionWeekly": "Conservés par semaine",
+  "page.backup.retentionDaily": "Conservés par jour",
   "page.backup.presetDaily": "Chaque jour",
   "page.backup.presetWeekly": "Chaque semaine",
   "page.backup.presetMonthly": "Chaque mois",

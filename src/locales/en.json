@@ -2155,6 +2155,8 @@
   "page.backup.tzLabel": "Timezone",
   "page.backup.nextRunLabel": "Next run",
   "page.backup.retentionLabel": "Retention",
+  "page.backup.retentionWeekly": "Keep per week",
+  "page.backup.retentionDaily": "Keep per day",
   "page.backup.presetDaily": "Daily",
   "page.backup.presetWeekly": "Weekly",
   "page.backup.presetMonthly": "Monthly",

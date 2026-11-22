@@ -2155,6 +2155,8 @@
   "page.backup.tzLabel": "Tijdzone",
   "page.backup.nextRunLabel": "Volgende uitvoering",
   "page.backup.retentionLabel": "Bewaartermijn",
+  "page.backup.retentionWeekly": "Bewaren per week",
+  "page.backup.retentionDaily": "Bewaren per dag",
   "page.backup.presetDaily": "Dagelijks",
   "page.backup.presetWeekly": "Wekelijks",
   "page.backup.presetMonthly": "Maandelijks",

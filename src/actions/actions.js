@@ -4894,6 +4894,10 @@ const backupTaskFormDefaults = () => ({
   scopeId: null,
   preset: 'daily',
   fields: { ...BACKUP_TASK_FIELD_DEFAULTS },
+  /* UAT r3 2026-11-22: retention is now form-staged (server buckets
+     daily/weekly/monthly/yearly; the builder exposes daily+weekly and always
+     sends both — monthly/yearly stay server defaults unless edited before). */
+  retention: { daily: 7, weekly: 4 },
   tz: '', // '' → the server's resolveTz(null) default (Europe/Paris, D-02)
   tzDirty: false,
   cronDirty: false, // edit mode: an untouched schedule is NOT re-sent (server keeps the stored cron)
@@ -4938,6 +4942,14 @@ IN.backupTaskField = el => {
   form.cronDirty = true;
   render();
 };
+/* UAT r3 2026-11-22: retention inputs stage into the form — no re-render on
+   each keystroke (numeric inputs keep focus; the staged value rides the save). */
+IN.backupTaskRetention = el => {
+  const form = S.ui.backupTaskForm;
+  if (!form) return;
+  const n = Number.parseInt(el.value, 10);
+  form.retention[el.dataset.f] = Number.isInteger(n) && n >= 0 ? n : 0;
+};
 A.backupTaskNew = () => {
   S.ui.backupTaskForm = backupTaskFormDefaults();
   render();
@@ -4958,6 +4970,12 @@ A.backupTaskEdit = el => {
        schedule (D-04: the stored string is the source of truth). */
     preset: 'custom',
     fields: { ...BACKUP_TASK_FIELD_DEFAULTS },
+    /* UAT r3: edit mode preloads the task's current retention so the inputs
+       show the stored values (round-trip: displayed value = stored value). */
+    retention: {
+      daily: Number(task.retention_daily ?? 7),
+      weekly: Number(task.retention_weekly ?? 4),
+    },
     tz: task.tz || '',
     tzDirty: false,
     cronDirty: false,
@@ -4995,6 +5013,9 @@ A.backupTaskSave = async () => {
      (browser/list default), so the displayed combobox value and the stored
      tz can never diverge. */
   body.tz = form.tz || tzPreselect(form.tz);
+  /* UAT r3: retention always rides the write — the displayed inputs are the
+     intent (server re-validates small non-negative ints, keyed invalidRetention). */
+  body.retention = { daily: form.retention.daily, weekly: form.retention.weekly };
   const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
