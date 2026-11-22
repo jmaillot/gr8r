@@ -23,7 +23,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createBucket, putObject, getObject, probeS3, downloadToStaged } from '../export/s3.js';
+import { createBucket, putObject, getObject, probeS3, downloadToStaged, uploadArchive, S3_MULTIPART_THRESHOLD, S3_PART_SIZE } from '../export/s3.js';
 
 /* D-08 gate idiom — the whole e2e is opt-in. */
 const minioUrl = process.env.MINIO_TEST_URL;
@@ -73,4 +73,80 @@ maybeMinio('e2e: probe returns success + download seam roundtrips from MinIO (D-
   assert.equal(result.sha256, sha);
   assert.equal(fs.readFileSync(result.tmpPath).length, bytes.length);
   fs.rmSync(result.tmpPath, { force: true });
+});
+
+/* =====================================================================
+   88-03 additions: the FULL run path against real MinIO — probe →
+   multipart upload crossing the threshold (via the opts overrides, the
+   same seam runExport uses) → stream-back sha256 verify → sidecar.
+   The real 512 MiB/64 MiB constants are covered by the unit tests in
+   test/backup-s3-upload.test.mjs; here the overrides make the multipart
+   path observable without a half-gigabyte fixture.
+   ===================================================================== */
+
+maybeMinio('e2e 88-03: multipart upload crosses the threshold → stream-back verify → sidecar (SC-2, T-88-11, D-88-8)', async () => {
+  const bucket = `gr8r-e2e-${crypto.randomUUID().slice(0, 8)}`;
+  const config = { ...CONFIG, bucket };
+  await createBucket(config);
+
+  const probe = await probeS3(config);
+  assert.equal(probe.ok, true, 'probe before upload');
+
+  /* 14 MiB synthetic archive with 6 MiB parts → 3 multipart parts. S3's
+     EntityTooSmall floor (5 MiB per part except the last) forbids smaller
+     part sizes against real MinIO. */
+  const bytes = crypto.randomBytes(14 * 1024 * 1024);
+  const expectedSha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-s3-e2e-')), 'archive.tar.gz');
+  fs.writeFileSync(staged, bytes);
+  const key = 'backup-task-e2e/gr8r 88-03 multipart.tar.gz';
+
+  const progress = [];
+  const result = await uploadArchive(config, staged, key, expectedSha, (done, total) => progress.push({ done, total }), {
+    thresholdBytes: 4 * 1024 * 1024, // below the fixture size → multipart path
+    partSize: 6 * 1024 * 1024,
+  });
+  assert.equal(result.mode, 'multipart');
+  assert.equal(result.partsTotal, 3);
+  assert.ok(progress.length >= 1, 'progress callbacks fired for the D-19 payload');
+
+  /* Stream-back verify: GET the object back and compare the whole-archive
+     sha256 (T-88-11 — ETag is never trusted, D-88-8). */
+  const res = await getObject(config, key);
+  assert.equal(res.status, 200);
+  const roundtrip = await res.body();
+  assert.equal(crypto.createHash('sha256').update(roundtrip).digest('hex'), expectedSha, 'byte-identical roundtrip over real MinIO');
+
+  /* The sidecar carries the stored hash verbatim (D-88-8). */
+  const sidecarRes = await getObject(config, `${key}.sha256`);
+  assert.equal(sidecarRes.status, 200);
+  const sidecar = (await sidecarRes.body()).toString('utf8');
+  assert.ok(sidecar.startsWith(expectedSha), `sidecar carries the run-row hash (got: ${sidecar.slice(0, 20)}…)`);
+
+  /* Download seam roundtrips the FULL uploaded object (SC-5 for Phase 89). */
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-s3-e2e-'));
+  const dl = await downloadToStaged(config, key, expectedSha, stagingDir);
+  assert.equal(dl.sha256, expectedSha);
+  fs.rmSync(dl.tmpPath, { force: true });
+  fs.rmSync(path.dirname(staged), { recursive: true, force: true });
+});
+
+maybeMinio('e2e 88-03: single-PUT mode below the threshold still lands the sidecar (SC-2 small path)', async () => {
+  const bucket = `gr8r-e2e-${crypto.randomUUID().slice(0, 8)}`;
+  const config = { ...CONFIG, bucket };
+  await createBucket(config);
+
+  const bytes = crypto.randomBytes(1024 * 1024);
+  const expectedSha = crypto.createHash('sha256').update(bytes).digest('hex');
+  const staged = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-s3-e2e-')), 'archive.tar.gz');
+  fs.writeFileSync(staged, bytes);
+  const key = 'backup-manual/gr8r 88-03 small.tar.gz'; // D-88-9 manual prefix
+
+  const result = await uploadArchive(config, staged, key, expectedSha, null);
+  assert.equal(result.mode, 'single');
+  const res = await getObject(config, key);
+  assert.equal(res.status, 200);
+  const sidecarRes = await getObject(config, `${key}.sha256`);
+  assert.ok((await sidecarRes.body()).toString('utf8').startsWith(expectedSha), 'sidecar present on the small path');
+  fs.rmSync(path.dirname(staged), { recursive: true, force: true });
 });

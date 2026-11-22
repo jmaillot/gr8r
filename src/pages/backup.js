@@ -88,6 +88,11 @@ const runProgress = () => {
   let detail = '';
   if (run.stage === 'done') {
     detail = `<div class="row" style="gap:8px;flex-wrap:wrap"><span class="faint">${t('page.backup.archiveLabel')}</span><span class="mono">${esc(run.filename || '')}</span><span class="faint mono trunc" style="display:inline-block;max-width:360px" title="${esc(run.sha256 || '')}">${esc(run.sha256 || '')}</span></div>`;
+  } else if (run.stage === 'uploading') {
+    /* 88-03 (T-88-09): render verbatim from the run payload — partsDone/
+       partsTotal arrive from the server; no client-side stage or count
+       derivation. Absent counts render nothing (honest empty detail). */
+    detail = `<p class="faint" style="margin:0">${t('page.backup.stageUploading')}</p>${Number.isFinite(Number(run.partsDone)) && Number.isFinite(Number(run.partsTotal)) ? `<p class="faint" style="margin:8px 0 0">${t('page.backup.partsProgress', { done: run.partsDone, total: run.partsTotal })}</p>` : ''}`; // partsTotal may be null until the upload starts — render nothing rather than "0/null"
   } else if (run.stage === 'failed') {
     detail = `<p class="faint" style="margin:0">${t('page.backup.runFailed')}</p>`;
   }
@@ -121,6 +126,7 @@ const RUN_STATUS_KEYS = {
   running: 'page.backup.statusRunning',
   succeeded: 'page.backup.statusSucceeded',
   failed: 'page.backup.statusFailed',
+  upload_failed: 'page.backup.statusUploadFailed', // 88-03: distinct terminal state — local archive kept, upload failed (D-88-2)
   interrupted: 'page.backup.statusInterrupted',
   skipped_overlap: 'page.backup.statusSkippedOverlap',
   deleted: 'page.backup.statusDeleted',

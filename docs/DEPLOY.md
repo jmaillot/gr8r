@@ -1641,3 +1641,73 @@ $BACKUPS_DIR/
 
 The boot sweep also still collects legacy `DATA_DIR/tmp/backup-*` debris from
 pre-amendment runs, so upgrades self-clean.
+
+## 20. Off-site S3 destination for backup tasks (Phase 88)
+
+Backup tasks can mirror every archive to an **S3-compatible object store**
+(AWS S3, MinIO, Cloudflare R2, Wasabi, …) after the local publish succeeds.
+Zero config = off-site copy disabled; the local-first behavior is unchanged.
+
+### Enable the destination
+
+Two env variables turn the surface on; the per-task opt-in then lives in the
+backup UI (create/edit form, "Upload to S3"):
+
+| Variable | Meaning |
+|----------|---------|
+| `S3_ENDPOINT` | full endpoint URL, e.g. `https://s3.eu-west-1.amazonaws.com` or `http://minio.internal:9000`. **Plain `http://` triggers a probe warning** — payloads cross the network unencrypted; use TLS in production. |
+| `S3_BUCKET` | existing bucket name. **The server never creates the bucket** — the boot probe reports `s3NoBucket` until you create it. |
+| `S3_ACCESS_KEY_ID` | access key id (secret-adjacent — it is logged nowhere) |
+| `S3_SECRET_KEY` | secret key — **secret**: never log it, never commit it |
+| `S3_REGION` | optional; defaults `us-east-1` (MinIO ignores it) |
+| `S3_PATH_STYLE` | optional; `true` is the default (MinIO/R2/Wasabi need path-style; AWS accepts it too) |
+
+With the pair unset, `s3Enabled` is refused on every task write and the probe
+route is a no-op refusal — the feature is fully invisible to operators.
+
+### Bucket setup
+
+1. Create the bucket and credentials with **s3:PutObject / s3:GetObject /
+   s3:AbortMultipartUpload / s3:ListMultipartUploadParts** on the bucket
+   (read-back is used for the post-upload integrity verify and Phase 89's
+   restore path — the server never needs delete).
+2. Run the probe from the backup UI before enabling a task; it reports the
+   exact failure class (`s3ClockSkew`, `s3BadCreds`, `s3NoBucket`, …).
+3. **Clock skew matters**: signature v4 rejects >15 min drift. NTP-sync the
+   host like any other S3 client.
+
+### Key layout & lifecycle rules (operator's job)
+
+Archives land under two prefixes:
+
+```
+backup-task-<taskId>/<original archive filename>.tar.gz (+ .sha256 sidecar)
+backup-manual/<original archive filename>.tar.gz   (+ .sha256 sidecar)
+```
+
+**Pruning is yours, not the server's** — the local GFS rotation never deletes
+off-site objects. Attach a lifecycle rule so uploads don't accumulate forever:
+
+| Local retention cadence | Recommended S3 lifecycle rule |
+|--------------------------|-------------------------------|
+| Daily GFS (7 daily / 4 weekly / 12 monthly) | expire `backup-task-*` after 90 days; keep it simple — the local GFS set already caps restore density |
+| Weekly-ish cadence | expire after 180 days |
+| Archival-only instances | expire after 365 days, or transition to a storage class (e.g. Glacier Instant) after 30 days |
+
+Two mandatory rules regardless of cadence:
+
+- **AbortIncompleteMultipartUpload after 7 days** on the whole bucket (or the
+  two prefixes). A crashed run can leave orphaned part uploads that otherwise
+  bill forever — the server aborts on failure, but a killed process cannot.
+- **Never auto-delete `backup-manual/` by age** if you treat Run-now archives
+  as operator-curated — exempt that prefix from any rule (or give it a much
+  longer horizon).
+
+### What a failed upload means
+
+Upload happens AFTER the local publish + manifest verify. If the upload fails
+(503, bad creds, bucket gone, skew), the run lands as **`upload_failed`** in
+the run history: the local archive is kept, the row carries the archive hash
+and a 300-char sliced error (never a secret), and the regular backup failure
+email fires (with a recovery email when a later run uploads clean). The run
+history shows the multipart parts progress while an upload is in flight.

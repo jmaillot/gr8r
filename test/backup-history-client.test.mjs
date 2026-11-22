@@ -107,6 +107,21 @@ test('D-14: the history card renders the payload verbatim — newest-first and c
   assert.match(actionsSrc, /A\.backupRunErr =/, 'the expandable error toggle exists');
 });
 
+test('88-03: the client renders upload_failed + the uploading stage verbatim from the payload (render-only)', () => {
+  /* T-88-09: upload_failed is a first-class labeled status, the uploading
+     stage badge + parts progress ride the D-19 payload — the client derives
+     nothing (no client stage math, no parts computation). */
+  assert.match(pagesSrc, /upload_failed: 'page\.backup\.statusUploadFailed'/, 'upload_failed is a keyed first-class status');
+  assert.match(pagesSrc, /run\.stage === 'uploading'/, 'the uploading stage branch exists in runProgress');
+  assert.match(pagesSrc, /t\('page\.backup\.stageUploading'\)/, 'the uploading stage label is keyed');
+  assert.match(pagesSrc, /t\('page\.backup\.partsProgress', \{ done: run\.partsDone, total: run\.partsTotal \}\)/, 'parts progress renders the payload fields verbatim');
+  /* No client-side stage or parts derivation: the stage string and the
+     counts come from the payload; nothing recomputes them. */
+  assert.ok(!/partsDone\s*[+\-*]|partsDone\s*=\s*[^=]|Math\.ceil.*parts/i.test(pagesSrc), 'no client-side parts math');
+  /* partsTotal may be null until the first part lands — no "0/null" render. */
+  assert.match(pagesSrc, /Number\.isFinite\(Number\(run\.partsTotal\)\)/, 'null partsTotal renders nothing');
+});
+
 test('5-locale key parity for every 87-04 backup page key', () => {
   const required = [
     'page.backup.tasksTitle', 'page.backup.taskFormTitle', 'page.backup.taskEditTitle', 'page.backup.taskNameLabel',
