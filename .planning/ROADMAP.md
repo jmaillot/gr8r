@@ -126,14 +126,14 @@ Plans:
 4. A Super Admin can restore a full instance from an instance-scope backup — Super-Admin-only, type-to-confirm, global session revocation — and the phase ships an explicit security contract (Phase 30 pattern) with threats_open: 0 covering privilege-escalation-via-restore.
 5. Restore authority is scoped by LIVE rights, never archive contents; instance-scope archive download stays instance-admin-only (the Phase 85 tiering, now enforced).
 
-**Plans**: 2/6 plans executed
+**Plans**: 3/6 plans executed
 Plans:
 **Wave 1**
 - [x] 89-01-PLAN.md — Restore engine foundations: ustar+gzip stream reader (86-writer layout spec), frozen entry allow-list, bounded staged extraction + restore-staging sweep (tracer: golden round-trip vs 86-written archives)
 - [x] 89-02-PLAN.md — Persistence substrate: restore_runs + restore_lock on both engines (SQLITE_SCHEMA twins, PG_EPOCH_COLUMNS), writer seam, boot sweeps, mutual-exclusion export-side half (D-89-1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 89-03-PLAN.md — BKRST-01 read surface: dual-location list with honest uploaded badge, manifest preview with on-pipe sha256 re-verify + S3 fetch via the 88-01 download seam, keyed refusals + preview throttle
+- [x] 89-03-PLAN.md — BKRST-01 read surface: dual-location list with honest uploaded badge, manifest preview with on-pipe sha256 re-verify + S3 fetch via the 88-01 download seam, keyed refusals + preview throttle
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 89-04-PLAN.md — BKRST-02 import-as-new: remap totality gate, doc-splice restore unit (one tx per unit), POST trigger + D-89-29 stage pipeline, `-restored` name counter, skip report, outcome emails
@@ -170,7 +170,7 @@ Plans:
 | 86. Export Core ("gr8r backup v1") | 2/2 | Complete    | 2026-11-21 |
 | 87. Scheduler, Tasks, Run History & Rotation | 4/4 | In Progress|  |
 | 88. S3 Destination | 3/3 | Complete    | 2026-11-22 |
-| 89. Restore | 2/6 | In Progress|  |
+| 89. Restore | 3/6 | In Progress|  |
 | 90. Polish & Verification Sweep | 0/? | Not started | - |
 
 ## Phase Ordering Rationale

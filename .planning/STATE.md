@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 89
 current_phase_name: restore
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed 89-02-PLAN.md
-last_updated: "2026-11-22T19:12:43.140Z"
+stopped_at: Completed 89-03-PLAN.md
+last_updated: "2026-11-22T19:55:57.583Z"
 last_activity: 2026-11-22
 last_activity_desc: Phase 89 execution started
-state_head: d98537bccbd0ddf4e2c78512687d0acc68610ef2
+state_head: 7fdbe257e2aaa6a026714aa85d95256f0e41d448
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -31,7 +31,7 @@ before features.
 ## Current Position
 
 Phase: 89 (restore) — EXECUTING
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 6
 Status: Ready to execute
 Last activity: 2026-11-22 — Phase 89 execution started
@@ -96,6 +96,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 87 P87-03 | 4h | 2 tasks | 5 files |
 | Phase 89 P01 | 31min | 3 tasks | 3 files |
 | Phase 89 P02 | 13min | 3 tasks | 5 files |
+| Phase 89 P03 | 26m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -138,6 +139,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 89]: Restore persistence substrate landed: restore_runs/restore_lock on both engines with boot sweeps
 - [Phase 89]: plans 03-06 build on the CAS lock + writer seam; stale-run sweep follows the 87 idiom (all running rows, no threshold)
 - [Phase 89]: 89-02: skipped_overlap reason rides backup_runs.error column; refusal code is exactly backupRestoreInProgress (plan 04/06 vocabulary)
+- [Phase 89]: 89-03: list+preview badges derive from run-row truth (backup_runs.uploaded + fs), never live S3 probing
+- [Phase 89]: 89-03: preview throttle 10/15min operator-keyed sits BEFORE the capability gate, consuming a try on refusal (D-89-22/OQ5)
+- [Phase 89]: 89-03: streamVerifyArchive gates entries during the walk with extraction's posture (escape fatal, shape-miss skip-and-record)
 
 ### Pending Todos
 
@@ -159,8 +163,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-22T19:12:34.640Z
-Stopped at: Completed 89-02-PLAN.md
+Last session: 2026-11-22T19:55:57.471Z
+Stopped at: Completed 89-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
