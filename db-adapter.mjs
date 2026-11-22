@@ -458,6 +458,11 @@ export const SQLITE_SCHEMA = `
     sha256       text,
     filename     text,
     error        text,
+    /* Phase 89 (D-89-15, 89-03): per-run upload truth — the restore list's
+       honest S3 badge source; mirrors the server.js SCHEMA declaration
+       byte-for-byte (pg tables are created fresh from this variant each
+       boot; existing dbs get the additive ensureColumn twin). */
+    uploaded     integer not null default 0,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);

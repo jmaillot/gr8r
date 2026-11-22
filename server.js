@@ -795,6 +795,12 @@ const SCHEMA = `
     sha256       text,
     filename     text,
     error        text,
+    /* Phase 89 (D-89-15): per-run upload truth — the honest S3 badge
+       source for the restore list (89-03). Additive, def byte-identical
+       on both engines (Pitfall P-B); existing rows default 0 via the
+       ensureColumn at boot — D-89-14: run-row truth only, never live S3
+       state. */
+    uploaded     integer not null default 0,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);
@@ -965,6 +971,13 @@ async function initDb() {
       await db.run('create index if not exists backup_runs_task on backup_runs(task_id, created_at)');
     }
   }, 'backup_runs status-CHECK widening rebuild (D-88-2 upload_failed)');
+  /* Phase 89 (D-89-15, 89-03): per-run upload truth — the additive column
+     behind the restore list's honest S3 badge (planner decision flag 2:
+     a column beats a heuristic badge). Def byte-identical to the SCHEMA
+     declaration (Pitfall P-B); existing rows default 0 — no task uploads
+     lie about S3 state. The 88-2 rebuild above predates the column, so
+     this ensureColumn must come AFTER it. */
+  await adapterEnsureColumn('backup_runs', 'uploaded', 'integer not null default 0');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -9050,6 +9063,57 @@ async function handleApi(req, res, url) {
     }
     const rows = await db.all('select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
     return json(res, 200, { runs: rows });
+  }
+
+  /* -------------- restore read surface (Phase 89, 89-03, BKRST-01/D-89-14) --------------
+     GET /api/backup/restore/backups — the restorable-archive list. Guard
+     chain copied VERBATIM from the history GET above (never reordered —
+     sameOrigin first, house rule): sameOrigin → requireUser → capability
+     gate → query; a GET list read skips throttle per that GET precedent.
+     The gate is RESTORE_USE ONLY (D-89-21: restore authority is distinct
+     from backup authority; D-33-10/D-11: archive contents never grant it).
+     Refusal keyed + audited (D-20). Rows: terminal statuses always,
+     ANY status when uploaded = 1 (D-89-15 S3-only survival after local
+     rotation). Location is derived SERVER-SIDE from run-row truth only
+     (D-89-14): local file exists → 'local'; else uploaded = 1 → 's3';
+     else 'missing'. NO ListObjectsV2 anywhere on this path — live S3
+     state is never consulted; the uploaded flag (written only after the
+     full D-88-8 upload verification) IS the S3 truth. The payload is
+     render-only — the client renders these fields verbatim, never
+     derives location or authority client-side (D-23 doctrine). */
+  if (pathname === '/api/backup/restore/backups' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      await auditBackupTask(user, 'restore_refused:restoreRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can list restorable backups');
+    }
+    const rows = await db.all(
+      `select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, uploaded, created_at
+         from backup_runs
+        where status in ('succeeded','upload_failed','deleted') or uploaded = 1
+        order by created_at desc, id desc limit 50`,
+    );
+    return json(res, 200, {
+      runs: rows.map(r => ({
+        runId: r.id,
+        taskId: r.task_id,
+        trigger: r.trigger,
+        status: r.status,
+        /* filename can be null (a failed run never produced an archive) —
+           fs membership only applies when there is a name to check. */
+        location: r.filename
+          ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
+          : (r.uploaded === 1 ? 's3' : 'missing'),
+        filename: r.filename,
+        sizeBytes: r.size_bytes,
+        sha256: r.sha256,
+        startedAt: r.started_at,
+        finishedAt: r.finished_at,
+        createdAt: r.created_at,
+      })),
+    });
   }
 
   if (pathname === '/api/auth/signup' && method === 'POST') {

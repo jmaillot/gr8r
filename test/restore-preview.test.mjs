@@ -23,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { after, before, test } from 'node:test';
+import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
 
 /* DATA_DIR must be set BEFORE export/backup.js / export/restore.js are
    imported (they derive their paths from the env at call time, but keep
@@ -231,5 +232,177 @@ test('89-01 sweep: planted orphans under restore-staging are removed with an exa
   assert.equal(removed, before, 'sweep removes every entry and returns the exact count');
   const left = fs.existsSync(home) ? fs.readdirSync(home).length : 0;
   assert.equal(left, 0, 'staging home is empty after the sweep');
+});
+
+/* =====================================================================
+   89-03 (BKRST-01) — the restore READ SURFACE route pins.
+   Server-harness half (startServer-per-case, test/backup-routes.test.mjs
+   pattern): the list route's honest dual-location badges (D-89-14/15 —
+   run-row truth only, never live S3 state), newest-first ordering, the
+   empty edge, the RESTORE_USE gate with keyed + audited refusals
+   (D-89-21), and terminal-row filtering. The in-process half above owns
+   the reader pins; this half owns the HTTP surface.
+   ===================================================================== */
+
+const restoreAuditRows = srv =>
+  withDb(srv.dbPath, db => db.prepare("select * from audit_log where action like 'restore_%' order by created_at, id").all());
+const userIdByEmail = (srv, email) =>
+  withDb(srv.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
+
+/* A Restore Operator granted through the Phase 85 route (the sanctioned
+   authority path — never a row planted by hand). */
+async function makeRestoreOp(server, email) {
+  const joined = await signup(server.base, { name: 'Restore Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await operator.post('/api/auth/operator/instance-roles', {
+    userId: userIdByEmail(server, email),
+    role: 'restore_operator',
+  });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  return (await login(server.base, email, 'password-1234')).client;
+}
+
+/* Plant a backup_runs history row directly — history rows are data; the
+   ROUTE is the subject under test (the 86-02 suite idiom). */
+function insertRun(server, row) {
+  withDb(server.dbPath, db =>
+    db.prepare(
+      `insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, uploaded)
+       values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ).run(
+      row.id,
+      row.taskId ?? null,
+      JSON.stringify(row.scope ?? { kind: 'instance', id: null }),
+      row.trigger ?? 'manual',
+      row.status,
+      row.startedAt ?? 1000,
+      row.finishedAt ?? 2000,
+      row.durationMs ?? 1000,
+      row.sizeBytes ?? 1234,
+      row.sha256 ?? 'a'.repeat(64),
+      row.filename ?? null,
+      row.error ?? null,
+      row.createdAt,
+      row.uploaded ?? 0,
+    ),
+  );
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* A real completed backup run via the frozen 86 surface — gives the list
+   one GENUINE local archive (location 'local' must be earned, not planted). */
+async function makeBackupOpAndRun(server, email) {
+  const joined = await signup(server.base, { name: 'Backup Op', email });
+  assert.equal(joined.status, 201);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await operator.post('/api/auth/operator/instance-roles', {
+    userId: userIdByEmail(server, email),
+    role: 'backup_operator',
+  });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  const backupOp = (await login(server.base, email, 'password-1234')).client;
+  const post = await backupOp.post('/api/backup/runs', { scope: { kind: 'instance' } });
+  assert.equal(post.status, 200, `trigger: ${JSON.stringify(post.data)}`);
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    const poll = await backupOp.get('/api/backup/runs/current');
+    assert.equal(poll.status, 200, `poll failed: ${JSON.stringify(poll.data)}`);
+    if (poll.data.stage === 'done') return poll.data;
+    if (poll.data.stage === 'failed') throw new Error(`run failed: ${JSON.stringify(poll.data)}`);
+    if (Date.now() > deadline) throw new Error(`run poll timeout: ${JSON.stringify(poll.data)}`);
+    await sleep(50);
+  }
+}
+
+test('89-03 list: zero backup runs → an honestly empty list payload (BKRST-01 empty edge, route half)', async () => {
+  const server = await startServer({});
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-empty@test.local');
+    const res = await restoreOp.get('/api/backup/restore/backups');
+    assert.equal(res.status, 200, `list: ${JSON.stringify(res.data)}`);
+    assert.deepEqual(res.data, { runs: [] }, 'empty history is { runs: [] } — never a fabricated row');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('89-03 list: plain member → 403 backupRoleRequired, audited restore_refused:restoreRoleRequired (D-89-21)', async () => {
+  const server = await startServer({});
+  try {
+    const joined = await signup(server.base, { name: 'Plain', email: 'plain-restore@test.local' });
+    assert.equal(joined.status, 201);
+    const plain = (await login(server.base, 'plain-restore@test.local', 'password-1234')).client;
+    const res = await plain.get('/api/backup/restore/backups');
+    assert.equal(res.status, 403);
+    assert.equal(res.data.code, 'backupRoleRequired');
+    const audits = restoreAuditRows(server);
+    assert.equal(audits.length, 1, 'exactly the refusal audit row');
+    assert.equal(audits[0].action, 'restore_refused:restoreRoleRequired');
+    assert.equal(audits[0].actor_id, userIdByEmail(server, 'plain-restore@test.local'));
+  } finally {
+    await server.stop();
+  }
+});
+
+test('89-03 list: honest dual-location rows newest-first — real local run, deleted+uploaded=1 S3-survival, non-terminal rows absent, stable across polls (D-89-14/15)', async () => {
+  const server = await startServer({});
+  try {
+    /* ALL direct-db access happens BEFORE the export fires — the run's
+       wal_checkpoint(truncate) + a later writer's close race the raw
+       withDb handles (harness WAL quirk, see withDb's busy_timeout note),
+       so users/grants/planted rows are set up first and everything after
+       the run rides HTTP only. */
+    const restoreOp = await makeRestoreOp(server, 'rop-list@test.local');
+    const done = await makeBackupOpAndRun(server, 'bop-list@test.local');
+    assert.ok(done.filename && done.sha256, 'fixture sanity: a completed run with filename + sha256');
+
+    insertRun(server, { id: 'run-deleted-s3', status: 'deleted', uploaded: 1, filename: 'backup-gone-local.tar.gz', createdAt: 3000 });
+    insertRun(server, { id: 'run-upload-failed', status: 'upload_failed', uploaded: 0, filename: null, createdAt: 2500 });
+    insertRun(server, { id: 'run-running', status: 'running', uploaded: 0, filename: null, createdAt: 4000 });
+    insertRun(server, { id: 'run-failed', status: 'failed', uploaded: 0, filename: null, createdAt: 5000 });
+
+    const first = await restoreOp.get('/api/backup/restore/backups');
+    assert.equal(first.status, 200, `list: ${JSON.stringify(first.data)}`);
+    const rows = first.data.runs;
+
+    /* newest-first by created_at, id desc as tiebreak (the 9044/9051 idiom) */
+    const order = rows.map(r => r.createdAt);
+    assert.deepEqual(order, [...order].sort((a, b) => b - a), 'rows are newest-first by created_at');
+    const stable = await restoreOp.get('/api/backup/restore/backups');
+    assert.deepEqual(stable.data.runs.map(r => r.runId), rows.map(r => r.runId), 'two consecutive polls return identical row order');
+
+    /* non-terminal rows are ABSENT — history poison never enters the restore surface */
+    assert.ok(!rows.some(r => r.status === 'running'), 'running row absent');
+    assert.ok(!rows.some(r => r.status === 'failed'), 'failed row absent');
+    assert.ok(!rows.some(r => r.runId === 'run-running' || r.runId === 'run-failed'), 'non-terminal ids absent');
+
+    /* the real run: local archive exists → 'local', full row shape */
+    const local = rows.find(r => r.status === 'succeeded');
+    assert.ok(local, 'the succeeded run is present');
+    assert.equal(local.location, 'local', 'a real on-disk archive badges local');
+    assert.equal(local.filename, done.filename);
+    assert.equal(local.sha256, done.sha256);
+    assert.equal(local.trigger, 'manual');
+    assert.deepEqual(
+      Object.keys(local).sort(),
+      ['createdAt', 'filename', 'finishedAt', 'location', 'runId', 'sha256', 'sizeBytes', 'startedAt', 'status', 'taskId', 'trigger'].sort(),
+      'render-only payload shape — server-derived, client renders verbatim',
+    );
+
+    /* D-89-15 S3-survival: deleted row WITH uploaded=1 stays listable, badged s3 */
+    const s3 = rows.find(r => r.runId === 'run-deleted-s3');
+    assert.ok(s3, 'a deleted-status row with uploaded=1 IS present (S3-only survival after rotation)');
+    assert.equal(s3.location, 's3', 'no local file + uploaded=1 → the s3 badge');
+    assert.equal(s3.status, 'deleted');
+
+    /* upload_failed is terminal — present; no file, no upload → missing */
+    const failedUp = rows.find(r => r.runId === 'run-upload-failed');
+    assert.ok(failedUp, 'upload_failed is a terminal status and present');
+    assert.equal(failedUp.location, 'missing', 'neither destination → the honest missing badge');
+  } finally {
+    await server.stop();
+  }
 });
 
