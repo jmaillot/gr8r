@@ -1656,11 +1656,11 @@ backup UI (create/edit form, "Upload to S3"):
 | Variable | Meaning |
 |----------|---------|
 | `S3_ENDPOINT` | full endpoint URL, e.g. `https://s3.eu-west-1.amazonaws.com` or `http://minio.internal:9000`. **Plain `http://` triggers a probe warning** — payloads cross the network unencrypted; use TLS in production. |
-| `S3_BUCKET` | existing bucket name. **The server never creates the bucket** — the boot probe reports `s3NoBucket` until you create it. |
+| `S3_BUCKET` | existing bucket name. **The server never creates the bucket** — probing reports `s3NoBucket` (NoSuchBucket) until you create it. |
 | `S3_ACCESS_KEY_ID` | access key id (secret-adjacent — it is logged nowhere) |
 | `S3_SECRET_KEY` | secret key — **secret**: never log it, never commit it |
 | `S3_REGION` | optional; defaults `us-east-1` (MinIO ignores it) |
-| `S3_PATH_STYLE` | optional; `true` is the default (MinIO/R2/Wasabi need path-style; AWS accepts it too) |
+| `S3_PATH_STYLE` | optional; `true` is the default (MinIO/R2/Wasabi need path-style; AWS accepts it too). `false` switches to virtual-host addressing — the bucket is prepended to the endpoint host (`<bucket>.s3.us-east-1.amazonaws.com`); an endpoint path prefix, if any, is preserved. |
 
 With the pair unset, `s3Enabled` is refused on every task write and the probe
 route is a no-op refusal — the feature is fully invisible to operators.
@@ -1668,11 +1668,19 @@ route is a no-op refusal — the feature is fully invisible to operators.
 ### Bucket setup
 
 1. Create the bucket and credentials with **s3:PutObject / s3:GetObject /
-   s3:AbortMultipartUpload / s3:ListMultipartUploadParts** on the bucket
-   (read-back is used for the post-upload integrity verify and Phase 89's
-   restore path — the server never needs delete).
-2. Run the probe from the backup UI before enabling a task; it reports the
-   exact failure class (`s3ClockSkew`, `s3BadCreds`, `s3NoBucket`, …).
+   s3:DeleteObject / s3:ListBucket / s3:AbortMultipartUpload** on the bucket:
+   - `s3:GetObject` — read-back is used for the post-upload integrity verify
+     and Phase 89's restore path;
+   - `s3:DeleteObject` — the probe writes and deletes a marker object under
+     `gr8r-probe/*` (scope the permission to that prefix if you can — without
+     it every probe ends in the `deleteFailed` warning);
+   - `s3:ListBucket` — the probe's `HeadBucket` check;
+   - `s3:AbortMultipartUpload` — abort on a failed multipart transaction.
+2. Run the probe from the backup UI before enabling a task (there is **no
+   boot probe** — probing happens via the UI probe route and at task
+   save when S3 is enabled); it reports the exact failure class:
+   `success`, `deleteFailed` (warning), `s3ClockSkew`, `s3NoBucket`,
+   `badCreds`, `unreachable`.
 3. **Clock skew matters**: signature v4 rejects >15 min drift. NTP-sync the
    host like any other S3 client.
 
