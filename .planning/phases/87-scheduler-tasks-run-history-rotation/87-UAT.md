@@ -3,7 +3,7 @@ status: testing
 phase: 87-scheduler-tasks-run-history-rotation
 source: [87-VERIFICATION.md]
 started: 2026-11-22T05:05:00Z
-updated: 2026-11-22T05:05:00Z
+updated: 2026-11-22T06:20:00Z
 ---
 
 ## Current Test
@@ -46,3 +46,25 @@ skipped: 0
 blocked: 0
 
 ## Gaps
+
+## UAT findings log (2026-11-22, round 2)
+
+Defects found by the human UAT pass and fixed same-day (commit f80b0cad):
+
+1. **New task → "Something went wrong"** — `settings.js` re-exported
+   `tzPreselect` (`export { tzPreselect } from ...`) without a local import;
+   the form render called an undefined identifier → render boundary. Reproduced
+   headless, fixed with a local binding.
+2. **Run now (instance) does nothing** — action read `S.ui.backupScope` raw and
+   returned on null while the card rendered the instance default via fallback →
+   untouched default select never fired. Guard mirrored from the render.
+3. **Run now (workspace) refused** — preselected single-option select never
+   fired its input handler → id null → scopeNotFound (fixed in bad4bb54).
+4. **Archive names** — workspace/project/task archives now carry a slugified
+   friendly name (`backup-workspace-projects-studio-<ts>.tar.gz`); resolved
+   AFTER claimRun so the D-10 claim race window stays intact (8 failures when
+   placed before the claim — re-run order matters, pinned by the suite).
+5. **Run progress spacing** — proper `panel-h` header (title + stage badge).
+
+Instance and workspace Run-now verified end-to-end in a real browser
+(Playwright against a live server): archives + sidecars produced.
