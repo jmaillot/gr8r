@@ -5963,7 +5963,7 @@ async function handleApi(req, res, url) {
       await emitRestoreRunEvent(event);
       return json(res, 200, { row: event.runId ? await db.get('select * from restore_runs where id = ?', [String(event.runId)]) ?? null : null });
     }
-    return fail(res, 400, 'badRequest', 'Unknown probe action');
+    return fail(res, 404, 'notFound', 'Unknown probe action');
   }
 
   if (pathname === '/api/config' && method === 'GET') {
