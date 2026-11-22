@@ -161,8 +161,11 @@ async function resetWorld() {
 }
 
 /* Connect once at module load — every test's resetWorld() clears rows on
-   the live connection (the restore-preview before() idiom). */
+   the live connection (the restore-preview before() idiom). ensureSearch
+   Index() creates task_fts, which exists from boot in production
+   (server.js boot call) — syncTaskFts writes into it inside the tx. */
 await freshDb();
+await db.ensureSearchIndex();
 
 const backupsCount = () => fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.tar.gz')).length;
 
@@ -207,8 +210,12 @@ test('89-05 snapshot-first ordering (P7/D-89-5): an injection right after the sn
   assert.equal(after.doc, beforeDoc, 'the target doc is untouched');
   assert.equal(after.revision, beforeRevision, 'revision untouched');
   assert.equal((await membershipsOf()).length, 1, 'the target roster is untouched');
-  assert.equal(fs.readdirSync(FILES_DIR).sort().join(','), 'f-old', 'FILES_DIR untouched');
-  assert.equal(fs.readdirSync(LOGOS_DIR).sort().join(','), 'lg-old', 'LOGOS_DIR untouched');
+  /* The fixture legitimately holds BOTH sides' blobs (f1/lg1 are the
+     source archive's blob content runExport collects from); "untouched"
+     means exactly that fixture state — no swapped-in or removed blob. */
+  assert.equal(fs.readdirSync(FILES_DIR).sort().join(','), 'f-old,f1', 'FILES_DIR untouched');
+  assert.equal(fs.readFileSync(path.join(FILES_DIR, 'f1'), 'utf8'), 'source new blob\n', 'f1 content untouched');
+  assert.equal(fs.readdirSync(LOGOS_DIR).sort().join(','), 'lg-old,lg1', 'LOGOS_DIR untouched');
 });
 
 test('89-05 overwrite replaces the data exactly with identity preserved (D-89-6/86-D-01); blobs swapped; removed blobs unlinked post-commit', async () => {
@@ -258,7 +265,7 @@ test('89-05 memberships replace-with-validation: live rows inserted, dead rows s
 
   const roster = await membershipsOf();
   const byUser = Object.fromEntries(roster.map(r => [r.user_id, r]));
-  assert.deepEqual(roster.map(r => r.user_id), [OP.id, LIVE.id], 'dead user never inserted');
+  assert.deepEqual(roster.map(r => r.user_id).sort(), [LIVE.id, OP.id].sort(), 'dead user never inserted');
   assert.equal(byUser[LIVE.id].role, 'member', 'archive role carried');
   assert.equal(byUser[LIVE.id].member_id, 'm_live-mem', 'archive member_id preserved (doc-profile continuity)');
   assert.equal(byUser[LIVE.id].provenance, 'manual', 'archive provenance carried');
@@ -343,9 +350,12 @@ with tarfile.open(${JSON.stringify(crafted)}, "w:gz", format=tarfile.USTAR_FORMA
   assert.equal(result.ok, false);
   assert.match(result.error, /restoreEntryRejected/, `keyed refusal: ${result.error}`);
   assert.equal((await targetRow()).doc, beforeDoc, 'zero DB writes');
-  assert.equal(fs.readdirSync(FILES_DIR).sort().join(','), 'f-old', 'zero blob mutations');
-  /* But the snapshot STILL exists first — the safety net is unconditional. */
-  assert.equal(backupsCount(), 2, 'the pre_restore snapshot was taken even for the refused archive');
+  assert.equal(fs.readdirSync(FILES_DIR).sort().join(','), 'f-old,f1', 'zero blob mutations');
+  /* But the snapshot STILL exists first — the safety net is unconditional.
+     (3 archives: the source export + the crafted fixture, which also lives
+     in BACKUPS_DIR, + the snapshot — the +1 vs the pre-run state proves
+     the snapshot was taken.) */
+  assert.equal(backupsCount(), 3, 'the pre_restore snapshot was taken even for the refused archive');
 });
 
 test('89-05 scope-kind mismatch refuses keyed restoreTargetMismatch (engine-side re-check)', async () => {
