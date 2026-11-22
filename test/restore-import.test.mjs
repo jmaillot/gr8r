@@ -484,4 +484,53 @@ test('89-04: a project archive splices its fragment into a live target workspace
   const runRowProj = await runRow('run-proj');
   assert.equal(runRowProj.status, 'done');
   assert.equal(runRowProj.final_name, 'Target', 'splice records the target name');
+
+  /* skip report for a PROJECT scope too (D-89-7): the instance-wide table
+     dumps ride every 86 archive — the operational rows are reported for
+     any scope, and the splice structurally cannot insert them. */
+  const projSummary = JSON.parse(runRowProj.summary);
+  const projSkipped = Object.fromEntries(projSummary.skipped.map(s => [s.table, s.rows]));
+  assert.equal(projSkipped.users, 2, 'project scope reports the operational users rows');
+  assert.equal(projSkipped.instance_roles, 1, 'project scope reports the operational instance_roles rows');
+  assert.equal(projSkipped.invites, 2, 'project scope reports the never-restored invites');
+  assert.deepEqual(projSummary.memberships, { skipped: 3, inserted: 0 }, 'the source roster rows (incl. the ghost) are reported honestly; a splice inserts no membership');
+  assert.equal((await db.get('select count(*) as n from users')).n, 2, 'NEGATIVE: no users row landed via the splice');
+  assert.equal((await db.get('select count(*) as n from instance_roles')).n, 1, 'NEGATIVE: no instance_roles row landed via the splice');
+  assert.equal((await db.get('select count(*) as n from sessions')).n, 0, 'NEGATIVE: no sessions row landed via the splice');
+  assert.equal((await db.get('select count(*) as n from audit_log')).n, 0, 'NEGATIVE: no audit_log row landed via the splice');
+});
+
+/* ---------- Task 3: skip-report hardening (D-89-7 summary shape) ---------- */
+
+test('89-04 task 3: a mixed archive yields the full summary shape { skipped: [{table,rows}], memberships: {skipped, inserted} } with operational rows counted and never inserted', async () => {
+  const run = await backup.runExport({ kind: 'workspace', id: WS_ID });
+  assert.equal(run.ok, true, `runExport failed: ${run.error}`);
+  const res = await restore.restoreImportAsNew(importOpts(run, 'run-mixed'));
+  assert.equal(res.ok, true, `restore failed: ${res.code ?? ''} ${res.error ?? ''}`);
+
+  /* the FROZEN shape — exactly these top-level keys */
+  assert.deepEqual(
+    Object.keys(res.summary).sort(),
+    ['files', 'memberships', 'skipped', 'teamMembers'],
+    'the summary contract shape is frozen',
+  );
+  /* every skipped entry is { table, rows } with a positive count; the
+     operational family (per the frozen TABLES classification) is complete */
+  for (const s of res.summary.skipped) {
+    assert.deepEqual(Object.keys(s).sort(), ['rows', 'table'], `skipped entry shape: ${JSON.stringify(s)}`);
+    assert.ok(Number.isInteger(s.rows) && s.rows > 0, `positive row count: ${JSON.stringify(s)}`);
+  }
+  const skippedTables = Object.fromEntries(res.summary.skipped.map(s => [s.table, s.rows]));
+  assert.equal(skippedTables.users, 2, 'operational users rows counted (2 live users in the archive)');
+  assert.equal(skippedTables.instance_roles, 1, 'operational instance_roles rows counted');
+  assert.equal(skippedTables.invites, 2, 'invites (live + ghost referencers) counted');
+  assert.deepEqual(res.summary.memberships, { skipped: 3, inserted: 1 }, 'user_id validation folds into the same shape: archive memberships all skip, operator inserted');
+  assert.deepEqual(res.summary.teamMembers, { skipped: 1, inserted: 1 }, 'ghost team_members row skipped + reported, live row inserted');
+
+  /* negative insert sweep — per operational table (D-89-7) */
+  assert.equal((await db.get('select count(*) as n from users')).n, 2, 'no users row inserted');
+  assert.equal((await db.get('select count(*) as n from instance_roles')).n, 1, 'no instance_roles row inserted');
+  assert.equal((await db.get('select count(*) as n from sessions')).n, 0, 'no sessions row inserted');
+  assert.equal((await db.get('select count(*) as n from audit_log')).n, 0, 'no audit_log row inserted');
+  assert.equal((await db.get('select count(*) as n from invites')).n, 2, 'no invites row inserted (the 2 planted rows only)');
 });

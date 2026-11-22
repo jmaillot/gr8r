@@ -630,6 +630,115 @@ function buildNotifMessage(config, msg) {
   };
 }
 
+/* 89-04 (D-89-28): the restore outcome alert — a sibling of
+   buildBackupAlertMessage with the same MIME bones and the same I18N
+   posture: the frame renders through tFor(locale, 'restore.alert.*'), keys
+   land in plan 06 (page.restore email keys ×5 — the 87-03 handoff
+   precedent). tFor returns the KEY for a missing entry, so the fallback
+   detector below renders the English literals until then. escapeHtml/
+   encodeWord applied AFTER interpolation. */
+function buildRestoreAlertMessage(config, msg) {
+  const to = bareAddress(msg.to);
+  if (!addressOk(to)) throw new Error('Restore alert address is invalid');
+
+  const locale = msg.locale === 'fr' ? 'fr' : msg.locale === 'es' ? 'es' : msg.locale === 'de' ? 'de' : msg.locale === 'nl' ? 'nl' : 'en';
+  const runId = text(msg.runId);
+  const errorText = text(msg.error);
+  const finalName = text(msg.finalName);
+  const failed = msg.outcome === 'failed';
+
+  /* tFor hands back the KEY ITSELF when the catalogue lacks the entry (it
+     never throws) — so the EN fallback fires on key-shaped returns, not on
+     exceptions. While the restore.alert.* keys are pending (plan 06 handoff)
+     this renders the English literals below; once plan 06 lands them the
+     catalogue copy takes over automatically, ×5 locales. */
+  const tr = (key, vars) => {
+    const v = tFor(locale, key, vars);
+    return v === key ? null : v;
+  };
+  const subjectKey = failed ? 'restore.alert.failed.subject' : 'restore.alert.done.subject';
+  const bodyKey = failed ? 'restore.alert.failed.body' : 'restore.alert.done.body';
+  const frame = {
+    greeting: tr('notif.email.greeting'),
+    subject: tr(subjectKey, { name: finalName || runId }),
+    sentence: tr(bodyKey, { name: finalName || runId }),
+    footer: tr('notif.email.body.footer'),
+  };
+  if (!frame.greeting || !frame.subject || !frame.sentence || !frame.footer) {
+    /* EN fallback literals — the interim copy until plan 06's locale commit */
+    frame.greeting = 'Hi,';
+    frame.subject = failed ? `Restore failed: ${finalName || runId}` : `Restore completed: ${finalName || runId}`;
+    frame.sentence = failed
+      ? `The restore run${finalName ? ` for "${finalName}"` : ''} failed. Check the restore history for details.`
+      : `The restore run${finalName ? ` for "${finalName}"` : ''} completed — the restored copy is live under its new name.`;
+    frame.footer = 'You receive this message because you are a backup operator of this instance.';
+  }
+
+  const detail = errorText ? `Error: ${errorText}` : null;
+  const detailRun = runId ? `Run: ${runId}` : null;
+  const textBody = [
+    frame.greeting,
+    '',
+    frame.sentence,
+    ...(detailRun ? ['', detailRun] : []),
+    ...(detail ? ['', detail] : []),
+    '',
+    frame.footer,
+  ].join('\r\n');
+
+  const htmlBody = `<!doctype html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#f6f5f2;color:#26241f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f2;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
+        <tr><td>
+          <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(frame.sentence)}</p>
+          ${detailRun ? `<p style="margin:0 0 8px;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(detailRun)}</p>` : ''}
+          ${detail ? `<p style="margin:0 0 14px;font-size:14px;line-height:1.55;color:#8a3b2b"><strong>${escapeHtml(detail)}</strong></p>` : ''}
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(frame.footer)}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const boundary = `projects_${crypto.randomBytes(12).toString('hex')}`;
+  const headers = [
+    `From: ${formatAddress(config.fromName || 'Projects Studio', config.from)}`,
+    `To: <${to}>`,
+    ...(config.replyTo ? [`Reply-To: <${config.replyTo}>`] : []),
+    `Subject: ${encodeWord(frame.subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <${crypto.randomUUID()}@${domainOf(config.from)}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    'Auto-Submitted: auto-generated',
+    'X-Mailer: Projects Studio',
+  ];
+
+  const body = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(textBody),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(htmlBody),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+
+  return {
+    to,
+    data: [...headers, '', body].join('\r\n') + '\r\n',
+  };
+}
+
 /* 87-03 (BKBCK-03/D-14..D-17): the backup failure/recovery alert email —
    a sibling of buildNotifMessage with the same MIME bones (one builder per
    email family; never shoehorn an ops alert into the notif builder).
@@ -1068,7 +1177,7 @@ function buildInviteMessage(config, invite) {
    verifyUnsubscribeToken exported pure — the token contract Phase 42's
    endpoint consumes, frozen by test/unsubscribe-token.test.mjs. Keys are
    arguments; the mailer module itself never touches MASTER_KEY. */
-export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage, buildBackupAlertMessage };
+export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage, buildBackupAlertMessage, buildRestoreAlertMessage };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);
@@ -1141,6 +1250,15 @@ export function createMailer(env = process.env) {
       const session = new SmtpSession(config);
       try {
         await session.send(buildBackupAlertMessage(config, msg));
+      } finally {
+        session.destroy();
+      }
+    },
+    /* 89-04 (D-89-28): restore outcome alert — the sendBackupAlert twin. */
+    async sendRestoreAlert(msg) {
+      const session = new SmtpSession(config);
+      try {
+        await session.send(buildRestoreAlertMessage(config, msg));
       } finally {
         session.destroy();
       }

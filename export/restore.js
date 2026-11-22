@@ -855,11 +855,16 @@ export function planRemap(manifest, archiveRows, liveContext = {}) {
       sourceWs: { id: srcRow.id, name: srcRow.name ?? 'restored', color: srcRow.color ?? '#1D1C1A' },
       data: remapped,
       membershipRows: [],
-      membershipsSkipped: 0,
+      membershipsSkipped: arr(archiveRows?.memberships).filter(r => r?.workspace_id === srcRow.id).length,
       teamMemberRows: [],
       teamMembersSkipped: 0,
-      invitesSkipped: 0,
-      skippedOperational: [],
+      invitesSkipped: arr(archiveRows?.invites).filter(r => r?.workspace_id === srcRow.id).length,
+      /* Same D-89-7 enumeration as workspace scope: operational-classified
+         manifest tables are never inserted for ANY scope — the fragment
+         splice touches only the doc collections. Report-only. */
+      skippedOperational: arr(manifest?.tables)
+        .filter(t => t.classification === 'operational' && t.rows > 0)
+        .map(t => ({ table: t.name, rows: t.rows })),
     };
   }
 

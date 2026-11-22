@@ -7,12 +7,18 @@
    Producers need MAILER.enabled (SMTP_HOST set) to claim; the injected send
    stub records calls so assertions pin the rebuilt email params without SMTP. */
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { startServer, withDb, signup, client } from './helpers/server.mjs';
+import { startServer, withDb, signup, client, login, ADMIN } from './helpers/server.mjs';
 
 const TOKEN = 'email-test-token';
 const NOW = Date.parse('2026-11-15T12:00:00Z');
 const DAY = 86_400_000;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let server;
 let mailerOff; // MAILER-disabled server (no SMTP_HOST) — producer gate + pass no-op
@@ -26,6 +32,7 @@ before(async () => {
     env: {
       EMAIL_TEST_TOKEN: TOKEN,
       REMINDER_TEST_TOKEN: TOKEN,
+      RESTORE_TEST_TOKEN: TOKEN, // 89-04: the writer-seam probe drives duplicate-terminal assertions
       SMTP_HOST: '127.0.0.1',
       SMTP_PORT: '1', // dead port — never contacted; the pass send is injected
       SMTP_REQUIRE_TLS: 'false',
@@ -304,16 +311,14 @@ test('digest: an empty digest claims nothing and writes no outbox row (D-12 guar
    pinned the house way: read the source text and assert the outbox enqueue
    appears at exactly the two D-04 claim sites and NOWHERE in the invites/2FA
    fire-and-forget paths (D-04: invites and 2FA alerts stay direct-send). */
-import fs from 'node:fs';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const serverSource = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
 
-test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest + backup-alert claim sites', () => {
+test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest + backup-alert + restore-alert claim sites', () => {
   const enqueueCalls = serverSource.match(/insert or ignore into email_outbox/g) || [];
-  assert.equal(enqueueCalls.length, 3, 'exactly three claim sites: notif (queueNotifEmails) + digest + backup_alert (87-03 D-17)');
+  assert.equal(enqueueCalls.length, 4, 'exactly four claim sites: notif (queueNotifEmails) + digest + backup_alert (87-03 D-17) + restore_alert (89-04 D-89-28)');
   const enclosing = (src, idx) => {
     const re = /\n(?:async )?function ([A-Za-z_]\w*)/g;
     let last = null;
@@ -324,9 +329,11 @@ test('D-04 boundary: the outbox enqueue exists at exactly the notif + digest + b
   const first = serverSource.indexOf('insert or ignore into email_outbox');
   const second = serverSource.indexOf('insert or ignore into email_outbox', first + 1);
   const third = serverSource.indexOf('insert or ignore into email_outbox', second + 1);
+  const fourth = serverSource.indexOf('insert or ignore into email_outbox', third + 1);
   assert.equal(enclosing(serverSource, first), 'queueNotifEmails', 'claim site 1 lives in queueNotifEmails (notif path)');
   assert.equal(enclosing(serverSource, second), 'runReminderPass', 'claim site 2 lives in the reminder/digest pass');
-  assert.equal(enclosing(serverSource, third), 'handleBackupTaskOutcome', 'claim site 3 lives in the backup outcome transition hook (87-03)');
+  assert.equal(enclosing(serverSource, third), 'handleRestoreRunOutcome', 'claim site 3 lives in the restore outcome transition hook (89-04 D-89-28)');
+  assert.equal(enclosing(serverSource, fourth), 'handleBackupTaskOutcome', 'claim site 4 lives in the backup outcome transition hook (87-03)');
 });
 
 test('D-04 boundary: sendInvite and sendSecurityAlert remain direct fire-and-forget', () => {
@@ -344,7 +351,7 @@ test('D-04 boundary: sendInvite and sendSecurityAlert remain direct fire-and-for
      the producer sites never call MAILER directly anymore. */
   const deliverStart = serverSource.indexOf('async function deliverEmail');
   const deliverEnd = serverSource.indexOf('async function runEmailDeliveryPass');
-  for (const [site, name] of [['MAILER.sendNotif(', 'sendNotif'], ['MAILER.sendDigest(', 'sendDigest']]) {
+  for (const [site, name] of [['MAILER.sendNotif(', 'sendNotif'], ['MAILER.sendDigest(', 'sendDigest'], ['MAILER.sendRestoreAlert(', 'sendRestoreAlert']]) {
     const occurrences = [];
     let at = serverSource.indexOf(site);
     while (at !== -1) {
@@ -357,4 +364,180 @@ test('D-04 boundary: sendInvite and sendSecurityAlert remain direct fire-and-for
   /* The delivery pass and the tick piggyback still exist. */
   assert.ok(serverSource.includes('async function runEmailDeliveryPass'), 'runEmailDeliveryPass exists');
   assert.ok(serverSource.includes('runEmailDeliveryPass().catch(err => logWarn(`email tick'), 'the 30 s tick piggyback is wired');
+});
+
+/* ------------------- 89-04 restore outcome emails (D-89-28) -------------------
+   A REAL restore drives the writer seam end-to-end: done → one restore_alert
+   claim per recipient (Backup Operators + Super Admins, dedup key
+   restore-alert:<runId>:<email>); a replayed terminal event changes zero rows
+   (the `and status = 'running'` compare-in-UPDATE gate) and claims nothing;
+   a failed run claims the failure copy; the injected delivery pass proves the
+   EN fallback copy end-to-end (locale keys land in plan 06 — 87-03 handoff). */
+
+const probeEmit = (event, srv = server) =>
+  fetch(`${srv.base}/api/internal/restore-probe`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-restore-token': TOKEN },
+    body: JSON.stringify({ action: 'emit', event }),
+  }).then(async r => ({ status: r.status, data: await r.json().catch(() => null) }));
+
+const restoreClaims = (runId, srv = server) =>
+  withDb(srv.dbPath, db => db.prepare('select * from email_outbox where dedup_key like ? order by recipient').all(`restore-alert:${runId}:%`));
+
+const waitForBackupDone = async (op, runId) => {
+  for (;;) {
+    const row = withDb(server.dbPath, db => db.prepare('select status from backup_runs where id = ?').get(runId));
+    if (row?.status === 'succeeded' || row?.status === 'failed') return row.status;
+    await sleep(100);
+  }
+};
+
+const waitForRestoreSettled = async (op, runId) => {
+  for (;;) {
+    const row = withDb(server.dbPath, db => db.prepare('select status from restore_runs where id = ?').get(runId));
+    if (row?.status === 'done' || row?.status === 'failed') return row.status;
+    await sleep(100);
+  }
+};
+
+test('89-04 restore outcome: a done import claims one restore_alert per recipient; a replayed terminal event claims nothing more', async () => {
+  const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const ownerId = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('outbox-owner@test.local').id);
+  for (const role of ['restore_operator', 'backup_operator']) {
+    const g = await admin.post('/api/auth/operator/instance-roles', { userId: ownerId, role });
+    assert.equal(g.status, 200, `grant ${role}: ${JSON.stringify(g.data)}`);
+  }
+
+  const backupRes = await owner.post('/api/backup/runs', { scope: { kind: 'workspace', id: ws.id } });
+  assert.equal(backupRes.status, 200, `backup trigger: ${JSON.stringify(backupRes.data)}`);
+  assert.equal(await waitForBackupDone(owner, backupRes.data.runId), 'succeeded');
+
+  const restoreRes = await owner.post('/api/backup/restore', { runId: backupRes.data.runId });
+  assert.equal(restoreRes.status, 200, `restore trigger: ${JSON.stringify(restoreRes.data)}`);
+  const restoreRunId = restoreRes.data.runId;
+  assert.equal(await waitForRestoreSettled(owner, restoreRunId), 'done');
+
+  /* one claim per recipient — Backup Operator (the owner) + Super Admin */
+  const claims = restoreClaims(restoreRunId);
+  assert.equal(claims.length, 2, `exactly one claim per recipient: ${JSON.stringify(claims.map(c => c.recipient))}`);
+  assert.deepEqual(
+    claims.map(c => c.recipient).sort(),
+    ['outbox-owner@test.local', ADMIN.email].sort(),
+    'recipients = Backup Operators ∪ Super Admins',
+  );
+  for (const c of claims) {
+    assert.equal(c.kind, 'restore_alert');
+    assert.equal(c.workspace_id, '', 'instance-scope sentinel workspace_id');
+    const ctx = JSON.parse(c.ctx);
+    assert.equal(ctx.type, 'restore_alert');
+    assert.equal(ctx.outcome, 'done');
+    assert.equal(ctx.runId, restoreRunId);
+    assert.ok(ctx.finalName, 'the finalName rides the ctx for the copy');
+  }
+
+  /* the transition gate: a REPLAYED terminal event (stray finish for a done
+     run) changes zero rows and claims nothing more */
+  const before = withDb(server.dbPath, db => db.prepare('select status, final_name from restore_runs where id = ?').get(restoreRunId));
+  const emitRes = await probeEmit({ kind: 'finish', runId: restoreRunId, finalName: 'Replayed', finishedAt: Date.now() });
+  assert.equal(emitRes.status, 200);
+  await sleep(300); // any (wrongful) post-commit pass would have run by now
+  const row = withDb(server.dbPath, db => db.prepare('select status, final_name from restore_runs where id = ?').get(restoreRunId));
+  assert.deepEqual(row, before, 'the replay changed nothing — the terminal row is untouched');
+  assert.equal(restoreClaims(restoreRunId).length, 2, 'the replayed terminal event multiplied nothing (D-89-28 exactly-once)');
+});
+
+test('89-04 restore outcome: a failed import claims the failure copy; the injected pass delivers the EN fallback end-to-end', async () => {
+  /* craft an archive whose manifest passes but whose second entry carries a
+     traversal name — the run fails at validating (D-89-33) */
+  const dataDir = path.dirname(server.dbPath);
+  const craftDir = path.join(dataDir, 'craft-fail');
+  fs.mkdirSync(craftDir, { recursive: true });
+  fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
+  const crafted = path.join(dataDir, 'backups', 'crafted-fail.tar.gz');
+  execFileSync(
+    'python3',
+    [
+      '-c',
+      `import tarfile, io, json, time
+manifest = json.dumps({"formatVersion": 1, "scope": {"kind": "workspace", "id": "nope"}, "tables": [], "files": [], "createdAt": int(time.time() * 1000)}).encode()
+evil = b"pwned\\n"
+out = ${JSON.stringify(crafted)}
+with tarfile.open(out, "w:gz", format=tarfile.USTAR_FORMAT) as t:
+    ti = tarfile.TarInfo("manifest.json"); ti.size = len(manifest); ti.mtime = 0
+    t.addfile(ti, io.BytesIO(manifest))
+    ti2 = tarfile.TarInfo("../evil.txt"); ti2.size = len(evil); ti2.mtime = 0
+    t.addfile(ti2, io.BytesIO(evil))
+`,
+    ],
+    { cwd: craftDir },
+  );
+  const sha = crypto.createHash('sha256').update(fs.readFileSync(crafted)).digest('hex');
+  const t = Date.now();
+  withDb(server.dbPath, db =>
+    db
+      .prepare('insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, uploaded, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+      .run('run-crafted-fail', null, '{"kind":"workspace","id":"nope"}', 'manual', 'succeeded', t, t, 5, 10, sha, 'crafted-fail.tar.gz', 0, t),
+  );
+
+  const res = await owner.post('/api/backup/restore', { runId: 'run-crafted-fail' });
+  assert.equal(res.status, 200, `restore trigger: ${JSON.stringify(res.data)}`);
+  assert.equal(await waitForRestoreSettled(owner, res.data.runId), 'failed');
+
+  const claims = restoreClaims(res.data.runId);
+  assert.equal(claims.length, 2, 'the failure transition claims per recipient too');
+  for (const c of claims) {
+    const ctx = JSON.parse(c.ctx);
+    assert.equal(ctx.outcome, 'failed');
+    assert.ok(ctx.error.includes('restoreEntryRejected'), 'the keyed class rides into the email ctx verbatim (D-89-33 consumer contract)');
+  }
+
+  /* the injected pass delivers both failure claims with the EN fallback ctx
+     (locale null → base EN at send time until plan 06 lands the keys) —
+     the pass clock is an epoch-ms NUMBER (Number.isFinite contract), set
+     +10 min so the claims' first-attempt backoff (the post-commit kick
+     against the dead SMTP port) is due again */
+  const pass = await trigger({ now: Date.now() + 10 * 60 * 1000, send: {} });
+  assert.equal(pass.status, 200);
+  const restoreCalls = callsOf(pass).filter(c => c.type === 'restore_alert');
+  const failedCalls = restoreCalls.filter(c => c.outcome === 'failed' && c.runId === res.data.runId);
+  assert.equal(failedCalls.length, 2, `both failure claims were delivered by the pass: ${JSON.stringify(restoreCalls.length)}`);
+  for (const call of failedCalls) {
+    assert.ok(call.to, 'the recipient rides the send args');
+    assert.equal(call.locale ?? null, null, 'locale null → base EN at send time');
+    assert.ok(call.error.includes('restoreEntryRejected'));
+  }
+});
+
+test('89-04: the EN fallback copy renders honestly while the restore.alert.* keys are pending (plan 06 handoff)', async () => {
+  const { buildRestoreAlertMessage } = await import('../mailer.js');
+  const config = { from: 'noreply@test.local', fromName: 'Projects Studio' };
+  /* MIME bodies travel base64 — decode the text/plain + text/html segments
+     before asserting on copy */
+  const decoded = msg =>
+    msg.data
+      .split('Content-Transfer-Encoding: base64')
+      .slice(1)
+      .map(section => Buffer.from((section.split(/\r?\n\r?\n/)[1] ?? '').trim(), 'base64').toString('utf8'))
+      .join('\n');
+  for (const [outcome, subjectPrefix] of [
+    ['failed', 'Restore failed:'],
+    ['done', 'Restore completed:'],
+  ]) {
+    const msg = buildRestoreAlertMessage(config, {
+      to: 'op@test.local',
+      outcome,
+      runId: 'run-en-copy',
+      finalName: 'Acme-restored',
+      error: outcome === 'failed' ? 'restoreEntryRejected: restore: entry "../evil.txt" rejected' : '',
+      locale: null,
+    });
+    assert.equal(msg.to, 'op@test.local');
+    assert.ok(msg.data.includes(`Subject: ${subjectPrefix} Acme-restored`), `EN subject for ${outcome}`);
+    assert.ok(msg.data.includes('Auto-Submitted: auto-generated'), 'auto-submitted header discipline');
+    assert.ok(msg.data.includes('Content-Type: multipart/alternative'), 'same MIME bones as the backup alert family');
+    const body = decoded(msg);
+    assert.ok(body.includes('Check the restore history') || body.includes('restored copy is live'), `EN body fallback for ${outcome}`);
+    if (outcome === 'failed') assert.ok(body.includes('restoreEntryRejected'), 'the error rides the copy');
+    assert.ok(body.includes('backup operator of this instance'), 'EN footer fallback');
+  }
 });

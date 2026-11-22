@@ -3372,6 +3372,7 @@ async function deliverEmail(d, atMs, sendFn) {
     (async (kind, a) => {
       if (kind === 'digest') return MAILER.sendDigest(a);
       if (kind === 'backup_alert') return MAILER.sendBackupAlert(a);
+      if (kind === 'restore_alert') return MAILER.sendRestoreAlert(a);
       return MAILER.sendNotif(a);
     });
   try {
@@ -3566,18 +3567,70 @@ const writeRestoreRunRow = async event => {
       [event.stage ?? null, event.snapshotRunId ?? null, event.snapshotTag ?? null, event.summary ?? null, event.finalName ?? null, event.runId],
     );
   } else if (event.kind === 'fail') {
-    await db.run(
-      'update restore_runs set status = ?, stage = ?, error = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ?',
-      ['failed', 'failed', String(event.error ?? '').slice(0, 300), event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId],
+    /* The `and status = 'running'` guard IS the D-89-28 transition gate —
+       the same compare-in-UPDATE atomicity as backup_tasks.last_notified_state
+       (87-03): a duplicate terminal event for a finished run changes zero
+       rows, and the outcome hook below claims nothing. */
+    const res = await db.run(
+      'update restore_runs set status = ?, stage = ?, error = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ? and status = ?',
+      ['failed', 'failed', String(event.error ?? '').slice(0, 300), event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId, 'running'],
     );
+    if (res.changes) await handleRestoreRunOutcome(event.runId, 'failed', { error: String(event.error ?? '').slice(0, 300), finalName: event.finalName ?? null });
   } else if (event.kind === 'finish') {
-    await db.run(
-      'update restore_runs set status = ?, stage = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ?',
-      ['done', 'done', event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId],
+    const res = await db.run(
+      'update restore_runs set status = ?, stage = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ? and status = ?',
+      ['done', 'done', event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId, 'running'],
     );
+    if (res.changes) await handleRestoreRunOutcome(event.runId, 'done', { finalName: event.finalName ?? null });
   }
 };
 setRestoreRunWriter(writeRestoreRunRow);
+
+/* 89-04 outcome emails (D-89-28): a REAL terminal transition (the guarded
+   write above observed changes ≥ 1 — exactly the last_notified_state
+   discipline) enqueues one POL-02 claim row per recipient (Backup Operators
+   + Super Admins, the same union as the backup alert, D-17: no
+   notification-preferences gating). workspace_id sentinel '' (instance-scope
+   rows), dedup_key `restore-alert:<runId>:<email>` — one claim per run per
+   recipient even if a terminal event were somehow replayed. kind
+   'restore_alert'. Enqueue gated on MAILER.enabled (no SMTP → zero claims;
+   the transition was already consumed — honest, matches 87-03). Delivery is
+   post-commit via runEmailDeliveryPass().catch(...) — never awaited into
+   any response. Locale keys defer to plan 06 (page.restore email keys ×5,
+   the 87-03 handoff precedent) — the builder's key-shaped-fallback detector
+   renders the English literals in the meantime. DR (plan 05) deliberately
+   skips this gate — the re-login wall is its notification. */
+async function handleRestoreRunOutcome(runId, outcome, { error = '', finalName = null } = {}) {
+  if (!MAILER.enabled) return;
+  const recipients = await db.all(
+    `select distinct u.email, u.locale from instance_roles ir
+       join users u on u.id = ir.user_id
+      where ir.role = 'backup_operator'
+      union
+      select u.email, u.locale from users u where u.is_instance_admin = 1`,
+  );
+  for (const r of recipients) {
+    const locale = r.locale && r.locale !== 'en' ? r.locale : null; // null → base EN at send time
+    await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
+      uid(),
+      '',
+      `restore-alert:${runId}:${r.email}`,
+      'restore_alert',
+      r.email,
+      JSON.stringify({
+        type: 'restore_alert',
+        to: r.email,
+        outcome, // 'done' | 'failed'
+        runId,
+        finalName: finalName || '',
+        error: error || '',
+        locale,
+      }),
+      now(),
+    ]);
+  }
+  runEmailDeliveryPass().catch(err => logWarn(`restore alert post-commit pass: ${err.message}`));
+}
 
 /* 89-04: the engine-level seam install — export/restore.js's stage events
    (validating → restoring → verifying → done|failed, Task 2 runRestore)
