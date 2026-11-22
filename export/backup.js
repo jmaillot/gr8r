@@ -793,6 +793,16 @@ export async function runExport(scope, meta = {}) {
         if (sideText.split(/\s+/)[0] !== sha256) {
           throw new Error(`s3 upload: sidecar sha256 mismatch for ${key}`);
         }
+        /* D-89-15 (89-03): per-run upload truth — the restore list's honest
+           S3 badge source (Pitfall 6: a column, never a heuristic). Marked
+           ONLY here, after the D-88-8 stream-back verify AND the sidecar
+           comparison both passed; never in a catch path — upload_failed and
+           disabled-S3 runs keep uploaded = 0. The writer seam inserted the
+           row at start; runId IS the backup_runs row id (BKBCK-04), and
+           manual + task runs both flow through this one site. A mark
+           failure routes into upload_failed (below) — the run never lies
+           about a state it failed to record. */
+        await dbRun('update backup_runs set uploaded = 1 where id = ?', [runId]);
       } catch (err) {
         return await uploadFailed(err);
       }

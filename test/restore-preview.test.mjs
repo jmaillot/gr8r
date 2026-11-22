@@ -19,6 +19,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -403,6 +404,160 @@ test('89-03 list: honest dual-location rows newest-first — real local run, del
     assert.equal(failedUp.location, 'missing', 'neither destination → the honest missing badge');
   } finally {
     await server.stop();
+  }
+});
+
+/* =====================================================================
+   89-03 Task 2 — the honest per-run S3 truth pins.
+   (a) boot ensureColumn: a pre-existing post-88 db (widened CHECK, no
+       uploaded column) gains it at boot default 0; a second boot is a
+       no-op with no data loss.
+   (b) the upload-success mark: runExport against an in-process S3 sink —
+       uploaded = 1 ONLY after the D-88-8 stream-back verify AND the
+       sidecar comparison both pass; disabled-S3 and failed-upload runs
+       keep 0 (Pitfall 6 closed: a column, never a heuristic).
+   ===================================================================== */
+
+test('89-03 uploaded: boot ensureColumn adds backup_runs.uploaded to a pre-existing db (default 0); second boot is a no-op', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-uploaded-boot-'));
+  const dbPath = path.join(dataDir, 'projects.db');
+  /* Hand-build the post-88 shape: upload_failed CHECK widened, NO uploaded
+     column, one legacy row — exactly what a pre-89 deployment has on disk. */
+  withDb(dbPath, db => {
+    db.exec(`create table backup_runs (
+      id           text primary key,
+      task_id      text,
+      scope        text not null default '{}',
+      trigger      text not null check (trigger in ('manual','scheduled')),
+      status       text not null check (status in ('running','succeeded','failed','upload_failed','interrupted','skipped_overlap','deleted')),
+      started_at   integer not null,
+      finished_at  integer,
+      duration_ms  integer,
+      size_bytes   integer,
+      sha256       text,
+      filename     text,
+      error        text,
+      created_at   integer not null
+    )`);
+    db.prepare("insert into backup_runs (id, trigger, status, started_at, created_at) values ('legacy-run','manual','succeeded',1,1)").run();
+  });
+  const server = await startServer({ dataDir });
+  try {
+    const cols = withDb(dbPath, db => db.prepare('pragma table_info(backup_runs)').all().map(c => c.name));
+    assert.ok(cols.includes('uploaded'), 'ensureColumn added uploaded at boot');
+    const legacy = withDb(dbPath, db => db.prepare('select uploaded from backup_runs where id = ?').get('legacy-run'));
+    assert.equal(legacy.uploaded, 0, 'the pre-existing row defaults to 0 (no data loss, fail-closed badge)');
+  } finally {
+    await server.stop();
+  }
+  /* Second boot against the SAME database — the additive probe is a no-op. */
+  const server2 = await startServer({ dataDir });
+  try {
+    const again = withDb(dbPath, db => db.prepare('select id, uploaded from backup_runs where id = ?').get('legacy-run'));
+    assert.equal(again.id, 'legacy-run', 'second boot keeps the legacy row intact');
+    assert.equal(again.uploaded, 0, 'second boot does not touch uploaded (no-op)');
+  } finally {
+    await server2.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 and failed uploads keep 0 (Pitfall 6 closed)', async () => {
+  /* Minimal S3-shaped sink (the 88-01 startS3Sink idiom): PUT stores the
+     object, GET serves it. discard mode stores empty bodies so the D-88-8
+     stream-back verify fails deterministically. */
+  let discard = false;
+  const objects = new Map(); // key -> Buffer
+  const sink = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://sink');
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      const body = Buffer.concat(chunks);
+      const keyPath = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+      if (req.method === 'PUT') {
+        objects.set(keyPath, discard ? Buffer.alloc(0) : body);
+        res.writeHead(200).end();
+        return;
+      }
+      if (req.method === 'GET') {
+        const obj = objects.get(keyPath);
+        if (!obj) {
+          res.writeHead(404).end('<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>msg</Message></Error>');
+          return;
+        }
+        res.writeHead(200).end(obj);
+        return;
+      }
+      res.writeHead(400).end();
+    });
+  });
+  await new Promise(resolve => sink.listen(0, '127.0.0.1', resolve));
+  const port = sink.address().port;
+
+  /* Mirror server.js writeBackupRunRow (BKBCK-04): the seam makes runId the
+     backup_runs row id, exactly as production installs it at boot. */
+  backup.setBackupRunWriter(async ev => {
+    if (ev.kind === 'start') {
+      await db.run(
+        'insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values (?,?,?,?,?,?,?)',
+        [ev.runId, ev.taskId ?? null, JSON.stringify({ kind: ev.scope?.kind, id: ev.scope?.id ?? null }), ev.trigger, 'running', ev.startedAt, Date.now()],
+      );
+    } else if (ev.kind === 'complete') {
+      await db.run(
+        'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, size_bytes = ?, sha256 = ?, filename = ? where id = ?',
+        ['succeeded', ev.finishedAt, ev.durationMs, ev.sizeBytes, ev.sha256, ev.filename, ev.runId],
+      );
+    } else if (ev.kind === 'upload_failed') {
+      await db.run(
+        'update backup_runs set status = ?, error = ?, filename = ?, sha256 = ? where id = ?',
+        ['upload_failed', ev.error, ev.filename ?? null, ev.sha256 ?? null, ev.runId],
+      );
+    }
+  });
+  const sinkConfig = () => ({
+    endpoint: `http://127.0.0.1:${port}`,
+    bucket: 'gr8r',
+    accessKeyId: 'test',
+    secretAccessKey: 'test-secret',
+    region: 'us-east-1',
+    pathStyle: true,
+  });
+  const rowFor = runId => db.get('select status, uploaded, filename, sha256 from backup_runs where id = ?', [runId]);
+
+  try {
+    /* 1 — full verify chain passes → uploaded = 1 */
+    backup.setBackupS3Destination(async () => ({ config: sinkConfig() }));
+    const good = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { trigger: 'manual' });
+    assert.equal(good.ok, true, `run 1: ${good.error ?? 'ok'}`);
+    const goodRow = await rowFor(good.runId);
+    assert.equal(goodRow.status, 'succeeded');
+    assert.equal(goodRow.uploaded, 1, 'stream-back + sidecar both verified → the row carries uploaded = 1');
+    assert.ok(objects.get(`backup-manual/${good.filename}`), 'the archive object really landed in the sink');
+    assert.ok(objects.get(`backup-manual/${good.filename}.sha256`), 'the sidecar really landed in the sink');
+
+    /* 2 — S3 disabled (provider null) → uploaded stays 0 */
+    backup.setBackupS3Destination(null);
+    const plain = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { trigger: 'manual' });
+    assert.equal(plain.ok, true, `run 2: ${plain.error ?? 'ok'}`);
+    const plainRow = await rowFor(plain.runId);
+    assert.equal(plainRow.status, 'succeeded');
+    assert.equal(plainRow.uploaded, 0, 'a no-S3 run keeps uploaded = 0 — the badge stays honest');
+
+    /* 3 — stream-back verify fails (discarded bodies) → upload_failed, uploaded stays 0 */
+    discard = true;
+    backup.setBackupS3Destination(async () => ({ config: sinkConfig() }));
+    const bad = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { trigger: 'manual' });
+    assert.equal(bad.ok, false, 'run 3 fails upload verification');
+    assert.equal(bad.code, 'uploadFailed', `run 3 refusal: ${JSON.stringify(bad)}`);
+    const badRow = await rowFor(bad.runId);
+    assert.equal(badRow.status, 'upload_failed');
+    assert.equal(badRow.uploaded, 0, 'a failed upload NEVER carries uploaded = 1 (the mark lives in the success block only)');
+    assert.ok(fs.existsSync(path.join(BACKUPS_DIR, bad.filename)), 'the local archive survives the upload failure (89 D-88-1 posture)');
+  } finally {
+    sink.close();
+    backup.setBackupS3Destination(null);
+    backup.setBackupRunWriter(null);
   }
 });
 
