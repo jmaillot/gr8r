@@ -73,7 +73,7 @@ export async function startServer({ dataDir = null, env = {} } = {}) {
   let ready = false;
   while (!ready && Date.now() < deadline && child.exitCode === null) {
     try {
-      ready = (await fetch(`${base}/api/config`)).ok;
+      ready = (await fetch(`${base}/api/config`, { headers: { connection: 'close' } })).ok;
     } catch {
       ready = false;
     }
@@ -112,6 +112,7 @@ export function client(base, name = 'client') {
     const headers = {};
     if (jar.size) headers.cookie = [...jar.values()].join('; ');
     if (body !== undefined) headers['content-type'] = 'application/json';
+    headers.connection = 'close'; // no keep-alive pool: a killed child server can't RST an idle test-side socket
     const res = await fetch(base + pathname, {
       method,
       headers,

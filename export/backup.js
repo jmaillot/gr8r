@@ -63,6 +63,7 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { DatabaseSync } from 'node:sqlite';
+import { uploadArchive, s3BackupKey, sliceError as s3SliceError, downloadToStaged, getObject } from './s3.js';
 import { backendKind, toPgSql, pgPoolRef, run as dbRun, get as dbGet, all as dbAll } from '../db-adapter.mjs';
 
 /* ---- Paths (same derivation as server.js:126-132) ----
@@ -155,7 +156,7 @@ export function getRunState() {
 }
 
 export function claimRun(scope) {
-  if (currentRun && (currentRun.stage === 'collecting' || currentRun.stage === 'archiving' || currentRun.stage === 'verifying')) {
+  if (currentRun && (currentRun.stage === 'collecting' || currentRun.stage === 'archiving' || currentRun.stage === 'verifying' || currentRun.stage === 'uploading')) {
     return null; // D-10: one export at a time — caller refuses with backupRunInProgress
   }
   const runId = crypto.randomUUID(); // D-18
@@ -594,6 +595,18 @@ let backupRunWriter = null;
 export function setBackupRunWriter(fn) {
   backupRunWriter = typeof fn === 'function' ? fn : null;
 }
+
+/* ---- S3 destination seam (Phase 88, 88-03, D-88-4/6/9) ----
+   server.js installs ONE provider via setBackupS3Destination(); runExport
+   consults it AFTER the local publish. The provider receives the run meta
+   and returns { config } to upload, or null to skip (S3 disabled, or the
+   task's s3_enabled off). export/backup.js stays env/engine agnostic —
+   the boot-frozen S3_* consts and the s3_enabled column read live in
+   server.js (the 88-02 custody). */
+let s3DestinationProvider = null;
+export function setBackupS3Destination(fn) {
+  s3DestinationProvider = typeof fn === 'function' ? fn : null;
+}
 async function emitRunEvent(event) {
   if (!backupRunWriter) return;
   try {
@@ -738,7 +751,53 @@ export async function runExport(scope, meta = {}) {
     fs.renameSync(tarPath, destination);
     fs.renameSync(sidecarStaged, `${destination}.sha256`);
 
-    rmStaging(stagingDir); // D-15: only the verified archive remains
+    rmStaging(stagingDir); // D-15: only the verified archive remains (staging; the published archive is the upload source now)
+
+    /* ---- S3 upload stage (Phase 88, 88-03 — RATIFIED SLOT: after verify/publish).
+       D-88-1: the local archive is already published and immutable. Every
+       failure from here on is upload_failed — NEVER the generic catch below
+       (that would rmStaging/failRun a run whose local archive exists and lie
+       about it). The local archive and its history row survive untouched. ---- */
+    const s3Dest = s3DestinationProvider ? await s3DestinationProvider(runMeta) : null;
+    if (s3Dest?.config) {
+      const uploadFailed = async err => {
+        const msg = s3SliceError(err); // V14/T-88-10: sliced, no headers, no secrets
+        currentRun = { ...currentRun, stage: 'upload_failed', error: msg, finishedAt: Date.now() };
+        await emitRunEvent({
+          kind: 'upload_failed', runId, ...runMeta, filename, sha256, sizeBytes: size,
+          error: msg, startedAt: startedAtMs, finishedAt: currentRun.finishedAt,
+          durationMs: currentRun.finishedAt - startedAtMs,
+        });
+        return { ok: false, runId, code: 'uploadFailed', filename, sha256, sizeBytes: size, error: msg };
+      };
+      /* Cancellation at the upload boundary routes into upload_failed too —
+         the local archive EXISTS, so the generic cancelled-run path would
+         misrepresent the outcome. */
+      if (currentRun.cancelled) {
+        return await uploadFailed(new Error('backup: cancelled before S3 upload — server shutdown'));
+      }
+      setStage('uploading'); // mirrors setStage('archiving') — the D-19 payload picks the stage up verbatim
+      const key = s3BackupKey(runMeta, filename); // D-88-6 task prefix / D-88-9 backup-manual/
+      try {
+        await uploadArchive(s3Dest.config, destination, key, sha256, (partsDone, partsTotal) => {
+          currentRun = { ...currentRun, partsDone, partsTotal };
+          emitRunEvent({ kind: 'progress', runId, stage: 'uploading', partsDone, partsTotal }); // writer errors swallowed by the seam
+        });
+        /* D-88-8 verification: stream the object BACK and compare against
+           the stored whole-archive sha256 — the ETag is never trusted
+           (Pitfall 4). The sidecar must exist AND carry the same hash. */
+        const back = await downloadToStaged(s3Dest.config, key, sha256, dirs.tmpDir);
+        fs.rmSync(back.tmpPath, { force: true });
+        const sideRes = await getObject(s3Dest.config, `${key}.sha256`);
+        const sideText = (await sideRes.body()).toString('utf8');
+        if (sideText.split(/\s+/)[0] !== sha256) {
+          throw new Error(`s3 upload: sidecar sha256 mismatch for ${key}`);
+        }
+      } catch (err) {
+        return await uploadFailed(err);
+      }
+    }
+
     completeRun(filename, sha256);
     await emitRunEvent({
       kind: 'complete', runId, ...runMeta, filename, sha256, sizeBytes: size,

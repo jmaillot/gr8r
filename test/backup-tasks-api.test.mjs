@@ -26,6 +26,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
 import { nextRunAt } from '../export/cron.js';
+import net from 'node:net';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOCALES = ['en', 'fr', 'es', 'de', 'nl'];
@@ -46,6 +47,19 @@ async function makeBackupOp(server, email) {
 }
 
 const taskRow = (srv, id) => withDb(srv.dbPath, db => db.prepare('select * from backup_tasks where id = ?').get(id));
+
+/* 88-03 helpers (declared up top so hoisting order is stable). */
+const S3_RIDE_TOKEN = 'tasks-api-s3-ride-token';
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const schedulerPass = (srv, nowMs) =>
+  fetch(`${srv.base}/api/internal/backup-scheduler-pass`, {
+    method: 'POST',
+    headers: { 'x-backup-token': S3_RIDE_TOKEN, 'content-type': 'application/json', connection: 'close' },
+    body: JSON.stringify({ now: new Date(nowMs).toISOString() }),
+  }).then(async r => {
+    assert.equal(r.status, 200, `scheduler pass: ${r.status}`);
+    return r.json();
+  });
 
 /* ---------- tracer slice: create → stored cron → next_run_at → list ---------- */
 
@@ -603,6 +617,175 @@ test('5-locale parity: every 88-02 S3 key exists in all five catalogues', () => 
     const cat = readLocale(loc);
     for (const key of keys) {
       assert.ok(typeof cat[key] === 'string' && cat[key].length > 0, `${loc}.${key}`);
+    }
+  }
+});
+
+/* =====================================================================
+   88-03: upload_failed rides the D-15/D-17 transition-email gate (D-88-3).
+   A real spawned server with the S3_* env pair pointed at a failing sink:
+   fire 1 → upload_failed row + failure email; fire 2 (sink heals) →
+   succeeded + recovery email. handleBackupTaskOutcome itself is UNTOUCHED
+   — this pins the ride end-to-end. ---- */
+
+function startS3RideSink() {
+  const state = { objects: new Map(), fail: true };
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://sink');
+    req.socket.on('error', () => {}); // RST when the child dies at teardown must not crash the test process
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      if (req.method === 'POST' && url.searchParams.has('uploads')) return res.writeHead(200).end('<InitiateMultipartUploadResult><UploadId>u1</UploadId></InitiateMultipartUploadResult>');
+      if (req.method === 'POST' && url.searchParams.has('uploadId')) return res.writeHead(200).end('<CompleteMultipartUploadResult></CompleteMultipartUploadResult>');
+      if (req.method === 'PUT' && url.searchParams.has('uploadId')) return res.writeHead(200, { etag: '"p"' }).end();
+      if (req.method === 'PUT') {
+        if (state.fail) return res.writeHead(503, { 'content-type': 'application/xml' }).end('<?xml version="1.0"?><Error><Code>ServiceUnavailable</Code></Error>');
+        state.objects.set(decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, '')), Buffer.concat(chunks));
+        return res.writeHead(200).end();
+      }
+      if (req.method === 'GET') {
+        const key = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+        const obj = state.objects.get(key) || (state.fail ? null : Buffer.from('unverified-stub'));
+        if (!obj) return res.writeHead(404).end();
+        return res.writeHead(200).end(obj);
+      }
+      res.writeHead(400).end();
+    });
+  });
+  return new Promise(resolve => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, state }));
+  });
+}
+
+/* Minimal SMTP catcher — every delivery is recorded as raw DATA text.
+   Assertions ride SMTP delivery (not outbox rows) because the delivery
+   pass runs inside the child server's DB universe, immune to the
+   withDb/live-server WAL divergence documented below. */
+function startSmtpCatcher() {
+  const msgs = [];
+  const state = { next: null };
+  const server = net.createServer(socket => {
+    socket.on('error', () => {}); // child-side RST at teardown is teardown noise
+    let phase = 'cmd';
+    let data = '';
+    socket.on('data', chunk => {
+      data += chunk.toString('utf8');
+      for (;;) {
+        if (phase === 'cmd') {
+          const nl = data.indexOf('\r\n');
+          if (nl < 0) return;
+          const line = data.slice(0, nl);
+          data = data.slice(nl + 2);
+          if (/^DATA$/i.test(line)) { phase = 'data'; socket.write('354 go\r\n'); }
+          else if (/^QUIT/i.test(line)) { socket.write('221 bye\r\n'); socket.end(); return; }
+          else socket.write('250 ok\r\n');
+        } else {
+          const end = data.indexOf('\r\n.\r\n');
+          if (end < 0) return;
+          msgs.push(data.slice(0, end).replaceAll('\r\n..', '\r\n.'));
+          data = data.slice(end + 5);
+          phase = 'cmd';
+          socket.write('250 queued\r\n');
+        }
+      }
+    });
+    socket.write('220 catcher\r\n');
+  });
+  return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, msgs, state })));
+}
+async function waitForSmtp(msgs, count, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (msgs.length < count) {
+    if (Date.now() > deadline) throw new Error(`smtp catcher got ${msgs.length}/${count} messages`);
+    await sleep(100);
+  }
+  return msgs;
+}
+
+const S3_RIDE_ENV = (s3Port, smtpPort) => ({
+  BACKUP_TEST_TOKEN: S3_RIDE_TOKEN,
+  S3_ENDPOINT: `http://127.0.0.1:${s3Port}`,
+  S3_BUCKET: 'gr8r',
+  S3_ACCESS_KEY_ID: 'gr8rtest',
+  S3_SECRET_KEY: 'gr8rtest-secret',
+  SMTP_HOST: '127.0.0.1',
+  SMTP_PORT: String(smtpPort), // SMTP catcher — delivery itself is the D-17/D-88-3 assertion
+  SMTP_REQUIRE_TLS: 'false',
+  MAIL_FROM: 'noreply@test.local',
+  APP_URL: 'http://127.0.0.1:1',
+});
+
+/* Run-status polling goes through the API (the CHILD's authoritative view).
+   Direct withDb reads against a live WAL server diverge: the test-side
+   connection's close deletes the server's -wal (SQLite's last-connection
+   heuristic is per-file-lock, and the server's idle connection holds none),
+   so the server's post-close commits land in an orphaned -wal until the
+   next run's snapshot fence (wal_checkpoint truncate) flushes them back.
+   The API view never diverges. */
+async function waitApiRun(op, taskId, status, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const res = await op.get(`/api/backup/runs?taskId=${taskId}`);
+    assert.equal(res.status, 200, `runs api: ${res.status}`);
+    const row = res.data.runs.find(r => r.status === status);
+    if (row) return row;
+    if (Date.now() > deadline) throw new Error(`no ${status} run appeared (statuses: ${res.data.runs.map(r => r.status).join(',')})`);
+    await sleep(100);
+  }
+}
+/* Force the task due via direct write, then fire exactly one sweep pass. */
+const fireNow = (srv, taskId) => {
+  const nowMs = Date.now();
+  withDb(srv.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(nowMs - 60_000, taskId));
+  return schedulerPass(srv, nowMs);
+};
+
+test('88-03: upload_failed enters as a FAILED outcome (failure email), later success recovers (recovery email) — D-88-3', async () => {
+  const sink = await startS3RideSink();
+  const smtp = await startSmtpCatcher();
+  const server = await startServer({ env: { ...S3_RIDE_ENV(sink.port, smtp.port) } });
+  try {
+    const op = await makeBackupOp(server, 'op-s3ride@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'S3 ride', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
+    assert.equal(created.status, 200, `create: ${JSON.stringify(created.data)}`);
+    const taskId = created.data.task.id;
+    assert.equal(taskRow(server, taskId).s3_enabled, 1, 'task opted into S3');
+
+    // FIRE 1 — sink 503s every object PUT → local publish ok, upload fails
+    await fireNow(server, taskId);
+    const failedRow = await waitApiRun(op, taskId, 'upload_failed');
+    assert.ok(failedRow.filename, 'upload_failed row carries the local filename (archive kept)');
+    assert.ok(failedRow.sha256, 'upload_failed row carries the archive hash');
+    assert.ok(failedRow.error && failedRow.error.length <= 300, 'sliced upload error in the row');
+
+    // FIRE 2 — sink heals → succeeded; recovery transition
+    sink.state.fail = false;
+    await fireNow(server, taskId);
+    const okRow = await waitApiRun(op, taskId, 'succeeded');
+
+    /* FIRE 3+ — none: the email gate is asserted via SMTP DELIVERY (immune
+       to the withDb/live-server WAL divergence — the delivery pass runs in
+       the child server's universe). The D-88-3 ride: failure email on
+       entering upload_failed, recovery email on the later success. */
+    const deliveries = await waitForSmtp(smtp.msgs, 4, 30_000); // one failure + one recovery email per recipient (2 recipients)
+    const subjects = deliveries.map(d => {
+      const m = d.match(/^Subject: (.*)$/m);
+      return m ? m[1] : '';
+    });
+    assert.ok(subjects.some(s => s.startsWith('Backup failed:')), `failure email delivered (got: ${JSON.stringify(subjects)})`);
+    assert.ok(subjects.some(s => s.startsWith('Backup recovered:')), `recovery email delivered (got: ${JSON.stringify(subjects)})`);
+    assert.ok(deliveries.some(d => d.includes('S3 ride')), 'alert names the task');
+    // the uploaded object exists in the sink and its sidecar matches the row hash
+    const keys = [...sink.state.objects.keys()];
+    const objKey = keys.find(k => k.startsWith(`backup-task-${taskId}/`) && !k.endsWith('.sha256'));
+    assert.ok(objKey, 'task-run object uploaded under the D-88-6 prefix');
+    assert.ok(sink.state.objects.get(`${objKey}.sha256`).toString('utf8').startsWith(okRow.sha256), 'sidecar hash matches the run row (D-88-8)');
+  } finally {
+    await server.stop();
+    for (const s of [sink.server, smtp.server]) {
+      s.closeAllConnections?.();
+      await new Promise(res => s.close(res));
     }
   }
 });

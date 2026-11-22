@@ -83,7 +83,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, backupsRoot } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import { probeS3 } from './export/s3.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
@@ -3442,6 +3442,19 @@ const writeBackupRunRow = async event => {
       await runBackupRotationPass({ taskId: event.taskId });
       await handleBackupTaskOutcome(event.taskId, event.runId, 'ok', '');
     }
+  } else if (event.kind === 'upload_failed') {
+    /* Phase 88 (88-03, D-88-1/2/3): a failed S3 upload is a DISTINCT terminal
+       state — the local archive was published first and is KEPT, so the row
+       carries filename/sha256/size like a success. The email gate rides it
+       as a FAILED outcome (failure email on entry, recovery on later
+       success, D-88-3) — handleBackupTaskOutcome needs no change. */
+    await db.run(
+      'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, size_bytes = ?, sha256 = ?, filename = ?, error = ? where id = ?',
+      ['upload_failed', event.finishedAt, event.durationMs, event.sizeBytes ?? null, event.sha256 ?? null, event.filename ?? null, event.error, event.runId],
+    );
+    if (event.taskId) {
+      await handleBackupTaskOutcome(event.taskId, event.runId, 'failed', event.error);
+    }
   } else if (event.kind === 'fail') {
     await db.run(
       'update backup_runs set status = ?, finished_at = ?, duration_ms = ?, error = ? where id = ?',
@@ -3455,6 +3468,29 @@ const writeBackupRunRow = async event => {
   }
 };
 setBackupRunWriter(writeBackupRunRow);
+
+/* Phase 88 (88-03, D-88-4/6/9): the S3 upload decision — installed as a
+   destination provider so export/backup.js stays env/engine agnostic
+   (the boot-frozen S3_* consts and the s3_enabled column read live HERE,
+   the 88-02 custody). Task runs upload only when the task opted in
+   (s3_enabled = 1, D-88-6); manual Run-now archives (task_id NULL) upload
+   whenever S3 is configured (D-88-4) under the backup-manual/ prefix
+   (D-88-9). A task-row lookup error fails CLOSED (upload skipped, warned)
+   — an S3 upload is never attempted on a broken read. Rotation stays
+   local-only either way (D-88-7/D-11). */
+setBackupS3Destination(async meta => {
+  if (!S3.enabled) return null;
+  if (meta?.taskId) {
+    try {
+      const task = await db.get('select s3_enabled from backup_tasks where id = ?', [meta.taskId]);
+      if (!task || task.s3_enabled !== 1) return null;
+    } catch (err) {
+      logWarn(`backup s3: task ${meta.taskId} lookup failed — upload skipped: ${err?.message || err}`);
+      return null;
+    }
+  }
+  return { config: S3.config() };
+});
 
 export async function runBackupSchedulerPass({ now: at } = {}) {
   const nowMs = at instanceof Date ? at.getTime() : Number(at ?? Date.now());
@@ -8691,7 +8727,7 @@ async function handleApi(req, res, url) {
        its first await (Pitfall 5), so the check→claim segment is atomic on the
        single-process model and a simultaneous trigger is refused, never doubled. */
     const active = getRunState();
-    if (active && (active.stage === 'collecting' || active.stage === 'archiving' || active.stage === 'verifying')) {
+    if (active && (active.stage === 'collecting' || active.stage === 'archiving' || active.stage === 'verifying' || active.stage === 'uploading')) {
       await db.run(
         'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
         [uid(), user.id, user.id, 'backup_run_refused:backupRunInProgress', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
@@ -8737,6 +8773,12 @@ async function handleApi(req, res, url) {
       stage: rs.stage,
       startedAt: new Date(rs.startedAt).toISOString(),
     };
+    if (rs.stage === 'uploading') {
+      /* D-88-5: parts progress rides the D-19 payload verbatim — the client
+         renders it render-only, never derives it. */
+      payload.partsDone = Number.isInteger(rs.partsDone) ? rs.partsDone : 0;
+      payload.partsTotal = Number.isInteger(rs.partsTotal) ? rs.partsTotal : null;
+    }
     if (rs.stage === 'done') {
       payload.filename = rs.filename;
       payload.sha256 = rs.sha256;

@@ -324,3 +324,137 @@ test('sweepStaleBackupStaging removes staging orphans (current + legacy homes)',
   assert.ok(fs.existsSync(untouched), 'non-backup tmp entries untouched');
   fs.rmSync(untouched, { recursive: true, force: true });
 });
+
+/* =====================================================================
+   88-03: S3 upload stage in runExport — local-first lifecycle pins.
+   In-process sink (the 88-01 idiom) + the injected S3 destination seam
+   (server.js installs the real one; tests inject this one). ---- */
+import http from 'node:http';
+import { setBackupS3Destination, setBackupRunWriter } from '../export/backup.js';
+
+const S3_XML = code => `<?xml version="1.0"?><Error><Code>${code}</Code><Message>msg</Message></Error>`;
+
+/* Minimal object-store sink: PUT objects (+ sidecar), GET for the D-88-8
+   stream-back verify, POST uploads/uploadId for multipart. failPuts makes
+   every object PUT 503 (upload_failure case). */
+function startS3Sink({ failPuts = false } = {}) {
+  const state = { objects: new Map(), puts: [] };
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://sink');
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      const key = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+      if (req.method === 'POST' && url.searchParams.has('uploads')) {
+        return res.writeHead(200).end('<InitiateMultipartUploadResult><UploadId>u1</UploadId></InitiateMultipartUploadResult>');
+      }
+      if (req.method === 'POST' && url.searchParams.has('uploadId')) return res.writeHead(200).end('<CompleteMultipartUploadResult></CompleteMultipartUploadResult>');
+      if (req.method === 'PUT' && url.searchParams.has('uploadId')) return res.writeHead(200, { etag: '"p"' }).end();
+      if (req.method === 'PUT') {
+        state.puts.push(key);
+        if (failPuts) return res.writeHead(503, { 'content-type': 'application/xml' }).end(S3_XML('ServiceUnavailable'));
+        state.objects.set(key, Buffer.concat(chunks));
+        return res.writeHead(200).end();
+      }
+      if (req.method === 'GET') {
+        const obj = state.objects.get(key);
+        if (!obj) return res.writeHead(404).end(S3_XML('NoSuchKey'));
+        return res.writeHead(200).end(obj);
+      }
+      res.writeHead(400).end();
+    });
+  });
+  return new Promise(resolve => {
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port, state }));
+  });
+}
+
+const sinkConfig = port => ({
+  endpoint: `http://127.0.0.1:${port}`,
+  bucket: 'gr8r',
+  accessKeyId: 't',
+  secretAccessKey: 't',
+  region: 'us-east-1',
+  pathStyle: true,
+});
+
+/* Writer capture: records every emitted event in order. */
+function captureWriter() {
+  const events = [];
+  setBackupRunWriter(async event => events.push(event));
+  return events;
+}
+
+test('88-03: S3-enabled run — local publish FIRST, then uploading stage with parts progress, stream-back verify, succeeded', async () => {
+  const { server, port, state } = await startS3Sink();
+  const events = captureWriter();
+  setBackupS3Destination(meta => (meta?.taskId === 't-s3' ? { config: sinkConfig(port) } : null));
+  try {
+    const run = await backup.runExport({ kind: 'project', id: 'p1' }, { taskId: 't-s3', trigger: 'scheduled' });
+    assert.equal(run.ok, true, `runExport: ${run.error}`);
+    assert.equal(backup.getRunState().stage, 'done');
+    // D-88-1: the local archive is published and intact
+    const tarPath = path.join(BACKUPS_DIR, run.filename);
+    assert.ok(fs.existsSync(tarPath), 'local archive kept');
+    assert.equal(sha256Hex(tarPath), run.sha256);
+    // D-88-6 key routing: task run → backup-task-<id>/
+    const keys = [...state.objects.keys()];
+    const objKey = keys.find(k => !k.endsWith('.sha256'));
+    assert.match(objKey, /^backup-task-t-s3\//, 'task run uploads under its task prefix');
+    assert.ok(objKey.endsWith(run.filename), 'the object key carries the archive filename');
+    // the uploaded bytes ARE the published archive (streamed, byte-identical)
+    assert.equal(state.objects.get(objKey).toString('hex'), fs.readFileSync(tarPath).toString('hex'));
+    // D-88-8 sidecar present and honest
+    const sidecar = state.objects.get(`${objKey}.sha256`);
+    assert.ok(sidecar, 'sidecar object present');
+    assert.equal(sidecar.toString('utf8').split(/\s+/)[0], run.sha256);
+    // writer events: progress (uploading stage + parts) then complete — never fail
+    const progress = events.filter(e => e.kind === 'progress');
+    assert.ok(progress.length >= 1, 'uploading progress emitted');
+    assert.equal(progress[0].stage, 'uploading');
+    assert.equal(progress[0].partsDone, 1);
+    assert.equal(progress[0].partsTotal, 1);
+    assert.ok(events.some(e => e.kind === 'complete' && e.filename === run.filename), 'complete still emitted after upload');
+  } finally {
+    setBackupS3Destination(null);
+    setBackupRunWriter(null);
+    server.close();
+  }
+});
+
+test('88-03: S3 failure after publish — upload_failed row shape, local archive KEPT, error sliced with no secrets', async () => {
+  const { server, port } = await startS3Sink({ failPuts: true });
+  const events = captureWriter();
+  setBackupS3Destination(() => ({ config: sinkConfig(port) }));
+  try {
+    const run = await backup.runExport({ kind: 'project', id: 'p1' }, { trigger: 'manual' });
+    assert.equal(run.ok, false);
+    assert.equal(run.code, 'uploadFailed');
+    assert.ok(run.error.length <= 300);
+    assert.ok(!/authorization/i.test(run.error), 'no Authorization/secret substrings (T-88-10)');
+    assert.equal(backup.getRunState().stage, 'upload_failed');
+    // D-88-1/2: the local archive and its sidecar are INTACT — never rmStaging'd/failRun'd
+    const tarPath = path.join(BACKUPS_DIR, run.filename);
+    assert.ok(fs.existsSync(tarPath), 'local archive kept on upload failure');
+    assert.ok(fs.existsSync(`${tarPath}.sha256`), 'local sidecar kept');
+    assert.equal(sha256Hex(tarPath), run.sha256);
+    // writer event: upload_failed carries filename/sha256/size (row shows the local archive)
+    const upFail = events.find(e => e.kind === 'upload_failed');
+    assert.ok(upFail, 'upload_failed emitted through the writer seam');
+    assert.equal(upFail.filename, run.filename);
+    assert.equal(upFail.sha256, run.sha256);
+    assert.ok(upFail.error.length <= 300);
+    assert.ok(!events.some(e => e.kind === 'complete'), 'no complete event');
+    // D-88-9: manual run → backup-manual/ prefix (key attempted)
+  } finally {
+    setBackupS3Destination(null);
+    setBackupRunWriter(null);
+    server.close();
+  }
+});
+
+test('88-03: no S3 destination installed — run completes without any upload attempt (regression)', async () => {
+  const run = await backup.runExport({ kind: 'project', id: 'p1' });
+  assert.equal(run.ok, true);
+  assert.equal(backup.getRunState().stage, 'done');
+});
