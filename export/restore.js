@@ -71,6 +71,7 @@ import { Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
 import { backupsRoot, TABLES } from './backup.js';
+import { downloadToStaged, s3BackupKey } from './s3.js';
 
 const BLOCK = 512;
 const MAX_USTAR_SIZE = 0o77777777777; // 8 GiB - 1 — the writer's own ceiling (ustarHeader)
@@ -552,6 +553,9 @@ import { get as dbGet, all as dbAll, tx as dbTx, syncTaskFts } from '../db-adapt
 
 const arr = v => (Array.isArray(v) ? v : []);
 const memberBase = userId => `m_${String(userId).slice(0, 8)}`;
+/* restore.js keeps zero logging deps — a one-line stderr warn for the two
+   belt-and-braces paths (lock-release failure, emitter trouble). */
+const logRestoreWarn = msg => console.warn(`[restore] ${msg}`);
 
 /* Writer seam — the restore.js twin of backup.js setBackupRunWriter.
    server.js installs ONE emitter at boot; every engine-level stage event
@@ -1195,6 +1199,81 @@ export async function restoreImportAsNew(opts = {}) {
   await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName, finishedAt: Date.now() });
   fs.rmSync(stagingDir, { recursive: true, force: true }); // success sweep — staging is spent
   return { ok: true, runId, workspaceId: wsId, finalName, slug, summary };
+}
+
+/* ---- Task 89-04 Task 2: the runRestore pipeline (D-89-29 stages) ----
+   The trigger route's fire-and-forget body: fetching (local archive
+   in place → use it; else uploaded=1 → the 88-01 downloadToStaged seam
+   into restore-staging, D-89-16) → delegating to restoreImportAsNew,
+   which walks validating → restoring → verifying → done|failed through
+   the writer seam with every keyed refusal class persisted verbatim
+   (D-89-33). The pipeline's finally ALWAYS releases the restore lock
+   (D-89-3) and unlinks a downloaded staged archive (best-effort) — a
+   failed unit leaves zero debris. resolve-by-design like its units:
+   returns { ok, ... } and never throws (unexpected throws are folded
+   into the failed run row through the emitter before returning). ---- */
+export async function runRestore(opts = {}) {
+  const runId = typeof opts.runId === 'string' ? opts.runId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) : crypto.randomUUID();
+  const backupRun = opts.backupRun && typeof opts.backupRun === 'object' ? opts.backupRun : {};
+  const releaseLock = typeof opts.releaseLock === 'function' ? opts.releaseLock : null;
+  let stagedTmp = null;
+  try {
+    await emitRestoreEvent({ kind: 'update', runId, stage: 'fetching' });
+
+    /* fetching: local archive in place → use it; else the uploaded copy
+       comes home through the 88-01 seam into restore-staging (same-fs
+       with the archives — D-89-16), digest-verified by downloadToStaged. */
+    let archivePath = opts.archivePath ?? null;
+    const localPath = backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null;
+    if (!archivePath && localPath && fs.existsSync(localPath)) archivePath = localPath;
+    if (!archivePath && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object') {
+      const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    }
+    if (!archivePath || !fs.existsSync(archivePath)) {
+      throw keyed('restoreArchiveMissing', 'restore: archive not found at either destination');
+    }
+
+    const result = await restoreImportAsNew({
+      runId,
+      archivePath,
+      expectedSha256: backupRun.sha256,
+      scope: opts.scope ?? null,
+      operatorId: opts.operatorId ?? null,
+      trigger: opts.trigger ?? 'import_new',
+      startedAt: opts.startedAt,
+      targetWorkspaceId: opts.targetWorkspaceId ?? null,
+      uniqueSlug: typeof opts.uniqueSlug === 'function' ? opts.uniqueSlug : null,
+    });
+    return result;
+  } catch (err) {
+    /* the pipeline itself threw (fetching trouble): fold into the run row
+       through the emitter — the failed state is the contract, never a
+       dangling running row (D-89-3). */
+    await emitRestoreEvent({
+      kind: 'fail',
+      runId,
+      error: (typeof err?.code === 'string' ? `${err.code}: ` : '') + (err?.message ?? String(err)),
+      finishedAt: Date.now(),
+    });
+    return { ok: false, runId, code: typeof err?.code === 'string' ? err.code : 'restoreFailed', error: err?.message ?? String(err) };
+  } finally {
+    if (stagedTmp) {
+      try {
+        fs.unlinkSync(stagedTmp);
+      } catch {
+        /* best-effort — the sweep collects leftovers */
+      }
+    }
+    if (releaseLock) {
+      try {
+        await releaseLock();
+      } catch (err) {
+        logRestoreWarn(`restore run ${runId}: lock release failed: ${err?.message ?? err}`);
+      }
+    }
+  }
 }
 
 /* Seek-extract ONLY manifest-declared entries into destDir (the caller

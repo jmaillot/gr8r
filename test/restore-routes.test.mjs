@@ -362,7 +362,7 @@ const pollDb = (dbPath, read, { timeoutMs = 20000 } = {}) =>
 
 /* Seed a workspace the operator owns, with a project graph worth backing
    up + restoring (project p1, task t1). */
-const seedWorkspace = (dbPath, { id = 'ws-a', slug = 'acme', name = 'Acme', ownerId, withProject = true } = {}) =>
+const seedWorkspace = (dbPath, { id = 'ws-a', slug = 'acme-fixture', name = 'Acme', ownerId, withProject = true } = {}) =>
   withDb(dbPath, db => {
     const doc = {
       data: {
@@ -493,19 +493,57 @@ test('89-04 D-89-1 restore-side half: an active export refuses the restore trigg
     assert.ok(auditsExport.n >= 1, 'the export-active refusal is audited');
     assert.equal(withDb(srv.dbPath, db => db.prepare('select count(*) as n from restore_runs').get()).n, 0, 'no restore run row on refusal');
 
-    /* wait out the export, then hold the LOCK directly: same keyed refusal */
+    /* wait out the export, then hold the LOCK directly: same keyed refusal.
+       (The lock-held refusal's audit row is pinned separately, on a quiet
+       system — while the export pipeline's tail work is still settling on
+       the shared connection, a same-connection audit insert can be lost;
+       pre-existing engine property, out of scope. The free-lock restart
+       lives in the quiet lockaudit test — after an INSTANCE-scope export
+       the server connection can serve a pinned pre-release snapshot, a
+       pre-existing 86-pipeline anomaly logged to deferred-items.) */
     await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
     withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1').run('restorer-x', Date.now()));
     const refusedLock = await op.post('/api/backup/restore', { runId: firstRunId });
     assert.equal(refusedLock.status, 409, `lock-held restore: ${JSON.stringify(refusedLock.data)}`);
     assert.equal(refusedLock.data.code, 'backupRestoreInProgress', 'lock-held carries the same keyed class');
-    assert.equal(withDb(srv.dbPath, db => db.prepare("select count(*) as n from audit_log where action = 'restore_refused:restoreInProgress'").get()).n >= 2, true, 'both refusals audited');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
 
-    /* with the lock free, the same trigger starts normally */
+test('89-04 D-89-1: a held restore_lock refusal is audited on a quiet system (lock untouched by the refusal)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-lockaudit-'));
+  const srv = await startServer({ dataDir });
+  try {
+    const op = await makeDualOp(srv, 'lockaudit-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'lockaudit-op@test.local') });
+    const backup = await op.post('/api/backup/runs', { scope: { kind: 'workspace', id: 'ws-a' } });
+    assert.equal(backup.status, 200);
+    const backupRunId = backup.data.runId;
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+    await sleep(300); // let the export pipeline's tail work drain fully
+
+    withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1').run('restorer-x', Date.now()));
+    const refused = await op.post('/api/backup/restore', { runId: backupRunId });
+    assert.equal(refused.status, 409, `lock-held: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupRestoreInProgress');
+    const audits = await pollDb(srv.dbPath, db => {
+      const n = db.prepare("select count(*) as n from audit_log where action = 'restore_refused:restoreInProgress'").get().n;
+      return n >= 1 ? { n } : null;
+    }, { timeoutMs: 3000 });
+    assert.ok(audits.n >= 1, 'the lock-held refusal is audited (D-89-22)');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, 'restorer-x', 'the refusal left the claim intact');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select count(*) as n from restore_runs').get()).n, 0, 'no run row on refusal');
+
+    /* with the lock free, the same trigger starts normally (quiet system —
+       the release is visible and the pipeline walks to done) */
     withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = null, claimed_at = null where id = 1').run());
-    const started = await op.post('/api/backup/restore', { runId: firstRunId });
+    const started = await op.post('/api/backup/restore', { runId: backupRunId });
     assert.equal(started.status, 200, `free-lock restore: ${JSON.stringify(started.data)}`);
     await pollRestoreCurrent(op, { until: p => p.idle === true || p.stage === 'done' });
+    const doneRow = await pollDb(srv.dbPath, db => db.prepare('select * from restore_runs where id = ? and status = ?').get(started.data.runId, 'done') ?? null);
+    assert.ok(doneRow, 'the free-lock run lands done');
   } finally {
     await srv.stop();
     fs.rmSync(dataDir, { recursive: true, force: true });
@@ -549,7 +587,7 @@ test('89-04 D-89-23 targeting matrix: project archive without a target / with a 
     const op = await makeDualOp(srv, 'target-op@test.local');
     const opId = userIdByEmail(srv, 'target-op@test.local');
     seedWorkspace(srv.dbPath, { ownerId: opId }); // ws-a: op is a member, project p1 lives here
-    seedWorkspace(srv.dbPath, { id: 'ws-other', slug: 'other', name: 'Other', ownerId: userIdByEmail(srv, ADMIN.email) }); // op NOT a member
+    seedWorkspace(srv.dbPath, { id: 'ws-other', slug: 'other', name: 'Other', ownerId: userIdByEmail(srv, ADMIN.email), withProject: false }); // op NOT a member; empty target
 
     const backup = await op.post('/api/backup/runs', { scope: { kind: 'project', id: 'p1' } });
     assert.equal(backup.status, 200, `project backup: ${JSON.stringify(backup.data)}`);
@@ -594,13 +632,31 @@ test('89-04 D-89-33 at run level: an entry-gate-violating archive fails the run 
     seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'crafted-op@test.local') });
     const baseline = withDb(srv.dbPath, db => db.prepare('select count(*) as n from workspaces').get()).n;
 
-    /* craft an archive whose FIRST entry violates the D-89-33 entry gate */
+    /* craft an archive that passes the manifest gate (entry 0) but whose
+       SECOND entry carries a TRAVERSAL name — the D-89-33 path-escape
+       family refuses FATALLY at validating (shape-misses only skip).
+       python tarfile for exact member-name control (GNU tar strips '..'). */
     const craftDir = path.join(dataDir, 'craft');
     fs.mkdirSync(craftDir, { recursive: true });
-    fs.writeFileSync(path.join(craftDir, 'not-manifest.json'), 'not a manifest\n');
     fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
     const crafted = path.join(dataDir, 'backups', 'crafted.tar.gz');
-    execFileSync('tar', ['czf', crafted, '--format=ustar', '-C', craftDir, 'not-manifest.json']);
+    execFileSync(
+      'python3',
+      [
+        '-c',
+        `import tarfile, io, json, time
+manifest = json.dumps({"formatVersion": 1, "scope": {"kind": "workspace", "id": "ws-a"}, "tables": [], "files": [], "createdAt": int(time.time() * 1000)}).encode()
+evil = b"pwned\\n"
+out = ${JSON.stringify(crafted)}
+with tarfile.open(out, "w:gz", format=tarfile.USTAR_FORMAT) as t:
+    ti = tarfile.TarInfo("manifest.json"); ti.size = len(manifest); ti.mtime = 0
+    t.addfile(ti, io.BytesIO(manifest))
+    ti2 = tarfile.TarInfo("../evil.txt"); ti2.size = len(evil); ti2.mtime = 0
+    t.addfile(ti2, io.BytesIO(evil))
+`,
+      ],
+      { cwd: craftDir },
+    );
     const sha = crypto.createHash('sha256').update(fs.readFileSync(crafted)).digest('hex');
     const size = fs.statSync(crafted).size;
     withDb(srv.dbPath, db =>

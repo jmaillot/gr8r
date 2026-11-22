@@ -86,7 +86,7 @@ import { buildMspdi } from './export/mspdi.js';
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
-import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir } from './export/restore.js';
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -3578,6 +3578,12 @@ const writeRestoreRunRow = async event => {
   }
 };
 setRestoreRunWriter(writeRestoreRunRow);
+
+/* 89-04: the engine-level seam install — export/restore.js's stage events
+   (validating → restoring → verifying → done|failed, Task 2 runRestore)
+   forward into this writer exactly like setBackupRunWriter does for the
+   export core. The 'start' event remains the trigger route's own write. */
+setRestoreRunEmitter(event => emitRestoreRunEvent(event));
 
 /* Phase 88 (88-03, D-88-4/6/9): the S3 upload decision — installed as a
    destination provider so export/backup.js stays env/engine agnostic
@@ -9140,6 +9146,143 @@ async function handleApi(req, res, url) {
      manifest-derived counts ONLY — no archive bytes, no client-side
      parsing, and no download endpoint exists (prohibition P2; Phase 90
      owns download tiering + ARCHIVE_READ). No MCP mirror (D-89-19). */
+  /* -------------- restore trigger (Phase 89, plan 89-04, BKRST-02) --------------
+     POST /api/backup/restore { runId, targetWorkspaceId? } — import-as-new.
+     Guard chain VERBATIM from the backup trigger funnel: sameOrigin →
+     requireUser → operator-keyed throttle (a refused attempt consumes a try,
+     D-89-22) → capability gate BEFORE body probing (D-89-21 — a non-holder
+     gets the same keyed refusal for a valid and an invalid body) → body
+     checks → D-89-23 live-membership targeting (project archives need a
+     target the operator is CURRENTLY a member of — the archive never confers
+     anything) → concurrency slot (active export OR held restore_lock — the
+     D-89-1 restore-side half, keyed backupRestoreInProgress, the shared
+     vocabulary the export-side refusal rides) → claimRestoreLock → start row
+     → fire-and-forget runRestore → audited start → 200 { runId } (D-89-2:
+     the run id leaves BEFORE the pipeline finishes). The pipeline's finally
+     always releases the lock. */
+  if (pathname === '/api/backup/restore' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`restorerun|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      await auditBackupTask(user, 'restore_refused:restoreRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can trigger restores');
+    }
+    const body = await readJson(req);
+    const backupRunId = typeof body?.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.runId) ? body.runId : null;
+    if (!backupRunId) {
+      return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
+    }
+    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
+    if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
+      await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    let scope = null;
+    try {
+      scope = JSON.parse(row.scope);
+    } catch {
+      scope = null;
+    }
+    if (!scope || (scope.kind !== 'workspace' && scope.kind !== 'project')) {
+      await auditBackupTask(user, 'restore_refused:restoreScopeUnsupported');
+      return fail(res, 400, 'restoreScopeUnsupported', 'That archive scope cannot be restored');
+    }
+    /* D-89-23: targeting validates LIVE membership at trigger time, BEFORE
+       the lock claim — zero live memberships → keyed restoreNoWorkspace,
+       the lock row is never touched by a refused trigger. */
+    const targetWorkspaceId = typeof body?.targetWorkspaceId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.targetWorkspaceId) ? body.targetWorkspaceId : null;
+    if (scope.kind === 'project') {
+      const memberOk = targetWorkspaceId
+        ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [targetWorkspaceId, user.id])
+        : null;
+      if (!memberOk) {
+        await auditBackupTask(user, 'restore_refused:restoreNoWorkspace');
+        return fail(res, 400, 'restoreNoWorkspace', 'Restoring a project needs a workspace you are currently a member of');
+      }
+    }
+    /* Concurrency slot — the D-89-1 restore-side half: an active export
+       (the frozen getRunState stage list) OR a claimed restore_lock blocks
+       the trigger, keyed + audited (D-89-22). */
+    const active = getRunState();
+    const exportActive = !!active && ['collecting', 'archiving', 'verifying', 'uploading'].includes(active.stage);
+    if (exportActive || (await restoreLockHeld())) {
+      await auditBackupTask(user, 'restore_refused:restoreInProgress');
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
+    }
+    /* Claim SYNCHRONOUSLY before firing: a lost claim is a refused trigger,
+       never a second pipeline against a held lock (D-89-31 CAS). */
+    const claimed = await claimRestoreLock(user.id);
+    if (!claimed) {
+      await auditBackupTask(user, 'restore_refused:restoreInProgress');
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
+    }
+    const restoreRunId = uid();
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: scope.id ?? null }, trigger: 'import_new', startedAt: now() });
+    runRestore({
+      runId: restoreRunId,
+      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      scope: { kind: scope.kind, id: scope.id ?? null },
+      targetWorkspaceId,
+      operatorId: user.id,
+      trigger: 'import_new',
+      startedAt: now(),
+      uniqueSlug: name => uniqueSlug(name),
+      s3Config: S3.enabled ? S3.config() : null,
+      releaseLock: () => releaseRestoreLock(user.id),
+    }).catch(err => logWarn(`restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
+    await auditBackupTask(user, 'restore_started:import_new', null, scope.kind);
+    logInfo(`restore run started: ${restoreRunId} (${scope.kind}) by ${user.email}`);
+    return json(res, 200, { runId: restoreRunId });
+  }
+
+  /* -------------- restore poll + history (plan 89-04) --------------
+     GET /api/backup/restore/current — the active restore_runs row (status
+     running, newest) or { idle: true }; GET /api/backup/restore/runs —
+     restore history capped 50 newest-first (D-14 discipline, the backup
+     history shape). Both: sameOrigin → requireUser → RESTORE_USE gate;
+     GET reads ride WITHOUT a throttle per the history-GET precedent. */
+  if (pathname === '/api/backup/restore/current' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can watch restores');
+    }
+    const row = await db.get("select id, scope, status, stage, final_name, started_at from restore_runs where status = 'running' order by created_at desc limit 1");
+    if (!row) return json(res, 200, { idle: true });
+    return json(res, 200, {
+      runId: row.id,
+      stage: row.stage,
+      startedAt: new Date(row.started_at).toISOString(),
+      finalName: row.final_name ?? null,
+    });
+  }
+
+  if (pathname === '/api/backup/restore/runs' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can see restore history');
+    }
+    const rows = await db.all(
+      'select id, scope, status, stage, final_name, summary, snapshot_run_id, snapshot_tag, error, started_at, finished_at, created_at from restore_runs order by created_at desc, started_at desc limit 50',
+    );
+    return json(res, 200, {
+      runs: rows.map(r => {
+        let scope = null;
+        try {
+          scope = JSON.parse(r.scope);
+        } catch {
+          scope = null;
+        }
+        return { ...r, scope };
+      }),
+    });
+  }
+
   if (pathname === '/api/backup/restore/preview' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = await requireUser(req, res);
