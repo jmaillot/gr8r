@@ -1,5 +1,5 @@
 ---
-status: testing
+status: passed
 phase: 87-scheduler-tasks-run-history-rotation
 source: [87-VERIFICATION.md]
 started: 2026-11-22T05:05:00Z
@@ -35,14 +35,16 @@ expected: |
   rows marked 'deleted', the newest verified archive retained, and
   backup_rotation:expired audit entries recorded. Manual Run-now archives
   (task_id NULL) are never touched.
-result: [pending]
+result: PASS (2026-11-22) — human-verified on the Docker deployment: keep-per-day
+  set to 2 via the builder, 3+ runs fired, oldest archives deleted sidecar-first,
+  history rows flipped to 'deleted', newest retained, manual archives untouched.
 
 ## Summary
 
 total: 2
-passed: 1
+passed: 2
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 

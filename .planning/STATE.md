@@ -4,11 +4,11 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 87
 current_plan: 4
-status: executing
-stopped_at: Completed 87-03-PLAN.md
-last_updated: "2026-11-21T23:44:03.747Z"
-last_activity: 2026-11-21
-last_activity_desc: Phase 87 execution resumed (wave continue)
+status: verified
+stopped_at: Phase 87 verified — UAT 2/2 passed
+last_updated: "2026-11-22T09:45:00.000Z"
+last_activity: 2026-11-22
+last_activity_desc: Phase 87 UAT passed (2/2) after 4 UAT-fix rounds
 state_head: 79e6a7c7c507c319d4bd7366f683b4bbbd525137
 progress:
   total_phases: 6
