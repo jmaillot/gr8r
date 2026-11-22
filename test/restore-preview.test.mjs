@@ -195,3 +195,41 @@ test('89-01: restoreStagingDir() rides BACKUPS_DIR (D-89-32 same-fs posture) and
   const removed = restore.sweepStaleRestoreStaging();
   assert.ok(Number.isInteger(removed) && removed >= 0, 'sweep returns a count without throwing on an absent dir');
 });
+
+/* ---- Task 3: bounded staged extraction + staging hygiene ---- */
+
+test('89-01 extraction: a real archive materializes the FLAT staged tree under restore-staging/<runId>', async () => {
+  const manifest = manifestViaHostTar();
+  const destDir = path.join(restore.restoreStagingDir(), 'extract-ws1');
+  const result = await restore.extractArchive(tarPath(), destDir, manifest);
+  assert.equal(result.ok, true, `extraction failed: ${result?.error ?? 'unknown'}`);
+  // FLAT files/<id> (D-89-12, 86 A6): the files dir holds ONLY blob ids —
+  // no owner-dir nesting, the source-level path assertion the plan pins
+  assert.deepEqual(fs.readdirSync(path.join(destDir, 'files')).sort(), ['f1']);
+  assert.deepEqual(fs.readdirSync(path.join(destDir, 'logos')).sort(), ['lg1']);
+  assert.equal(fs.readFileSync(path.join(destDir, 'files', 'f1'), 'utf8'), 'project one blob\n');
+  assert.equal(fs.readFileSync(path.join(destDir, 'logos', 'lg1'), 'utf8'), 'logo-one-bytes');
+  assert.ok(fs.existsSync(path.join(destDir, 'manifest.json')), 'manifest.json extracted at the staging root');
+  for (const t of manifest.tables) {
+    assert.ok(fs.existsSync(path.join(destDir, t.path)), `${t.path} extracted`);
+  }
+  assert.deepEqual(result.flagged, [], 'a clean archive carries zero flagged rows');
+  assert.ok(
+    result.extracted.length >= manifest.tables.length + 2,
+    'manifest + every declared table + both blobs extracted',
+  );
+});
+
+test('89-01 sweep: planted orphans under restore-staging are removed with an exact count', () => {
+  const home = restore.restoreStagingDir();
+  fs.mkdirSync(path.join(home, 'orphan-run', 'nested'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'orphan-run', 'nested', 'blob.bin'), 'x');
+  fs.writeFileSync(path.join(home, 'orphan-file.bin'), 'y');
+  const before = fs.readdirSync(home).length;
+  assert.ok(before >= 3, 'orphan-run + orphan-file.bin + the extraction dir all present');
+  const removed = restore.sweepStaleRestoreStaging();
+  assert.equal(removed, before, 'sweep removes every entry and returns the exact count');
+  const left = fs.existsSync(home) ? fs.readdirSync(home).length : 0;
+  assert.equal(left, 0, 'staging home is empty after the sweep');
+});
+

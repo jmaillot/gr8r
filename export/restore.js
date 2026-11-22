@@ -39,13 +39,31 @@
    - restoreArchiveDuplicate     the same entry name twice in one archive
    - restoreEntryRejected        entry-name allow-list gate (reason: traversal | absolute | unknownTable |
                                  badFileId | badLogoName | unexpectedEntry) — D-89-33 families 2+3
+   - restoreShaMismatch          an extracted entry's content hash disagrees with its manifest row
+                                 (non-flagged rows only — flagged rows carry no hash to verify, 86-D-4)
+   - restoreContainmentViolated  an extraction target escapes destDir through a symlink (contained()
+                                 realpath discipline — backup.js:412-416 shape — before every write)
+   - restoreArchiveIncomplete    the manifest declares a row the archive never carried (fail-closed)
    The gate (gateEntryName) runs BEFORE any extraction decision: the only
    valid entry names are exactly `manifest.json`, `<table>.ndjson` where
    the table ∈ the frozen TABLES set imported from export/backup.js (the
    archive supplies table names as untrusted input — single allow-list
    source of truth, never a second classification table), flat
    `files/<[A-Za-z0-9_-]{1,64}>` (D-89-12, 86 A6) and
-   `logos/<[A-Za-z0-9_-]{1,64}>`. ---- */
+   `logos/<[A-Za-z0-9_-]{1,64}>`.
+
+   extractArchive(archivePath, destDir, manifest) — Task 89-01 Task 3 —
+   seek-extracts ONLY manifest-declared entries into destDir (the caller
+   passes restoreStagingDir()/<runId>/): blobs land FLAT as
+   destDir/files/<id> and destDir/logos/<name> (D-89-12), tables and the
+   manifest at the staging root. Flag rows (missingBlob/pathEscaped/
+   nameReserved/symlinkSkipped) are carried in the result with no sha
+   verification and never stop the run (verifyStagedBackup posture,
+   backup.js:313-327); unmanifested and gate-refused entries are skipped
+   — counted in result.skipped, never written. Entry bodies stream to
+   disk in bounded chunks with write-stream backpressure — never
+   whole-file buffering (P3). On ANY error the catch rmStaging()s destDir
+   so a failed restore leaves NOTHING behind (D-15 mirrored, D-89-32). ---- */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -188,16 +206,20 @@ function isZeroBlock(block) {
    zero blocks (the writer's exact end marker). Anything after the end
    marker (extra zero padding) is tolerated and discarded. */
 class TarWalker extends Writable {
-  constructor(archivePath) {
+  constructor(archivePath, { onEntry } = {}) {
     super();
     this.archivePath = archivePath;
+    this.onEntry = onEntry ?? null;
     this.buf = EMPTY;
     this.entries = [];
     this.seen = new Set(); // duplicate entry names are archive corruption — refuse (walk-level)
     this.zeroBlocks = 0;
     this.done = false;
     this.state = 'header'; // 'header' | 'data'
-    this.skip = 0; // data bytes still to discard for the current entry
+    this.skip = 0; // block-rounded data bytes still to consume for the current entry
+    this.remaining = 0; // exact payload bytes still to ROUTE (padding is consumed but never routed)
+    this.sink = null; // per-entry write sink from onEntry, or null (drop the body)
+    this.pendingCb = null; // withheld while a sink applies backpressure
   }
 
   _write(chunk, _enc, cb) {
@@ -206,20 +228,47 @@ class TarWalker extends Writable {
       return;
     }
     this.buf = this.buf.length ? Buffer.concat([this.buf, chunk]) : chunk;
+    this.pendingCb = cb;
     try {
       this.consume();
-      cb();
     } catch (err) {
+      this.pendingCb = null;
       cb(err);
+      return;
+    }
+    if (this.pendingCb) {
+      const done = this.pendingCb;
+      this.pendingCb = null;
+      done();
     }
   }
 
   _final(cb) {
     if (!this.done) {
+      if (this.sink) this.sink.stream.destroy();
       cb(keyed('restoreArchiveTruncated', `restore: archive stream ended before the end-of-archive marker: ${this.archivePath}`));
       return;
     }
     cb();
+  }
+
+  /* Entry body complete: end the write stream, verify the piped hash
+     against the manifest row (fail-closed), record the extraction. The
+     flush is awaited by extractArchive via s.finished before it returns
+     — callers may read the staged tree immediately. */
+  finishSink() {
+    const s = this.sink;
+    this.sink = null;
+    const digest = s.hash.digest('hex');
+    if (s.expected !== null && s.expected !== undefined && digest !== s.expected) {
+      s.stream.destroy();
+      throw keyed('restoreShaMismatch', `restore: entry "${s.name}" content sha256 mismatch (expected ${s.expected}, got ${digest})`, { name: s.name });
+    }
+    s.finished = new Promise((resolve, reject) => {
+      s.stream.end(err => (err ? reject(err) : resolve()));
+    });
+    s.finished.catch(() => {}); // handled up front — the error path destroys sinks and never awaits them
+    s.onDone();
   }
 
   consume() {
@@ -231,11 +280,32 @@ class TarWalker extends Writable {
       if (this.state === 'data') {
         const take = Math.min(this.buf.length, this.skip);
         if (take > 0) {
-          this.skip -= take;
-          this.buf = this.buf.subarray(take); // drop — data blocks are never accumulated
+          const route = Math.min(take, this.remaining); // payload only — block padding is consumed, never routed
+          if (route > 0) {
+            const slice = this.buf.subarray(0, route);
+            if (this.sink) {
+              this.sink.hash.update(slice);
+              if (!this.sink.stream.write(slice)) {
+                /* backpressure — withhold the walk's cb until the write
+                   stream drains, then resume with the remaining bytes */
+                const paused = this.pendingCb;
+                this.pendingCb = null;
+                this.sink.stream.once('drain', paused);
+                this.skip -= take;
+                this.remaining -= route;
+                this.buf = this.buf.subarray(take);
+                if (this.buf.length === 0) this.buf = EMPTY;
+                return;
+              }
+            }
+          }
+          this.skip -= take; // routed to a sink or dropped — never accumulated (P3)
+          this.remaining -= route;
+          this.buf = this.buf.subarray(take);
+          if (this.buf.length === 0) this.buf = EMPTY;
         }
-        if (this.buf.length === 0) this.buf = EMPTY;
         if (this.skip > 0) return; // need more bytes for this entry's body
+        if (this.sink) this.finishSink();
         this.state = 'header';
         continue;
       }
@@ -258,7 +328,9 @@ class TarWalker extends Writable {
       }
       this.seen.add(entry.name);
       this.entries.push(entry);
-      this.skip = Math.ceil(entry.size / BLOCK) * BLOCK; // data rounded to the block boundary
+      this.skip = Math.ceil(entry.size / BLOCK) * BLOCK; // data rounded to the block boundary (consumption)
+      this.remaining = entry.size; // exact payload bytes (routing — padding never reaches a sink)
+      this.sink = this.onEntry ? this.onEntry(entry) : null; // open a write sink, or skip the body
       this.state = 'data';
     }
   }
@@ -266,8 +338,12 @@ class TarWalker extends Writable {
 
 /* Stream the archive once: enumerate every entry (name/size/typeflag/
    mode/mtime) AND compute the whole-archive sha256 on the same pipe.
-   Memory stays bounded no matter how large the blobs are. */
-export async function readArchiveEntries(archivePath, { onHash } = {}) {
+   Memory stays bounded no matter how large the blobs are. onEntry, when
+   provided, is called at each header parse and may return a write sink
+   ({ stream, hash, expected, name, onDone }) to receive that entry's
+   body — a non-null `expected` makes its finish-time hash check refuse
+   keyed on mismatch. */
+export async function readArchiveEntries(archivePath, { onHash, onEntry, onWalker } = {}) {
   const hash = crypto.createHash('sha256');
   const hashTap = new Transform({
     transform(chunk, _enc, cb) {
@@ -275,11 +351,12 @@ export async function readArchiveEntries(archivePath, { onHash } = {}) {
       cb(null, chunk);
     },
   });
-  const walker = new TarWalker(archivePath);
+  const walker = new TarWalker(archivePath, { onEntry });
+  if (onWalker) onWalker(walker); // lets callers route write-stream errors into walker.destroy(err)
   try {
     await pipeline(fs.createReadStream(archivePath), hashTap, zlib.createGunzip(), walker);
   } catch (err) {
-    if (typeof err?.code === 'string' && err.code.startsWith('restoreArchive')) throw err; // already keyed
+    if (typeof err?.code === 'string' && err.code.startsWith('restore')) throw err; // already keyed
     throw keyed('restoreArchiveTruncated', `restore: archive stream unreadable or truncated (${archivePath}): ${err?.message ?? err}`);
   }
   const sha256 = hash.digest('hex');
@@ -306,4 +383,123 @@ export function sweepStaleRestoreStaging() {
     }
   }
   return removed;
+}
+
+/* ---- Bounded staged extraction (Task 3) ----
+   contained() realpath discipline mirrors export/backup.js:412-416;
+   rmStaging mirrors backup.js:582-584 (D-15 best-effort). ---- */
+function contained(realPath, rootReal) {
+  return realPath === rootReal || realPath.startsWith(rootReal + path.sep);
+}
+
+function rmStaging(dir) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* D-15 best-effort — the sweep collects leftovers on the next run */
+  }
+}
+
+const FLAG_KEYS = Object.freeze(['missingBlob', 'pathEscaped', 'nameReserved', 'symlinkSkipped']);
+const isFlaggedRow = row => FLAG_KEYS.some(k => row[k]);
+
+/* Seek-extract ONLY manifest-declared entries into destDir (the caller
+   passes restoreStagingDir()/<runId>/). Blobs land FLAT as
+   destDir/files/<id> and destDir/logos/<name> (D-89-12, 86 A6); the
+   manifest and table ndjson land at the staging root. Returns
+   { ok, extracted, flagged, skipped, sha256 } — flagged rows carried
+   with no sha verification (86-D-4 / verifyStagedBackup posture), every
+   non-flagged row's content hash verified on the pipe. On ANY error the
+   catch rmStaging()s destDir: failed restores leave NOTHING behind. */
+export async function extractArchive(archivePath, destDir, manifest) {
+  fs.mkdirSync(destDir, { recursive: true });
+  const destReal = fs.realpathSync(destDir); // canonical — containment runs against the real root
+  fs.mkdirSync(path.join(destReal, 'files'), { recursive: true });
+  fs.mkdirSync(path.join(destReal, 'logos'), { recursive: true });
+
+  const tableRows = new Map((manifest.tables ?? []).map(t => [t.path, t]));
+  const fileRows = new Map((manifest.files ?? []).filter(f => !isFlaggedRow(f)).map(f => [f.path, f]));
+  const flagged = (manifest.files ?? []).filter(isFlaggedRow);
+  const extracted = [];
+  const skipped = [];
+  const sinks = []; // every opened write sink — their flushes are awaited before returning
+  let activeStream = null;
+  const walkerRef = { walker: null };
+
+  const onEntry = entry => {
+    let gated;
+    try {
+      gated = gateEntryName(entry.name);
+    } catch (err) {
+      skipped.push({ name: entry.name, code: err.code, reason: err.reason }); // never extracted, never fatal
+      return null;
+    }
+    if ((gated.kind === 'file' || gated.kind === 'logo') && !fileRows.has(entry.name)) {
+      skipped.push({ name: entry.name, code: 'restoreEntryRejected', reason: 'unmanifested' }); // no manifest contract → never written
+      return null;
+    }
+    const target = path.join(destReal, entry.name);
+    /* contained() BEFORE every write (T-89-01): a symlinked subdirectory
+       under destDir resolves outside the canonical root → refuse, never
+       follow. */
+    const parentReal = fs.realpathSync(path.dirname(target));
+    if (!contained(parentReal, destReal)) {
+      throw keyed(
+        'restoreContainmentViolated',
+        `restore: extraction target for "${entry.name}" escapes ${destReal} through a symlink`,
+        { name: entry.name },
+      );
+    }
+    const expected =
+      gated.kind === 'manifest'
+        ? null // the manifest entry itself carries no row contract
+        : tableRows.get(entry.name)?.sha256 ?? fileRows.get(entry.name)?.sha256 ?? null;
+    const stream = fs.createWriteStream(target, { flags: 'w', mode: 0o644 });
+    stream.on('error', err => walkerRef.walker?.destroy(err));
+    activeStream = stream;
+    const sink = {
+      name: entry.name,
+      kind: gated.kind,
+      expected,
+      stream,
+      hash: crypto.createHash('sha256'),
+      finished: null, // set by the walker's finishSink — awaited before extractArchive returns
+      onDone: () => extracted.push({ name: entry.name, kind: gated.kind, size: entry.size }),
+    };
+    sinks.push(sink);
+    return sink;
+  };
+
+  try {
+    const walked = await readArchiveEntries(archivePath, {
+      onEntry,
+      onWalker: w => {
+        walkerRef.walker = w;
+      },
+    });
+    /* Every sink's flush is awaited — callers may read the staged tree
+       the moment extractArchive resolves. */
+    await Promise.all(sinks.map(s => s.finished ?? Promise.resolve()));
+    /* Fail-closed completeness: every manifest-declared row must have
+       been extracted — a declared row the archive never carried is
+       corruption, not a flag (flags declare themselves up front). */
+    for (const rel of [...tableRows.keys(), ...fileRows.keys()]) {
+      if (!extracted.some(e => e.name === rel)) {
+        throw keyed('restoreArchiveIncomplete', `restore: manifest declares "${rel}" but the archive never carried it`, { name: rel });
+      }
+    }
+    return { ok: true, extracted, flagged, skipped, sha256: walked.sha256 };
+  } catch (err) {
+    if (activeStream) {
+      try {
+        activeStream.destroy();
+      } catch {
+        /* best-effort */
+      }
+    }
+    rmStaging(destDir); // D-15 mirrored (D-89-32): failed restores leave NOTHING behind
+    throw err;
+  } finally {
+    walkerRef.walker = null;
+  }
 }

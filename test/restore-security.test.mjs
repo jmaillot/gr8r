@@ -293,3 +293,151 @@ test('89-01 control: the clean 86-written archive passes the reader with zero re
   const sidecar = fs.readFileSync(`${CLEAN_ARCHIVE}.sha256`, 'utf8').split(/\s+/)[0];
   assert.equal(sha256, sidecar, 'clean control digest matches the sidecar');
 });
+
+/* ---- Task 3: staged extraction — flag variants, sha discipline,
+   containment, and failure hygiene. craftBackup builds a COMPLETE
+   archive + matching manifest object (entry 0 manifest, declared
+   tables, declared files — the 86 layout) so each vector touches
+   exactly one knob. ---- */
+import crypto from 'node:crypto';
+
+function sha256Hex(buf) {
+  return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+function craftBackup(filename, { tables = [], files = [], extras = [] }) {
+  const manifest = {
+    formatVersion: 1,
+    generator: 'gr8r restore-security fixture',
+    scope: { kind: 'workspace', id: 'ws-fix' },
+    createdAt: 1700000000000,
+    tables: tables.map(t => ({ path: `${t.name}.ndjson`, sha256: sha256Hex(t.content) })),
+    files: files.map(f => ({ ...f.row })),
+  };
+  const entries = [{ name: 'manifest.json', payload: Buffer.from(JSON.stringify(manifest, null, 2)) }];
+  for (const t of tables) entries.push({ name: `${t.name}.ndjson`, payload: t.content });
+  for (const f of files) {
+    if (!f.payload) continue; // flagged rows are never tarred (86-D-4)
+    entries.push({ name: f.row.path, payload: f.payload });
+  }
+  for (const e of extras) entries.push(e); // undeclared entries appended raw
+  const parts = [];
+  for (const e of entries) {
+    parts.push(ustarHeader({ name: e.name, size: e.payload.length, override: e.override ?? {} }));
+    parts.push(e.payload);
+    const pad = (512 - (e.payload.length % 512)) % 512;
+    if (pad) parts.push(Buffer.alloc(pad));
+  }
+  parts.push(Buffer.alloc(1024)); // end marker
+  const archivePath = path.join(BACKUPS_DIR, filename);
+  fs.writeFileSync(archivePath, zlib.gzipSync(Buffer.concat(parts)));
+  return { archivePath, manifest };
+}
+
+const runDir = name => path.join(restore.restoreStagingDir(), name);
+
+test('89-01 extraction: per-entry sha256 mismatch refuses keyed AND leaves nothing under restore-staging/<runId>', async () => {
+  const { archivePath, manifest } = craftBackup('sha-mismatch.tar.gz', {
+    tables: [{ name: 'workspaces', content: Buffer.from('[{"id":"ws1"}]') }], // extracted BEFORE the bad blob — mid-extraction injection
+    files: [
+      {
+        row: { id: 'f1', path: 'files/f1', size: 11, sha256: 'a'.repeat(64) }, // deliberately wrong sha
+        payload: Buffer.from('real bytes\n'),
+      },
+    ],
+  });
+  const destDir = runDir('sha-mismatch-run');
+  await assert.rejects(
+    () => restore.extractArchive(archivePath, destDir, manifest),
+    err => {
+      assertKeyed(err, 'restoreShaMismatch');
+      return true;
+    },
+  );
+  assert.equal(fs.existsSync(destDir), false, 'rmStaging in catch: a failed extraction leaves NOTHING behind (D-15/D-89-32)');
+  assert.ok(fs.existsSync(restore.restoreStagingDir()), 'the staging HOME survives for the next attempt');
+});
+
+test('89-01 extraction: a missingBlob row is carried flagged with no blob and never stops the run', async () => {
+  const { archivePath, manifest } = craftBackup('missing-blob.tar.gz', {
+    tables: [{ name: 'workspaces', content: Buffer.from('[]') }],
+    files: [{ row: { id: 'f9', path: 'files/f9', missingBlob: true } }], // no payload → no entry, no sha256 (86-D-4)
+  });
+  const destDir = runDir('missing-blob-run');
+  const result = await restore.extractArchive(archivePath, destDir, manifest);
+  assert.equal(result.ok, true);
+  assert.equal(result.flagged.length, 1, 'the flagged row is carried in the result');
+  assert.equal(result.flagged[0].missingBlob, true);
+  assert.equal(fs.existsSync(path.join(destDir, 'files', 'f9')), false, 'no blob materializes for a missingBlob row');
+});
+
+test('89-01 extraction: pathEscaped/nameReserved/symlinkSkipped rows carried without sha verification, never run-stopping', async () => {
+  const { archivePath, manifest } = craftBackup('flagged-rows.tar.gz', {
+    tables: [{ name: 'workspaces', content: Buffer.from('[]') }],
+    files: [
+      { row: { id: 'escapee', path: 'files/../escapee', pathEscaped: true } },
+      { row: { id: 'manifest.json', path: 'manifest.json', nameReserved: true } },
+      { row: { id: 'link', path: 'link', symlinkSkipped: true } },
+    ],
+  });
+  const destDir = runDir('flagged-run');
+  const result = await restore.extractArchive(archivePath, destDir, manifest);
+  assert.equal(result.ok, true, 'flagged rows never stop the run');
+  assert.deepEqual(
+    result.flagged.map(f => f.id).sort(),
+    ['escapee', 'link', 'manifest.json'],
+    'all three flag variants carried',
+  );
+});
+
+test('89-01 extraction: extraction into a symlinked subdirectory under destDir refuses keyed — nothing escapes', async () => {
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-outside-'));
+  const canary = path.join(outside, 'canary.txt');
+  fs.writeFileSync(canary, 'do not delete');
+  try {
+    const { archivePath, manifest } = craftBackup('symlink-subdir.tar.gz', {
+      tables: [{ name: 'workspaces', content: Buffer.from('[]') }],
+      files: [
+        {
+          row: { id: 'f1', path: 'files/f1', size: 11, sha256: sha256Hex(Buffer.from('blob bytes\n')) },
+          payload: Buffer.from('blob bytes\n'),
+        },
+      ],
+    });
+    const destDir = runDir('sym-run');
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.symlinkSync(outside, path.join(destDir, 'files')); // planted escape route
+    await assert.rejects(
+      () => restore.extractArchive(archivePath, destDir, manifest),
+      err => {
+        assertKeyed(err, 'restoreContainmentViolated');
+        return true;
+      },
+    );
+    assert.equal(fs.readFileSync(canary, 'utf8'), 'do not delete', 'containment held — the outside dir is untouched');
+    assert.equal(fs.existsSync(path.join(outside, 'f1')), false, 'no blob written through the symlink');
+    assert.equal(fs.existsSync(destDir), false, 'failed extraction leaves nothing behind');
+  } finally {
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('89-01 extraction: unmanifested and gate-refused entries are skipped — never written, never fatal', async () => {
+  const { archivePath, manifest } = craftBackup('extra-entries.tar.gz', {
+    tables: [{ name: 'workspaces', content: Buffer.from('[]') }],
+    files: [],
+    extras: [
+      { name: 'files/stealer', payload: Buffer.from('valid shape, no manifest row') },
+      { name: 'secret_table.ndjson', payload: Buffer.from('[]') },
+    ],
+  });
+  const destDir = runDir('extra-run');
+  const result = await restore.extractArchive(archivePath, destDir, manifest);
+  assert.equal(result.ok, true);
+  assert.equal(fs.readdirSync(path.join(destDir, 'files')).length, 0, 'unmanifested blob never written');
+  assert.equal(fs.existsSync(path.join(destDir, 'secret_table.ndjson')), false, 'gate-refused entry never written');
+  const skippedNames = result.skipped.map(s => s.name);
+  assert.ok(skippedNames.includes('files/stealer'), 'unmanifested skip is reported');
+  assert.ok(skippedNames.includes('secret_table.ndjson'), 'gate-refused skip is reported');
+});
+
