@@ -3609,6 +3609,20 @@ export async function runBackupSchedulerPass({ now: at } = {}) {
          windows collapse into this single firing, and a concurrent pass
          (or a crash mid-export) can never re-fire the same window. */
       await db.run('update backup_tasks set next_run_at = ?, updated_at = ? where id = ?', [next, nowMs, task.id]);
+      /* D-89-1 (89-02, export-side half): a held restore_lock blocks a
+         scheduled fire too — the same mutual exclusion the manual trigger
+         honors, never a scheduler bypass (T-89-04). The refused window
+         records a skipped_overlap row carrying the reason (D-06 — never
+         silent) and no export starts; next_run_at was already advanced
+         above, so the 87-02 catch-up-once discipline holds for the skipped
+         window as well. */
+      if (await restoreLockHeld()) {
+        await db.run(
+          'insert into backup_runs (id, task_id, scope, trigger, status, error, started_at, created_at) values (?,?,?,?,?,?,?,?)',
+          [uid(), task.id, task.scope, 'scheduled', 'skipped_overlap', 'restore_in_progress', nowMs, nowMs],
+        );
+        continue;
+      }
       let scope;
       try { scope = JSON.parse(task.scope); } catch { scope = {}; }
       /* 86-D-10 overlap: the sweep maps runExport's SYNCHRONOUS claim refusal
@@ -8928,6 +8942,19 @@ async function handleApi(req, res, url) {
     if (!['project', 'workspace', 'instance'].includes(kind) || !scopeExists) {
       await auditRefusedScope();
       return fail(res, 400, 'scopeNotFound', 'That backup scope does not exist');
+    }
+    /* D-89-1 (89-02, export-side half): a held restore_lock blocks any
+       backup — keyed backupRestoreInProgress, the shared vocabulary the
+       restore-side refusal half (plan 04) and the 5-locale key (plan 06)
+       ride; the refusal is audited like every other (D-89-22/D-20). Sits in
+       the concurrency slot — after the gate, before the claim — so the
+       403-vs-400 oracle is unchanged. */
+    if (await restoreLockHeld()) {
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), user.id, user.id, 'backup_run_refused:restoreInProgress', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+      );
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
     }
     /* D-10: one export at a time. The check sits immediately before the claim
        with NO await between — the claim inside runExport is synchronous before

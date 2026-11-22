@@ -270,3 +270,44 @@ test('89-02 writer: a planted writer exception (CHECK violation) never fails the
     await srv.stop();
   }
 });
+
+/* ---------- Task 3: mutual exclusion export-side half (D-89-1) ---------- */
+
+/* A holder + the operator client granted through the Phase 85 grant route
+   (the makeBackupOp idiom from test/backup-routes.test.mjs). */
+async function makeBackupOp(server, email) {
+  const joined = await signup(server.base, { name: 'Backup Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, email), role: 'backup_operator' });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  return (await login(server.base, email, 'password-1234')).client;
+}
+const userIdByEmail = (srv, email) => withDb(srv.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
+
+test('89-02 mutual exclusion: a held restore lock refuses the manual backup trigger keyed + audited, no backup_runs row (D-89-1)', async () => {
+  const srv = await bootProbe();
+  try {
+    const op = await makeBackupOp(srv, 'op-backup-lock@test.local');
+    /* Plant the claim directly — the restore trigger routes land in plan 04. */
+    withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1').run('restorer-1', Date.now()));
+
+    const refused = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });
+    assert.equal(refused.status, 409, `restore-held trigger: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupRestoreInProgress', 'the shared D-89-1 refusal vocabulary');
+
+    const audits = withDb(srv.dbPath, db => db.prepare("select * from audit_log where action like 'backup_run_refused:%'").all());
+    assert.ok(audits.some(a => a.action === 'backup_run_refused:restoreInProgress'), 'the refused attempt is audited (D-89-22)');
+
+    const runs = withDb(srv.dbPath, db => db.prepare('select * from backup_runs').all());
+    assert.equal(runs.length, 0, 'no backup run row created — no export started');
+
+    /* With the lock free, the same operator fires normally (no behavior change). */
+    await probe(srv, { action: 'release', userId: 'restorer-1' });
+    const started = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });
+    assert.equal(started.status, 200, `free-lock trigger: ${JSON.stringify(started.data)}`);
+    assert.match(started.data.runId, UUID_RE, 'free lock behaves exactly as before');
+  } finally {
+    await srv.stop();
+  }
+});

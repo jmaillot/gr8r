@@ -423,3 +423,43 @@ test('taskId=manual lists the manual Run-now archives (task_id NULL, D-11); the 
     await server.stop();
   }
 });
+
+/* ---------- 89-02: mutual exclusion export-side half (D-89-1) ---------- */
+
+test('a sweep fire while a restore lock is held records skipped_overlap with reason restore_in_progress and never starts an export (D-89-1, 89-02)', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-restore-overlap@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'RestoreHeld', scope: { kind: 'instance' }, cron: '0 4 * * *' });
+    assert.equal(created.status, 200, `create: ${JSON.stringify(created.data)}`);
+    const id = created.data.task.id;
+
+    /* Plant the restore claim directly — the restore trigger routes land in
+       plan 04; the lock row is the only state the scheduler must honor. */
+    withDb(server.dbPath, db => db.prepare('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1').run('restorer-2', Date.now()));
+
+    const nowMs = Date.now();
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(nowMs - 60_000, id));
+
+    const pass = await schedulerPass(server, nowMs);
+    assert.equal(pass.fired, 1, 'the due task entered the pass');
+
+    const rows = runRows(server, id);
+    assert.equal(rows.length, 1, 'exactly one row for the refused fire');
+    assert.equal(rows[0].status, 'skipped_overlap', 'the refusal is recorded — never silent (D-06)');
+    assert.equal(rows[0].error, 'restore_in_progress', 'the skip reason names the restore lock');
+    assert.equal(rows[0].trigger, 'scheduled');
+    /* No archive started: only the manual-free path below may add rows. */
+    assert.ok(!fs.existsSync(path.join(server.dataDir, 'backups')) || fs.readdirSync(path.join(server.dataDir, 'backups')).length === 0, 'no export artifacts under the lock');
+
+    /* Free the lock → the same task fires exactly as before (regression control). */
+    withDb(server.dbPath, db => db.prepare('update restore_lock set claimed_by = null, claimed_at = null where id = 1').run());
+    const now2 = Date.now();
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(now2 - 60_000, id));
+    await schedulerPass(server, now2);
+    const rows2 = runRows(server, id);
+    assert.ok(rows2.some(r => r.status === 'succeeded'), 'free-lock fire behaves exactly as before');
+  } finally {
+    await server.stop();
+  }
+});
