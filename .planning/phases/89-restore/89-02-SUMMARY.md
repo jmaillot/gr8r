@@ -224,3 +224,7 @@ None - no external service configuration required.
 ---
 *Phase: 89-restore*
 *Completed: 2026-11-22*
+
+## Self-Check: PASSED
+
+SUMMARY on disk; all task commits (`6a1d9d24`, `fd37d12f`, `1be5f23e`) + SUMMARY commit (`d98537bc`) present in history; commit count measured from the plan ledger (`3` since `7ba770a0`); final plan verification 32/32 green (restore-routes + backup-scheduler + backup-routes); pg-matrix skips cleanly with POSTGRES_TEST_URL absent (env-gated pins to exercise before ship).

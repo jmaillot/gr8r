@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 89
 current_phase_name: restore
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 89-01-PLAN.md
-last_updated: "2026-11-22T18:55:36.907Z"
+stopped_at: Completed 89-02-PLAN.md
+last_updated: "2026-11-22T19:12:43.140Z"
 last_activity: 2026-11-22
 last_activity_desc: Phase 89 execution started
-state_head: eb8f7347b6ebb44294f6d8c14bc2bf21c05ba6b3
+state_head: d98537bccbd0ddf4e2c78512687d0acc68610ef2
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -31,7 +31,7 @@ before features.
 ## Current Position
 
 Phase: 89 (restore) — EXECUTING
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 6
 Status: Ready to execute
 Last activity: 2026-11-22 — Phase 89 execution started
@@ -95,6 +95,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 87 P87-03 | 4h | 2 tasks | 5 files |
 | Phase 87 P87-03 | 4h | 2 tasks | 5 files |
 | Phase 89 P01 | 31min | 3 tasks | 3 files |
+| Phase 89 P02 | 13min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -134,6 +135,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 87]: 87-03: backup alerts are transition-only via third outbox claim site (backup-alert:<runId>:<email> dedup); locale keys delegated to 87-04 via 87-03-LOCALE-HANDOFF.md (SC-5 EN fallback meanwhile)
 - [Phase 89]: 89-01: restore gate = exported gateEntryName() at extraction decision time; readArchiveEntries stays a pure preview enumerator (instance-scope names enumerate, restore never writes them)
 - [Phase 89]: 89-01: keyed refusal vocabulary (restoreArchive*/restoreEntryRejected/restoreShaMismatch/restoreContainmentViolated/restoreArchiveIncomplete) documented in export/restore.js module header for plans 03/04 fail() mapping
+- [Phase 89]: Restore persistence substrate landed: restore_runs/restore_lock on both engines with boot sweeps
+- [Phase 89]: plans 03-06 build on the CAS lock + writer seam; stale-run sweep follows the 87 idiom (all running rows, no threshold)
+- [Phase 89]: 89-02: skipped_overlap reason rides backup_runs.error column; refusal code is exactly backupRestoreInProgress (plan 04/06 vocabulary)
 
 ### Pending Todos
 
@@ -155,8 +159,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-22T18:55:36.531Z
-Stopped at: Completed 89-01-PLAN.md
+Last session: 2026-11-22T19:12:34.640Z
+Stopped at: Completed 89-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
