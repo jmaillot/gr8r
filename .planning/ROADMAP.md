@@ -105,7 +105,13 @@ Plans:
 4. SigV4 correctness is proven by golden-vector tests plus a MinIO e2e against the pinned MinIO version (provider quirks re-checked at plan time — research flag).
 5. A restore-direction download to a staged temp file with streaming-hash verification exists (consumed by Phase 89).
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 88-01-PLAN.md — SigV4 client core + tracer: golden-vector signer, MinIO pin smoke, signed PUT/GET roundtrip, probe ops, download seam
+- [ ] 88-02-PLAN.md — Config surface: S3_* boot consts, additive migration (s3_enabled + status widening), /api/config, s3Enabled gate, probe route, 5-locale keys
+- [ ] 88-03-PLAN.md — Upload lifecycle: multipart executor, uploading stage in runExport, upload_failed + email gate, sidecar verify, client render, DEPLOY.md §19
+
 **UI hint**: no
 
 ### Phase 89: Restore
