@@ -83,7 +83,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
@@ -3555,7 +3555,7 @@ export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}
     ? [onlyTaskId]
     : (await db.all("select distinct task_id as id from backup_runs where task_id is not null and status in ('succeeded','deleted')")).map(r => r.id);
   const report = { scanned: taskIds.length, deleted: 0, floorHeld: 0, tasks: [] };
-  const backupsDir = path.join(DATA_DIR, 'backups');
+  const backupsDir = backupsRoot(); // BACKUPS_DIR-aware — same derivation as export/backup.js
   for (const taskId of taskIds) {
     /* Per-task try/catch — one broken task never starves the others (T-87-04 discipline). */
     try {

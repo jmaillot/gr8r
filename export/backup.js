@@ -65,15 +65,34 @@ import { pipeline } from 'node:stream/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { backendKind, toPgSql, pgPoolRef, run as dbRun } from '../db-adapter.mjs';
 
-/* ---- Paths (same derivation as server.js:126-132) ---- */
+/* ---- Paths (same derivation as server.js:126-132) ----
+   BACKUPS_DIR (D-08 amendment, post-87): completed archives live at
+   BACKUPS_DIR, default DATA_DIR/backups (every existing deployment unchanged).
+   When overridden to a separate filesystem (compose bind-mount at /backups),
+   backup STAGING moves with it — staging/. — because the publish step is an
+   atomic fs.rename from staging into backups (Pitfall 6: same filesystem only;
+   across filesystems every run would fail EXDEV). The instance-scope walk
+   skips the staging directory by name (stagingSkipName). */
+export function backupsRoot() {
+  return path.resolve(process.env.BACKUPS_DIR || path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'backups'));
+}
+const BACKUP_STAGING_NAME = '.backup-staging';
+export const backupStagingSkipName = BACKUP_STAGING_NAME;
+
 function dataDirs() {
   const dataDir = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
+  const backupsDir = backupsRoot();
   return {
     dataDir,
     filesDir: path.join(dataDir, 'files'),
     logosDir: path.join(dataDir, 'logos'),
     tmpDir: path.join(dataDir, 'tmp'),
-    backupsDir: path.join(dataDir, 'backups'),
+    backupsDir,
+    /* Staging lives ON THE BACKUPS FILESYSTEM so the rename stays atomic.
+       Under the default (backups inside DATA_DIR) this differs from the
+       legacy DATA_DIR/tmp location — the sweep (below) cleans BOTH, so
+       upgrade debris from the old path is still collected. */
+    backupStagingDir: path.join(backupsDir, BACKUP_STAGING_NAME),
   };
 }
 
@@ -164,16 +183,25 @@ function failRun(error) {
   currentRun = { ...currentRun, stage: 'failed', error: String(error?.message || error).slice(0, 300), finishedAt: Date.now() };
 }
 
-/* ---- Boot-time sweep (D-13): remove DATA_DIR/tmp/backup-* orphans left
-   by a crash. Exported for server.js wiring in Plan 86-02. ---- */
+/* ---- Boot-time sweep (D-13): remove staging orphans left by a crash.
+   Cleans BOTH staging homes: the current one (backupsRoot()/.backup-staging,
+   on the backups filesystem — Pitfall 6) and the legacy DATA_DIR/tmp/backup-*
+   entries from pre-amendment runs, so an upgrade collects old debris too. ---- */
 export function sweepStaleBackupStaging() {
-  const { tmpDir } = dataDirs();
+  const { tmpDir, backupStagingDir } = dataDirs();
   let removed = 0;
-  if (!fs.existsSync(tmpDir)) return removed;
-  for (const entry of fs.readdirSync(tmpDir)) {
-    if (!entry.startsWith('backup-')) continue;
-    fs.rmSync(path.join(tmpDir, entry), { recursive: true, force: true });
-    removed += 1;
+  if (fs.existsSync(backupStagingDir)) {
+    for (const entry of fs.readdirSync(backupStagingDir)) {
+      fs.rmSync(path.join(backupStagingDir, entry), { recursive: true, force: true });
+      removed += 1;
+    }
+  }
+  if (fs.existsSync(tmpDir)) {
+    for (const entry of fs.readdirSync(tmpDir)) {
+      if (!entry.startsWith('backup-')) continue;
+      fs.rmSync(path.join(tmpDir, entry), { recursive: true, force: true });
+      removed += 1;
+    }
   }
   return removed;
 }
@@ -450,7 +478,9 @@ const RESERVED_ROOT_ENTRIES = Object.freeze(
 
 function collectInstanceFiles(dirs, stagingDir, files) {
   const rootReal = fs.realpathSync(dirs.dataDir);
-  const skip = new Set(['tmp', 'backups']);
+  /* tmp/, backups/ and the staging dir (.backup-staging, inside backups when
+     BACKUPS_DIR is overridden) are machinery, never user data (D-01). */
+  const skip = new Set(['tmp', 'backups', backupStagingSkipName]);
   const record = (rel, real, flags) => files.push({
     id: rel,
     name: path.basename(rel),
@@ -548,7 +578,7 @@ export async function runExport(scope, meta = {}) {
   const startedAtMs = currentRun.startedAt;
   await emitRunEvent({ kind: 'start', runId, ...runMeta, scope, startedAt: startedAtMs });
   const dirs = dataDirs();
-  const stagingDir = path.join(dirs.tmpDir, `backup-${runId}`);
+  const stagingDir = path.join(dirs.backupStagingDir, `backup-${runId}`);
   try {
     fs.mkdirSync(stagingDir, { recursive: true });
     fs.mkdirSync(dirs.backupsDir, { recursive: true });

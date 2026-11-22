@@ -1598,3 +1598,46 @@ and no-cache headers; all manifest icons resolve over the network (200s, no
 404s); and the service worker registers successfully at root scope
 (`/sw.js`, no-cache). Fix whichever of those three is failing — the app code
 itself needs no changes.
+
+## 19. Backup task archives: location & separate volume (Phase 87)
+
+Scheduled backup task archives (and manual Run-now archives) land in the
+**backup archive directory**. Default is `DATA_DIR/backups` — zero config for
+existing deployments.
+
+### Separate volume (recommended)
+
+Keep archives OUT of the data volume: a failed or recreated data volume must
+never take the backups with it. In `docker-compose.yml`:
+
+```yaml
+    environment:
+      BACKUPS_DIR: /backups
+    volumes:
+      - projects-studio-data:/data
+      - /volume1/docker/projectsstudio/backups:/backups
+```
+
+Both variables must agree: **staging lives ON the backups filesystem**
+(`<BACKUPS_DIR>/.backup-staging/`) because the publish step is an atomic
+`fs.rename` from staging into the archive directory — across filesystems every
+run would fail with `EXDEV`. The compose file ships this pairing commented;
+the bind-mount default (`./data-backups:/backups`) needs `BACKUPS_DIR=/backups`
+set in `.env` to take effect.
+
+| Variable | Meaning |
+|----------|---------|
+| `BACKUPS_DIR` | absolute path of the archive directory; default `DATA_DIR/backups` |
+
+### Layout on disk
+
+```
+$BACKUPS_DIR/
+  backup-task-<taskId>-<ts>.tar.gz   # scheduled task archives (GFS-pruned)
+  backup-instance-<ts>.tar.gz        # manual Run-now archives (never rotated)
+  *.tar.gz.sha256                    # sidecar per archive, deleted BEFORE the archive
+  .backup-staging/                   # crash-swept at boot (boot sweep D-13)
+```
+
+The boot sweep also still collects legacy `DATA_DIR/tmp/backup-*` debris from
+pre-amendment runs, so upgrades self-clean.

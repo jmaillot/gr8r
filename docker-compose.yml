@@ -73,6 +73,11 @@ services:
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-8388608}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       DATA_DIR: /data
+      # Phase 87 (D-08 amendment): backup archives on a separate filesystem.
+      # Set BACKUPS_DIR in .env (e.g. /backups) AND bind-mount it in volumes;
+      # default keeps archives at DATA_DIR/backups. Staging moves with it
+      # (atomic-rename constraint), so both must share the same mount.
+      BACKUPS_DIR: ${BACKUPS_DIR:-}
       MASTER_KEY: ${MASTER_KEY:?set MASTER_KEY in .env (32+ random chars; encrypts TOTP secrets — losing it locks out 2FA)}
       MASTER_KEY_PREVIOUS: ${MASTER_KEY_PREVIOUS:-} # old key during rotation (docs/DEPLOY.md §13)
       OIDC_ENABLED: ${OIDC_ENABLED:-false}
@@ -88,9 +93,9 @@ services:
       # Phase 87: backup task archives on a SEPARATE host path — a failed/rotated
       # data volume must never take the backups with it (BKBCK-03). Bind-mount
       # keeps archives visible to host-side backup routines; GFS retention prunes
-      # them in-app (Phase 87 rotation). Override with BACKUPS_HOST_DIR in .env
-      # if the default ./data-backups doesn't suit the host.
-      - ${BACKUPS_HOST_DIR:-./data-backups}:/data/backups
+      # them in-app (Phase 87 rotation). Set BACKUPS_DIR=/backups in .env to
+      # match this mount (staging follows the archives — same-filesystem rename).
+      - ${BACKUPS_HOST_DIR:-./data-backups}:/backups
     # No published port: Traefik reaches the container over the shared network.
     expose:
       - '8080'

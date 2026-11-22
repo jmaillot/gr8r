@@ -123,7 +123,8 @@ test('project-scope export round-trips through host tar with manifest.json as en
     assert.equal(fs.readFileSync(`${tarPath}.sha256`, 'utf8').split(' ')[0], run.sha256);
 
     // D-15: staging cleaned
-    assert.equal(fs.readdirSync(TMP_DIR).filter(d => d.startsWith('backup-')).length, 0);
+    // D-15: staging cleaned — no run dirs left under the staging root
+    assert.equal(fs.readdirSync(path.join(backup.backupsRoot(), '.backup-staging')).filter(d => d.startsWith('backup-')).length, 0);
   })();
 });
 
@@ -234,7 +235,7 @@ test('unknown scope kind fails the run closed', () => {
     assert.equal(run.ok, false);
     assert.match(run.error, /unknown scope kind/);
     assert.equal(backup.getRunState().stage, 'failed');
-    assert.equal(fs.readdirSync(TMP_DIR).filter(d => d.startsWith('backup-')).length, 0, 'D-15: staging removed');
+    assert.equal(fs.readdirSync(path.join(backup.backupsRoot(), '.backup-staging')).filter(d => d.startsWith('backup-')).length, 0, 'D-15: staging removed');
   })();
 });
 
@@ -282,7 +283,7 @@ test('missing blob records a missingBlob flag and the run still succeeds', () =>
 /* ---- Task 2: self-verification fail-closed (D-15/T-86-03) ---- */
 test('manifest self-verification mismatch fails closed on a corrupted staged byte', () => {
   return (async () => {
-    const stagingDir = path.join(TMP_DIR, 'backup-verify-pin');
+    const stagingDir = path.join(backup.backupsRoot(), '.backup-staging', 'backup-verify-pin');
     fs.mkdirSync(stagingDir, { recursive: true });
     fs.writeFileSync(path.join(stagingDir, 'workspaces.ndjson'), '{"id":"ws1"}\n');
     const manifest = {
@@ -302,16 +303,24 @@ test('manifest self-verification mismatch fails closed on a corrupted staged byt
   })();
 });
 
-/* ---- Task 2: boot sweep clears staging orphans (D-13) ---- */
-test('sweepStaleBackupStaging removes DATA_DIR/tmp/backup-* orphans', () => {
-  const orphan = path.join(TMP_DIR, 'backup-orphan-crash');
+/* ---- Task 2: boot sweep clears staging orphans (D-13) ----
+   Amended staging contract (BACKUPS_DIR): orphans live in
+   BACKUPS_DIR/.backup-staging/; the sweep ALSO still collects legacy
+   DATA_DIR/tmp/backup-* debris from pre-amendment runs. ---- */
+test('sweepStaleBackupStaging removes staging orphans (current + legacy homes)', () => {
+  const stagingRoot = path.join(backup.backupsRoot(), '.backup-staging');
+  const orphan = path.join(stagingRoot, 'backup-orphan-crash');
   fs.mkdirSync(orphan, { recursive: true });
   fs.writeFileSync(path.join(orphan, 'snapshot.db'), 'junk');
+  const legacy = path.join(TMP_DIR, 'backup-legacy-debris');
+  fs.mkdirSync(legacy, { recursive: true });
+  fs.writeFileSync(path.join(legacy, 'snapshot.db'), 'junk');
   const untouched = path.join(TMP_DIR, 'not-backup-prefix');
   fs.mkdirSync(untouched, { recursive: true });
   const removed = backup.sweepStaleBackupStaging();
-  assert.ok(removed >= 1);
-  assert.ok(!fs.existsSync(orphan), 'orphan staging removed');
+  assert.ok(removed >= 2);
+  assert.ok(!fs.existsSync(orphan), 'staging-root orphan removed');
+  assert.ok(!fs.existsSync(legacy), 'legacy tmp/backup-* debris removed');
   assert.ok(fs.existsSync(untouched), 'non-backup tmp entries untouched');
   fs.rmSync(untouched, { recursive: true, force: true });
 });

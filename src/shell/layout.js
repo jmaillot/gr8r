@@ -176,11 +176,6 @@ export function renderSidebar() {
       ${sItem('mytasks', routeName('mytasks'), 'circle-check', { ct: myOpen || '' })}
       ${sItem('favorites', routeName('favorites'), 'star')}
       ${sItem('notifications', routeName('notifications'), 'bell', { ct: unreadAll || '' })}
-      ${/* 85-02 (D-21/D-23): the Backup entry is TOP-LEVEL — never nested in
-           the instance group (Backup Operators are regular users, not
-           operators). UX gate only — the server 403 is the control
-           (layout.js:178 doctrine applies verbatim). */ ''}
-      ${api.user?.canBackup || api.user?.canRestore ? sItem('backup', routeName('backup'), 'hard-drive') : ''}
       <div class="sgroup">
         <div class="sgroup-h">${t('common.workspace')}</div>
         ${sItem('overview', routeName('overview'), 'layout-dashboard')}
@@ -195,6 +190,11 @@ export function renderSidebar() {
       </div>
       <div class="sgroup">
         <div class="sgroup-h">${t('common.instance')}</div>
+        ${/* 2026-11-22 owner ruling (supersedes 85-02 D-21's top-level entry):
+           Backup lives in the Instance group. Still UX gate only — the group
+           renders for everyone and the server 403 is the control, so a Backup
+           Operator (regular user) still sees and reaches the entry. */ ''}
+        ${api.user?.canBackup || api.user?.canRestore ? sItem('backup', routeName('backup'), 'hard-drive') : ''}
         ${/* 79-02 (D-11): UX gate only — the server 403 is the control (the
            layout.js:175 doctrine applies verbatim to the instance scope). */ ''}
         ${api.user?.isInstanceAdmin ? sItem('governance', routeName('governance'), 'scale') : ''}
