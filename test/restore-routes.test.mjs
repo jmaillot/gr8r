@@ -311,3 +311,347 @@ test('89-02 mutual exclusion: a held restore lock refuses the manual backup trig
     await srv.stop();
   }
 });
+
+/* =====================================================================
+   89-04 Task 2 (RED): POST /api/backup/restore trigger + poll routes.
+   Pins the full trigger funnel (guard chain verbatim from the backup
+   trigger: sameOrigin -> requireUser -> tooMany restorerun|id 5/15min ->
+   RESTORE_USE gate -> body checks -> D-89-23 live-membership targeting
+   BEFORE the lock claim -> concurrency slot -> claim -> start row ->
+   fire-and-forget runRestore -> audit -> 200 { runId }), the D-89-29
+   stage walk through the real pipeline, the D-89-13 -restored counter
+   at route level, and the D-89-33 keyed failure persistence at run
+   level.
+   ===================================================================== */
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+
+const grantRole = async (srv, email, role) => {
+  const admin = (await login(srv.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await admin.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(srv, email), role });
+  assert.equal(grant.status, 200, `grant ${role}: ${JSON.stringify(grant.data)}`);
+};
+const makeRestoreOp = async (srv, email) => {
+  const joined = await signup(srv.base, { name: 'Restore Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  await grantRole(srv, email, 'restore_operator');
+  return (await login(srv.base, email, 'password-1234')).client;
+};
+const makeDualOp = async (srv, email) => {
+  const op = await makeRestoreOp(srv, email);
+  await grantRole(srv, email, 'backup_operator');
+  return op;
+};
+
+const pollDb = (dbPath, read, { timeoutMs = 20000 } = {}) =>
+  new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const tick = () => {
+      let v = null;
+      try {
+        v = withDb(dbPath, read);
+      } catch {
+        /* transient read trouble — keep polling */
+      }
+      if (v) return resolve(v);
+      if (Date.now() > deadline) return reject(new Error('pollDb timeout'));
+      setTimeout(tick, 40);
+    };
+    tick();
+  });
+
+/* Seed a workspace the operator owns, with a project graph worth backing
+   up + restoring (project p1, task t1). */
+const seedWorkspace = (dbPath, { id = 'ws-a', slug = 'acme', name = 'Acme', ownerId, withProject = true } = {}) =>
+  withDb(dbPath, db => {
+    const doc = {
+      data: {
+        projects: withProject ? [{ id: 'p1', name: 'Alpha', color: '#111111' }] : [],
+        tasks: withProject ? [{ id: 't1', project: 'p1', title: 'Task One', desc: '' }] : [],
+        comments: [],
+        files: [],
+        teams: [],
+        projOrder: withProject ? ['p1'] : [],
+      },
+    };
+    const t = Date.now();
+    db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+      id, slug, name, '#123456', JSON.stringify(doc), 1, t, t,
+    );
+    db.prepare('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)').run(
+      id, ownerId, 'owner', `m_${String(ownerId).slice(0, 8)}`, 'manual',
+    );
+  });
+
+const pollRestoreCurrent = (op, { until = null, timeoutMs = 20000 } = {}) =>
+  new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const seen = [];
+    const tick = async () => {
+      const res = await op.get('/api/backup/restore/current');
+      assert.equal(res.status, 200, `restore/current poll: ${JSON.stringify(res.data)}`);
+      seen.push(res.data);
+      if (until ? until(res.data) : true) return resolve({ last: res.data, seen });
+      if (Date.now() > deadline) return reject(new Error(`restore/current poll timeout — seen: ${JSON.stringify(seen)}`));
+      setTimeout(tick, 40);
+    };
+    tick();
+  });
+
+test('89-04 trigger+poll: POST returns a fresh uuid immediately; the pipeline walks to done; current serves the stage verbatim then idle; the D-89-13 counter chain lands -restored then -restored-2', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-trigger-'));
+  const srv = await startServer({ dataDir });
+  try {
+    const op = await makeDualOp(srv, 'trigger-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'trigger-op@test.local') });
+
+    const backup = await op.post('/api/backup/runs', { scope: { kind: 'workspace', id: 'ws-a' } });
+    assert.equal(backup.status, 200, `backup trigger: ${JSON.stringify(backup.data)}`);
+    const backupRunId = backup.data.runId;
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+
+    /* first restore: immediate keyed-uuid response (D-89-2) */
+    const res = await op.post('/api/backup/restore', { runId: backupRunId });
+    assert.equal(res.status, 200, `restore trigger: ${JSON.stringify(res.data)}`);
+    assert.match(res.data.runId, UUID_RE, 'the restore run id is a fresh UUID');
+    assert.notEqual(res.data.runId, backupRunId, 'restore run id is NOT the backup run id');
+
+    /* the run row exists at response time, running on the D-89-29 vocabulary */
+    const immediate = await pollDb(srv.dbPath, db => db.prepare('select * from restore_runs where id = ?').get(res.data.runId) ?? null);
+    assert.ok(immediate, 'the start row exists');
+    assert.equal(immediate.status, 'running');
+    assert.ok(RESTORE_STAGES.includes(immediate.stage), `stage on the vocabulary: ${immediate.stage}`);
+    assert.equal(immediate.trigger, 'import_new');
+
+    /* poll contract: stage rides the vocabulary verbatim, then the run
+       finishes and current flips to idle */
+    const walked = await pollRestoreCurrent(op, { until: p => p.idle === true || p.stage === 'done' });
+    for (const payload of walked.seen) {
+      if (payload.idle) continue;
+      assert.ok(RESTORE_STAGES.includes(payload.stage), `poll served a vocabulary stage: ${JSON.stringify(payload)}`);
+    }
+
+    const idle = await op.get('/api/backup/restore/current');
+    assert.equal(idle.status, 200);
+    assert.equal(idle.data.idle, true, 'no active run → { idle: true }');
+
+    /* the restored workspace exists with the D-89-13 first-import name */
+    const restored = await pollDb(srv.dbPath, db => db.prepare("select * from workspaces where name = 'Acme-restored'").get() ?? null);
+    assert.ok(restored, 'the restored workspace row exists');
+    assert.equal(restored.revision, 1);
+
+    /* history: newest-first, carries final_name + summary */
+    const history = await op.get('/api/backup/restore/runs');
+    assert.equal(history.status, 200);
+    assert.ok(Array.isArray(history.data.runs), `history shape: ${JSON.stringify(Object.keys(history.data))}`);
+    const top = history.data.runs[0];
+    assert.equal(top.id, res.data.runId, 'history is newest-first');
+    assert.equal(top.final_name, 'Acme-restored', 'D-89-13: first import is -restored');
+    assert.equal(top.status, 'done');
+
+    /* second restore of the SAME archive: the counter walks to -restored-2 */
+    const second = await op.post('/api/backup/restore', { runId: backupRunId });
+    assert.equal(second.status, 200, `second restore: ${JSON.stringify(second.data)}`);
+    await pollRestoreCurrent(op, { until: p => p.idle === true || p.stage === 'done' });
+    const secondRow = await pollDb(srv.dbPath, db => db.prepare('select * from restore_runs where id = ? and status = ?').get(second.data.runId, 'done') ?? null);
+    assert.ok(secondRow, 'second run lands done');
+    assert.equal(secondRow.final_name, 'Acme-restored-2', 'D-89-13: the auto-counter walks to -restored-2');
+    const history2 = await op.get('/api/backup/restore/runs');
+    assert.equal(history2.data.runs.length, 2, 'both runs in history');
+    assert.equal(history2.data.runs[0].id, second.data.runId, 'newest first');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-04 D-89-1 restore-side half: an active export refuses the restore trigger 409 backupRestoreInProgress + audited; a held lock refuses the same way', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-mutex-'));
+  /* 600 x 24KB blobs → the instance-scope export stays visibly active */
+  fs.mkdirSync(path.join(dataDir, 'files'), { recursive: true });
+  for (let i = 0; i < 600; i++) fs.writeFileSync(path.join(dataDir, 'files', `blob-${i}`), crypto.randomBytes(24 * 1024));
+  const srv = await startServer({ dataDir });
+  try {
+    const op = await makeDualOp(srv, 'mutex-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'mutex-op@test.local') });
+
+    /* backup #1 completes — the archive the restore trigger will name */
+    const first = await op.post('/api/backup/runs', { scope: { kind: 'workspace', id: 'ws-a' } });
+    assert.equal(first.status, 200);
+    const firstRunId = first.data.runId;
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+
+    /* backup #2 (instance scope over the blob tree) holds the slot */
+    const second = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });
+    assert.equal(second.status, 200);
+    await pollCurrent(op, { until: p => ['collecting', 'archiving', 'verifying', 'uploading'].includes(p.stage) });
+
+    const refused = await op.post('/api/backup/restore', { runId: firstRunId });
+    assert.equal(refused.status, 409, `export-active restore: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupRestoreInProgress', 'the shared D-89-1 refusal vocabulary');
+    const auditsExport = await pollDb(srv.dbPath, db => db.prepare("select count(*) as n from audit_log where action = 'restore_refused:restoreInProgress'").get() ?? null);
+    assert.ok(auditsExport.n >= 1, 'the export-active refusal is audited');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select count(*) as n from restore_runs').get()).n, 0, 'no restore run row on refusal');
+
+    /* wait out the export, then hold the LOCK directly: same keyed refusal */
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+    withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1').run('restorer-x', Date.now()));
+    const refusedLock = await op.post('/api/backup/restore', { runId: firstRunId });
+    assert.equal(refusedLock.status, 409, `lock-held restore: ${JSON.stringify(refusedLock.data)}`);
+    assert.equal(refusedLock.data.code, 'backupRestoreInProgress', 'lock-held carries the same keyed class');
+    assert.equal(withDb(srv.dbPath, db => db.prepare("select count(*) as n from audit_log where action = 'restore_refused:restoreInProgress'").get()).n >= 2, true, 'both refusals audited');
+
+    /* with the lock free, the same trigger starts normally */
+    withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = null, claimed_at = null where id = 1').run());
+    const started = await op.post('/api/backup/restore', { runId: firstRunId });
+    assert.equal(started.status, 200, `free-lock restore: ${JSON.stringify(started.data)}`);
+    await pollRestoreCurrent(op, { until: p => p.idle === true || p.stage === 'done' });
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-04 gates: a plain member gets 403 backupRoleRequired + audited; five refused tries are consumed, the sixth is 429', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-gates-'));
+  const srv = await startServer({ dataDir });
+  try {
+    /* 403: signed-in user WITHOUT the restore role */
+    const plain = await signup(srv.base, { name: 'Plain', email: 'plain@test.local' });
+    assert.equal(plain.status, 201);
+    const plainClient = (await login(srv.base, 'plain@test.local', 'password-1234')).client;
+    const refused = await plainClient.post('/api/backup/restore', { runId: 'whatever' });
+    assert.equal(refused.status, 403, `plain member: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupRoleRequired', 'the D-89-21 keyed refusal');
+    assert.equal(withDb(srv.dbPath, db => db.prepare("select count(*) as n from audit_log where action = 'restore_refused:restoreRoleRequired'").get()).n, 1, 'the 403 is audited');
+
+    /* 429: a restore operator burning the 5-try window on keyed body
+       refusals — every refused attempt consumed a try (D-89-22) */
+    const op = await makeRestoreOp(srv, 'throttle-op@test.local');
+    for (let i = 0; i < 5; i++) {
+      const bad = await op.post('/api/backup/restore', { runId: 'x'.repeat(65) }); // regex fail
+      assert.equal(bad.status, 400, `try ${i + 1}: ${JSON.stringify(bad.data)}`);
+      assert.notEqual(bad.status, 429);
+    }
+    const sixth = await op.post('/api/backup/restore', { runId: 'still-bad-body-here-because-throttle-fires-first' });
+    assert.equal(sixth.status, 429, `sixth try: ${JSON.stringify(sixth.data)}`);
+    assert.equal(sixth.data.code, 'tooManyAttempts');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-04 D-89-23 targeting matrix: project archive without a target / with a non-member target / operator with zero memberships all refuse restoreNoWorkspace BEFORE the lock claim; a live-member target restores', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-target-'));
+  const srv = await startServer({ dataDir });
+  try {
+    const op = await makeDualOp(srv, 'target-op@test.local');
+    const opId = userIdByEmail(srv, 'target-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: opId }); // ws-a: op is a member, project p1 lives here
+    seedWorkspace(srv.dbPath, { id: 'ws-other', slug: 'other', name: 'Other', ownerId: userIdByEmail(srv, ADMIN.email) }); // op NOT a member
+
+    const backup = await op.post('/api/backup/runs', { scope: { kind: 'project', id: 'p1' } });
+    assert.equal(backup.status, 200, `project backup: ${JSON.stringify(backup.data)}`);
+    const backupRunId = backup.data.runId;
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+
+    /* 1. no targetWorkspaceId at all */
+    const noTarget = await op.post('/api/backup/restore', { runId: backupRunId });
+    assert.equal(noTarget.status, 400, `no target: ${JSON.stringify(noTarget.data)}`);
+    assert.equal(noTarget.data.code, 'restoreNoWorkspace', 'the D-89-23 keyed refusal');
+    /* 2. a target the operator is NOT a live member of */
+    const notMember = await op.post('/api/backup/restore', { runId: backupRunId, targetWorkspaceId: 'ws-other' });
+    assert.equal(notMember.status, 400, `non-member target: ${JSON.stringify(notMember.data)}`);
+    assert.equal(notMember.data.code, 'restoreNoWorkspace');
+    /* every refusal left the lock UNCLAIMED (the check precedes the claim, D-89-23) */
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, null, 'the lock was never claimed by a refused trigger');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select count(*) as n from restore_runs').get()).n, 0, 'no run row on refused targeting');
+
+    /* 3. the live-member target restores: op joins ws-other → splice lands */
+    withDb(srv.dbPath, db => db.prepare('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)').run('ws-other', opId, 'member', `m_${String(opId).slice(0, 8)}`, 'manual'));
+    const started = await op.post('/api/backup/restore', { runId: backupRunId, targetWorkspaceId: 'ws-other' });
+    assert.equal(started.status, 200, `member target: ${JSON.stringify(started.data)}`);
+    await pollRestoreCurrent(op, { until: p => p.idle === true || p.stage === 'done' });
+    const row = await pollDb(srv.dbPath, db => db.prepare('select * from restore_runs where id = ? and status = ?').get(started.data.runId, 'done') ?? null);
+    assert.ok(row, 'the splice run lands done');
+    assert.equal(row.final_name, 'Other', 'splice records the target name');
+    const targetDoc = JSON.parse(withDb(srv.dbPath, db => db.prepare('select doc, revision from workspaces where id = ?').get('ws-other')).doc);
+    assert.equal(targetDoc.data.projects.length, 1, 'the archived project arrived');
+    assert.notEqual(targetDoc.data.projects[0].id, 'p1', 'fresh project id');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select revision from workspaces where id = ?').get('ws-other')).revision, 2, 'the splice bumped the revision');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-04 D-89-33 at run level: an entry-gate-violating archive fails the run at validating with restoreEntryRejected persisted, zero rows, lock released', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-crafted-'));
+  const srv = await startServer({ dataDir });
+  try {
+    const op = await makeDualOp(srv, 'crafted-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'crafted-op@test.local') });
+    const baseline = withDb(srv.dbPath, db => db.prepare('select count(*) as n from workspaces').get()).n;
+
+    /* craft an archive whose FIRST entry violates the D-89-33 entry gate */
+    const craftDir = path.join(dataDir, 'craft');
+    fs.mkdirSync(craftDir, { recursive: true });
+    fs.writeFileSync(path.join(craftDir, 'not-manifest.json'), 'not a manifest\n');
+    fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
+    const crafted = path.join(dataDir, 'backups', 'crafted.tar.gz');
+    execFileSync('tar', ['czf', crafted, '--format=ustar', '-C', craftDir, 'not-manifest.json']);
+    const sha = crypto.createHash('sha256').update(fs.readFileSync(crafted)).digest('hex');
+    const size = fs.statSync(crafted).size;
+    withDb(srv.dbPath, db =>
+      db.prepare('insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, uploaded, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+        'run-crafted', null, JSON.stringify({ kind: 'workspace', id: 'ws-a' }), 'manual', 'succeeded', Date.now(), Date.now(), 5, size, sha, 'crafted.tar.gz', 0, Date.now(),
+      ));
+
+    const res = await op.post('/api/backup/restore', { runId: 'run-crafted' });
+    assert.equal(res.status, 200, `crafted trigger: ${JSON.stringify(res.data)}`);
+    const failed = await pollDb(srv.dbPath, db => db.prepare('select * from restore_runs where id = ? and status = ?').get(res.data.runId, 'failed') ?? null);
+    assert.ok(failed, 'the run lands failed');
+    assert.ok(/restoreEntryRejected/.test(failed.error ?? ''), `the keyed class persists verbatim: ${failed.error}`);
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select count(*) as n from workspaces').get()).n, baseline, 'ZERO rows inserted');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, null, 'the pipeline released the lock in its finally');
+
+    /* no staging debris left behind (D-89-32) */
+    const restoreStaging = path.join(dataDir, 'tmp', 'restore');
+    if (fs.existsSync(restoreStaging)) {
+      assert.equal(fs.readdirSync(restoreStaging).length, 0, 'failed restores sweep their staging tree');
+    }
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('89-04 stage CHECK enforcement: an invalid stage through the writer is refused by the schema — the row keeps its prior stage', async () => {
+  const srv = await bootProbe();
+  try {
+    const started = await probe(srv, { action: 'emit', event: { kind: 'start', runId: 'r-check', scope: { kind: 'workspace', id: 'ws-1' }, trigger: 'import_new', startedAt: Date.now() } });
+    assert.equal(started.data.row.stage, 'fetching');
+    const bogus = await probe(srv, { action: 'emit', event: { kind: 'update', runId: 'r-check', stage: 'teleporting' } });
+    assert.equal(bogus.status, 200, 'the caller never sees the CHECK error (best-effort)');
+    assert.equal(bogus.data.row.stage, 'fetching', 'the CHECK refused the invalid stage; prior stage kept');
+    const valid = await probe(srv, { action: 'emit', event: { kind: 'update', runId: 'r-check', stage: 'validating' } });
+    assert.equal(valid.data.row.stage, 'validating', 'the vocabulary itself still walks');
+  } finally {
+    await srv.stop();
+  }
+});
+
+/* local re-export for the trigger tests (backup-routes pollCurrent twin) */
+async function pollCurrent(holder, { until = null, timeoutMs = 30000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    const res = await holder.get('/api/backup/runs/current');
+    assert.equal(res.status, 200, `poll failed: ${JSON.stringify(res.data)}`);
+    last = res.data;
+    if (!until || until(last)) return last;
+    await sleep(50);
+  }
+  throw new Error(`poll timeout — last payload: ${JSON.stringify(last)}`);
+}
