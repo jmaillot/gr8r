@@ -105,10 +105,10 @@ Plans:
 4. SigV4 correctness is proven by golden-vector tests plus a MinIO e2e against the pinned MinIO version (provider quirks re-checked at plan time — research flag).
 5. A restore-direction download to a staged temp file with streaming-hash verification exists (consumed by Phase 89).
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
-- [ ] 88-01-PLAN.md — SigV4 client core + tracer: golden-vector signer, MinIO pin smoke, signed PUT/GET roundtrip, probe ops, download seam
+- [x] 88-01-PLAN.md — SigV4 client core + tracer: golden-vector signer, MinIO pin smoke, signed PUT/GET roundtrip, probe ops, download seam
 - [ ] 88-02-PLAN.md — Config surface: S3_* boot consts, additive migration (s3_enabled + status widening), /api/config, s3Enabled gate, probe route, 5-locale keys
 - [ ] 88-03-PLAN.md — Upload lifecycle: multipart executor, uploading stage in runExport, upload_failed + email gate, sidecar verify, client render, DEPLOY.md §19
 
@@ -152,7 +152,7 @@ Plans:
 | 85. Roles Foundation | 2/2 | Complete    | 2026-11-21 |
 | 86. Export Core ("gr8r backup v1") | 2/2 | Complete    | 2026-11-21 |
 | 87. Scheduler, Tasks, Run History & Rotation | 4/4 | In Progress|  |
-| 88. S3 Destination | 0/? | Not started | - |
+| 88. S3 Destination | 1/3 | In Progress|  |
 | 89. Restore | 0/? | Not started | - |
 | 90. Polish & Verification Sweep | 0/? | Not started | - |
 
