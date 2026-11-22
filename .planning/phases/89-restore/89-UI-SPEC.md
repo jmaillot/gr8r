@@ -1,7 +1,8 @@
 ---
 phase: "89"
 slug: restore
-status: draft
+status: approved
+reviewed_at: "2026-11-22"
 shadcn_initialized: false
 preset: none
 created: "2026-11-22"
@@ -216,12 +217,12 @@ State coverage resolved from the UI-consideration probe (2026-11-22: 41 applicab
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
-**Approval:** pending
+**Approval:** approved 2026-11-22 (gsd-ui-checker, revision iteration 1/2 — 5 PASS, 2 non-blocking FLAGs)
