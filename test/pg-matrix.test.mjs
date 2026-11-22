@@ -444,3 +444,32 @@ maybe('pg matrix: restore_runs + restore_lock exist on pg; stale sweep interrupt
     });
   }
 });
+
+maybe('pg matrix: restore_lock CAS claim/release behaves identically to sqlite under live pg (89-02)', async () => {
+  const srv = await bootPg({ RESTORE_TEST_TOKEN: 'pg-restore-probe' });
+  try {
+    const probe = body =>
+      fetch(`${srv.base}/api/internal/restore-probe`, {
+        method: 'POST',
+        headers: { 'x-restore-token': 'pg-restore-probe', 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(async r => {
+        assert.equal(r.status, 200, `probe ${body?.action}: ${r.status}`);
+        return r.json();
+      });
+
+    assert.equal((await probe({ action: 'claim', userId: 'pg-user-1' })).claimed, true, 'first claim wins on pg');
+    assert.equal((await probe({ action: 'claim', userId: 'pg-user-2' })).claimed, false, 'second claim rejected while held (CAS on pg)');
+    assert.equal((await probe({ action: 'release', userId: 'pg-user-2' })).released, false, 'non-holder release rejected on pg');
+    assert.equal((await probe({ action: 'release', userId: 'pg-user-1' })).released, true, 'holder release succeeds on pg');
+    const freed = await probe({ action: 'lockRow' });
+    assert.equal(freed.lock.claimed_by, null, 'row freed after holder release');
+    assert.equal(freed.lock.claimed_at, null, 'claimed_at cleared with the claim');
+  } finally {
+    await srv.stop();
+    await dropPgSchema(url);
+    await withPg(url, async pool => {
+      for (const table of ['restore_runs', 'restore_lock']) await pool.query(`drop table if exists ${table}`);
+    });
+  }
+});

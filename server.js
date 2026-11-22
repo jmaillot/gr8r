@@ -3512,6 +3512,59 @@ const writeBackupRunRow = async event => {
 };
 setBackupRunWriter(writeBackupRunRow);
 
+/* =====================================================================
+   RESTORE RUNS + GLOBAL RESTORE LOCK (Phase 89, 89-02, BKRST-02/D-89-31).
+   =====================================================================
+   The persisted restore lifecycle (D-89-2): restore-trigger routes (plan
+   04/05) emit start/update/fail/finish events through this best-effort
+   seam — the exact shape of export/backup.js's setBackupRunWriter/
+   emitRunEvent pair — and every event lands in restore_runs carrying the
+   D-89-29 stage vocabulary (fetching → validating → restoring →
+   verifying → done|failed, CHECK-enforced at the schema). Writer errors
+   never propagate: history-write trouble must never fail a restore. */
+let restoreRunWriter = null;
+export function setRestoreRunWriter(fn) {
+  restoreRunWriter = typeof fn === 'function' ? fn : null;
+}
+async function emitRestoreRunEvent(event) {
+  if (!restoreRunWriter) return;
+  try {
+    await restoreRunWriter(event);
+  } catch {
+    /* history-write trouble never fails a restore (best-effort discipline) */
+  }
+}
+
+/* Row-shaped writer: 'start' inserts the running/fetching row, 'update'
+   advances the stage/snapshot/summary fields (coalesce — a partial event
+   never wipes an earlier value), 'fail' forces the failed terminal state
+   with the slice(0, 300) error discipline, 'finish' lands done. Every
+   write through parameterized statements. */
+const writeRestoreRunRow = async event => {
+  if (event.kind === 'start') {
+    await db.run(
+      'insert into restore_runs (id, scope, trigger, status, stage, started_at, created_at) values (?,?,?,?,?,?,?)',
+      [event.runId, JSON.stringify({ kind: event.scope?.kind, id: event.scope?.id ?? null }), event.trigger, 'running', 'fetching', event.startedAt, now()],
+    );
+  } else if (event.kind === 'update') {
+    await db.run(
+      'update restore_runs set stage = coalesce(?, stage), snapshot_run_id = coalesce(?, snapshot_run_id), snapshot_tag = coalesce(?, snapshot_tag), summary = coalesce(?, summary), final_name = coalesce(?, final_name) where id = ?',
+      [event.stage ?? null, event.snapshotRunId ?? null, event.snapshotTag ?? null, event.summary ?? null, event.finalName ?? null, event.runId],
+    );
+  } else if (event.kind === 'fail') {
+    await db.run(
+      'update restore_runs set status = ?, stage = ?, error = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ?',
+      ['failed', 'failed', String(event.error ?? '').slice(0, 300), event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId],
+    );
+  } else if (event.kind === 'finish') {
+    await db.run(
+      'update restore_runs set status = ?, stage = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ?',
+      ['done', 'done', event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId],
+    );
+  }
+};
+setRestoreRunWriter(writeRestoreRunRow);
+
 /* Phase 88 (88-03, D-88-4/6/9): the S3 upload decision — installed as a
    destination provider so export/backup.js stays env/engine agnostic
    (the boot-frozen S3_* consts and the s3_enabled column read live HERE,
@@ -5616,6 +5669,33 @@ async function hasInstanceRole(userId, capability) {
   return (await userCapabilities(user)).includes(capability);
 }
 
+/* -------------- global restore lock (Phase 89, 89-02, D-89-31) --------------
+
+   The engine-neutral claim behind the D-89-1 mutual exclusion (any restore
+   blocks any backup run and vice versa) and the ONLY restore concurrency
+   control (D-89-26 — the instance stays live during a restore). A
+   single-row CAS on restore_lock: the WHERE clause IS the compare-and-set
+   — atomic on BOTH engines, no per-engine advisory locks (D-89-31). The
+   release is holder-checked; stale claims are released at boot
+   (sweepStaleRestoreRuns). No DDL ever runs near the lock — the table
+   comes from boot runSchema only. */
+async function claimRestoreLock(userId) {
+  const res = await db.run('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1 and claimed_by is null', [userId, now()]);
+  return res.changes === 1;
+}
+
+async function releaseRestoreLock(userId) {
+  const res = await db.run('update restore_lock set claimed_by = null, claimed_at = null where id = 1 and claimed_by = ?', [userId]);
+  return res.changes === 1;
+}
+
+/* The lock-held probe both refusal sites (manual trigger + scheduler, D-89-1)
+   read — a single row read, never a claim attempt (claiming to test would
+   race). Unknown claimant → not held. */
+async function restoreLockHeld() {
+  return !!(await db.get('select claimed_by from restore_lock where id = 1 and claimed_by is not null'));
+}
+
 /* Resolve a workspace by slug and enforce a minimum role. Unknown slugs 404. */
 async function requireWorkspace(req, res, slug, minRole = 'viewer') {
   const user = await requireUser(req, res);
@@ -5848,6 +5928,28 @@ async function handleApi(req, res, url) {
       taskId: typeof body?.taskId === 'string' && body.taskId ? body.taskId : undefined,
     });
     return json(res, 200, report);
+  }
+
+  /* Plan 89-02: test-only restore-lock/writer probe — the same harness
+     pattern as the backup-scheduler-pass route above (reminder-pass
+     pattern). Drives claimRestoreLock/releaseRestoreLock and the
+     emitRestoreRunEvent seam directly (both are server-internal). Exists
+     ONLY while RESTORE_TEST_TOKEN is set; unset in production the path
+     404s like any unknown route. */
+  if (pathname === '/api/internal/restore-probe' && method === 'POST') {
+    if (!process.env.RESTORE_TEST_TOKEN || req.headers['x-restore-token'] !== process.env.RESTORE_TEST_TOKEN) {
+      return fail(res, 404, 'notFound', 'Not found');
+    }
+    const body = await readJson(req).catch(() => ({}));
+    if (body?.action === 'claim') return json(res, 200, { claimed: await claimRestoreLock(String(body.userId ?? '')) });
+    if (body?.action === 'release') return json(res, 200, { released: await releaseRestoreLock(String(body.userId ?? '')) });
+    if (body?.action === 'lockRow') return json(res, 200, { lock: await db.get('select id, claimed_by, claimed_at from restore_lock where id = 1') });
+    if (body?.action === 'emit') {
+      const event = body.event && typeof body.event === 'object' ? body.event : {};
+      await emitRestoreRunEvent(event);
+      return json(res, 200, { row: event.runId ? await db.get('select * from restore_runs where id = ?', [String(event.runId)]) ?? null : null });
+    }
+    return fail(res, 400, 'badRequest', 'Unknown probe action');
   }
 
   if (pathname === '/api/config' && method === 'GET') {
