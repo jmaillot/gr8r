@@ -21,7 +21,7 @@ created: "2026-11-22"
 |----------|-------|
 | **Framework** | node:test (node --test), same idiom as Phases 86–87 (`test/*.test.mjs`) |
 | **Config file** | package.json (`"test": "node --test --test-concurrency=2 test/*.test.mjs"`) |
-| **Quick run command** | `node --test test/backup-s3.test.mjs` |
+| **Quick run command** | `node --test test/backup-s3-sigv4.test.mjs` |
 | **Full suite command** | `node --test --test-concurrency=2 test/*.test.mjs` |
 | **Estimated runtime** | ~60–120 seconds (full suite; MinIO e2e container adds spin-up) |
 
@@ -29,7 +29,7 @@ created: "2026-11-22"
 
 ## Sampling Rate
 
-- **After every task commit:** Run `node --test test/backup-s3.test.mjs`
+- **After every task commit:** Run `node --test test/backup-s3-sigv4.test.mjs`
 - **After every plan wave:** Run `node --test --test-concurrency=2 test/*.test.mjs`
 - **Before `/gsd-verify-work`:** Full suite must be green
 - **Max feedback latency:** 120 seconds (excluding MinIO container e2e, which runs as its own opt-in test file)
@@ -52,7 +52,7 @@ created: "2026-11-22"
 
 ## Wave 0 Requirements
 
-- [ ] `test/backup-s3.test.mjs` — stubs: SigV4 golden-vector cases (AWS-published test suites), probe refusal cases, RequestTimeTooSkewed mapping
+- [ ] `test/backup-s3.test.mjs` — stubs: SigV4 golden-vector cases (AWS-published test suites), probe refusal cases, RequestTimeTooSkewed mapping *(plans 01/03 create the split files `test/backup-s3-sigv4.test.mjs` / e2e; consolidate or update this file reference at plan-03 summary time)*
 - [ ] `test/backup-s3-e2e.test.mjs` — stub gated behind env (idiom from `test/pg-matrix.test.mjs:32-43`); MinIO container from pinned quay.io tag
 - [ ] No framework install needed — node:test is stdlib
 
