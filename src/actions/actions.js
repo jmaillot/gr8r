@@ -4773,7 +4773,7 @@ A.backupRetry = () => {
 let backupPollSeq = 0;
 let backupPollInflight = null;
 let backupPollTimer = null;
-const BACKUP_ACTIVE_STAGES = ['collecting', 'archiving', 'verifying'];
+const BACKUP_ACTIVE_STAGES = ['collecting', 'archiving', 'verifying', 'uploading'];
 /* WR-02: cooldown between render-kicked ticks after a failure — no backoff
    here would let pageBackup's in-render kick re-fire on every render. */
 const BACKUP_POLL_FAILURE_COOLDOWN_MS = 30000;
