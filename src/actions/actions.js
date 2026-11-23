@@ -4791,8 +4791,15 @@ export async function backupPollTick() {
   backupPollInflight = new AbortController();
   const signal = backupPollInflight.signal;
   /* 90-03 (D-90-22): the previous stage captured BEFORE the payload write —
-     the transition compare happens after the fetch below. */
+     the transition compare happens after the fetch below. backupPending is
+     captured with it: the FIRST poll of a just-triggered run (UAT 90 finding)
+     can land ALREADY TERMINAL on a small instance — the run finishes inside
+     the trigger POST, prevStage was never an active stage, so the plain
+     active→terminal compare misses it and the restore list would stay stale
+     ("No backups yet" under a fresh done run). pending=true at tick start
+     means this tick IS the first poll of a trigger. */
   const backupPrevStage = S.ui.backupRun?.stage || null;
+  const backupPrevPending = !!S.ui.backupPending;
   const res = await api.backupRunCurrent({ signal });
   if (my !== backupPollSeq) return null;
   if (res.ok) {
@@ -4838,12 +4845,16 @@ export async function backupPollTick() {
   /* 90-03 (D-90-22): stage-transition compare INSIDE the existing tick —
      when the polled backup run crossed from an active stage into a terminal
      one THIS tick, the just-finished archive changes what the restore list
-     should show, so invalidate the shared state by nulling it. The page's
-     in-render kick (backup.js — the `!S.ui.restoreList` guard) then
-     refetches EXACTLY ONCE — the tick NEVER invokes the restore refresh
+     should show, so invalidate the shared state by nulling it. The UAT-90
+     fast-run arm: the first poll of a just-triggered run landing terminal
+     (prevStage null + pending captured true + a real stage written now) is
+     the SAME "a finished archive just appeared" event — same invalidation.
+     The page's in-render kick (backup.js — the `!S.ui.restoreList` guard)
+     then refetches EXACTLY ONCE — the tick NEVER invokes the restore refresh
      action itself and never refetches unconditionally inside the 1s tick
      (Pitfall 8: invalidate here, refetch at the render boundary). */
-  if (BACKUP_ACTIVE_STAGES.includes(backupPrevStage) && !backupActive) S.ui.restoreList = null;
+  const backupLandedTerminal = backupPrevStage === null && backupPrevPending && !!S.ui.backupRun?.stage;
+  if ((BACKUP_ACTIVE_STAGES.includes(backupPrevStage) || backupLandedTerminal) && !backupActive) S.ui.restoreList = null;
   if ((backupActive || restoreActive) && !backupPollTimer) backupStartPolling();
   if (!backupActive && !restoreActive) backupStopPolling();
   render();

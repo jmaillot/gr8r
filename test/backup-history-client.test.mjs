@@ -311,7 +311,9 @@ test('90-03: backupPollTick invalidates the shared restore list on the backup ac
     actionsSrc.indexOf('refreshOpenBackupHistories()', actionsSrc.indexOf('export async function backupPollTick')),
   );
   assert.match(tick, /const backupPrevStage = S\.ui\.backupRun\?\.stage \|\| null/, 'the previous stage is captured BEFORE the payload write');
-  assert.match(tick, /BACKUP_ACTIVE_STAGES\.includes\(backupPrevStage\) && !backupActive\) S\.ui\.restoreList = null/, 'the active→terminal transition nulls the shared restore-list state');
+  assert.match(tick, /const backupPrevPending = !!S\.ui\.backupPending/, 'the trigger-pending flag is captured BEFORE the payload write (UAT-90 fast-run arm)');
+  assert.match(tick, /BACKUP_ACTIVE_STAGES\.includes\(backupPrevStage\) \|\| backupLandedTerminal\) && !backupActive\) S\.ui\.restoreList = null/, 'the active→terminal transition nulls the shared restore-list state');
+  assert.match(tick, /const backupLandedTerminal = backupPrevStage === null && backupPrevPending && !!S\.ui\.backupRun\?\.stage/, 'the first poll of a just-triggered run landing terminal is the same invalidation event (run finishes inside the trigger POST — prevStage was never active)');
   assert.ok(!tick.includes('refreshRestoreBackups'), 'the tick NEVER calls the restore refresh action directly (Pitfall 8 — invalidate here, refetch at the render boundary)');
   /* The render boundary: the page's in-render kick refetches exactly once
      when the shared state is null. */
