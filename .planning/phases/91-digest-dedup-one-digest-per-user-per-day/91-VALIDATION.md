@@ -40,10 +40,10 @@ created: "2026-11-23"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (filled by planner) | | | NOTIF-01 SC1/SC2 | — | 4-ws user → exactly 1 email / 1 aggregated outbox row (`digest:user:{id}:{date}`) | integration (SMTP capture) | `node --test test/digest.test.mjs` | ✅ (extend) | ⬜ pending |
-| (filled by planner) | | | NOTIF-01 SC3 | — | restart after partial claims → 1 email, all sections; MAILER-disabled → no enqueue | integration | `node --test test/digest.test.mjs` | ✅ | ⬜ pending |
-| (filled by planner) | | | NOTIF-01 SC4 | — | per-ws `reminders_sent` keys unchanged (byte-compat) | assertion ×4 | `node --test test/digest.test.mjs` | ✅ | ⬜ pending |
-| (filled by planner) | | | D-02 | — | 0x02 token POST disables digest across all workspaces | route test | `node --test test/unsubscribe-route.test.mjs` | ✅ (extend) | ⬜ pending |
+| 91-T1 | 91-PLAN | 1 | NOTIF-01 SC1/SC2 | T-91-03 | 4-ws user → exactly 1 email / 1 aggregated outbox row (`digest:user:{id}:{date}`) | integration (SMTP capture) | `node --test test/digest.test.mjs` | ✅ (extend) | ⬜ pending |
+| 91-T2 | 91-PLAN | 1 | NOTIF-01 SC3 | T-91-03 | restart after partial claims → 1 email, all sections; MAILER-disabled → no enqueue | integration | `node --test test/digest.test.mjs` | ✅ | ⬜ pending |
+| 91-T2 | 91-PLAN | 1 | NOTIF-01 SC4 | — | per-ws `reminders_sent` keys unchanged (byte-compat) | assertion ×4 | `node --test test/digest.test.mjs` | ✅ | ⬜ pending |
+| 91-T4 | 91-PLAN | 1 | D-02 | T-91-01 | 0x02 token POST disables digest across all workspaces | route test | `node --test test/unsubscribe-route.test.mjs` | ✅ (extend) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

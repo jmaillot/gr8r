@@ -24,7 +24,9 @@
   2. The reported 4× duplicate is pinned as a failing regression test FIRST, then green after the fix — the per-workspace WHAT-to-send semantic claim stays honest; only the transport layer coalesces (per-user outbox row per user/day inside the same tx).
   3. Restart and MAILER-disabled paths never double-send the aggregated digest; the email renders in the USER's locale (×5 locale keys for new section headers/footer in the same commit).
   4. Per-workspace digest history (reminders_sent claim) remains byte-compatible for non-aggregated consumers — no reshaping of the per-workspace semantic claim.
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 91-PLAN.md — pinned red regression test (4-ws → 1 email), per-user outbox coalescing, digest-aggregated templating, global unsubscribe (0x02)
 
 ### Phase 92: Server Payload Contracts
 **Goal**: The server serves every read-shape the client phases render — roles aggregation, cron descriptor, resolved names, GFS-marked archive naming with stored bucket, unified runs, and the operator scope listing — with the client still deriving nothing.
