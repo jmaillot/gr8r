@@ -247,3 +247,19 @@ test('90-review WR-02: the preview action stage-guards its response on the mount
   assert.ok(newStart !== -1 && newEnd > newStart, 'backupTaskNew exists');
   assert.match(src.slice(newStart, newEnd), /S\.ui\.backupDeletions = null;/, 'backupTaskNew clears the ephemeral projection');
 });
+
+/* ---------- 90-UAT item 6: the projection detail list scrolls ----------
+   Live-UAT finding (48 seeded runs → 33 daily candidates): the expanded
+   per-scale detail list rendered every filename at full height with no
+   scroll container — it pushed the page instead of scrolling within the
+   panel, exactly what the UAT row forbids. The container must carry an
+   explicit max-height + overflow-y:auto so the list scrolls in place. */
+
+test('90-UAT item 6: the expanded projection detail list scrolls within the panel — max-height + overflow-y on the detail container', () => {
+  const src = fs.readFileSync(path.join(REPO, 'src', 'pages', 'backup.js'), 'utf8');
+  const start = src.indexOf('const detailId = `backupDel-${scale}`');
+  assert.ok(start !== -1, 'the detail container template exists');
+  const row = src.slice(start, src.indexOf('};', start));
+  assert.match(row, /id="\$\{detailId\}"[^`]*max-height:\d+px;overflow-y:auto/, 'the expanded detail list container carries an explicit max-height and scrolls vertically instead of pushing the page');
+  assert.match(row, /class="mono trunc" style="max-width:\d+px" title="/, 'each detail row stays trunc+title (90-03 deviation accepted by owner)');
+});

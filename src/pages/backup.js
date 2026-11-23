@@ -306,7 +306,7 @@ const deletionsPanel = () => {
         <span>${t(GFS_SCALE_KEYS[scale])}</span>
         ${g.count > 0 ? `<button class="btn btn-sm" data-a="backupDeletionsToggle" data-scale="${scale}" aria-expanded="${open}" aria-controls="${detailId}">${t(open ? 'page.backup.deletionsHide' : 'page.backup.deletionsShow')}</button>` : ''}
       </div>
-      ${g.count > 0 && open ? `<div id="${detailId}" style="padding:4px 0 0 16px">${(g.runs || []).map(r => `<div class="mono trunc" style="max-width:340px" title="${esc(r.filename || '')}">${esc(r.filename || '')}</div>`).join('')}</div>` : ''}
+      ${g.count > 0 && open ? `<div id="${detailId}" style="padding:4px 0 0 16px;max-height:220px;overflow-y:auto">${(g.runs || []).map(r => `<div class="mono trunc" style="max-width:340px" title="${esc(r.filename || '')}">${esc(r.filename || '')}</div>`).join('')}</div>` : ''}
     </div>`;
   };
   return `<div style="margin-top:10px">
