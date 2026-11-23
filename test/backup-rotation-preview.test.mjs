@@ -1,0 +1,204 @@
+/* =====================================================================
+   Phase 90 (90-03 task 2, SC-3 / D-90-12..15) — the rotation projection
+   endpoint GET /api/backup/rotation-preview: the on-demand DRY-RUN of the
+   GFS keep-N pass.
+
+   Pinned here:
+   - guard funnel: capability 403 backupManageRequired for non-operators;
+     429 tooManyAttempts past the budget (10 / 15 min, D-89-22 idiom — a
+     refused attempt still consumed a try, D-90-15);
+   - never-run task → 200 { noRuns: true } (keyed empty state, D-90-14);
+   - seeded multi-scale task → grouped counts match the keep-N walk's
+     expectation (same assignGfsBuckets + reverse counting as
+     runBackupRotationPass), runs carry filename, the newest-verified run
+     is NEVER among the candidates (T-87-07 exclusion);
+   - MUTATION-FREEDOM (D-90-12): backup_runs rows/statuses byte-identical
+     before vs after the call (withDb snapshot) and ZERO new audit rows —
+     a projection mutates nothing.
+
+   Harness idiom: test/backup-rotation.test.mjs (startServer-per-case,
+   withDb row inspection/backdating — no sleeps, no clock travel).
+   ===================================================================== */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { test } from 'node:test';
+import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
+
+const userIdByEmail = (srv, email) => withDb(srv.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
+
+async function makeBackupOp(server, email) {
+  const joined = await signup(server.base, { name: 'Backup Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await operator.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, email), role: 'backup_operator' });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  return (await login(server.base, email, 'password-1234')).client;
+}
+
+async function makeTask(srv, op, name) {
+  const created = await op.post('/api/backup/tasks', { name, scope: { kind: 'instance' }, cron: '30 2 * * *' });
+  assert.equal(created.status, 200, `create: ${JSON.stringify(created.data)}`);
+  return created.data.task.id;
+}
+
+/* Seed one succeeded run row (backdated created_at) — the projection reads
+   rows only, never archive bytes. */
+function seedRun(srv, taskId, { id, at }) {
+  withDb(srv.dbPath, db =>
+    db.prepare('insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at, filename) values (?,?,?,?,?,?,?,?)').run(
+      id,
+      taskId,
+      JSON.stringify({ kind: 'instance' }),
+      'scheduled',
+      'succeeded',
+      at,
+      at,
+      `backup-${id}.tar.gz`,
+    ),
+  );
+  return id;
+}
+
+const setRetention = (srv, taskId, retention) =>
+  withDb(srv.dbPath, db =>
+    db.prepare('update backup_tasks set retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ? where id = ?').run(
+      retention.daily ?? 7,
+      retention.weekly ?? 4,
+      retention.monthly ?? 12,
+      retention.yearly ?? 5,
+      taskId,
+    ),
+  );
+
+const preview = async (op, taskId) => {
+  const res = await op.get(`/api/backup/rotation-preview?taskId=${encodeURIComponent(taskId)}`);
+  return res;
+};
+
+const DAY = 24 * 3600 * 1000;
+const HOUR = 3600 * 1000;
+/* 2026-01-02 Fri — the yearly primer (the task's first run of 2026). */
+const BASE = Date.UTC(2026, 0, 2, 2, 30);
+
+/* ---------- guard funnel ---------- */
+
+test('rotation-preview: 403 backupManageRequired for a non-operator (BACKUP_MANAGE gate)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-prev@test.local');
+    const taskId = await makeTask(server, op, 'Prev A');
+    const joined = await signup(server.base, { name: 'Plain', email: 'plain-prev@test.local' });
+    assert.equal(joined.status, 201);
+    const plain = (await login(server.base, 'plain-prev@test.local', 'password-1234')).client;
+    const res = await preview(plain, taskId);
+    assert.equal(res.status, 403);
+    assert.equal(res.data?.code, 'backupManageRequired');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('rotation-preview: 429 tooManyAttempts past the budget (10 / 15 min, D-89-22)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-prev-thr@test.local');
+    const taskId = await makeTask(server, op, 'Prev B');
+    for (let i = 0; i < 10; i++) {
+      const res = await preview(op, taskId);
+      assert.notEqual(res.status, 429, `attempt ${i + 1} is inside the budget`);
+    }
+    const res = await preview(op, taskId);
+    assert.equal(res.status, 429);
+    assert.equal(res.data?.code, 'tooManyAttempts');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- never-run → keyed empty state ---------- */
+
+test('rotation-preview: a never-run task answers 200 { noRuns: true } (D-90-14)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-prev-empty@test.local');
+    const taskId = await makeTask(server, op, 'Prev C');
+    const res = await preview(op, taskId);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.data, { noRuns: true });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- grouped projection over a multi-scale task ---------- */
+
+test('rotation-preview: grouped counts match the keep-N walk; runs carry filename; newest never projected', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-prev-run@test.local');
+    const taskId = await makeTask(server, op, 'Prev D');
+    setRetention(server, taskId, { daily: 2 });
+    seedRun(server, taskId, { id: 'prev-primer', at: BASE }); // yearly (first of 2026)
+    seedRun(server, taskId, { id: 'prev-m1', at: BASE + 31 * DAY }); // Feb 2 → monthly
+    seedRun(server, taskId, { id: 'prev-w1', at: BASE + 38 * DAY }); // Feb 9 → weekly
+    /* Five same-day dailies (Feb 10, ISO week W07, month 2) with keep 2 →
+       the three OLDEST are candidates. */
+    const dailies = [];
+    for (let i = 0; i < 5; i++) dailies.push(seedRun(server, taskId, { id: `prev-d${i}`, at: Date.UTC(2026, 1, 10, 10 + i) }));
+
+    const res = await preview(op, taskId);
+    assert.equal(res.status, 200);
+    const { groups, total } = res.data;
+    assert.deepEqual(
+      Object.keys(groups),
+      ['daily', 'weekly', 'monthly', 'yearly'],
+      'the four groups render in the fixed order with honest zeros (D-90-14)',
+    );
+    assert.equal(groups.daily.count, 3, 'keep 2 over 5 dailies → the 3 oldest are candidates');
+    assert.equal(groups.weekly.count, 0, 'honest zero — the weekly slot is within keep');
+    assert.equal(groups.monthly.count, 0, 'honest zero');
+    assert.equal(groups.yearly.count, 0, 'honest zero');
+    assert.equal(total, 3);
+    for (const r of groups.daily.runs) {
+      assert.equal(typeof r.filename, 'string');
+      assert.ok(r.filename.startsWith('backup-prev-d'), 'projected runs carry their filename');
+    }
+    const projectedIds = new Set(groups.daily.runs.map(r => r.id));
+    for (const id of ['prev-d2', 'prev-d1', 'prev-d0']) assert.ok(projectedIds.has(id), `the oldest daily ${id} is a candidate`);
+    for (const id of ['prev-d4', 'prev-d3']) assert.ok(!projectedIds.has(id), `within-keep daily ${id} is not a candidate`);
+    assert.ok(!projectedIds.has('prev-d4'), 'the newest-verified run is NEVER among the candidates (T-87-07)');
+    assert.ok(!['prev-primer', 'prev-m1', 'prev-w1'].some(id => projectedIds.has(id)), 'other buckets untouched');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- mutation-freedom (D-90-12) ---------- */
+
+test('rotation-preview: the dry-run mutates nothing — rows/statuses identical, zero audit rows', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-prev-mut@test.local');
+    const taskId = await makeTask(server, op, 'Prev E');
+    setRetention(server, taskId, { daily: 2 });
+    seedRun(server, taskId, { id: 'prev-e-primer', at: BASE });
+    for (let i = 0; i < 4; i++) seedRun(server, taskId, { id: `prev-e-d${i}`, at: Date.UTC(2026, 1, 10, 10 + i) });
+    const snapshot = () =>
+      withDb(server.dbPath, db => ({
+        runs: db.prepare('select * from backup_runs order by id').all(),
+        audit: db.prepare('select count(*) as n from audit_log').get().n,
+      }));
+    const before = snapshot();
+    const res = await preview(op, taskId);
+    assert.equal(res.status, 200);
+    assert.equal(res.data.total > 0, true, 'the projection actually has candidates to show');
+    const after = snapshot();
+    assert.deepEqual(after.runs, before.runs, 'backup_runs byte-identical — no unlink, no status write');
+    assert.equal(after.audit, before.audit, 'zero new audit rows');
+    /* And the on-disk (non-)deletion: nothing was removed either — the seed
+       wrote no archive files, but assert no file was created/removed under
+       the backups dir is moot here; the row snapshot IS the mutation proof. */
+  } finally {
+    await server.stop();
+  }
+});

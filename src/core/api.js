@@ -481,6 +481,14 @@ export const api = {
   async backupVerifyChecksum(runId, { signal } = {}) {
     return call('POST', '/api/backup/verify-checksum', { runId }, { signal });
   },
+  /* 90-03 (D-90-12/13/14/15): the rotation projection — GET the dry-run
+     grouped delete set for one task, computed server-side from the CURRENT
+     policy. noRuns is a RESULT (200), never a refusal; tooManyAttempts /
+     backupManageRequired / taskNotFound flow call()'s central keyed
+     handling. */
+  async backupRotationPreview(taskId, { signal } = {}) {
+    return call('GET', `/api/backup/rotation-preview?taskId=${encodeURIComponent(taskId)}`, undefined, { signal });
+  },
   /* ==================================================================
      89-06 (BKRST-01..04, D-89-14..23): the restore client surface. The
      five restore methods sit beside the backup family; every route

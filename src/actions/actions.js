@@ -5064,6 +5064,7 @@ A.backupTaskNew = () => {
 A.backupTaskEdit = el => {
   const task = (S.ui.backupTasks?.tasks || []).find(x => x?.id === el.dataset.id);
   if (!task) return;
+  S.ui.backupDeletions = null; // 90-03: the ephemeral projection never outlives the form that produced it
   let scope = task.scope || { kind: 'instance', id: null };
   S.ui.backupTaskForm = {
     ...backupTaskFormDefaults(),
@@ -5094,6 +5095,7 @@ A.backupTaskEdit = el => {
 };
 A.backupTaskCancel = () => {
   S.ui.backupTaskForm = null;
+  S.ui.backupDeletions = null; // 90-03: ephemeral projection cleared with the form
   render();
 };
 A.backupTaskSave = async () => {
@@ -5137,6 +5139,7 @@ A.backupTaskSave = async () => {
     return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
   }
   S.ui.backupTaskForm = null;
+  S.ui.backupDeletions = null; // 90-03: ephemeral projection cleared on save — the policy changed, re-preview before trusting
   S.ui.tzPick = null;
   /* SC-1 probe visibility: a response carrying s3Probe toasts the keyed
      outcome on top of the save confirmation (D-88-15: deleteFailed is a
@@ -5317,6 +5320,44 @@ A.backupVerifyChecksum = async el => {
     busy.delete(id);
     render();
   }
+};
+/* 90-03 task 2 (D-90-12/13/15): the on-demand rotation projection. The
+   server computes the dry-run delete set from the CURRENT policy (zero
+   client GFS math, D-90-12/16); the result stages EPHEMERALLY in
+   S.ui.backupDeletions — cleared on save/cancel/edit above, never stored
+   server-side. Refusals toast through the restoreToast closed map —
+   tooManyAttempts / backupManageRequired are already mapped (D-90-15: the
+   refused attempt consumed a try server-side). */
+A.backupPreviewDeletions = async el => {
+  const taskId = el.dataset.taskId;
+  if (!taskId) return;
+  S.ui.backupDeletions = { loading: true };
+  render();
+  const res = await api.backupRotationPreview(taskId);
+  if (!res.ok) {
+    S.ui.backupDeletions = null;
+    render();
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+  }
+  S.ui.backupDeletions = res.data?.noRuns
+    ? { noRuns: true }
+    : {
+        groups: res.data.groups,
+        total: res.data.total,
+        /* All groups start collapsed — the count line is the information
+           density the operator wants first (D-90-14 honest zeros). */
+        open: { daily: false, weekly: false, monthly: false, yearly: false },
+      };
+  render();
+};
+A.backupDeletionsToggle = el => {
+  const d = S.ui.backupDeletions;
+  const scale = el.dataset.scale;
+  if (!d?.groups?.[scale]) return;
+  d.open = d.open || {};
+  d.open[scale] = !d.open[scale];
+  render();
 };
 
 /* 89-06 restore history (D-89-20): ONE instance-wide card — newest-first

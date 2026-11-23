@@ -9210,6 +9210,80 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* -------------- rotation projection (Phase 90, 90-03 task 2, SC-3) --------------
+     GET /api/backup/rotation-preview?taskId= — the D-90-12 on-demand dry-run
+     of the GFS keep-N pass. Guard funnel copied from the house template
+     (restore preview, D-89-22 idiom): sameOrigin → requireUser → throttle →
+     capability → validation → lookup → projection. Throttle FIRST in the
+     D-89-22 order (a refused attempt still consumed a try — the projection
+     reads every succeeded run of the task, D-90-15), key `rotationproj|${user.id}`
+     distinct from restorepreview. DRY-RUN: the keep-N walk is COPIED from
+     runBackupRotationPass (same assignGfsBuckets input, same reverse
+     counting, same explicit `id <> ?` newest-verified exclusion — the T-87-07
+     SQL shape verbatim) but STOPS after candidates: NO unlink, NO
+     status='deleted' write, NO audit insert — a projection mutates nothing.
+     The count groups are fixed daily→weekly→monthly→yearly with honest zeros
+     (D-90-14): the client renders every group, even count 0. */
+  if (pathname === '/api/backup/rotation-preview' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    /* D-89-22/OQ5: the whole-task run read is the resource being guarded —
+       a refused attempt still consumed a try. */
+    if (tooMany(`rotationproj|${user.id}`, 10, 15 * 60 * 1000)) {
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    }
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can preview rotation deletions');
+    }
+    const taskId = url.searchParams.get('taskId');
+    if (!taskId || !/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
+    const task = await db.get('select id, retention_daily, retention_weekly, retention_monthly, retention_yearly from backup_tasks where id = ?', [taskId]);
+    if (!task) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
+    /* The dry-run walk — inputs identical to runBackupRotationPass (D-90-13:
+       one projection source, dont-hand-roll). */
+    const runsAsc = await db.all(
+      "select id, created_at, filename from backup_runs where task_id = ? and status = 'succeeded' order by created_at asc, id asc",
+      [taskId],
+    );
+    if (!runsAsc.length) return json(res, 200, { noRuns: true });
+    /* T-87-07 shape: the newest verified run's explicit ID resolves first. */
+    const newestVerified = await db.get(
+      "select id from backup_runs where task_id = ? and status = 'succeeded' order by created_at desc, id desc limit 1",
+      [taskId],
+    );
+    const buckets = assignGfsBuckets(runsAsc);
+    const keep = { daily: task.retention_daily, weekly: task.retention_weekly, monthly: task.retention_monthly, yearly: task.retention_yearly };
+    const seenPerBucket = {};
+    const candidates = [];
+    for (const r of [...runsAsc].reverse()) {
+      const bucket = buckets.get(r.id);
+      seenPerBucket[bucket] = (seenPerBucket[bucket] || 0) + 1;
+      if (seenPerBucket[bucket] > keep[bucket]) candidates.push(r.id);
+    }
+    /* The delete-set re-selection with the explicit `id <> ?` exclusion —
+       the projection STOPS here: no unlink, no status write, no audit. */
+    const projected = candidates.length
+      ? await db.all(
+          `select id, filename, created_at from backup_runs where task_id = ? and status = 'succeeded' and id in (${candidates.map(() => '?').join(',')}) and id <> ?`,
+          [taskId, ...candidates, newestVerified.id],
+        )
+      : [];
+    const groups = { daily: [], weekly: [], monthly: [], yearly: [] };
+    for (const row of projected) {
+      groups[buckets.get(row.id)]?.push({ id: row.id, filename: row.filename, createdAt: row.created_at });
+    }
+    return json(res, 200, {
+      groups: {
+        daily: { count: groups.daily.length, runs: groups.daily },
+        weekly: { count: groups.weekly.length, runs: groups.weekly },
+        monthly: { count: groups.monthly.length, runs: groups.monthly },
+        yearly: { count: groups.yearly.length, runs: groups.yearly },
+      },
+      total: projected.length,
+    });
+  }
+
   /* -------------- restore read surface (Phase 89, 89-03, BKRST-01/D-89-14) --------------
      GET /api/backup/restore/backups — the restorable-archive list. Guard
      chain copied VERBATIM from the history GET above (never reordered —

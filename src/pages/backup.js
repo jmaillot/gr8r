@@ -274,6 +274,47 @@ const fieldSel = (form, name, labelKey, min, max, star) => {
    staged in S.ui.backupTaskForm.retention and ALWAYS sent with the save
    (the displayed value IS the intent); monthly/yearly keep the server's
    frozen defaults. Edit mode preloads the stored values. */
+/* =====================================================================
+   90-03 task 2 (D-90-12/13/14): the rotation-deletion preview — the
+   on-demand, server-computed projection of what the NEXT rotation pass
+   would delete under the CURRENT policy. The client renders the payload
+   verbatim (grouped counts + filenames) with ZERO GFS math (D-90-12/16):
+   the four groups render in the server's fixed order with honest zeros
+   (every group shows its count, 0 included — no expander on 0, D-90-14);
+   count>0 groups expose a real toggle button (aria-expanded/aria-controls,
+   NOT a details/summary restyle, 90-UI-SPEC Surface 3). The result is
+   EPHEMERAL — staged in S.ui.backupDeletions and cleared on task save,
+   cancel and edit (a stale projection must never outlive the form that
+   produced it; the badge/panel re-derive on the next preview click).
+   ===================================================================== */
+const GFS_GROUP_ORDER = ['daily', 'weekly', 'monthly', 'yearly'];
+const deletionsPanel = () => {
+  const d = S.ui.backupDeletions;
+  if (!d) return '';
+  if (d.loading) return `<div class="faint" style="margin-top:8px" aria-busy="true">${t('page.backup.deletionsLoading')}</div>`;
+  if (d.noRuns) return `<div style="margin-top:8px">${empty('archive', t('page.backup.deletionsEmpty'), '', '', 'sm', 3)}</div>`;
+  if (!d.groups) return '';
+  const groupRow = scale => {
+    const g = d.groups[scale];
+    if (!g) return '';
+    const open = !!d.open?.[scale];
+    const detailId = `backupDel-${scale}`;
+    return `<div style="padding:6px 0;border-top:1px solid var(--border)">
+      <div class="row" style="gap:8px;align-items:center">
+        <span class="mono" style="min-width:28px">${esc(String(g.count))}</span>
+        <span>${t(GFS_SCALE_KEYS[scale])}</span>
+        ${g.count > 0 ? `<button class="btn btn-sm" data-a="backupDeletionsToggle" data-scale="${scale}" aria-expanded="${open}" aria-controls="${detailId}">${t(open ? 'page.backup.deletionsHide' : 'page.backup.deletionsShow')}</button>` : ''}
+      </div>
+      ${g.count > 0 && open ? `<div id="${detailId}" style="padding:4px 0 0 16px">${(g.runs || []).map(r => `<div class="mono trunc" style="max-width:340px" title="${esc(r.filename || '')}">${esc(r.filename || '')}</div>`).join('')}</div>` : ''}
+    </div>`;
+  };
+  return `<div style="margin-top:10px">
+    <h2 style="margin:0">${t('page.backup.deletionsTitle')}</h2>
+    <div class="faint" style="font-size:12px;margin:2px 0 4px">${t('page.backup.deletionsCount', { n: Number(d.total) || 0 })}</div>
+    ${GFS_GROUP_ORDER.map(groupRow).join('')}
+  </div>`;
+};
+
 const taskFormCard = () => {
   const form = S.ui.backupTaskForm;
   if (!form) return '';
@@ -334,9 +375,11 @@ const taskFormCard = () => {
       <div class="field"><label class="label">${t('page.backup.retentionWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
     </div>
     ${api.s3Enabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskS3"${form.s3Enabled ? ' checked' : ''}><span>${esc(t('page.backup.s3Toggle'))}</span></label></div>` : ''}
+    ${deletionsPanel()}
     <div class="hint" style="margin-top:8px">${t('page.backup.scheduleSummaryPrefix')}: ${esc(summary)}</div>
     <div class="row" style="gap:8px;margin-top:10px">
       <button class="btn btn-primary" data-a="backupTaskSave">${ic('check', 14)}${t('page.backup.taskSaveAction')}</button>
+      ${form.editing ? `<button class="btn btn-secondary btn-sm" data-a="backupPreviewDeletions" data-task-id="${esc(form.editing)}">${t('page.backup.previewDeletionsAction')}</button>` : ''}
       <button class="btn" data-a="backupTaskCancel">${t('page.backup.taskCancelAction')}</button>
     </div>
   </div></div>`;
