@@ -787,6 +787,55 @@ docker compose logs --tail=20 projects
 `docker cp` preserves the snapshot's owner. The entrypoint runs `chown` on `/data` before
 dropping to `PUID:PGID`, so a backup written by root is usable without extra steps.
 
+### The two backup engines: gr8r backup v1 (in-app) vs the legacy `--backup` CLI
+
+Two engines ship with the app. The `--backup` walkthrough above is the **legacy** one.
+
+**gr8r backup v1 (in-app — the primary engine)** builds `tar.gz` archives that carry the
+database dump **and** the uploaded files/logos, not just the database. Every archive
+carries a `manifest.json`, and integrity is checked with sha256 at three levels — each
+entry on the pipe, the manifest, and the whole archive (recorded on the run row and in a
+`.sha256` sidecar next to the archive). Tasks are configured in the app by an instance
+admin: a 5-field cron plus an IANA timezone per task, per-task GFS retention
+(daily/weekly/monthly), an optional off-site S3 destination (every upload is verified by
+streaming the object back and comparing digests before it is trusted), a run history with
+size/checksum/location per run, notification emails to backup operators when a run fails,
+and a disaster-recovery restore that replaces the instance's data tables from a chosen
+archive after taking a pre-restore snapshot — every session is revoked by that restore,
+so all users (including the operator who triggered it) sign in again. The in-app engine is
+the **only** one that supports the Postgres backend. See §19 for archive placement and a
+separate volume, and §20 for the S3 destination.
+
+**The legacy `node server.js --backup` CLI** — the script above — is a one-shot,
+SQLite-**only** database dump (`VACUUM INTO` into the path you give it). No schedule, no
+files, no S3, no history. Keep it as an escape hatch on legacy SQLite installs and for
+scripting a quick dump; on a Postgres deployment use the in-app engine.
+
+### Timezone & clock posture (NTP)
+
+The scheduler fires against wall-clock time. Each backup task stores a 5-field cron plus
+an IANA timezone; the runner persists the computed `next_run_at` and fires when the clock
+passes it. Daily digests fire at a workspace-local 08:00, and GFS rotation assigns each
+archive to its daily/weekly/monthly bucket using the run's timestamp.
+
+All of that needs a synced clock. Run an NTP client — chrony is the usual choice — **on
+the host**: containers share the host's kernel clock, so syncing the host syncs the stack.
+
+```sh
+apt install chrony
+chronyc tracking    # expect: Leap status Normal, stratum 4 or lower
+timedatectl         # alternative: NTP service: active, synchronized: yes
+```
+
+Seconds of drift already misorder things: a slow clock delays every scheduled fire, a fast
+clock fires a task before its intended wall time and files the archive under the wrong GFS
+rotation bucket. Keep drift under a second and investigate anything larger before blaming
+the scheduler. Timezone display can be adjusted with `TZ`, but scheduling itself rides the
+per-task IANA zone — the cron evaluator handles DST explicitly: a 02:30 daily task does not
+fire on spring-forward days (the nonexistent wall time is skipped — the next fire is the
+following day 02:30, never 03:30), and on fall-back days it fires the first of the two
+occurrences. `test/dst-cron-boundaries.test.mjs` pins that contract for EU and US zones.
+
 ## 10. Updates and rollback
 
 ```sh
