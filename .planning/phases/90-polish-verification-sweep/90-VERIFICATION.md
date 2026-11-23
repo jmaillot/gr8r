@@ -66,6 +66,12 @@ insufficient_spec_items: # backstop markers abstained (held-out UI-state claims 
 coincidental_reliance_items: []
 gaps: [] # no FAILED must-have — status is human_needed on the strength of the items above
 covered_digest: v2:sha256:0f26fd2e9df0c1b95f0f5e111ee823cf9f279069096412ddee728d9df9461727
+re_verification:
+  previous_status: human_needed
+  previous_score: 36/42
+  gaps_closed: []
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 90: Polish & Verification Sweep — Verification Report
@@ -73,7 +79,7 @@ covered_digest: v2:sha256:0f26fd2e9df0c1b95f0f5e111ee823cf9f279069096412ddee728d
 **Phase Goal:** The trust checklist is closed — operators can verify and retrieve archives themselves, the Super Admin console backlog item ships, and the whole milestone survives a PG-parity + DST verification sweep.
 **Verified:** 2026-11-23T18:45:00Z
 **Status:** human_needed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — delta re-verification after the two code-review warning fixes (b3a2e8fd, da20260e)
 
 ## Goal Achievement
 
@@ -225,8 +231,8 @@ No orphaned requirements — REQUIREMENTS.md maps only SACON-01 to Phase 90 and 
 | server.js | :9878-9882 | Audit-before-stream TOCTOU (IN-02) | ℹ️ Info | D-90-10 audit contract; hardening backlog |
 | server.js / src/pages/backup.js | :9186/:175 | `deleted` runs with S3 copy render live CTAs (IN-03) | ℹ️ Info | Semantic wrinkle, owner decision |
 | src/actions/actions.js | :5343 | Preview button no busy guard (IN-04) | ℹ️ Info | Throttle covers server cost |
-| export/restore.js | :2055-2094 | WR-01: staged S3 temp leaks on 4 failure exits (disposition: open) | ⚠️ Warning | Does NOT invalidate any must-have (main paths + e2e-proven path honor rm-finally); real defect — fix before ship via `/gsd-code-review 90 --fix` |
-| src/actions/actions.js | :5343-5363 | WR-02: stale-projection race re-stages after cancel (disposition: open) | ⚠️ Warning | Does NOT invalidate the ephemeral-staging must-have (clears on save/cancel/edit are wired); real defect — same fix path |
+| export/restore.js | :2055-2094 | WR-01: staged S3 temp leaks on 4 failure exits (disposition: **fixed** — b3a2e8fd, verified post-fix, see below) | ⚠️→✓ | Fix verified with file:line evidence; regression test green |
+| src/actions/actions.js | :5343-5363 | WR-02: stale-projection race re-stages after cancel (disposition: **fixed** — da20260e, verified post-fix, see below) | ⚠️→✓ | Fix verified with file:line evidence; regression test green |
 
 No TBD/FIXME/XXX debt markers in any phase-modified file; zero new npm dependencies.
 
@@ -280,9 +286,56 @@ No FAILED must-haves — every route, column, chrome surface, i18n key, test fil
 
 Status is human_needed, not passed, because: (a) two behavior-dependent truths (promote no-reload reconcile; restore-list refetch-once) have no behavioral test and route to human verification per the honest-verifier contract; (b) four backstop markers abstained as insufficient_spec — including one explicit deviation (missing `title=` on governance trunc rows, Human Verification #3) that a human should accept or fix. The two open review warnings (WR-01 staged-temp leak on failure exits; WR-02 stale-projection race) do not invalidate any must-have but are real defects tracked in 90-REVIEW-DISPOSITION.md — recommend closing both before ship.
 
+## Post-review fix re-verification
+
+**Delta re-verification** (2026-11-23T18:06:46Z) after two fix commits. Previously verified must-haves kept; 3 spot-checked against the live tree — no drift (governance.js:190 `q.length >= 2` [was :187, shift only]; export/backup.js:300 `sha256AndSize` exact; actions.js:5083/:5114/:5158 ephemeral clears exact). Neither fix broke a previously verified must-have; the 7 human items remain → status stays `human_needed`.
+
+### Fix commits
+
+| Commit | Finding | Files |
+| ------ | ------- | ----- |
+| b3a2e8fd | WR-01 — DR S3-fallback staged-temp leak on early failure exits | export/restore.js, test/restore-instance.test.mjs |
+| da20260e | WR-02 — stale rotation-projection race (re-stages after cancel/save/new/edit) | src/actions/actions.js, test/backup-rotation-preview.test.mjs |
+
+### Per-fix verdicts — verified_with_evidence
+
+**WR-01: ✓ VERIFIED.** Every exit between `stagedTmp` creation (export/restore.js:2037) and commit/cleanup now drops the staged temp:
+
+| Exit | Drop mechanism | Evidence |
+| ---- | -------------- | -------- |
+| downloadToStaged throw | explicit `dropStagedTmp()` | restore.js:2039 |
+| archive-missing at :2043 | nothing to leak — `stagedTmp` points at a nonexistent file (downloadToStaged digest-verifies before returning, so a set `stagedTmp` always exists here) | restore.js:2043-2045 |
+| pre-DR snapshot `!snapshot.ok` return | explicit `dropStagedTmp()` (predates `cleanup`'s declaration) | restore.js:2059 (the fix) |
+| snapshot-block catch | explicit `dropStagedTmp()` before rmStaging(swap/staging) | restore.js:2074 (the fix) |
+| verify-fail / targetMismatch / remap / blob / swap / tx-catch / unexpected-throw | ride the `cleanup()` funnel, now folding `dropStagedTmp()` first | restore.js:2091 + exits :2106, :2111, :2125-2126, :2144, :2171, :2300, :2336, :2413+:2419, :2467-2468 |
+| success path | `dropStagedTmp()` only POST-commit :2424; `cleanup()` success sweep :2451 is a no-op then (stagedTmp already null) | restore.js:2424, :2451 |
+
+D-89-30 in-tx re-hash semantics preserved: `cleanup()` never executes on the success path before the in-tx `sha256File(archivePath)` at restore.js:2406 — its only pre-commit calls are failure-path returns (:2106, :2111, :2125, :2144, :2171, :2300, :2336, :2419), and the success-path call (:2451) follows the post-commit drop (:2424). Refusal classes untouched (every `cleanup()` precedes a `return failWith(...)`).
+
+**WR-02: ✓ VERIFIED.** The stale guard covers both staging writes and the defense-in-depth clear is in place:
+
+- Request-side gate: `const form = S.ui.backupTaskForm; if (!form || form.editing !== taskId) return;` — actions.js:5355-5356.
+- Post-await form-identity guard sits BEFORE every write: `if (S.ui.backupTaskForm !== form) return;` — actions.js:5361; both the refusal-clear (`S.ui.backupDeletions = null`, :5363) and the result-staging (:5368) execute only after it. Cancel (5112-5114 → form = null), edit (5085 → new object), save (5157 → null), new (5073 → fresh object) and task-delete (5204 → null) all reassign the form, so a mid-flight response always fails the identity check.
+- Defense in depth: `A.backupTaskNew` clears `S.ui.backupDeletions = null` — actions.js:5077.
+
+### Regression suites — per-file, this tree (2026-11-23T18:06Z)
+
+| Suite | Command | Result | Status |
+| ----- | ------- | ------ | ------ |
+| restore-instance (WR-01 regression) | `node --test test/restore-instance.test.mjs` | 10 pass / 0 fail / 0 skip — includes "90-review WR-01: the staged S3-fallback temp never outlives the response on the post-download failure exits" | ✓ PASS |
+| backup-rotation-preview (WR-02 regression) | `node --test test/backup-rotation-preview.test.mjs` | 6 pass / 0 fail / 0 skip — includes "90-review WR-02: the preview action stage-guards its response on the mounted form" (pins guard-after-await + every staging write behind it + backupTaskNew clear) | ✓ PASS |
+| backup-export | `node --test test/backup-export.test.mjs` | 14 pass / 0 fail / 0 skip | ✓ PASS |
+| gfs-kept-until | `node --test test/gfs-kept-until.test.mjs` | 5 pass / 0 fail / 0 skip | ✓ PASS |
+
+No env-gated extras required — all four suites are self-contained offline. Per-file execution as established; no `--test-concurrency` overrides.
+
+### Verdict
+
+Both fixes verified_with_evidence against the live tree; zero regressions in the previously verified 36 must-haves; the documented pre-existing pair remains the only suite failures. The two review warnings are closed — no new gaps. Status remains **human_needed** (the 7 human items stand unchanged).
+
 Observed during verification (advisory, non-blocking): running `backup-download.test.mjs` and `backup-checksum.test.mjs` concurrently in one `node --test` invocation failed once on a shared restore-staging-dir emptiness assertion and passes per-file — same cross-file shared-state family as the documented 89-05/webhook flakes; per-file execution (the established discipline) is clean.
 
 ---
 
-_Verified: 2026-11-23T18:45:00Z_
+_Verified: 2026-11-23T18:45:00Z (initial) · 2026-11-23T18:06:46Z (post-review fix re-verification)_
 _Verifier: the agent (gsd-verifier)_
