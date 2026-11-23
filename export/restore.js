@@ -2262,11 +2262,22 @@ export async function restoreInstanceUnit(opts = {}) {
     }
 
     /* ---- ONE transaction (Pattern 2): deletes + validated inserts only ---- */
+    let apiKeysRevoked = 0;
     try {
       await dbTx(async txScope => {
         /* FK children first, then the parents — the roster tables are
            workspace-keyed, so DR replaces them wholesale with the
            validated archive rows. */
+        /* Credential disclosure (D-89-7): api_keys.workspace_id is
+           `references workspaces(id) on delete cascade` — the workspaces
+           delete below would silently destroy every user's API key with
+           ZERO trace in the run report. Delete them EXPLICITLY instead so
+           the revocation count is disclosed (sessions are revoked
+           post-commit per D-89-25; the keys ride the same disclosure
+           discipline). The overwrite unit never deletes workspaces rows
+           and never cascades. */
+        apiKeysRevoked = (await txScope.get('select count(*) as n from api_keys', [])).n;
+        await txScope.run('delete from api_keys', []);
         await txScope.run('delete from invites', []);
         await txScope.run('delete from team_members', []);
         await txScope.run('delete from memberships', []);
@@ -2353,6 +2364,7 @@ export async function restoreInstanceUnit(opts = {}) {
       teamMembers: { skipped: teamMembersSkipped, replaced: keptTeamMembers.length },
       invites: { skipped: invitesSkipped, replaced: keptInvites.length },
       files: { swapped: blobPlan.length, removed: removedIds.length },
+      apiKeys: { revoked: apiKeysRevoked }, // explicit disclosure: DR destroys every API key via the workspaces cascade
       skippedEntries,
     };
     await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName: 'instance', finishedAt: Date.now() });
