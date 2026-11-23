@@ -731,3 +731,49 @@ test('89-04 history: GET /api/backup/restore/runs is capped at 50 rows, newest-f
     await srv.stop();
   }
 });
+
+/* ---------- 89-05 Task 3: the overwrite direction completes the D-89-1 matrix ----------
+   The import direction (export running → import restore refuses) and the
+   export-side halves (held lock → backup refuses; held lock → scheduler
+   records skipped_overlap) are pinned above / in backup-scheduler. These
+   cells pin the NEW overwrite route against BOTH halves. */
+test('89-05 mutual exclusion, overwrite direction: an active export refuses POST /api/backup/restore/overwrite 409 backupRestoreInProgress + audited; a held lock refuses the same way', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-mutex-'));
+  /* 600 x 24KB blobs → the instance-scope export stays visibly active */
+  fs.mkdirSync(path.join(dataDir, 'files'), { recursive: true });
+  for (let i = 0; i < 600; i++) fs.writeFileSync(path.join(dataDir, 'files', `blob-${i}`), crypto.randomBytes(24 * 1024));
+  const srv = await startServer({ dataDir });
+  try {
+    const op = await makeBackupOp(srv, 'ow-mutex-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'ow-mutex-op@test.local') });
+
+    const first = await op.post('/api/backup/runs', { scope: { kind: 'workspace', id: 'ws-a' } });
+    assert.equal(first.status, 200);
+    const firstRunId = first.data.runId;
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+
+    const second = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });
+    assert.equal(second.status, 200);
+    await pollCurrent(op, { until: p => ['collecting', 'archiving', 'verifying', 'uploading'].includes(p.stage) });
+
+    const refused = await op.post('/api/backup/restore/overwrite', { runId: firstRunId, targetId: 'ws-a', confirmName: 'Acme' });
+    assert.equal(refused.status, 409, `export-active overwrite: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupRestoreInProgress', 'the shared D-89-1 refusal vocabulary');
+    const audits = await pollDb(srv.dbPath, db => {
+      const n = db.prepare("select count(*) as n from audit_log where action = 'restore_refused:restoreInProgress'").get().n;
+      return n >= 1 ? { n } : null;
+    }, { timeoutMs: 3000 });
+    assert.ok(audits.n >= 1, 'the export-active overwrite refusal is audited');
+    assert.equal(withDb(srv.dbPath, db => db.prepare("select count(*) as n from restore_runs where trigger = 'overwrite'").get()).n, 0, 'no overwrite run row on refusal');
+
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+    await sleep(300); // let the export pipeline's tail work drain fully
+    withDb(srv.dbPath, db => db.prepare('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1').run('restorer-x', Date.now()));
+    const refusedLock = await op.post('/api/backup/restore/overwrite', { runId: firstRunId, targetId: 'ws-a', confirmName: 'Acme' });
+    assert.equal(refusedLock.status, 409, `lock-held overwrite: ${JSON.stringify(refusedLock.data)}`);
+    assert.equal(refusedLock.data.code, 'backupRestoreInProgress', 'lock-held carries the same keyed class');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

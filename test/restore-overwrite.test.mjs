@@ -365,3 +365,229 @@ test('89-05 scope-kind mismatch refuses keyed restoreTargetMismatch (engine-side
   assert.equal(result.code, 'restoreTargetMismatch', `keyed: ${result.code ?? result.error}`);
   assert.equal(backupsCount(), 2, 'the snapshot still came first');
 });
+
+/* =====================================================================
+   Route-level cells (Phase 89, plan 89-05, Task 3 — POST
+   /api/backup/restore/overwrite). Per-case startServer + ONE persistent
+   DatabaseSync reader per test (an open/close-cycle reader checkpoints
+   + removes the server's WAL mid-flight and the server's subsequent
+   writes vanish — bisected 2026-11-22, restore-instance probes 11-15).
+   ===================================================================== */
+import { DatabaseSync } from 'node:sqlite';
+
+const { ADMIN, login, signup, startServer } = await import('./helpers/server.mjs');
+
+const openReader = srv => {
+  const ro = new DatabaseSync(srv.dbPath);
+  ro.exec('pragma busy_timeout = 5000');
+  return {
+    get: (sql, ...params) => ro.prepare(sql).get(...params),
+    all: (sql, ...params) => ro.prepare(sql).all(...params),
+    run: (sql, ...params) => ro.prepare(sql).run(...params),
+    close: () => ro.close(),
+  };
+};
+
+const makeBackupOpRoute = async (srv, ro, email) => {
+  const joined = await signup(srv.base, { name: 'Backup Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const uid = ro.get('select id from users where email = ?', email)?.id;
+  const admin = (await login(srv.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await admin.post('/api/auth/operator/instance-roles', { userId: uid, role: 'backup_operator' });
+  assert.equal(grant.status, 200, `grant backup_operator: ${JSON.stringify(grant.data)}`);
+  return (await login(srv.base, email, 'password-1234')).client;
+};
+
+const makeRestoreOpRoute = async (srv, ro, email) => {
+  const joined = await signup(srv.base, { name: 'Restore Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const uid = ro.get('select id from users where email = ?', email)?.id;
+  const admin = (await login(srv.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await admin.post('/api/auth/operator/instance-roles', { userId: uid, role: 'restore_operator' });
+  assert.equal(grant.status, 200, `grant restore_operator: ${JSON.stringify(grant.data)}`);
+  return (await login(srv.base, email, 'password-1234')).client;
+};
+
+const pollRoute = (ro, read, { timeoutMs = 20000 } = {}) =>
+  new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const tick = () => {
+      let v = null;
+      try {
+        v = read(ro);
+      } catch {
+        /* transient — keep polling */
+      }
+      if (v) return resolve(v);
+      if (Date.now() > deadline) return reject(new Error('poll timeout'));
+      setTimeout(tick, 40);
+    };
+    tick();
+  });
+
+/* Boot + a workspace with distinguishable live/archive docs + its
+   workspace-scope archive. Live drift (a p-drift project + revision bump)
+   lands AFTER the export so the overwrite's replacement semantics are
+   observable through the route. Returns everything a cell needs. */
+async function bootOverwriteWorld() {
+  const srv = await startServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-route-')) });
+  const ro = openReader(srv);
+  const op = await makeBackupOpRoute(srv, ro, 'ow-op@test.local');
+  const ownerId = ro.get('select id from users where email = ?', ADMIN.email).id;
+  const doc = JSON.stringify({ data: { projects: [{ id: 'p-live', name: 'P Live', color: '#111111' }], tasks: [{ id: 't-live', project: 'p-live', title: 'Live task', desc: '' }], comments: [], files: [], teams: [], projOrder: ['p-live'], logo: null, members: [], activity: [], notifs: [], events: [], savedViews: [], recentSearches: [] } });
+  ro.run('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)', ...['ws-ow', 'overwrite-me', 'Overwrite Me', '#123456', doc, 5, T, T, 0]);
+  const backupRes = await op.post('/api/backup/runs', { scope: { kind: 'workspace', id: 'ws-ow' } });
+  assert.equal(backupRes.status, 200, `backup trigger: ${JSON.stringify(backupRes.data)}`);
+  for (let i = 0; i < 200; i++) {
+    const cur = await op.get('/api/backup/runs/current');
+    if (cur.data.stage === 'done' || cur.data.stage === 'failed') break;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  const row = ro.get('select id, status, sha256 from backup_runs where id = ?', backupRes.data.runId);
+  assert.equal(row.status, 'succeeded', 'the workspace archive landed');
+  /* Live drift the overwrite must revert (D-89-6: replacement, never merge). */
+  const drifted = JSON.stringify({ data: { projects: [{ id: 'p-live', name: 'P Live', color: '#111111' }, { id: 'p-drift', name: 'P Drift', color: '#222222' }], tasks: [], comments: [], files: [], teams: [], projOrder: ['p-live', 'p-drift'], logo: null, members: [], activity: [], notifs: [], events: [], savedViews: [], recentSearches: [] } });
+  ro.run('update workspaces set doc = ?, revision = 9 where id = ?', ...[drifted, 'ws-ow']);
+  const anInstance = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });
+  assert.equal(anInstance.status, 200);
+  for (let i = 0; i < 200; i++) {
+    const cur = await op.get('/api/backup/runs/current');
+    if (cur.data.stage === 'done' || cur.data.stage === 'failed') break;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  const instanceRow = ro.get("select id from backup_runs where scope like '%instance%' order by created_at desc limit 1");
+  assert.ok(instanceRow, 'an instance-scope archive exists for the kind-mismatch cell');
+  return { srv, ro, op, ownerId, backupRunId: row.id, instanceRunId: instanceRow.id, targetName: 'Overwrite Me' };
+}
+
+const closeWorld = async (world, ro) => {
+  ro.close();
+  await world.srv.stop();
+  fs.rmSync(path.dirname(world.srv.dbPath), { recursive: true, force: true });
+};
+
+test('89-05 overwrite route (BKRST-03): Backup Operator + exact CURRENT target name → 200 {runId}; the run lands done with trigger overwrite and the target doc is the archive doc (replacement, never merge)', async () => {
+  const w = await bootOverwriteWorld();
+  try {
+    const res = await w.op.post('/api/backup/restore/overwrite', { runId: w.backupRunId, targetId: 'ws-ow', confirmName: w.targetName });
+    assert.equal(res.status, 200, `trigger: ${JSON.stringify(res.data)}`);
+    assert.match(res.data.runId, UUID_RE, 'the run id leaves before the pipeline (D-89-2)');
+    const done = await pollRoute(w.ro, db => db.get("select * from restore_runs where id = ? and status = 'done'", res.data.runId) ?? null);
+    assert.equal(done.trigger, 'overwrite', 'the run row carries trigger overwrite');
+    const docRow = w.ro.get('select doc, revision from workspaces where id = ?', 'ws-ow');
+    const doc = JSON.parse(docRow.doc);
+    assert.ok(!doc.data.projects.some(p => p.id === 'p-drift'), 'the drift project is GONE (replacement)');
+    assert.ok(doc.data.projects.some(p => p.id === 'p-live'), 'the archive project set is back');
+    assert.equal(w.ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock released');
+  } finally {
+    await closeWorld(w, w.ro);
+  }
+});
+
+test('89-05 overwrite route: near-miss confirmName (case / trailing space / substring) → keyed confirmPhraseMismatch + audited, ZERO state change (D-89-27 server-side re-validation)', async () => {
+  const w = await bootOverwriteWorld();
+  try {
+    const liveBefore = w.ro.get('select doc from workspaces where id = ?', 'ws-ow').doc;
+    for (const bad of ['overwrite me', 'Overwrite Me ', 'Overwrite']) {
+      const res = await w.op.post('/api/backup/restore/overwrite', { runId: w.backupRunId, targetId: 'ws-ow', confirmName: bad });
+      assert.equal(res.status, 400, `name ${JSON.stringify(bad)}: ${JSON.stringify(res.data)}`);
+      assert.equal(res.data.code, 'confirmPhraseMismatch', `keyed: ${JSON.stringify(res.data)}`);
+    }
+    const audits = w.ro.all("select action from audit_log where action like 'restore_refused:%'");
+    assert.equal(audits.filter(a => a.action === 'restore_refused:confirmPhraseMismatch').length, 3, 'every near-miss audited');
+    assert.equal(w.ro.get('select doc from workspaces where id = ?', 'ws-ow').doc, liveBefore, 'zero state change');
+    assert.equal(w.ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock never claimed');
+    assert.equal(w.ro.get("select count(*) as n from restore_runs where trigger = 'overwrite'").n, 0, 'no run rows');
+  } finally {
+    await closeWorld(w, w.ro);
+  }
+});
+
+test('89-05 overwrite route: an instance-scope archive against a workspace target → keyed restoreTargetMismatch (scope/kind match enforced)', async () => {
+  const w = await bootOverwriteWorld();
+  try {
+    const res = await w.op.post('/api/backup/restore/overwrite', { runId: w.instanceRunId, targetId: 'ws-ow', confirmName: w.targetName });
+    assert.equal(res.status, 400, `kind mismatch: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'restoreTargetMismatch', 'keyed scope/kind refusal');
+    assert.equal(w.ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock never claimed');
+  } finally {
+    await closeWorld(w, w.ro);
+  }
+});
+
+test('89-05 overwrite route role-gate: Restore Operator + plain member → 403 backupManageRequired + audited (D-89-21: overwrite authority = Backup Operator/Super Admin)', async () => {
+  const w = await bootOverwriteWorld();
+  try {
+    const restoreOp = await makeRestoreOpRoute(w.srv, w.ro, 'ow-restore-op@test.local');
+    const plain = await signup(w.srv.base, { name: 'Plain', email: 'ow-plain@test.local' });
+    assert.equal(plain.status, 201);
+    const plainClient = (await login(w.srv.base, 'ow-plain@test.local', 'password-1234')).client;
+
+    for (const [who, cl] of [['restore_operator', restoreOp], ['plain member', plainClient]]) {
+      const res = await cl.post('/api/backup/restore/overwrite', { runId: w.backupRunId, targetId: 'ws-ow', confirmName: w.targetName });
+      assert.equal(res.status, 403, `${who}: ${JSON.stringify(res.data)}`);
+      assert.equal(res.data.code, 'backupManageRequired', `${who}: keyed backupManageRequired`);
+    }
+    const audits = w.ro.all("select action from audit_log where action like 'restore_refused:%'");
+    assert.equal(audits.filter(a => a.action === 'restore_refused:overwriteRoleRequired').length, 2, 'every role refusal audited');
+    assert.equal(w.ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock never claimed');
+    assert.equal(w.ro.get("select count(*) as n from restore_runs where trigger = 'overwrite'").n, 0, 'no run rows from refused triggers');
+  } finally {
+    await closeWorld(w, w.ro);
+  }
+});
+
+test('89-05 overwrite route throttle: restoreoverwrite|<id> 5/15min consuming a try — 5 refused attempts burn the budget, the 6th 429s (D-89-22)', async () => {
+  const w = await bootOverwriteWorld();
+  try {
+    for (let i = 0; i < 5; i++) {
+      const res = await w.op.post('/api/backup/restore/overwrite', { runId: w.backupRunId, targetId: 'ws-ow', confirmName: 'wrong' });
+      assert.equal(res.status, 400, `attempt ${i + 1} refused keyed`);
+    }
+    const sixth = await w.op.post('/api/backup/restore/overwrite', { runId: w.backupRunId, targetId: 'ws-ow', confirmName: w.targetName });
+    assert.equal(sixth.status, 429, `the 6th attempt throttled: ${JSON.stringify(sixth.data)}`);
+    assert.equal(sixth.data.code, 'tooManyAttempts');
+    assert.equal(w.ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock never claimed');
+  } finally {
+    await closeWorld(w, w.ro);
+  }
+});
+
+test('89-05 overwrite route outbox gate: a done overwrite claims one restore_alert per recipient (Super Admins + Backup Operators — D-89-28 via the 89-04 Task 3 machinery)', async () => {
+  /* MAILER enabled via env (the email-outbox boot idiom — SMTP never
+     contacted; the pass send is injected there, here only the CLAIM
+     rows are pinned). */
+  const srv = await startServer({
+    dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-outbox-')),
+    env: { SMTP_HOST: '127.0.0.1', SMTP_PORT: '1', SMTP_REQUIRE_TLS: 'false' },
+  });
+  const ro = openReader(srv);
+  try {
+    const op = await makeBackupOpRoute(srv, ro, 'ow-outbox-op@test.local');
+    const doc = JSON.stringify({ data: { projects: [{ id: 'p1', name: 'P1', color: '#111111' }], tasks: [], comments: [], files: [], teams: [], projOrder: ['p1'], logo: null, members: [], activity: [], notifs: [], events: [], savedViews: [], recentSearches: [] } });
+    ro.run('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)', ...['ws-ob', 'outbox-ws', 'Outbox WS', '#123456', doc, 1, T, T, 0]);
+    const backupRes = await op.post('/api/backup/runs', { scope: { kind: 'workspace', id: 'ws-ob' } });
+    assert.equal(backupRes.status, 200);
+    for (let i = 0; i < 200; i++) {
+      const cur = await op.get('/api/backup/runs/current');
+      if (cur.data.stage === 'done' || cur.data.stage === 'failed') break;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    const res = await op.post('/api/backup/restore/overwrite', { runId: backupRes.data.runId, targetId: 'ws-ob', confirmName: 'Outbox WS' });
+    assert.equal(res.status, 200, `trigger: ${JSON.stringify(res.data)}`);
+    await pollRoute(ro, db => db.get("select id from restore_runs where id = ? and status = 'done'", res.data.runId) ?? null);
+    const claims = ro.all('select * from email_outbox where dedup_key like ? order by recipient', `restore-alert:${res.data.runId}:%`);
+    assert.equal(claims.length, 2, `one claim per recipient (Backup Operator + Super Admin): ${JSON.stringify(claims.map(c => c.recipient))}`);
+    assert.deepEqual(claims.map(c => c.recipient).sort(), ['ow-outbox-op@test.local', ADMIN.email].sort(), 'recipients = Backup Operators ∪ Super Admins');
+    for (const c of claims) {
+      assert.equal(c.kind, 'restore_alert');
+      const ctx = JSON.parse(c.ctx);
+      assert.equal(ctx.outcome, 'done');
+      assert.equal(ctx.runId, res.data.runId);
+    }
+  } finally {
+    ro.close();
+    await srv.stop();
+    fs.rmSync(path.dirname(srv.dbPath), { recursive: true, force: true });
+  }
+});
