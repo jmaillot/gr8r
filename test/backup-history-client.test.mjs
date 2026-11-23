@@ -136,6 +136,8 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.historyAction', 'page.backup.historyTitle', 'page.backup.historyCap', 'page.backup.historyEmpty',
     'page.backup.historyLoading', 'page.backup.historyUnavailable', 'page.backup.errorToggle',
     'page.backup.downloadAction',
+    'page.backup.verifyChecksumAction', 'page.backup.checksumChecking', 'page.backup.checksumOk',
+    'page.backup.checksumFail', 'page.backup.checksumLastCheck',
     'page.backup.durLabel', 'page.backup.sizeLabel',
     'page.backup.statusRunning', 'page.backup.statusSucceeded', 'page.backup.statusFailed',
     'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
@@ -223,4 +225,35 @@ test('90-02: the download CTA renders ONLY for payload location local|s3 — the
   assert.match(actionsSrc, /filenameFrom\(res\.headers\.get\('Content-Disposition'\)\)/, 'the filename derives from the server header');
   assert.match(actionsSrc, /saveBlob\(await res\.blob\(\)/, 'the bytes ride saveBlob');
   assert.match(actionsSrc, /credentials: 'same-origin'/, 'the GET rides the same-origin session cookies');
+});
+
+test('90-02 task 3: the verify CTA renders only for non-missing runs — busy swap + durable keyed badge, never a toast on the result', () => {
+  /* The CTA shares the download's payload-flag condition: the bytes exist
+     (local | s3) — a missing run renders NO verify CTA either. */
+  assert.match(pagesSrc, /data-a="backupVerifyChecksum"/, 'the verify CTA exists');
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const runRow ='), pagesSrc.indexOf('const historyCard ='));
+  /* In-flight: the label swaps to the keyed checking copy, the button
+     disables and the row flags aria-busy — never a fabricated result during
+     an S3 stream-back (D-90-11). */
+  assert.match(runRowBody, /chkBusy \? ' disabled aria-busy="true"'/, 'the busy CTA is disabled + aria-busy');
+  assert.match(runRowBody, /chkBusy \? t\('page\.backup\.checksumChecking'\) : /, 'the busy label swaps to the keyed checking copy');
+  assert.match(runRowBody, /aria-busy="true"/, 'the row carries aria-busy while checking');
+  /* The result is the DURABLE keyed badge + the server timestamp line —
+     rendered from the persisted payload (checksum_ok / checksum_checked_at). */
+  assert.match(runRowBody, /chk === 1 \? `<span class="badge green">/, 'the match badge is keyed green');
+  assert.match(runRowBody, /chk === 0 \? `<span class="badge red">/, 'the mismatch badge is keyed red');
+  assert.match(runRowBody, /t\('page\.backup\.checksumLastCheck', \{ time: /, 'the server timestamp renders in the keyed last-check line');
+  /* The action: POST via the api method, refusals through the closed map,
+     the persisted result re-renders through the 87-04 open-history refresh
+     (payload-derived — the client stores no verify result) — and NO toast
+     call sits on the result path (restoreToast is refusal-only, D-90-11). */
+  const actionHead = actionsSrc.slice(actionsSrc.indexOf('A.backupVerifyChecksum ='), actionsSrc.indexOf('};', actionsSrc.indexOf('A.backupVerifyChecksum =')));
+  assert.ok(actionHead.includes('api.backupVerifyChecksum(id)'), 'the action rides the api verify method');
+  assert.ok(actionHead.includes('toast(restoreToast('), 'refusals surface through the closed map — restoreToast wrapped in toast() (the click delegation discards handler return values)');
+  assert.ok(actionHead.includes('refreshOpenBackupHistories()'), 'the result re-renders through the open-history refresh');
+  /* The RESULT path (success) carries no toast — the durable keyed badge is
+     the feedback; the toast call belongs to the refusal branch only. */
+  const afterRefresh = actionHead.slice(actionHead.indexOf('refreshOpenBackupHistories()'));
+  assert.ok(!afterRefresh.includes('toast('), 'no toast on the success path — the durable badge is the feedback');
+  assert.match(apiSrc, /async backupVerifyChecksum\(runId/, 'api.js exports the verify method');
 });

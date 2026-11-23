@@ -143,8 +143,16 @@ const runRow = run => {
      payload-flag chrome — it renders ONLY when the server-derived location
      says the bytes exist (local | s3); a missing run renders ZERO download
      CTAs, never a disabled/dead button. The client never derives location
-     itself (D-23 doctrine). */
-  return `<div style="padding:8px 0;border-top:1px solid var(--border)">
+     itself (D-23 doctrine).
+     90-02 (D-90-11): the verify CTA shares that condition and the result is
+     the DURABLE keyed badge + server timestamp — the only client state is
+     the in-flight flag (S.ui.backupChecksumBusy), never a fabricated result
+     during an S3 stream-back: the badge re-renders payload-derived after the
+     refresh (checksum_ok / checksum_checked_at ride the history payload),
+     and NO toast sits on the result path. */
+  const chkBusy = !!S.ui.backupChecksumBusy?.has(run.id);
+  const chk = run.checksum_ok == null ? null : Number(run.checksum_ok);
+  return `<div style="padding:8px 0;border-top:1px solid var(--border)"${chkBusy ? ' aria-busy="true"' : ''}>
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
       <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
@@ -155,6 +163,9 @@ const runRow = run => {
       ${run.sha256 ? `<span class="mono faint" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</span>` : ''}
       ${run.filename ? `<span class="mono faint">${esc(run.filename)}</span>` : ''}
       ${run.location === 'local' || run.location === 's3' ? `<button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>` : ''}
+      ${run.location === 'local' || run.location === 's3' ? `<button class="btn btn-secondary btn-sm" data-a="backupVerifyChecksum" data-id="${esc(run.id)}"${chkBusy ? ' disabled aria-busy="true"' : ''}>${chkBusy ? t('page.backup.checksumChecking') : `${ic('shield-check', 13)}${t('page.backup.verifyChecksumAction')}`}</button>` : ''}
+      ${chk === 1 ? `<span class="badge green">${t('page.backup.checksumOk')}</span>` : chk === 0 ? `<span class="badge red">${t('page.backup.checksumFail')}</span>` : ''}
+      ${run.checksum_checked_at ? `<span class="faint">${t('page.backup.checksumLastCheck', { time: esc(fmtDate(run.checksum_checked_at)) })}</span>` : ''}
     </div>
     ${
       run.error

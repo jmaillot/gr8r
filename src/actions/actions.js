@@ -5278,12 +5278,44 @@ A.backupDownload = async el => {
       } catch {
         /* non-JSON error body */
       }
-      return restoreToast(data?.code, data?.error);
+      return toast(restoreToast(data?.code, data?.error), { kind: 'err' });
     }
     const [{ saveBlob, filenameFrom }] = await Promise.all([import('../core/download.js')]);
     saveBlob(await res.blob(), filenameFrom(res.headers.get('Content-Disposition')));
   } finally {
     el.disabled = false;
+  }
+};
+
+/* 90-02 (D-90-11): the verify-checksum action — POST the re-hash route and
+   surface the RESULT as the durable keyed badge: the only client state is
+   the in-flight flag (row aria-busy + the checksumChecking label swap), the
+   persisted result re-renders payload-derived through the 87-04 open-history
+   refresh (checksum_ok / checksum_checked_at ride the history payload — the
+   client stores no verify result, never a fabricated one during an S3
+   stream-back), and NO toast sits on the result path. Refusals surface
+   through the closed RESTORE_REFUSAL_TOASTS map — the house refusal idiom
+   (restoreRun et al.): restoreToast wrapped in toast(), because the click
+   delegation discards handler return values. */
+A.backupVerifyChecksum = async el => {
+  const id = el.dataset.id || '';
+  const busy = (S.ui.backupChecksumBusy = S.ui.backupChecksumBusy || new Set());
+  busy.add(id);
+  render();
+  try {
+    const res = await api.backupVerifyChecksum(id);
+    if (!res.ok) {
+      if (res.status === 401) return; // D-28: the central intercept owns the teardown
+      /* call()'s refusal envelope carries the centrally translated message
+         in .error (the raw code is dropped), so restoreToast resolves
+         through tErr's raw fallback when the map misses. */
+      return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+    }
+    /* Both outcomes persisted server-side — the badge is the payload's. */
+    await refreshOpenBackupHistories();
+  } finally {
+    busy.delete(id);
+    render();
   }
 };
 

@@ -474,6 +474,13 @@ export const api = {
   async backupRuns({ taskId, signal } = {}) {
     return call('GET', `/api/backup/runs?taskId=${encodeURIComponent(taskId)}`, undefined, { signal });
   },
+  /* 90-02 (D-90-11): the verify re-hash — 200 { ok, checkedAt } on BOTH
+     outcomes (a mismatch is a RESULT, never a refusal); the refusal
+     vocabulary (backupRoleRequired / restoreArchiveMissing / tooManyAttempts)
+     flows through call()'s central keyed handling. */
+  async backupVerifyChecksum(runId, { signal } = {}) {
+    return call('POST', '/api/backup/verify-checksum', { runId }, { signal });
+  },
   /* ==================================================================
      89-06 (BKRST-01..04, D-89-14..23): the restore client surface. The
      five restore methods sit beside the backup family; every route

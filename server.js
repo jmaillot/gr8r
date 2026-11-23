@@ -9159,14 +9159,14 @@ async function handleApi(req, res, url) {
         };
       });
     if (taskId === 'manual') {
-      const rows = await db.all('select id, task_id, scope, uploaded, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      const rows = await db.all('select id, task_id, scope, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
       return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     if (!(await db.get('select id from backup_tasks where id = ?', [taskId]))) {
       return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     }
-    const rows = await db.all('select id, task_id, scope, uploaded, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    const rows = await db.all('select id, task_id, scope, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
     return json(res, 200, { runs: historyChrome(rows) });
   }
 
