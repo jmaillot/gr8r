@@ -1482,8 +1482,6 @@
   "settings.apikeys.newKey": "Your new API key",
   "settings.apikeys.createdHint": "Copy this key now — it is shown only once.",
   "settings.apikeys.onceHint": "Projects Studio stores only a hash. If you lose it, create a new key.",
-  "settings.operator.title": "Super Admin console",
-  "settings.operator.lead": "Every account on this instance. Revoking signs a user out of all their devices; they can sign in again right away.",
   "settings.operator.youBadge": "You",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Revoke sessions",
@@ -2090,7 +2088,6 @@
   "page.governance.emptyBody": "No workspace exists on this instance yet. New workspaces appear here the moment they are created.",
   "page.governance.noMatchesTitle": "No matches",
   "page.governance.noMatchesBody": "No workspace name or slug matches “{query}”. Clear the filter to see all workspaces.",
-  "page.governance.noMatchesOpBody": "No user name or email matches “{query}”. Clear the filter to see all users.",
   "page.governance.segAll": "All",
   "page.governance.segActive": "Active",
   "page.governance.segArchived": "Archived",
@@ -2301,5 +2298,10 @@
   "restore.alert.done.subject": "Restore completed: {name}",
   "restore.alert.done.body": "The restore run for “{name}” completed — the restored copy is live under its new name.",
   "restore.alert.failed.subject": "Restore failed: {name}",
-  "restore.alert.failed.body": "The restore run for “{name}” failed. Check the restore history for details."
+  "restore.alert.failed.body": "The restore run for “{name}” failed. Check the restore history for details.",
+  "page.governance.superTitle": "Super Admins & roles",
+  "page.governance.superSegAria": "Switch between Super Admin management and instance roles",
+  "page.governance.superSegAdmins": "Super Admins",
+  "page.governance.superRosterEmptyTitle": "No Super Admins",
+  "page.governance.superRosterEmptyBody": "The instance owner is always a Super Admin. Search below to promote one."
 }

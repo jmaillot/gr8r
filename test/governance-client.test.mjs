@@ -122,12 +122,13 @@ test('settings.js carries zero operatorCard/refreshOperatorUsers/operator-stage 
   assert.doesNotMatch(settings, /operator(Users|Promote|Revoke|Demote)/, 'a pointer remnant survives in settings.js (Pitfall 9)');
 });
 
-/* governance.js carries the relocated markup, keys reused verbatim */
-test('governance.js mounts the Operators sblock: settings.operator.title + promote/demote/revoke rows', () => {
+/* governance.js carries the seg-staged Super Admins console (90-01): the
+   operator action family relocated verbatim into the roster rows */
+test('governance.js mounts the seg-staged Super Admins console: superTitle shell + promote/demote/revoke rows', () => {
   const p = page();
-  assert.match(p, /export function operatorCard\(\)/, 'operatorCard did not relocate into governance.js');
-  assert.match(p, /t\('settings\.operator\.title'\)/, 'the Operators section heading key is not reused verbatim');
-  assert.match(p, /t\('settings\.operator\.lead'\)/, 'the Operators section lead is not reused verbatim');
+  assert.match(p, /export function superAdminsView\(\)/, 'the console did not replace the operator section in governance.js');
+  assert.doesNotMatch(p, /operatorCard/, 'the legacy operatorCard function survives the 90-01 rewrite');
+  assert.match(p, /t\('page\.governance\.superTitle'\)/, 'the console shell heading key is missing');
   for (const a of ['operatorPromote', 'operatorDemoteAsk', 'operatorDemote', 'operatorDemoteCancel', 'operatorRevokeAsk', 'operatorRevokeConfirm', 'operatorRevokeCancel']) {
     assert.match(p, new RegExp(`data-a="${a}"`), `the ${a} control did not relocate`);
   }
@@ -154,14 +155,14 @@ test('the operator api methods are called only from the governance path (actions
    through the unchanged Phase 78 endpoints.
    ===================================================================== */
 
-/* (a) the operator section renders ONLY when the server payload says isInstanceAdmin */
-test('the governance page renders the Operators section only for isInstanceAdmin (WSG-09, D-11/D-112)', () => {
+/* (a) the console section renders ONLY when the server payload says isInstanceAdmin */
+test('the governance page renders the console section only for isInstanceAdmin (WSG-09, D-11/D-112)', () => {
   const p = page();
-  assert.match(p, /api\.user\?\.isInstanceAdmin \? operatorCard\(\) : ''/, 'the operator section is not gated on the server isInstanceAdmin payload');
+  assert.match(p, /api\.user\?\.isInstanceAdmin \? superAdminsView\(\) : ''/, 'the console section is not gated on the server isInstanceAdmin payload');
   assert.match(p, /api\.user\?\.isInstanceAdmin && !S\.ui\.operatorUsers\) refreshOperatorUsers\(\)/, 'the operator users fetch is not gated on the server payload');
-  const card = p.match(/export function operatorCard\(\) \{[\s\S]*?\n\}/);
-  assert.ok(card, 'operatorCard not found in governance.js');
-  assert.match(card[0], /if \(!all\) return '';/, 'the empty-state null guard moved');
+  const roster = p.match(/function superRosterView\(\) \{[\s\S]*?\n\}/);
+  assert.ok(roster, 'superRosterView not found in governance.js');
+  assert.match(roster[0], /if \(!all\) return '';/, 'the empty-state null guard moved');
 });
 
 /* (b) promote/demote/revoke still call the SAME Phase 78 api methods — no endpoint drift */

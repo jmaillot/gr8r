@@ -113,58 +113,64 @@ export function pageGovernance() {
       <div class="row" style="margin-bottom:12px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-q" data-in="govQ" placeholder="${t('page.governance.searchWs')}" value="${esc(S.ui.govQ || '')}" aria-label="${t('page.governance.searchWs')}"></div>${seg}</div>
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
-    ${api.user?.isInstanceAdmin ? operatorCard() : ''}
-    ${api.user?.isInstanceAdmin ? rolesCard() : ''}
+    ${api.user?.isInstanceAdmin ? superAdminsView() : ''}
   </div>`;
 }
 
 /* =====================================================================
-   OPERATORS (79-03, WSG-09/D-01) — relocated from the Settings sessions
-   tab (Phase 78/22 operatorCard): the governance page is the SINGLE
-   operator-management surface. The markup, the D-90 inline-confirm
-   stages (S.ui.operatorRevoke / S.ui.operatorDemote) and the
-   settings.operator.* locale keys are reused verbatim; the underlying
-   Phase 78 endpoints (GET/POST /api/auth/operator/users*) are untouched.
-   Rendered ONLY for isInstanceAdmin (server ground truth — D-112); the
-   list comes from refreshOperatorUsers() — never from the document.
-   Owner rows are immune (D-119); the operator's own row explains the
-   keep-current semantics (D-118). is_instance_admin is multi-seat
-   (78-02, WSG-06/D-78-2): plain rows gain Make-operator, operator rows
-   gain the demote inline-confirm; the last-operator refusal is the
-   server's 409 (lastOperator) surfaced as a keyed err toast.
+   SUPER ADMINS CONSOLE (90-01, SACON-01/SC-1, D-90-1..6) — ONE seg-staged
+   section replacing the previously stacked operator + roles sblocks. The
+   .seg control is the govSeg idiom (research Pitfall 7: there is NO tab
+   component on this page) switching between the Super Admins roster
+   (DEFAULT — roster-first is the seed's non-negotiable core) and the
+   Instance Roles card relocated verbatim inside the switched section.
+   Seg state lives in S.ui.govSuperSeg ('admins' | 'roles'), torn down on
+   route exit. The whole section renders ONLY for isInstanceAdmin (server
+   ground truth — D-112; the D-112 gate is unchanged). Every payload
+   string renders through esc() — text nodes only, no raw interpolation
+   (T-79-10). Zero API change anywhere: the split is presentation over the
+   existing GET /api/auth/operator/users payload (seed Option B).
    ===================================================================== */
-export function operatorCard() {
+export function superAdminsView() {
+  const segV = S.ui.govSuperSeg || 'admins';
+  const seg = `<div class="seg" role="group" aria-label="${t('page.governance.superSegAria')}">${[
+    ['admins', 'page.governance.superSegAdmins'],
+    ['roles', 'page.governance.rolesTitle'],
+  ]
+    .map(([v, k]) => `<button class="${segV === v ? 'on' : ''}" data-a="govSuperSeg" data-v="${v}" aria-pressed="${segV === v}">${t(k)}</button>`)
+    .join('')}</div>`;
+  const body = segV === 'roles' ? rolesCard() : superRosterView();
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.superTitle')}</h2><div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">${seg}</div>${body}</div>`;
+}
+
+/* The Super Admins roster (D-90-2): is_instance_admin rows ONLY from the
+   S.ui.operatorUsers payload — the search input mounts here (S.ui.govOpQ);
+   the ≥2-char candidate search over the SAME payload rides below it (the
+   roster never filters on the query). The inline-confirm stages (revoke /
+   demote) and the row markup carry over verbatim — D-118/D-119 semantics
+   untouched; owner rows are immune, the operator's own row explains the
+   keep-current semantics. Roster-empty is a defensive keyed guard (the
+   instance owner is always a Super Admin — never an expected shape). */
+function superRosterView() {
   const all = S.ui.operatorUsers;
   if (!all) return '';
   const meId = api.user?.id;
-  /* Client-side name/email filter — same scaling affordance and pattern as
-     the workspaces filter (govQ): state in S.ui.govOpQ, never server
-     pagination (planner assumption: small instance). The inline confirm
-     stages (revoke/demote) keep working regardless of the filter — rows
-     hidden by the filter simply don't render their stage. */
-  const q = (S.ui.govOpQ || '').trim().toLowerCase();
-  const rows = q
-    ? all.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
-    : all;
-  const search = `<div class="row" style="margin-bottom:10px;gap:8px"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-op-q" data-in="govOpQ" placeholder="${t('page.governance.searchOp')}" value="${esc(S.ui.govOpQ || '')}" aria-label="${t('page.governance.searchOp')}"></div></div>`;
-  const list = rows.length
-    ? rows
-        .map(u =>
-          srow(
-            `<span class="row" style="gap:8px">${esc(u.name || '')}<span class="faint">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
-            u.last_login_at ? ago(u.last_login_at) : '—',
-            S.ui.operatorRevoke === u.id
-              ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
-              : S.ui.operatorDemote === u.id
-                ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
-                : u.is_instance_admin
-                  ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
-                  : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
-          ),
-        )
-        .join('')
-    : empty('search', t('popover.noMatches'), t('page.governance.noMatchesOpBody', { query: esc(q) }), '', 'sm', 1);
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('settings.operator.title')}</h2><p class="hint" style="margin-bottom:10px">${t('settings.operator.lead')}</p>${search}<div class="panel">${list}</div></div>`;
+  const admins = all.filter(u => u.is_instance_admin);
+  const rosterRow = u =>
+    srow(
+      `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
+      u.last_login_at ? ago(u.last_login_at) : '—',
+      S.ui.operatorRevoke === u.id
+        ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
+        : S.ui.operatorDemote === u.id
+          ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
+          : u.is_instance_admin
+            ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
+            : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
+    );
+  const search = `<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-op-q" data-in="govOpQ" placeholder="${t('page.governance.searchOp')}" value="${esc(S.ui.govOpQ || '')}" aria-label="${t('page.governance.searchOp')}"></div></div>`;
+  const list = admins.length ? admins.map(rosterRow).join('') : empty('users', t('page.governance.superRosterEmptyTitle'), t('page.governance.superRosterEmptyBody'), '', 'sm', 1);
+  return `${search}<div class="panel">${list}</div>`;
 }
 
 /* =====================================================================
@@ -374,6 +380,11 @@ export const govOrphanTeardown = () => {
   if (S.ui.govRoleMod) S.ui.govRoleMod = null;
   if (S.ui.govRoleDup) S.ui.govRoleDup = null;
   if (S.ui.govRoleRevoke) S.ui.govRoleRevoke = null;
+  /* 90-01: the console's seg stage and the candidate slice counter never
+     survive route exit either — a stale seg/zero slice state must never
+     cross a route boundary. */
+  S.ui.govSuperSeg = null;
+  S.ui.govSuperShown = null;
 };
 /* Phase 60 (D-05): the teardown registry pattern — no poll to kill here, but
    a stale orphan-disposition stage must never survive route exit. */

@@ -1482,8 +1482,6 @@
   "settings.apikeys.newKey": "Tu nueva clave API",
   "settings.apikeys.createdHint": "Copia esta clave ahora — solo se muestra una vez.",
   "settings.apikeys.onceHint": "Projects Studio guarda solo un hash. Si la pierdes, crea una clave nueva.",
-  "settings.operator.title": "Consola de Super Admin",
-  "settings.operator.lead": "Todas las cuentas de esta instancia. Revocar cierra la sesión de un usuario en todos sus dispositivos; puede iniciar sesión de nuevo de inmediato.",
   "settings.operator.youBadge": "Tú",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Revocar sesiones",
@@ -2090,7 +2088,6 @@
   "page.governance.emptyBody": "Aún no existe ningún espacio de trabajo en esta instancia. Los nuevos aparecen aquí en cuanto se crean.",
   "page.governance.noMatchesTitle": "Sin coincidencias",
   "page.governance.noMatchesBody": "Ningún nombre o slug de espacio de trabajo coincide con “{query}”. Borra el filtro para verlos todos.",
-  "page.governance.noMatchesOpBody": "Ningún nombre o correo electrónico de usuario coincide con «{query}». Borra el filtro para ver todos los usuarios.",
   "page.governance.segAll": "Todos",
   "page.governance.segActive": "Activos",
   "page.governance.segArchived": "Archivados",
@@ -2301,5 +2298,10 @@
   "restore.alert.done.subject": "Restauración completada: {name}",
   "restore.alert.done.body": "La restauración de «{name}» se completó — la copia restaurada está disponible con su nuevo nombre.",
   "restore.alert.failed.subject": "La restauración falló: {name}",
-  "restore.alert.failed.body": "La restauración de «{name}» falló. Consulta el historial de restauraciones para más detalles."
+  "restore.alert.failed.body": "La restauración de «{name}» falló. Consulta el historial de restauraciones para más detalles.",
+  "page.governance.superTitle": "Super Admins y roles",
+  "page.governance.superSegAria": "Cambiar entre la gestión de Super Admins y los roles de la instancia",
+  "page.governance.superSegAdmins": "Super Admins",
+  "page.governance.superRosterEmptyTitle": "No hay Super Admins",
+  "page.governance.superRosterEmptyBody": "El propietario de la instancia siempre es un Super Admin. Busque abajo para promocionar uno."
 }

@@ -1482,8 +1482,6 @@
   "settings.apikeys.newKey": "Votre nouvelle clé API",
   "settings.apikeys.createdHint": "Copiez cette clé maintenant — elle n’est affichée qu’une seule fois.",
   "settings.apikeys.onceHint": "Projects Studio ne stocke qu’un hash. Si vous la perdez, créez une nouvelle clé.",
-  "settings.operator.title": "Console Super Admin",
-  "settings.operator.lead": "Tous les comptes de cette instance. La révocation déconnecte un utilisateur de tous ses appareils ; il peut se reconnecter immédiatement.",
   "settings.operator.youBadge": "Vous",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Révoquer les sessions",
@@ -2130,7 +2128,6 @@
   "page.governance.emptyBody": "Aucun espace de travail n’existe encore sur cette instance. Les nouveaux apparaissent ici dès leur création.",
   "page.governance.noMatchesTitle": "Aucun résultat",
   "page.governance.noMatchesBody": "Aucun nom ou identifiant d’espace de travail ne correspond à « {query} ». Effacez le filtre pour tout afficher.",
-  "page.governance.noMatchesOpBody": "Aucun nom ou e-mail d’utilisateur ne correspond à « {query} ». Effacez le filtre pour voir tous les utilisateurs.",
   "page.governance.segAll": "Tous",
   "page.governance.segActive": "Actifs",
   "page.governance.segArchived": "Archivés",
@@ -2341,5 +2338,10 @@
   "restore.alert.done.subject": "Restauration terminée : {name}",
   "restore.alert.done.body": "La restauration pour « {name} » est terminée — la copie restaurée est en ligne sous son nouveau nom.",
   "restore.alert.failed.subject": "Échec de la restauration : {name}",
-  "restore.alert.failed.body": "La restauration pour « {name} » a échoué. Consultez l’historique des restaurations pour plus de détails."
+  "restore.alert.failed.body": "La restauration pour « {name} » a échoué. Consultez l’historique des restaurations pour plus de détails.",
+  "page.governance.superTitle": "Super Admins et rôles",
+  "page.governance.superSegAria": "Basculer entre la gestion des Super Admins et les rôles de l’instance",
+  "page.governance.superSegAdmins": "Super Admins",
+  "page.governance.superRosterEmptyTitle": "Aucun Super Admin",
+  "page.governance.superRosterEmptyBody": "Le propriétaire de l’instance est toujours un Super Admin. Effectuez une recherche ci-dessous pour en promouvoir un."
 }

@@ -5522,6 +5522,13 @@ A.govSeg = el => {
   S.ui.govSegV = el.dataset.v;
   render();
 };
+/* 90-01: the console's seg switch mirrors the govSeg handler — set the
+   staged stage, rerender; no refetch on switch (both views render from
+   their already-staged payloads). */
+A.govSuperSeg = el => {
+  S.ui.govSuperSeg = el.dataset.v;
+  render();
+};
 const govWsById = id => (S.ui.govWs || []).find(w => w.id === id);
 /* Pitfall 5 separation: the three delete-path refusals land on three DISTINCT
    keyed toasts so the operator can tell exactly which list to fix. */

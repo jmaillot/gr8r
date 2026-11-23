@@ -1482,8 +1482,6 @@
   "settings.apikeys.newKey": "Ihr neuer API-Schlüssel",
   "settings.apikeys.createdHint": "Kopieren Sie diesen Schlüssel jetzt – er wird nur einmal angezeigt.",
   "settings.apikeys.onceHint": "Projects Studio speichert nur einen Hash. Wenn Sie ihn verlieren, erstellen Sie einen neuen Schlüssel.",
-  "settings.operator.title": "Super-Admin-Konsole",
-  "settings.operator.lead": "Jedes Konto auf dieser Instanz. Widerrufen meldet einen Benutzer von allen seinen Geräten ab; er kann sich sofort wieder anmelden.",
   "settings.operator.youBadge": "Sie",
   "settings.operator.ownerBadge": "Super-Admin",
   "settings.operator.revokeShort": "Sitzungen widerrufen",
@@ -2090,7 +2088,6 @@
   "page.governance.emptyBody": "Auf dieser Instanz existiert noch kein Workspace. Neue Workspaces erscheinen hier, sobald sie erstellt wurden.",
   "page.governance.noMatchesTitle": "Keine Treffer",
   "page.governance.noMatchesBody": "Kein Workspace-Name oder -Slug stimmt mit „{query}“ überein. Filter löschen, um alle zu sehen.",
-  "page.governance.noMatchesOpBody": "Kein Benutzername oder keine E-Mail passt zu „{query}“. Filter löschen, um alle Benutzer zu sehen.",
   "page.governance.segAll": "Alle",
   "page.governance.segActive": "Aktiv",
   "page.governance.segArchived": "Archiviert",
@@ -2301,5 +2298,10 @@
   "restore.alert.done.subject": "Wiederherstellung abgeschlossen: {name}",
   "restore.alert.done.body": "Die Wiederherstellung für „{name}“ ist abgeschlossen — die wiederhergestellte Kopie ist unter ihrem neuen Namen live.",
   "restore.alert.failed.subject": "Wiederherstellung fehlgeschlagen: {name}",
-  "restore.alert.failed.body": "Die Wiederherstellung für „{name}“ ist fehlgeschlagen. Details finden Sie im Wiederherstellungsverlauf."
+  "restore.alert.failed.body": "Die Wiederherstellung für „{name}“ ist fehlgeschlagen. Details finden Sie im Wiederherstellungsverlauf.",
+  "page.governance.superTitle": "Super Admins & Rollen",
+  "page.governance.superSegAria": "Zwischen der Super-Admin-Verwaltung und den Instanzrollen wechseln",
+  "page.governance.superSegAdmins": "Super Admins",
+  "page.governance.superRosterEmptyTitle": "Keine Super Admins",
+  "page.governance.superRosterEmptyBody": "Der Instanz-Eigentümer ist immer ein Super Admin. Suchen Sie unten, um einen zu befördern."
 }

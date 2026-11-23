@@ -1482,8 +1482,6 @@
   "settings.apikeys.newKey": "Je nieuwe API-sleutel",
   "settings.apikeys.createdHint": "Kopieer deze sleutel nu — hij wordt slechts één keer getoond.",
   "settings.apikeys.onceHint": "Projects Studio bewaart alleen een hash. Als je hem verliest, maak een nieuwe sleutel aan.",
-  "settings.operator.title": "Super Admin-console",
-  "settings.operator.lead": "Elk account op deze instantie. Intrekken logt een gebruiker uit op al zijn apparaten; die kan direct weer inloggen.",
   "settings.operator.youBadge": "Jij",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Sessies intrekken",
@@ -2090,7 +2088,6 @@
   "page.governance.emptyBody": "Er bestaat nog geen workspace op deze instantie. Nieuwe workspaces verschijnen hier zodra ze zijn aangemaakt.",
   "page.governance.noMatchesTitle": "Geen treffers",
   "page.governance.noMatchesBody": "Geen workspace-naam of -slug komt overeen met “{query}”. Wis het filter om alles te zien.",
-  "page.governance.noMatchesOpBody": "Geen gebruikersnaam of e-mail komt overeen met „{query}”. Wis het filter om alle gebruikers te zien.",
   "page.governance.segAll": "Alle",
   "page.governance.segActive": "Actief",
   "page.governance.segArchived": "Gearchiveerd",
@@ -2301,5 +2298,10 @@
   "restore.alert.done.subject": "Herstel voltooid: {name}",
   "restore.alert.done.body": "Het herstel van „{name}” is voltooid — de herstelde kopie staat live onder zijn nieuwe naam.",
   "restore.alert.failed.subject": "Herstel mislukt: {name}",
-  "restore.alert.failed.body": "Het herstel van „{name}” is mislukt. Bekijk de herstelgeschiedenis voor details."
+  "restore.alert.failed.body": "Het herstel van „{name}” is mislukt. Bekijk de herstelgeschiedenis voor details.",
+  "page.governance.superTitle": "Super Admins en rollen",
+  "page.governance.superSegAria": "Wisselen tussen het beheer van Super Admins en de instantierollen",
+  "page.governance.superSegAdmins": "Super Admins",
+  "page.governance.superRosterEmptyTitle": "Geen Super Admins",
+  "page.governance.superRosterEmptyBody": "De instantie-eigenaar is altijd een Super Admin. Zoek hieronder om er een te promoten."
 }
