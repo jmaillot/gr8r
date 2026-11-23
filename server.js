@@ -11959,13 +11959,23 @@ async function handleUnsubscribe(req, res, token) {
   const payload = valid ? decodeUnsubscribePayload(token) : null;
   if (payload && method === 'POST') {
     /* D-10: merge-upsert the stored prefs row (convergent, replay-safe,
-       creates the row if sparse), scope exactly (token.wsId, token.userId). */
-    const merged = { ...(await getStoredNotifPrefs(payload.userId, payload.wsId)), email_digest: false };
-    await db.run('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [
-      payload.wsId,
-      payload.userId,
-      JSON.stringify(merged),
-    ]);
+       creates the row if sparse). Merge source is getStoredNotifPrefs
+       (whitelist-filtered, K-10) — NEVER blind-replace the row.
+       Phase 91 (D-02): the GLOBAL 0x02 token carries no wsId — the flip
+       applies to EVERY workspace the user is a member of (one footer link
+       unsubscribes the whole account's digests). The 0x01 path keeps its
+       exact (token.wsId, token.userId) scope, byte-unchanged. */
+    const targets = payload.wsId
+      ? [payload.wsId]
+      : (await db.all('select workspace_id from memberships where user_id = ?', [payload.userId])).map(m => m.workspace_id);
+    for (const wsId of targets) {
+      const merged = { ...(await getStoredNotifPrefs(payload.userId, wsId)), email_digest: false };
+      await db.run('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)', [
+        wsId,
+        payload.userId,
+        JSON.stringify(merged),
+      ]);
+    }
   }
   /* D-02 (post-verification only): the page locale rides the token user's
      users.locale row, clamped exactly like the I18N-01 pattern — NULL,

@@ -165,14 +165,21 @@ function unsubscribeUrlGlobal(key, appUrl, userId) {
 }
 
 /* Length-guard-then-timingSafeEqual — the server.js timingSafeHex form
-   (L414). Phase 42's route consumes this exact verification path. */
+   (L414). Phase 42's route consumes this exact verification path.
+   Phase 91 (D-02): the verifier dispatches on version byte + payload LENGTH,
+   accepting the frozen 0x01 framing OR the 0x02 user-scoped framing. The
+   length is part of the version identity, so a flipped version byte on a
+   wrong-length token stays rejected. */
 function verifyUnsubscribeToken(key, tokenB64url) {
   try {
     const raw = Buffer.from(String(tokenB64url), 'base64url');
-    if (raw.length !== UNSUB_PAYLOAD_BYTES + UNSUB_MAC_BYTES) return false;
-    if (raw[0] !== UNSUB_TOKEN_VERSION) return false;
-    const payload = raw.subarray(0, UNSUB_PAYLOAD_BYTES);
-    const mac = raw.subarray(UNSUB_PAYLOAD_BYTES);
+    const version = raw[0];
+    const payloadBytes =
+      version === UNSUB_TOKEN_VERSION ? UNSUB_PAYLOAD_BYTES : version === UNSUB_USER_TOKEN_VERSION ? UNSUB_USER_PAYLOAD_BYTES : 0;
+    if (!payloadBytes) return false;
+    if (raw.length !== payloadBytes + UNSUB_MAC_BYTES) return false;
+    const payload = raw.subarray(0, payloadBytes);
+    const mac = raw.subarray(payloadBytes);
     const want = crypto.createHmac('sha256', key).update(payload).digest();
     return mac.length === want.length && crypto.timingSafeEqual(mac, want);
   } catch {
@@ -182,17 +189,26 @@ function verifyUnsubscribeToken(key, tokenB64url) {
 
 /* Phase 42 (UNSUB-02): decode-after-verify — verification (above) covers the
    MAC over the whole framing, so decoding the payload AFTER a successful
-   verify is safe. Pure: returns { wsId, userId } or null on any framing
+   verify is safe. Pure: returns { wsId, userId } for 0x01 (wsId present) or
+   { userId } for 0x02 (user-scoped — Phase 91 D-02), or null on any framing
    anomaly (length, version byte, undecodable input). Never verifies — the
    route must call verifyUnsubscribeToken FIRST. */
 function decodeUnsubscribePayload(tokenB64url) {
   try {
     const raw = Buffer.from(String(tokenB64url), 'base64url');
-    if (raw.length !== UNSUB_PAYLOAD_BYTES + UNSUB_MAC_BYTES) return null;
-    if (raw[0] !== UNSUB_TOKEN_VERSION) return null;
-    const wsId = raw.subarray(1, 1 + UNSUB_ID_BYTES).toString('utf8');
-    const userId = raw.subarray(1 + UNSUB_ID_BYTES, UNSUB_PAYLOAD_BYTES).toString('utf8');
-    return { wsId, userId };
+    const version = raw[0];
+    if (version === UNSUB_TOKEN_VERSION) {
+      if (raw.length !== UNSUB_PAYLOAD_BYTES + UNSUB_MAC_BYTES) return null;
+      const wsId = raw.subarray(1, 1 + UNSUB_ID_BYTES).toString('utf8');
+      const userId = raw.subarray(1 + UNSUB_ID_BYTES, UNSUB_PAYLOAD_BYTES).toString('utf8');
+      return { wsId, userId };
+    }
+    if (version === UNSUB_USER_TOKEN_VERSION) {
+      if (raw.length !== UNSUB_USER_PAYLOAD_BYTES + UNSUB_MAC_BYTES) return null;
+      const userId = raw.subarray(1, UNSUB_USER_PAYLOAD_BYTES).toString('utf8');
+      return { userId };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -1157,6 +1173,10 @@ function buildDigestAggregatedMessage(config, msg) {
     data: [...headers, '', body].join('\r\n') + '\r\n',
   };
 }
+
+/* TFA-MAIL: security alert — a 2FA factor was added or removed on the
+   account. Unlike notification emails this is NOT gated by workspace prefs:
+   security alerts always reach the account address. */
 function buildSecurityAlertMessage(config, msg) {
   const to = bareAddress(msg.to);
   if (!addressOk(to)) throw new Error('Security alert address is invalid');

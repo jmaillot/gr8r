@@ -381,3 +381,75 @@ test('badge-placement pin (D-11/D-12/48-02): the derived browser-blocked badge d
   assert.equal((block.match(/tog\('push_/g) || []).length, 4, 'the three push toggles + the push_due row (59-03 D-09) are rendered via tog()');
   assert.ok(!block.includes('disabled'), 'no toggle is disabled (D-12)');
 });
+
+/* =====================================================================
+   Phase 91 (D-02): the GLOBAL user-scoped unsubscribe token (0x02,
+   payload = 0x02 ‖ userId(36B) = 37B). One footer link flips
+   email_digest=false for EVERY workspace the user is a member of.
+   ===================================================================== */
+import { makeUserUnsubscribeToken } from '../mailer.js';
+
+test('Phase 91: a 0x02 global POST flips email_digest=false across ALL the user memberships, idempotent on replay; legacy 0x01 unchanged; tampered 0x02 neutral', async () => {
+  const fx = await bootUnsubServer();
+  try {
+    const { server, userId, key } = fx;
+    /* 3 extra workspaces: the user ends up a member of 4. */
+    const extraWs = [];
+    for (let i = 1; i <= 3; i++) {
+      withDb(server.dbPath, db => {
+        const wsId = `ws-91-${i}-${userId.slice(0, 8)}`;
+        db.prepare('insert into workspaces (id, name, slug, doc, created_at, updated_at) values (?,?,?,?,?,?)').run(wsId, `W91-${i}`, `w91-${i}-${i}`, '{}', Date.now(), Date.now());
+        db.prepare('insert into memberships (workspace_id, user_id, role) values (?,?,?)').run(wsId, userId, 'member');
+        /* Pre-seed NON-default prefs so the merge is proven (a blind
+           replace would also pass this test — the sparse-row case below
+           covers creation; here we pin merge semantics). */
+        db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(
+          wsId,
+          userId,
+          JSON.stringify({ email_digest: true, email_reminder: true, due_reminder: true, past_due: false }),
+        );
+        extraWs.push(wsId);
+      });
+    }
+    extraWs.push(fx.wsId);
+
+    const token = makeUserUnsubscribeToken(key, userId);
+    const res = await unsubFetch(server.base, token);
+    assert.equal(res.status, 200);
+    const body = await res.text();
+    assert.ok(body.includes(VERIFIED_TEXT), 'the verified page text is rendered for the global token');
+
+    /* ALL four memberships flipped, and only email_digest — the other
+       prefs survive the merge (D-10 merge-upsert, not blind replace). */
+    for (const wsId of extraWs) {
+      const stored = JSON.parse(prefsRow(server, wsId, userId).prefs);
+      assert.equal(stored.email_digest, false, `digest off in ${wsId}`);
+      if (wsId !== fx.wsId) {
+        assert.equal(stored.email_reminder, true, `non-digest pref preserved in ${wsId}`);
+        assert.equal(stored.due_reminder, true, `due_reminder preserved in ${wsId}`);
+      }
+    }
+
+    /* Idempotent replay: second POST answers the same verified envelope. */
+    const res2 = await unsubFetch(server.base, token);
+    assert.equal(res2.status, 200);
+    assert.ok((await res2.text()).includes(VERIFIED_TEXT), 'idempotent replay verified page');
+
+    /* Legacy 0x01 token still works byte-unchanged (no regression). */
+    const legacy = makeUnsubscribeToken(key, fx.wsId, userId);
+    const res3 = await unsubFetch(server.base, legacy);
+    assert.equal(res3.status, 200);
+    assert.ok((await res3.text()).includes(VERIFIED_TEXT), 'legacy 0x01 POST still verified');
+    const legacyRow = prefsRow(server, fx.wsId, userId);
+    assert.ok(legacyRow, 'legacy path still writes its scoped row');
+
+    /* Tampered 0x02 (byte-flipped payload) → neutral response, no throw. */
+    const raw = Buffer.from(token, 'base64url');
+    raw[5] ^= 0xff;
+    const res4 = await unsubFetch(server.base, raw.toString('base64url'));
+    assert.equal(res4.status, 200);
+    assert.ok((await res4.text()).includes(NEUTRAL_TEXT), 'tampered 0x02 answers the neutral envelope');
+  } finally {
+    await fx.server.stop();
+  }
+});
