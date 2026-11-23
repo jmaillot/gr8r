@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 90
 current_phase_name: Polish & Verification Sweep
-current_plan: Not started
-status: planning
-stopped_at: Completed 90-01-PLAN.md
-last_updated: "2026-11-23T14:45:01.871Z"
+current_plan: 3 (01 complete, 02 next)
+status: executing
+stopped_at: Completed 90-02-PLAN.md
+last_updated: "2026-11-23T15:37:12.973Z"
 last_activity: 2026-11-23
 last_activity_desc: Phase 89 complete, transitioned to Phase 90
-state_head: 49b06b126cfe81f64d3c56391c25618bd6dc7b3e
+state_head: 2daeae777a52b3ce87428da303984e780633248a
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -31,10 +31,10 @@ before features.
 ## Current Position
 
 Phase: 90 — Polish & Verification Sweep
-Current Plan: 2 (01 complete, 02 next)
+Current Plan: 3 (01–02 complete, 03 next)
 Total Plans in Phase: 6
-Status: Executing
-Last activity: 2026-11-23 — 90-01 complete (Super Admins console, 2 tasks, 2 commits)
+Status: Ready to execute
+Last activity: 2026-11-23 — 90-02 complete (archive download + verify-checksum, 3 tasks, 4 commits)
 
 ## Milestone v3.3 Phase Map
 
@@ -103,6 +103,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 89 P05 | 41min | 3 tasks | 9 files |
 | Phase 89 P06 | 92 min | 3 tasks | 14 files |
 | Phase 90 P01 | ~35 min | 2 tasks | 12 files |
+| Phase 90 P02 | 49min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -157,6 +158,8 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 90]: 90-01: console keys split across commits per emitting markup — superRosterEmpty* landed with task 1 (its empty branch renders there), the 7 search keys with task 2; keys never precede or lag markup (plan executor's call)
 - [Phase 90]: 90-01: 3 orphaned keys removed (settings.operator.title/lead, page.governance.noMatchesOpBody) — i18n-scan dead-key gate; removed x5 same commit as the orphaning markup; net catalogue +9
 - [Phase 90]: 90-01: tree-wide data-a/data-v pins bumped 610→613 / 93→94 (i18n-shell + i18n-toast) — govSuperSeg/govSuperMore markup + operatorPromote's second occurrence; D-12 same-commit pin procedure
+- [Phase 90]: 90-02: history payload projects location/uploaded/checksum but NOT raw scope JSON — the pre-existing D-14 projection contract wins over the plan's additive scope field (zero client consumers; tier enforced server-side)
+- [Phase 90]: 90-02: download route streams via awaited pipeline + rm-finally (house pipe-and-forget rejected — it would race the staged-temp removal); checksum mismatch is a 200 RESULT persisted server-side, never a refusal
 
 ### Pending Todos
 
@@ -178,8 +181,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T14:45:01.734Z
-Stopped at: Completed 90-01-PLAN.md
+Last session: 2026-11-23T15:37:12.840Z
+Stopped at: Completed 90-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
