@@ -22,3 +22,11 @@ Out-of-scope discoveries logged during execution (never auto-fixed per the scope
 - **[pre-existing, load-flaky] test/backup-scheduler.test.mjs "skipped_overlap":** passes standalone (13/13); fails only under full `npm test` parallel load (timing). Same for `error-codes`/`french-typography` documented pre-existing failures.
 - **[latent, same family] buildBackupAlertMessage try/catch i18n fallback:** tFor returns the KEY for a missing catalogue entry (never throws), so a try/catch EN fallback never fires. Harmless today (backup.alert.* keys landed in 87-04) — buildRestoreAlertMessage (89-04) uses the key-shaped-return detector instead; refactoring the backup builder is out of scope.
 - **[handoff] plan 06 locale keys:** page.restore email keys (restore.alert.done.subject/body, restore.alert.failed.subject/body — 4 keys + greeting reuse) land ×5 locales there; EN literals render meanwhile (verified by test).
+
+## 89-05 out-of-scope discoveries (2026-11-23)
+
+- **[pre-existing] test/error-codes.test.mjs "every error code the server emits has a non-empty err.<code> entry":** fails `en missing err.backupRestoreInProgress` — verified pre-existing by re-running at 89-04 close-out (eeb6bbed) AND at STATE.md state_head 7fdbe257 (pre-89-04-execution). The 89-04 keyed refusal vocabulary landed before its catalogue entries; plan 06's locale commit owns the ×5 err.* keys.
+- **[pre-existing] test/french-typography.test.mjs:** same catalogue family, verified pre-existing at the same two commits.
+- **[load-flake, pre-existing] test/backup-scheduler.test.mjs "skipped_overlap":** green solo (13/13, re-verified twice this session); fails only under `npm test` parallel load — unchanged from the 89-04 note.
+- **[housekeeping] stray `node server.js` process** leaked by the stalled prior executor's test runs (running since 2026-11-22 ~23:29, cwd = repo). Random port, harmless to tests; a user kill is a cleanup decision.
+- **[fixed this session, for the record] test/restore-overwrite.test.mjs fixture bugs** the stalled session left uncommitted (node:sqlite array-params ×3, closeWorld wrong temp path, outbox MAIL_FROM missing) — fixed in ad867909/84d248ef, ledgered here only as the record of why Task 3's RED evidence was re-captured.

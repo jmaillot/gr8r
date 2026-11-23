@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 11
+open_count: 12
 waived_count: 0
 fixed_count: 0
-total_count: 11
-last_updated: 2026-11-21T23:43:30.746Z
+total_count: 12
+last_updated: 2026-11-23T06:11:33.501Z
 ---
 
 # Broken Windows Ledger
@@ -26,6 +26,7 @@ last_updated: 2026-11-21T23:43:30.746Z
 | 9 | 84 | unrun-verify | src/features/team-pick.js |  | 84-02 task 4 manual browser smoke of both picker surfaces deferred to the phase e2e/verify-work pass; automated coverage = 7 source pins + full unit suite + chunk gate | open |  | 2026-11-20T18:18:19.689Z |  |
 | 10 | 87 | deviation | test/backup-rotation.test.mjs |  | D-16 recovery test asserts via delivery-kick log (test-process DB read-visibility quirk after export snapshot fence; see 87-03-SUMMARY deviations) | open |  | 2026-11-21T23:43:30.530Z |  |
 | 11 | 87 | unrun-verify | test/webhook-events.test.mjs |  | pre-existing due.reminder claim failure (out of 87-03 scope), recorded in deferred-items.md | open |  | 2026-11-21T23:43:30.746Z |  |
+| 12 | 89 | deviation | .planning/phases/89-restore/89-05-SUMMARY.md |  | npm test baseline carries 4 pre-existing failures + scheduler load-flake (see deferred-items 89-05 section); no 89-05-introduced failures | open |  | 2026-11-23T06:11:33.501Z |  |
 
 ````json
 [
@@ -169,6 +170,19 @@ last_updated: 2026-11-21T23:43:30.746Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-21T23:43:30.746Z",
+    "resolved_at": null,
+    "milestone": "v3.3"
+  },
+  {
+    "id": 12,
+    "kind": "deviation",
+    "phase": "89",
+    "file": ".planning/phases/89-restore/89-05-SUMMARY.md",
+    "line": null,
+    "description": "npm test baseline carries 4 pre-existing failures + scheduler load-flake (see deferred-items 89-05 section); no 89-05-introduced failures",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-23T06:11:33.501Z",
     "resolved_at": null,
     "milestone": "v3.3"
   }

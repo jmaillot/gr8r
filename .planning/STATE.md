@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 89
 current_phase_name: restore
-current_plan: 4
+current_plan: 6
 status: executing
-stopped_at: Completed 89-03-PLAN.md
-last_updated: "2026-11-22T19:55:57.583Z"
+stopped_at: Completed 89-05-PLAN.md
+last_updated: "2026-11-23T06:10:31.624Z"
 last_activity: 2026-11-22
 last_activity_desc: Phase 89 execution started
-state_head: 7fdbe257e2aaa6a026714aa85d95256f0e41d448
+state_head: 84d248efb1fbfb111b6af7c97aeaac45bf1eaa6a
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 16
 ---
 
 # Project State
@@ -31,7 +31,7 @@ before features.
 ## Current Position
 
 Phase: 89 (restore) — EXECUTING
-Current Plan: 5
+Current Plan: 6
 Total Plans in Phase: 6
 Status: Ready to execute
 Last activity: 2026-11-22 — 89-04 complete (import-as-new engine + trigger routes + outcome emails)
@@ -100,6 +100,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 89 P02 | 13min | 3 tasks | 5 files |
 | Phase 89 P03 | 26m | 3 tasks | 6 files |
 | Phase 89 P04 | 77m | 3 tasks | 6 files |
+| Phase 89 P05 | 41min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,10 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 89]: 89-03: list+preview badges derive from run-row truth (backup_runs.uploaded + fs), never live S3 probing
 - [Phase 89]: 89-03: preview throttle 10/15min operator-keyed sits BEFORE the capability gate, consuming a try on refusal (D-89-22/OQ5)
 - [Phase 89]: 89-03: streamVerifyArchive gates entries during the walk with extraction's posture (escape fatal, shape-miss skip-and-record)
+- [Phase 89]: restoreOverwriteUnit consumes releaseLock — failWith funnel + success-path release (D-89-32); the route always claims before firing, the unit owns releasing — Route success cell failed 'the lock released' — the unit ignored opts.releaseLock entirely, leaking every route-triggered overwrite claim
+- [Phase 89]: D-89-28 enforced: handleRestoreRunOutcome skips trigger='instance' runs — the post-commit global session revocation is DR's notification — The skip existed only as a comment; the DR no-claims test passed solely because its fixture left MAILER disabled
+- [Phase 89]: Overwrite route validates confirmName against the target's exact CURRENT live name (D-89-27) BEFORE archive resolution; CAP.BACKUP_MANAGE gate keyed backupManageRequired (no new refusal code) — A refused phrase is a near-zero-read trigger with zero state change; the client confirmModal is chrome, never the boundary
+- [Phase 89]: 89-05 TDD evidence committed (tdd/red-89-05-task1..3.json); Task 3 RED re-captured after the prior executor stalled on crashing fixtures (RED_EVIDENCE_OK) — Never commit RED evidence whose failures do not match the actual failing cells — the prior fixture crashed (Unknown named parameter '0') instead of failing intentionally
 
 ### Pending Todos
 
@@ -166,8 +171,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-22T19:55:57.471Z
-Stopped at: Completed 89-03-PLAN.md
+Last session: 2026-11-23T06:10:19.511Z
+Stopped at: Completed 89-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
