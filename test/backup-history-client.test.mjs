@@ -257,3 +257,28 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
   assert.ok(!afterRefresh.includes('toast('), 'no toast on the success path — the durable badge is the feedback');
   assert.match(apiSrc, /async backupVerifyChecksum\(runId/, 'api.js exports the verify method');
 });
+
+/* =====================================================================
+   Phase 90 (90-03 task 1, SC-3 / D-90-16 refined): the kept-position
+   badge — payload-flag chrome rendering the server-computed bucket
+   position verbatim. The client holds ZERO GFS math: no date
+   arithmetic, no bucket assignment, no counting under src/ (D-90-12/16
+   — the position comes from gfsKeptPositions per request, and {scale}
+   resolves only through the four gfs label keys).
+   ===================================================================== */
+test('90-03: the kept-position badge renders ONLY when the payload carries keptPosition — scale resolves through the four gfs keys', () => {
+  /* The badge anchor: payload-flag conditional inside runRow — no
+     keptPosition in the payload ⇒ no badge (D-89-21 chrome discipline). */
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const runRow ='), pagesSrc.indexOf('const historyCard ='));
+  assert.match(runRowBody, /kept \? `<span class="badge"><span class="mono">\$\{t\('page\.backup\.keptPosition'/, 'the badge renders only when the payload carries keptPosition (payload-flag chrome)');
+  /* The three figures ride the payload verbatim — the interpolation names
+     the payload fields, never a client-derived value. */
+  assert.match(runRowBody, /position: kept\.position, keep: kept\.keep, scale: t\(GFS_SCALE_KEYS\[kept\.scale\]\)/, 'the {position}/{keep}/{scale} inputs are the payload fields, verbatim');
+  /* {scale} resolves through the FOUR gfs keys — no other scale vocabulary. */
+  assert.match(pagesSrc, /const GFS_SCALE_KEYS = \{ daily: 'page\.backup\.gfsDaily', weekly: 'page\.backup\.gfsWeekly', monthly: 'page\.backup\.gfsMonthly', yearly: 'page\.backup\.gfsYearly' \}/, 'the four GFS scale keys are the one scale vocabulary');
+  /* Zero client GFS math (T-90-06): no retention arithmetic under src/ —
+     no date math on the kept position, no bucket assignment, no counting
+     walk. The badge guards on the payload fields, not on derived values. */
+  assert.ok(!/keptPosition[^;]*(\+|\*|Math\.|getUTC|getTime|toISOString)/.test(pagesSrc), 'no retention arithmetic on keptPosition anywhere in the page');
+  assert.ok(!/retention_daily|retention_weekly|retention_monthly|retention_yearly/.test(runRowBody), 'the run/history renderer never reads retention counts — the client computes nothing');
+});

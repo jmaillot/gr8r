@@ -3903,6 +3903,32 @@ function assignGfsBuckets(runsAsc) {
   return out;
 }
 
+/* Phase 90 (SC-3, D-90-16 refined): the kept-POSITION map — per-request
+   retention visibility, never a date. GFS is count-based per bucket: a run's
+   deletion depends on FUTURE run arrivals, so "run date + retention × cadence"
+   is semantically wrong (90-RESEARCH Pitfall 1). Each succeeded run instead
+   gets its position WITHIN its bucket, counted exactly like the keep-N
+   reverse walk below: newest-first per bucket, 1 = newest of that bucket.
+   keep is the task's CURRENT retention count for the run's bucket —
+   recomputed on EVERY call from the live policy, never stored on the run
+   row, so a policy change re-renders truthfully (D-90-16: kept-until is the
+   bucket position, never a date). runsAsc is the succeeded runs of one task,
+   created_at asc — the SAME input assignGfsBuckets consumes, so the badge
+   and the deletion projection can never drift (one bucket source, one
+   counting walk, dont-hand-roll). */
+function gfsKeptPositions(task, runsAsc) {
+  const buckets = assignGfsBuckets(runsAsc);
+  const keep = { daily: task.retention_daily, weekly: task.retention_weekly, monthly: task.retention_monthly, yearly: task.retention_yearly };
+  const seenPerBucket = {};
+  const out = new Map();
+  for (const r of [...runsAsc].reverse()) {
+    const bucket = buckets.get(r.id);
+    seenPerBucket[bucket] = (seenPerBucket[bucket] || 0) + 1;
+    out.set(r.id, { position: seenPerBucket[bucket], keep: keep[bucket], scale: bucket });
+  }
+  return out;
+}
+
 /* One rotation pass. taskId rotates just that task; omitted rotates every
    task that has rotation-eligible rows. Injectable clock for tests. */
 export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}) {
@@ -9157,11 +9183,31 @@ async function handleApi(req, res, url) {
       return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
-    if (!(await db.get('select id from backup_tasks where id = ?', [taskId]))) {
+    const task = await db.get('select id, retention_daily, retention_weekly, retention_monthly, retention_yearly from backup_tasks where id = ?', [taskId]);
+    if (!task) {
       return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     }
+    /* Phase 90 (SC-3, D-90-16 refined, 90-03 task 1): the kept-position badge
+       input — computed per REQUEST from the task's CURRENT GFS policy over
+       its succeeded runs (the same assignGfsBuckets + keep-N counting the
+       rotation pass uses), attached ONLY to succeeded rows. Manual
+       task_id-null runs (outside rotation, D-11 — the branch above) and
+       non-succeeded runs carry no keptPosition: the client renders the badge
+       only when the payload carries it (payload-flag chrome, D-89-21), and
+       never computes retention itself (D-90-12/16 — zero client GFS math).
+       Never stored: a policy change re-renders truthfully on the next read. */
+    const succeededAsc = await db.all(
+      "select id, created_at from backup_runs where task_id = ? and status = 'succeeded' order by created_at asc, id asc",
+      [taskId],
+    );
+    const kept = succeededAsc.length ? gfsKeptPositions(task, succeededAsc) : null;
     const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
-    return json(res, 200, { runs: historyChrome(rows) });
+    return json(res, 200, {
+      runs: historyChrome(rows).map(r => {
+        const kp = kept?.get(r.id);
+        return kp ? { ...r, keptPosition: kp } : r;
+      }),
+    });
   }
 
   /* -------------- restore read surface (Phase 89, 89-03, BKRST-01/D-89-14) --------------

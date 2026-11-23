@@ -132,6 +132,13 @@ const RUN_STATUS_KEYS = {
   deleted: 'page.backup.statusDeleted',
 };
 const RUN_TRIGGER_KEYS = { manual: 'page.backup.triggerManual', scheduled: 'page.backup.triggerScheduled' };
+/* 90-03 (D-90-16 refined): the four GFS scale labels the kept-position badge
+   resolves {scale} through — the ONLY retention vocabulary the client holds.
+   The position/keep figures themselves ride the server payload verbatim
+   (gfsKeptPositions, computed per request from the CURRENT policy) — zero
+   client GFS math, ever (D-90-12/16: no date arithmetic, no bucket
+   assignment, no counting under src/). */
+const GFS_SCALE_KEYS = { daily: 'page.backup.gfsDaily', weekly: 'page.backup.gfsWeekly', monthly: 'page.backup.gfsMonthly', yearly: 'page.backup.gfsYearly' };
 const durText = ms => (Number.isFinite(ms) && ms >= 0 ? `${(ms / 1000).toFixed(1)} s` : '—');
 
 const runRow = run => {
@@ -152,10 +159,17 @@ const runRow = run => {
      and NO toast sits on the result path. */
   const chkBusy = !!S.ui.backupChecksumBusy?.has(run.id);
   const chk = run.checksum_ok == null ? null : Number(run.checksum_ok);
+  /* 90-03 (D-90-16 refined): the kept-position badge is payload-flag chrome —
+     it renders ONLY when the payload carries keptPosition (succeeded runs of
+     a rotation task; manual task_id-null runs and non-succeeded runs carry
+     none, D-11). The three fields render verbatim; {scale} resolves through
+     the four gfs keys — the client computes nothing. */
+  const kept = run.keptPosition && GFS_SCALE_KEYS[run.keptPosition.scale] ? run.keptPosition : null;
   return `<div style="padding:8px 0;border-top:1px solid var(--border)"${chkBusy ? ' aria-busy="true"' : ''}>
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
       <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
+      ${kept ? `<span class="badge"><span class="mono">${t('page.backup.keptPosition', { position: kept.position, keep: kept.keep, scale: t(GFS_SCALE_KEYS[kept.scale]) })}</span></span>` : ''}
       <span class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</span>
       <span class="faint">${esc(when)}</span>
       <span class="faint">${t('page.backup.durLabel')}: ${esc(durText(Number(run.duration_ms)))}</span>
