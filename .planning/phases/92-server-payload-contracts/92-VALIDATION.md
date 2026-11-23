@@ -40,12 +40,14 @@ created: "2026-11-24"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (planner fills) | | | BKNAME-01 | — | filename `<instance>-<scope>-<slug>-<gfs>-<date>`; manual runs no marker; collision `-2`; sidecar from final name | unit+integration | `node --test test/backup-export.test.mjs` | ✅ extend | ⬜ pending |
-| (planner fills) | | | BKNAME-02 | — | one pure GFS fn; bucket stored at creation; backfill; rotation reads stored; dual-engine DDL | unit+integration | `node --test test/backup-rotation.test.mjs test/db-adapter.test.mjs test/migration.test.mjs` | ✅ | ⬜ pending |
-| (planner fills) | | | BKNAME-02 (dates) | — | pure fn vs known dates: ISO week boundaries, year rollover; UTC-pure (DST-irrelevant) | unit | `node --test test/gfs-kept-until.test.mjs` | ✅ extend | ⬜ pending |
-| (planner fills) | | | D-04 | — | describeCron daily/weekly/monthly/yearly/custom from parseCron sets; honest raw | unit | `node --test test/backup-cron.test.mjs` | ✅ | ⬜ pending |
-| (planner fills) | | | D-05 | — | `?all=1` filters + per-run fail-closed scope; legacy byte-identical (golden differential) | integration | `node --test test/backup-routes.test.mjs` | ✅ | ⬜ pending |
-| (planner fills) | | | D-06 | — | scopes gate (3 roles) + minimal payload; `workspacesForUser` byte-unchanged | integration | new scopes test file | ❌ Wave 0 | ⬜ pending |
+| 92-T1 | 92-01 | 0 | golden legacy snapshot + D-05 byte-identity gate | integration | `node --test test/backup-routes.test.mjs` | ✅ extend | ⬜ pending |
+| 92-T1 | 92-01 | 0 | scopes test scaffold (404 pre-Task 6) | integration | `node --test test/backup-scopes.test.mjs` | ❌ Wave 0 (new file) | ⬜ pending |
+| 92-T1 | 92-01 | 0 | BKNAME-02 (dates) | pure fn vs known dates: ISO week boundaries, year rollover; UTC-pure (DST-irrelevant) | unit | `node --test test/gfs-kept-until.test.mjs` | ✅ extend | ⬜ pending |
+| 92-T2 | 92-01 | 1 | BKNAME-02 | — | one pure GFS fn (export/gfs.js verbatim relocation); bucket stored at creation (`created_at asc, id asc` tiebreak); idempotent backfill; rotation reads stored; dual-engine DDL same commit | unit+integration | `node --test test/backup-rotation.test.mjs test/db-adapter.test.mjs test/migration.test.mjs` | ✅ | ⬜ pending |
+| 92-T3 | 92-01 | 2 | BKNAME-01 | — | filename `<instance>-<scope>-<slug>-<gfs>-<date>`; manual runs no marker; collision `-2` before `.tar.gz`; sidecar from final name | unit+integration | `node --test test/backup-export.test.mjs` | ✅ extend | ⬜ pending |
+| 92-T4 | 92-01 | 2 | D-04 | — | describeCron daily/weekly/monthly/yearly/custom from parseCron sets; honest raw | unit | `node --test test/backup-cron.test.mjs` | ✅ | ⬜ pending |
+| 92-T5 | 92-01 | 3 | D-05 | T-92-01, T-92-03 | `?all=1` filters + per-run fail-closed scope; legacy byte-identical (golden differential 92-T1) | integration | `node --test test/backup-routes.test.mjs` | ✅ | ⬜ pending |
+| 92-T6 | 92-01 | 3 | D-06 | T-92-02 | scopes gate (3 roles) + minimal payload; `workspacesForUser` byte-unchanged | integration | `node --test test/backup-scopes.test.mjs` | ❌ Wave 0 → real in T6 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
