@@ -1,6 +1,6 @@
 ---
 phase: 90-polish-verification-sweep
-verified: 2026-11-23T19:10:05Z
+verified: 2026-11-23T19:21:07Z
 status: passed
 score: 42/42 must-haves verified
 behavior_unverified: 0
@@ -49,9 +49,10 @@ covered_files:
   - test/i18n-shell.test.mjs
   - test/i18n-toast.test.mjs
   - test/client-surfaces.test.mjs
-covered_digest: v2:sha256:a50e3d9a90d6ae81da63a624a2030f6aec435a7e2bca118f55f361c3c844f7b1
+covered_digest: v4:sha256:576ddb8316d73106041bdef2abecbdf470a58e547baf5ec83b6ba97b0bf44eee # freshness re-pass: recomputed after milestone-close planning-file edits re-staled the v2 a50e3d9a digest; no source/test file changed (git log 0ad87056..b18462be touches .planning only)
 re_verification:
   previous_status: passed # canonicalized per #4663 after UAT 7/7 (90-UAT.md complete); file content was stale — covered source files drifted after the last verifier run
+  re_pass: freshness # 2026-11-23 — milestone-close edits (c0144e3d, b18462be: STATE.md disclosure rows, deferred-items.md acknowledgment restructures) re-staled the digest; source unchanged since 0ad87056, all 42 findings carried forward unchanged
   previous_score: 36/42
   gaps_closed:
     - "90-01 truth 4 — promote no-reload reconcile (behavior-driven PASS, UAT item 1)"
@@ -68,9 +69,9 @@ gaps: []
 # Phase 90: Polish & Verification Sweep — Verification Report
 
 **Phase Goal:** The trust checklist is closed — operators can verify and retrieve archives themselves, the Super Admin console backlog item ships, and the whole milestone survives a PG-parity + DST verification sweep.
-**Verified:** 2026-11-23T19:10:05Z
+**Verified:** 2026-11-23T19:21:07Z
 **Status:** passed
-**Re-verification:** Yes — post-UAT re-verification after three fix commits (fb356ee9, cf1ba1b5, 69b6b95c); digest recomputed over the current tree
+**Re-verification:** Yes — freshness re-pass: milestone-close planning-file edits (STATE.md disclosure rows, deferred-items.md acknowledgment restructures in phases 89/90) re-staled the digest over an otherwise-unchanged tree. `git log 0ad87056..b18462be` touches `.planning/` only — no source/test drift; all 42 goal-backward findings carried forward unchanged. Digest recomputed via `verification.fingerprint`.
 
 ## Goal Achievement
 
