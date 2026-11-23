@@ -21,8 +21,12 @@
    ===================================================================== */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
+
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const userIdByEmail = (srv, email) => withDb(srv.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
 
@@ -201,4 +205,45 @@ test('rotation-preview: the dry-run mutates nothing — rows/statuses identical,
   } finally {
     await server.stop();
   }
+});
+
+/* ---------- 90-review WR-02: the stale-projection race ----------
+   Source-assertion (backup-history-client discipline): the action's
+   staging must be guarded on the mounted form that requested it — a
+   cancel/save/new/edit while the projection is in flight reassigns
+   S.ui.backupTaskForm, and the late response must land NOWHERE. */
+
+test('90-review WR-02: the preview action stage-guards its response on the mounted form — a stale projection never re-stages after the form changed', () => {
+  const src = fs.readFileSync(path.join(REPO, 'src', 'actions', 'actions.js'), 'utf8');
+  const start = src.indexOf('A.backupPreviewDeletions');
+  const end = src.indexOf('A.backupDeletionsToggle');
+  assert.ok(start !== -1 && end > start, 'the preview action exists beside the toggle');
+  const action = src.slice(start, end);
+
+  /* The form identity is captured BEFORE the await and re-checked AFTER
+     it — the mounted form object IS the request token (no new global). */
+  const awaitIdx = action.indexOf('await api.backupRotationPreview');
+  assert.ok(awaitIdx !== -1, 'the action awaits the projection endpoint');
+  assert.ok(
+    action.indexOf('const form = S.ui.backupTaskForm;') !== -1 && action.indexOf('const form = S.ui.backupTaskForm;') < awaitIdx,
+    'the requesting form is captured before the await',
+  );
+  assert.ok(
+    action.indexOf('form.editing !== taskId') !== -1 && action.indexOf('form.editing !== taskId') < awaitIdx,
+    'the task id matches the mounted edit form before staging the loading state',
+  );
+  const guardIdx = action.indexOf('if (S.ui.backupTaskForm !== form) return;');
+  assert.ok(guardIdx !== -1 && guardIdx > awaitIdx, 'the stale guard sits after the await');
+  /* BOTH post-response mutations (the keyed-refusal clear and the result
+     staging) come after the guard — no path writes S.ui.backupDeletions
+     on a stale response. */
+  const clearIdx = action.indexOf('S.ui.backupDeletions = null;');
+  const stageIdx = action.indexOf('S.ui.backupDeletions = res.data?.noRuns');
+  assert.ok(clearIdx > guardIdx && stageIdx > guardIdx, 'every staging write is behind the stale guard');
+
+  /* Defense in depth: a brand-new form never inherits the projection. */
+  const newStart = src.indexOf('A.backupTaskNew');
+  const newEnd = src.indexOf('A.backupTaskEdit');
+  assert.ok(newStart !== -1 && newEnd > newStart, 'backupTaskNew exists');
+  assert.match(src.slice(newStart, newEnd), /S\.ui\.backupDeletions = null;/, 'backupTaskNew clears the ephemeral projection');
 });

@@ -5071,6 +5071,10 @@ IN.backupTaskS3 = el => {
 };
 A.backupTaskNew = () => {
   S.ui.backupTaskForm = backupTaskFormDefaults();
+  /* 90-review WR-02 (defense in depth): a fresh form never inherits a
+     stale projection — deletionsPanel renders inside ANY open form, so a
+     leftover from a cancelled preview would render under the New form. */
+  S.ui.backupDeletions = null;
   render();
 };
 A.backupTaskEdit = el => {
@@ -5343,9 +5347,18 @@ A.backupVerifyChecksum = async el => {
 A.backupPreviewDeletions = async el => {
   const taskId = el.dataset.taskId;
   if (!taskId) return;
+  /* 90-review WR-02: the response is stage-guarded on the FORM that asked
+     for it — the mounted form object IS the token (the house staged-state
+     idiom; no new global). A cancel/save/new/edit while the projection is
+     in flight reassigns S.ui.backupTaskForm, so a stale response lands
+     nowhere: the 90-03 doctrine ("a stale projection must never outlive
+     the form that produced it") holds mid-flight too. */
+  const form = S.ui.backupTaskForm;
+  if (!form || form.editing !== taskId) return;
   S.ui.backupDeletions = { loading: true };
   render();
   const res = await api.backupRotationPreview(taskId);
+  if (S.ui.backupTaskForm !== form) return; // stale: the form was closed/replaced mid-flight — never re-stage
   if (!res.ok) {
     S.ui.backupDeletions = null;
     render();
