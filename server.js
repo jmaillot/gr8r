@@ -2644,6 +2644,20 @@ function reminderSnippet(offset, task) {
 async function runReminderPass({ now: at = new Date() } = {}) {
   const emitted = [];
   let digests = 0;
+  /* =====================================================================
+     Phase 91 (NOTIF-01, D-01/D-04): per-(user, localDate) digest
+     accumulation. The per-workspace reminders_sent claim below stays the
+     byte-compatible SEMANTIC claim (SC4) — aggregation happens ONLY on
+     the transport side. Keyed on `${userId}:${localDate}`, never userId
+     alone: a cross-tz user can legitimately get two digests on different
+     localDates (Pitfall 1). Sections accumulate INDEPENDENT of the claim
+     result — an already-claimed (user, ws, day) still contributes its
+     section, so a restart between partial claims and the enqueue keeps
+     ALL sections (Q5 restart hole); the outbox dedup key collision is
+     what prevents a double-SEND. Gated on MAILER.enabled only —
+     MAILER-disabled servers never accumulate, never enqueue (SC3).
+     ===================================================================== */
+  const digestAcc = new Map();
   for (const ws of await db.all('select * from workspaces')) {
     try {
       const doc = JSON.parse(ws.doc);
@@ -2870,58 +2884,96 @@ async function runReminderPass({ now: at = new Date() } = {}) {
              fires exactly one new legitimate claim (re-window allowed). No
              ledger reset on tz change. */
           claimed = res.changes !== 0; // D-03: user_id id space, exactly-once
-          /* POL-02 (Phase 68, D-07): the reminders_sent ledger stays the
-             SEMANTIC claim (WHAT to send, who-was-notified history);
-             email_outbox is the TRANSPORT claim (HOW to deliver). Exactly one
-             outbox row per digest claim, inside THIS same tx — a re-run
-             collides on the dedup_key (INSERT OR IGNORE), so no double-send
-             is possible. MAILER-disabled producers skip claiming entirely
-             (same producer gate as the notif path). Fail-absent: outbox
-             plumbing never rolls back the semantic claim. */
-          if (claimed && MAILER.enabled) {
-            try {
-              const logo = logoShape(ws, docLogo(ws));
-              const unsubscribe = unsubscribeHmacKey() && APP_URL.startsWith('https://')
-                ? unsubscribeUrl(unsubscribeHmacKey(), APP_URL, ws.id, r.user_id)
-                : null;
-              await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
-                uid(),
-                ws.id,
-                `digest:${ws.id}:${r.user_id}:${localDate}`,
-                'digest',
-                r.email,
-                JSON.stringify({
-                  type: 'digest',
-                  to: r.email,
-                  locale: r.locale === 'fr' ? 'fr' : 'en',
-                  workspace: ws.name || 'Projects Studio',
-                  wsSlug: ws.slug,
-                  appUrl: APP_URL,
-                  /* Phase 43 (D-07): absolute versioned logo URL — omitted when unset (D-10). */
-                  ...(logo ? { logoUrl: `${APP_URL}${logo.url}` } : {}),
-                  /* Phase 41 (UNSUB-01, D-05): MASTER_KEY + https APP_URL gates live server-side (Pitfall 6). */
-                  ...(unsubscribe ? { unsubscribeUrl: unsubscribe } : {}),
-                  dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
-                  overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
-                }),
-                now(),
-              ]);
-            } catch (err) {
-              logWarn(`email outbox enqueue (digest): ${err.message}`);
-            }
-          }
+          /* POL-02 (Phase 68, D-07) — Phase 91 revision (NOTIF-01, D-04): the
+             reminders_sent ledger stays the SEMANTIC claim (WHAT to send);
+             email_outbox is the TRANSPORT claim (HOW to deliver). The per-ws
+             outbox insert MOVED OUT of this claim site: one aggregated row
+             per (user, localDate) is enqueued AFTER the workspace loop (the
+             root-cause site of the 4× duplicate was this per-ws insert —
+             one row per ws membership). Exactly-once now comes from the
+             user/day dedup key `digest:user:{userId}:{localDate}` colliding
+             on INSERT OR IGNORE. */
         });
+        /* Phase 91 (D-01/D-04): accumulate the section for the aggregated
+           digest — BEFORE/independent of the claim result (restart hole),
+           gated on MAILER.enabled only. The digest is non-empty here (the
+           D-12 honesty `continue` above), so every accumulated section has
+           ≥1 task; empty sections never accumulate, never enqueue (SC1
+           belt-and-braces: the enqueue loop skips empty section lists). */
+        if (MAILER.enabled) {
+          const logo = logoShape(ws, docLogo(ws));
+          const accKey = `${r.user_id}:${localDate}`;
+          if (!digestAcc.has(accKey)) {
+            digestAcc.set(accKey, { userId: r.user_id, email: r.email, locale: r.locale === 'fr' ? 'fr' : 'en', localDate, sections: [] });
+          }
+          digestAcc.get(accKey).sections.push({
+            wsId: ws.id,
+            wsSlug: ws.slug,
+            wsName: ws.name || 'Projects Studio',
+            logoUrl: logo ? `${APP_URL}${logo.url}` : null,
+            dueToday: dueToday.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
+            overdue: overdue.map(t => ({ key: t.key, title: t.title || 'a task', project: projects.get(t?.project)?.name || '' })),
+          });
+        }
         if (!claimed) continue;
-        digests++;
-        /* POL-02: post-commit delivery kick — NEVER inside the transaction.
-           The delivery pass rebuilds the digest email from the claim's ctx;
-           sendDigest is never called directly here anymore (D-07). */
-        if (MAILER.enabled) runEmailDeliveryPass().catch(err => logWarn(`email post-commit pass: ${err.message}`));
+        /* POL-02: post-commit delivery kick moved to ONE post-loop kick after
+           the aggregated enqueue (Phase 91) — NEVER inside a transaction
+           (POL-02 D-07). The reminder loop above keeps its own kick. */
       }
     } catch (err) {
       logWarn(`reminder pass ${ws.id}: ${err.message}`);
     }
   }
+  /* =====================================================================
+     Phase 91 (NOTIF-01, D-04): ONE aggregated enqueue per (user, localDate)
+     — after the ws loop, in its own fail-absent tx. workspace_id carries
+     the first section's ws (text NOT NULL, no FK — informational for the
+     digest kind). The ctx is everything the template rebuild needs at
+     delivery time: sections + app-level logo/unsubscribe (D-04). The
+     unsubscribeUrl uses the GLOBAL user-scoped token (D-02) under the
+     same MASTER_KEY + https APP_URL gates as the per-ws link it replaces.
+     Fail-absent: enqueue plumbing never fails the pass.
+     ===================================================================== */
+  for (const acc of digestAcc.values()) {
+    if (!acc.sections.length) continue; // SC1 belt-and-braces: empty never enqueues
+    let enqueued = false;
+    try {
+      const logoUrl = acc.sections.find(s => s.logoUrl)?.logoUrl || null;
+      /* Task 2 interim: per-ws unsubscribe URL on the first section's ws —
+         Task 3 swaps this to the global user-scoped unsubscribeUrlGlobal
+         token (D-02) under the same gates. */
+      const unsubscribe = unsubscribeHmacKey() && APP_URL.startsWith('https://')
+        ? unsubscribeUrl(unsubscribeHmacKey(), APP_URL, acc.sections[0].wsId, acc.userId)
+        : null;
+      await db.tx(async () => {
+        const r = await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
+          uid(),
+          acc.sections[0].wsId,
+          `digest:user:${acc.userId}:${acc.localDate}`,
+          'digest-aggregated',
+          acc.email,
+          JSON.stringify({
+            type: 'digest-aggregated',
+            to: acc.email,
+            locale: acc.locale,
+            appUrl: APP_URL,
+            ...(logoUrl ? { logoUrl } : {}),
+            ...(unsubscribe ? { unsubscribeUrl: unsubscribe } : {}),
+            sections: acc.sections.map(({ wsId: _wsId, logoUrl: _logoUrl, ...s }) => s),
+          }),
+          now(),
+        ]);
+        enqueued = r.changes !== 0;
+      });
+    } catch (err) {
+      logWarn(`email outbox enqueue (digest-aggregated): ${err.message}`);
+    }
+    if (enqueued) digests++;
+  }
+  /* POL-02: ONE post-commit delivery kick for the whole pass — never inside
+     a tx (D-07). A restart mid-tick re-collides on the user/day key, so the
+     re-run cannot double-send (exactly-once per SC3). */
+  if (MAILER.enabled && digestAcc.size) runEmailDeliveryPass().catch(err => logWarn(`email post-commit pass: ${err.message}`));
   if (emitted.length || digests) logInfo(`reminder pass: ${emitted.length} reminder notification(s), ${digests} digest email(s)`);
   else logDebug('reminder pass: nothing to send');
   return { emitted, digests };
@@ -3399,6 +3451,17 @@ async function deliverEmail(d, atMs, sendFn) {
     sendFn ||
     (async (kind, a) => {
       if (kind === 'digest') return MAILER.sendDigest(a);
+      /* Phase 91 Task 2 INTERIM projection (replaced by the aggregated
+         template + sendDigestAggregated dispatch in Task 3): a single-
+         section aggregated row renders through the existing per-ws builder
+         so the transport coalescing lands without crashing delivery.
+         Multi-section rows render their first section here — the full
+         D-03 template is Task 3's commit. */
+      if (kind === 'digest-aggregated') {
+        const s = a?.sections?.[0];
+        if (!s) throw new Error('digest-aggregated ctx carries no sections');
+        return MAILER.sendDigest({ ...a, workspace: s.wsName, wsSlug: s.wsSlug, dueToday: s.dueToday, overdue: s.overdue });
+      }
       if (kind === 'backup_alert') return MAILER.sendBackupAlert(a);
       if (kind === 'restore_alert') return MAILER.sendRestoreAlert(a);
       return MAILER.sendNotif(a);

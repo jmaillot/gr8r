@@ -429,12 +429,13 @@ test('D-11: email_reminder true AND false are BOTH suppressed for a digest user'
     assert.ok(res.emitted.filter(n => n.task && wsRows.includes(n.task)).length > 0, `emitted rows correspond to doc notif rows for ${ws.slug}`);
   }
   assert.ok(res.emitted.length > 0, 'reminder loop emitted rows');
-  await waitFor(smtp, 2, 'two digests (one per workspace)');
+  /* Phase 91: the two same-user workspaces coalesce into ONE aggregated email. */
+  const msgs = await waitFor(smtp, 1, 'one aggregated digest for the two-workspace digest user');
   await new Promise(r => setTimeout(r, 500));
-  for (const { ws, email: rcpt } of [on, off]) {
-    const mine = smtp.payloads.map(decode).filter(x => x.to === rcpt && x.text.includes(`/w/${ws.slug}/`));
-    assert.equal(mine.length, 1, `exactly one email for ${ws.slug}`);
-    assert.match(mine[0].subject, /Daily digest/, `reminder email suppressed for ${ws.slug} (digest wins over email_reminder)`);
+  const mine = smtp.payloads.map(decode).filter(x => x.to === on.email && /Daily digest/.test(x.subject));
+  assert.equal(mine.length, 1, `exactly one digest email for the user (got ${mine.length})`);
+  for (const { ws } of [on, off]) {
+    assert.deepEqual(digestKeys(ws.id), [`${ws.id}:${on.userId}:digest:2026-03-03`], `byte-compatible claim for ${ws.slug} (reminder emails still suppressed — digest wins)`);
   }
 });
 
@@ -547,22 +548,27 @@ test('idle tick before the 08:00 window: no email, no claim, revision unchanged'
    buildDigestMessage with a poisoned catalogue (restored in finally).
    ===================================================================== */
 
-test('SUBJ-01: a member of two workspaces gets two same-morning digests, each subject bracketed with its own workspace name', async () => {
+test('SUBJ-01 (Phase 91 supersession): a member of two workspaces gets ONE same-morning digest carrying both sections — per-ws bracket subjects retire with the per-ws send', async () => {
   const a = await makeWorkspace(m => [task(m, { key: 'K-WSA', title: 'Due in A', due: '2026-05-10' })], DIGEST_ONLY);
   const b = await makeWorkspace(m => [task(m, { key: 'K-WSB', title: 'Due in B', due: '2026-05-10' })], DIGEST_ONLY);
+  assert.equal(a.userId, b.userId, 'both workspaces share the one enrolled user');
 
   const res = await trigger(at8('2026-05-10'));
-  assert.ok(res.digests >= 2, `both workspaces contribute a digest (got ${res.digests})`);
-  const msgs = await waitFor(smtp, 2, 'two same-morning digests');
+  assert.ok(res.digests >= 1, `the pass enqueues the user's digest (got ${res.digests})`);
+  const msgs = await waitFor(smtp, 1, 'one aggregated digest for the two-workspace user');
 
-  for (const { ws, email } of [a, b]) {
-    const digest = digestFor(msgs, email, ws.slug);
-    assert.ok(digest.subject.startsWith(`[${ws.name}] `), `bracket prefix with the workspace name for ${ws.slug}: ${digest.subject}`);
-    assert.match(digest.subject, /Daily digest: 1 task\(s\)/, 'localized subject still renders behind the bracket');
-  }
-  /* The two digests must NOT share one subject — each workspace owns its bracket. */
-  const subjects = [a, b].map(({ ws, email }) => digestFor(msgs, email, ws.slug).subject);
-  assert.notEqual(subjects[0], subjects[1], 'per-workspace subjects differ');
+  /* Phase 91 (NOTIF-01/D-03): exactly ONE email for the user; both
+     workspaces are sections of the aggregated ctx. */
+  const toUser = msgs.filter(x => x.to === a.email);
+  assert.equal(toUser.length, 1, `exactly one email for the user (got ${toUser.length})`);
+  assert.match(toUser[0].subject, /Daily digest|Résumé quotidien/, 'localized digest subject frame');
+  const row = withDb(server.dbPath, db => db.prepare("select ctx from email_outbox where kind = 'digest-aggregated' and recipient = ?").get(a.email));
+  assert.ok(row, 'aggregated outbox row present');
+  const ctx = JSON.parse(row.ctx);
+  /* Catch-up honesty: stale opted-in workspaces legitimately contribute
+     overdue sections on later dates — pin ≥2 with BOTH slugs covered. */
+  assert.ok(ctx.sections.length >= 2, `both workspaces ride as sections (got ${ctx.sections.length})`);
+  assert.ok(ctx.sections.some(s => s.wsSlug === a.ws.slug) && ctx.sections.some(s => s.wsSlug === b.ws.slug), 'section slugs cover both workspaces');
 });
 
 test('SUBJ-02: task lines read "Project Name — Task Name" in the text part and ONE whole-label <a> in the HTML part', async () => {
@@ -897,18 +903,31 @@ const outboxOldWsKeys = wsId =>
 
 test('Phase 91 SC1/SC2: a digest user in 4 workspaces receives exactly ONE aggregated email/day — 4 sections inside, claims byte-compatible, per-ws outbox keys gone', async () => {
   const DUE = '2026-09-01';
+  /* Isolation (Phase 91): the shared owner account carries stale opted-in
+     workspaces from earlier tests whose overdue tasks would legitimately
+     catch-up-claim into ANY later trigger — so the pinned 4-section count
+     needs a FRESH user enrolled in exactly these four workspaces. The
+     digest-off owner keeps a decoy task (never claims — D-14). */
   const fixtures = [];
+  let peer;
   for (let i = 1; i <= 4; i++) {
-    fixtures.push(await makeWorkspace(m => [task(m, { key: `K91-${i}`, title: `Task ${i}`, due: DUE })], DIGEST_ONLY));
+    const { ws } = await makeWorkspace(m => [
+      task(m, { key: `K91O-${i}`, title: `Owner decoy ${i}`, due: DUE }),
+      task('m-peer', { key: `K91-${i}`, title: `Task ${i}`, due: DUE }),
+    ]);
+    peer = addPeerMember(ws);
+    withDb(server.dbPath, db =>
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, peer.userId, JSON.stringify(DIGEST_ONLY)),
+    );
+    fixtures.push({ ws });
   }
-  const { userId, email } = fixtures[0];
-  assert.ok(fixtures.every(f => f.userId === userId), 'all four workspaces share the one enrolled user');
+  const { userId, email } = peer;
 
   const payloadsBefore = smtp.payloads.length;
   const res = await trigger(at8(DUE));
   assert.ok(res.digests >= 1, 'digest pass enqueues');
   await waitFor(smtp, 1, 'the aggregated digest email');
-  const sent = smtp.payloads.slice(payloadsBefore).map(decode).filter(x => x.text.includes('K91-'));
+  const sent = smtp.payloads.slice(payloadsBefore).map(decode).filter(x => x.to === email && x.text.includes('K91-'));
   assert.equal(sent.length, 1, `exactly ONE email total for the 4-ws user (got ${sent.length} — the pinned 4× duplicate)`);
   assert.equal(sent[0].to, email, 'the single email lands on the enrolled address');
 
@@ -962,10 +981,19 @@ test('Phase 91 SC1/SC2: a digest user in 4 workspaces receives exactly ONE aggre
 test('Phase 91 SC3: restart hole — partial claims before the crash still yield ONE email with ALL 4 sections', async () => {
   const DUE = '2026-09-02';
   const fixtures = [];
+  let peer;
   for (let i = 1; i <= 4; i++) {
-    fixtures.push(await makeWorkspace(m => [task(m, { key: `K91R-${i}`, title: `Restart ${i}`, due: DUE })], DIGEST_ONLY));
+    const { ws } = await makeWorkspace(m => [
+      task(m, { key: `K91RO-${i}`, title: `Owner decoy ${i}`, due: DUE }),
+      task('m-peer', { key: `K91R-${i}`, title: `Restart ${i}`, due: DUE }),
+    ]);
+    peer = addPeerMember(ws);
+    withDb(server.dbPath, db =>
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, peer.userId, JSON.stringify(DIGEST_ONLY)),
+    );
+    fixtures.push({ ws });
   }
-  const { userId, email } = fixtures[0];
+  const { userId, email } = peer;
   /* Simulate the crash window: 2 of the 4 per-ws claims landed (committed),
      but the aggregated enqueue never happened. Honest mechanism — direct
      reminders_sent inserts for ws 1 and 2. */
@@ -978,7 +1006,7 @@ test('Phase 91 SC3: restart hole — partial claims before the crash still yield
   const res = await trigger(at8(DUE));
   void res;
   await waitFor(smtp, 1, 'the restart-hole digest email');
-  const sent = smtp.payloads.slice(payloadsBefore).map(decode).filter(x => x.text.includes('K91R-'));
+  const sent = smtp.payloads.slice(payloadsBefore).map(decode).filter(x => x.to === email && x.text.includes('K91R-'));
   assert.equal(sent.length, 1, `exactly ONE email after the partial-claim restart (got ${sent.length})`);
 
   /* Sections accumulate independent of the claim result — ALL 4 workspaces
