@@ -1,344 +1,179 @@
-# Pitfalls Research — v3.3 Instance Operations (Backup, Restore & Roles)
+# Pitfalls Research — v3.4 "UX Polish & Backup Console Refinement"
 
-**Domain:** adding scheduled backup + selective restore to an existing zero-dependency single-process Node.js app (SQLite default / optional Postgres, file uploads in DATA_DIR, setInterval scheduler, SMTP mailer)
-**Researched:** 2026-11-21
-**Confidence:** HIGH (SQLite/SigV4/scheduler/rotation/restore semantics are well-documented engineering knowledge; cross-checked against the codebase's own proven patterns — `vacuum into` pre-migration backups, WR-04 pg caveat, `--backup` CLI, v1.5 reminder scheduler)
-
----
+**Domain:** Refinement milestone on an existing, discipline-heavy codebase (frozen archive format D-86, exactly-once outbox claims, ×5-locale i18n gate, db-adapter dual-engine, audit funnel for every mutation).
+**Researched:** 2026-11-23
+**Confidence:** HIGH (every pitfall below is grounded in read code: `export/backup.js`, `export/cron.js`, `server.js:2815-2925` digest loop, `server.js:3844-4028` GFS rotation, `server.js:5813` `hasInstanceRole`, `server.js:7662-7747` api-keys, `src/pages/backup.js` GFS_SCALE_KEYS)
 
 ## Critical Pitfalls
 
-### Pitfall 1: Snapshotting SQLite while writes occur — copying a live DB file or checkpointing wrong
+### Pitfall 1: GFS marker drift — creation-time predicted bucket ≠ rotation-time actual bucket
 
-**What goes wrong:**
-The naive approach — `fs.copyFile(DB_PATH)` or reading the `.db` file — captures a torn state: pages in the WAL that haven't been checkpointed are missing from the copy, and the copy can be internally inconsistent mid-write. The restore then fails integrity checks or silently loses the most recent writes. A second trap: running `PRAGMA wal_checkpoint(TRUNCATE)` at backup time while writers are active either blocks on busy writers (backup "hangs") or fails silently with `SQLITE_BUSY`, leaving the "snapshot" stale.
+**What goes wrong:** The owner ruling puts the GFS marker (daily/weekly/monthly/yearly) in the archive filename AT CREATION, using the same pure function as rotation. Rotation today derives the bucket lazily from the run's UTC calendar position at rotation time (`server.js:3844-3850`, D-10) — a run created just before a week/month boundary could be named `daily` but rotated into (or counted against) the `weekly` bucket. Worse, two implementation paths (naming at `export/backup.js:573/749` vs. `gfsKeptPositions` at `server.js:3931`) can silently diverge into two bucket definitions.
 
-**Why it happens:**
-Developers treat the DB file as a single object; with WAL mode the truth is spread across `projects.db` + `projects.db-wal` + `projects.db-shm`. Also, `node:sqlite` doesn't expose the SQLite Online Backup API the way better-sqlite3's `.backup()` does — the codebase's own proven primitive is `VACUUM INTO` (used by `migrateTenancy` and every pre-migration backup), which is safe on a live, WAL-mode database and produces a fully checkpointed, consistent single file.
+**Why it happens:** The filename is written once and never renamed (frozen format, manifest-hash dependency); the bucket is *re-derived* at rotation. Two call sites of "which bucket is this run?" is the classic duplication trap.
 
 **How to avoid:**
-- Use the codebase's own `VACUUM INTO` inside a read transaction (the established pattern, server.js:3778) as the ONLY snapshot mechanism on SQLite. Never copy the live file; never hand-copy `-wal`/`-shm` sidecars.
-- `VACUUM INTO` on a live DB does NOT block writers for the whole export (it takes a read snapshot), but it does serialize with checkpoints — accept a brief pause, and run the export on a `setImmediate`/idle-friendly path rather than inside a hot request handler.
-- For **Postgres (WR-04 precedent)**: there is NO file-level backup. The backup must be a logical SELECT-based export running in one repeatable-read transaction (`BEGIN ISOLATION LEVEL REPEATABLE READ`), so the exported rows are a consistent snapshot. Do not attempt to fake pg parity by exporting table-by-table in separate implicit transactions.
-- The backup destination file must be written to a temp name (e.g. `.part`) and renamed atomically only after success — a crashed backup must never leave a truncated file that rotation later treats as "the newest backup".
+- Extract ONE pure function, e.g. `gfsBucketFor(task, runStartedAtUtc) -> 'daily'|'weekly'|'monthly'|'yearly'`, unit-pinned, imported by BOTH `archiveName` (creation, `export/backup.js:573`) and the rotation pass (`server.js:3944`). No second implementation, ever.
+- Store the bucket ON THE RUN ROW at creation (additive column — mirrored SQLite+Postgres DDL in the same commit) and have rotation read the stored bucket instead of re-deriving. The stored value is truth; re-derivation is the drift vector.
+- Never post-hoc rename: the filename recorded in `backup_runs` is authoritative and restore depends on the manifest hash (format frozen since 86).
+- The filename marker is the machine token (`daily`), NOT the localized UI label — UI labels come from the existing `GFS_SCALE_KEYS` (`src/pages/backup.js:141`). Localized text in filenames would break grep-based rotation matching and the frozen format.
+- Keep the collision-guard suffix (`-N.tar.gz`, `backup.js:756-761`) applied AFTER the GFS segment in the final name, and write the sidecar (`${sha256}  ${filename}`, `backup.js:765`) from the FINAL filename — including the uniquifier. A sidecar written before uniquification is checksum-name drift.
 
-**Warning signs:**
-Restored DB fails `PRAGMA integrity_check`; backup file size ≪ live DB size; backup files appearing in DATA_DIR while a `-wal` file persists next to them.
-
-**Phase to address:** Backup export core phase (first backup phase) — the snapshot mechanism is the foundation; everything else (S3, rotation, restore) consumes its output.
+**Warning signs:** A run named `weekly` counted against the daily keep-7 count; `grep daily backupsDir` returns files rotation treats as weekly; a sha256 sidecar whose embedded filename ≠ actual filename after a same-second collision.
+**Phase to address:** Backup naming phase (the phase that touches `archiveName`) — the pure-function extraction and stored-bucket DDL are its first task, before any UI label work.
 
 ---
 
-### Pitfall 2: Logical export is not one consistent snapshot — mid-transaction rows and file/manifest mismatch
+### Pitfall 2: Digest aggregation breaks exactly-once — changing the claim key instead of the delivery layer
 
-**What goes wrong:**
-The logical export reads tables one at a time in separate implicit transactions. Between reading `workspaces` and reading `tasks`, a user edits a task — the exported archive mixes two moments in time and foreign keys dangle (task references a project revision that doesn't exist in the archive). Worse for the file story: DB rows are exported first, then DATA_DIR files are copied — an upload that lands between the two passes is missing from the archive while its row IS present (manifest says N files, archive has N−1), or vice versa.
+**What goes wrong:** Today the digest claims per (workspace, user, localDate) (`reminders_sent` key `${ws.id}:${user}:digest:${localDate}`, server.js:2863) and enqueues one outbox row per claim (`digest:${ws.id}:${user}:${localDate}`, :2890). Aggregating to 1 email/day/user across workspaces tempts you to move the claim to `${user}:digest:${date}` — that silently destroys per-workspace exactly-once, the D-11/D-12 tz-change re-window semantics, and the D-12 "empty digest claims nothing" ledger honesty per workspace (a workspace with an empty section must still NOT claim — but the aggregated email still has other sections).
+
+**Why it happens:** The claim and the email are currently 1:1; the ruling makes them N:1 and the path of least resistance is to reshape the claim.
 
 **How to avoid:**
-- One snapshot fence: SQLite — the `VACUUM INTO` file IS the snapshot; run the logical row export **against the snapshot file** opened as a second read-only connection, not against the live DB. Postgres — one REPEATABLE READ transaction for the whole row export.
-- Fence the files: enumerate DB rows that reference files first (under the snapshot), compute the exact set of `DATA_DIR/files` paths needed, copy only those, and emit a **manifest** (row counts, per-file sha256, row-export timestamp, schema version). Then verify: every file path in the manifest exists in the archive and every file in the archive is in the manifest. A mismatch marks the run FAILED — never ship an archive that fails self-verification.
-- Record `schemaVersion` and export timestamp in the manifest; restore depends on it (Pitfall 12).
-- Keep the snapshot connection open for the whole run (SQLite) / transaction open (pg) — closing early unfences the export.
+- KEEP the per-(workspace, user, localDate) semantic claim untouched — it is the WHAT-to-send history (POL-02).
+- Aggregate at the TRANSPORT layer: after the per-workspace pass, a per-user coalescing step builds one email/day/user with one section per claimed workspace; the outbox dedup key becomes `digest:daily:${userId}:${date}` with `insert or ignore` exactly-once, and the multi-workspace ctx is written inside the SAME `db.tx` as the last claim (shared-connection tx discipline: never a module-level db call inside the pg tx).
+- Locale: the aggregate email uses the USER's locale (users.locale), not the per-membership row locale currently read at :2896 — per-workspace rows can disagree.
+- This is the root-cause fix for the reported "digest received 4×" bug — pin the 4× reproduction as a failing test first.
+- ×5 locales: any new section header/unsubscribe wording lands in en/fr/nl/de/es in the same commit (i18n gate will fail otherwise).
 
-**Warning signs:** e2e test where a write happens mid-backup produces FK-dangling archives; archives whose manifest file count ≠ actual file count.
-
-**Phase to address:** Backup export core phase (same as Pitfall 1 — snapshot fence and manifest are one design unit).
+**Warning signs:** A user gets N emails again after the fix ships; a workspace whose only content is an empty section appears as a blank heading in the aggregate; duplicate-key errors on `email_outbox.dedup_key` during restarts.
+**Phase to address:** Notifications digest-fix phase (the owner's "investigation + fix" item) — it is standalone and should land before/parallel to backup console work since it touches `email_outbox`.
 
 ---
 
-### Pitfall 3: Hand-rolled S3 SigV4 — canonical request traps
+### Pitfall 3: Cron humanization drifting from the scheduler's interpretation
 
-**What goes wrong:**
-SigV4 has a dozen exacting requirements; hand-rolled implementations fail against real S3 even when they pass against MinIO. The classic traps:
-- **Payload hash on streaming uploads:** the canonical request needs `x-amz-content-sha256` of the *body bytes*. For a multi-GB backup streamed from a temp file you must hash the file first (sha256 of the full stream), then send that as the signed header — signing with `UNSIGNED-PAYLOAD` requires HTTPS and is not honored by all S3-compatible providers. Buffering the whole backup in memory to hash-and-send in one pass will OOM at real backup sizes.
-- **Presigned vs header auth confusion:** presigned URLs sign a *different* canonical request (query string, no `x-amz-content-sha256` header semantics, expiry clock). Mixing the two (e.g. adding the header to a presigned URL) breaks the signature. Pick header auth (SigV4 headers) for the server-side uploader — presigning buys nothing when the signer and sender are the same process.
-- **Clock skew:** signature window is ±15 min. A Docker container whose clock drifts gets intermittent `RequestTimeTooSkewed` — a *scheduled* backup feature makes this a recurring, confusing failure. Fail with a distinct, keyed refusal that names clock skew.
-- **Path-style vs virtual-host:** `https://s3.amazonaws.com/bucket/key` (path-style) vs `https://bucket.s3.amazonaws.com/key`. MinIO and B2 only reliably support path-style; AWS us-east-1 needs path-style for some bucket names; the bucket name lands IN the signature either way. Hardcode path-style for v1 (the deployment is self-hosted against MinIO/B2-style endpoints) — don't make it configurable.
-- **Canonicalization details:** URI-encode every path segment (but keep `/` separators), sort headers lowercase, trim whitespace, use the exact `x-amz-*` headers sent, sign `host` explicitly. Off-by-one here yields `SignatureDoesNotMatch` with no diagnosis.
+**What goes wrong:** The console will display "Every Monday at 00:00" style labels. If the label is generated by a second, UI-side cron interpretation (string split, naive weekday mapping), the label can disagree with `nextRunAt` — especially around DST, where the scheduler deliberately measures wall time through `Intl.DateTimeFormat` per candidate in UTC-millis (`export/cron.js:83/135/160/178`, 18-test DST matrix). A label like "Every day at 00:00" is a lie twice a year if the scheduler keeps 00:00 *wall* time via formatter measurement and the label author assumed fixed offsets.
+
+**Why it happens:** Humanization feels like a display concern, so it gets implemented in the client far from the parser.
 
 **How to avoid:**
-Write the signer against a golden-vector test (AWS publishes test suites; the S3 docs example requests are pinned vectors). Test against MinIO in CI (e2e already runs a server; MinIO via docker in the e2e stack is a dev-only dependency, not a runtime one). Stream uploads with known-content-length + pre-computed sha256. One config surface: `endpoint`, `bucket`, `region`, `accessKeyId`, `secretAccessKey`, all strict-token env-validated.
+- Humanize from the SAME `parseCron(expr)` output (server computes the label or the client imports the shared parser module — no second parse). The builder presets (daily/weekly/monthly/custom) map 1:1 to expressions; only those get humanized sentences.
+- Custom expressions outside the supported 5-field subset get an HONEST fallback: show the raw expression, never a guessed sentence ("Every 7 days" for `*/1002 * * * *` is a lie).
+- New humanization keys land ×5 locales in the same commit; weekday names must come from locale-aware `Intl` formatting, not hardcoded English arrays.
+- Reuse the DST test matrix: add assertions that the humanized label for a `0 0 * * *` task matches what `nextRunAt` actually fires across the existing DST fixtures.
 
-**Warning signs:** `SignatureDoesNotMatch` only on some object names (spaces/unicode); intermittent `RequestTimeTooSkewed`; works on MinIO, fails on AWS.
-
-**Phase to address:** S3 destination phase — dedicated phase because SigV4 deserves its own verification loop (golden vectors + MinIO e2e), not tasks inside the backup-core phase.
-
----
-
-### Pitfall 4: Multipart upload + checksum trailing headers — the silent corruption trap
-
-**What goes wrong:**
-Large backups exceed the 5 GB single-PUT limit; multipart is mandatory. Traps:
-- **ETag ≠ sha256.** A multipart ETag is `md5-of-md5s-N`, not the object's content hash. Any code that "verifies" the upload by comparing the returned ETag to the local sha256 will fail or (worse, if it "fixes" the comparison) store a wrong checksum. The run record must store BOTH: S3 ETag (with part count) and the local sha256.
-- **Trailing checksum headers (`x-amz-checksum-*`):** the newer AWS flexible-checksum API appends checksums as *trailing headers* after the body chunk stream. MinIO and older B2 gateways choke on them. For v1: use the classic `Content-MD5`-free, sha256-signed PUT/multipart flow without optional checksum trailing headers, and store the checksum locally in the run record instead of trying to push it to S3 metadata.
-- **Resumable/retry corruption:** retrying a failed part upload with a different part number offset, or appending to a partially-written local temp file, produces an object whose bytes don't match the sha256 recorded at export time. Rule: every upload attempt starts from the complete, checksummed local file; parts are re-uploaded whole; a failed upload aborts the multipart (`AbortMultipartUpload`) so no orphaned parts accrue storage charges.
-- **List-after-write/list-after-delete eventual consistency:** S3 is strongly consistent for reads today, but MinIO gateways, B2, and some S3-compatible providers are not. After `DeleteObjects`, a subsequent `ListObjectsV2` can still show the deleted key — rotation code that trusts the list immediately will re-delete (harmless) or re-count (harmful — see Pitfall 7).
-
-**How to avoid:** part size fixed (e.g. 64 MB), each part content-length exact, retry per-part with full re-PUT, abort multipart on run failure, verify by re-reading part count + ETag list. Store sha256 locally; treat S3 ETag as transport evidence only.
-
-**Warning signs:** orphaned `part-N` uploads accumulating in the bucket; checksum mismatch on download-verify; `NoSuchUpload` on retries.
-
-**Phase to address:** S3 destination phase (with Pitfall 3 — same verification loop). Multipart should be an explicit requirement of that phase, not discovered at >5 GB runtime failure.
+**Warning signs:** A label/schedule mismatch reported on a DST-boundary day; e2e asserting on label text that broke after a locale change; a custom-cron task showing a confident "every N days" sentence.
+**Phase to address:** Backup tasks console phase — schedule humanization is one of its deliverables; the shared-parser rule belongs in its plan constraints.
 
 ---
 
-### Pitfall 5: setInterval drift, missed runs across restarts, and overlapping runs
+### Pitfall 4: Unified run history leaking runs beyond viewer rights (task-scope vs instance-scope)
 
-**What goes wrong:**
-- **Drift:** `setInterval(fn, 60_000)` fires at *interval-after-completion* boundaries and accumulates drift; combined with the event loop being busy (a large backup export!), ticks fire late. The existing v1.5 reminder scheduler already lives with this at minute granularity — fine for reminders, wrong for cron.
-- **Missed runs across restarts:** a backup scheduled at 02:00 with a server restart at 01:59 is silently skipped; nothing records that the run never happened. Worse, a crash *during* a run leaves the run row in `running` forever, and if the "is a run active?" guard reads that stale row, **all future backups of that task are blocked** — the most likely production incident of this whole milestone.
-- **Overlapping runs:** a 40-minute backup with a 30-minute cron schedule starts run 2 while run 1 is still streaming to S3 — two exports, two rotations racing, double emails.
-- **In-memory-only scheduling:** if the schedule lives in memory and the task rows live in SQLite, a restart with a cached interval for a deleted task keeps backing up (and rotating!) ghost tasks.
+**What goes wrong:** The unified multi-task history merges runs across tasks of different scopes (project / workspace / instance). A Restore Operator with `hasInstanceRole(userId, RESTORE_USE)` (:9171) may view instance-scope runs but has NO workspace membership on a project-scoped task's workspace — a naive "list all runs for these task ids" endpoint shows workspace/project names (and filenames) the viewer has no right to see. The v3.3 restore-list already needed invalidation keyed on run identity for a cousin of this problem.
+
+**Why it happens:** Cross-workspace visibility for operators is new in v3.4 and it is easy to conflate "can see the Backup/Restore surfaces" with "can see every workspace's data on them".
 
 **How to avoid:**
-- Reuse and extend the v1.5 scheduler pattern, but make it **reconcile-from-DB**: a single 30–60 s tick reads `backup_tasks` from the DB each tick (no cached intervals), computes "next due" from `last_run_at` + cron, and fires when `now >= nextDue`. This is self-healing across restarts and drift (each tick re-derives the truth) — never accumulate offsets.
-- Persist run rows with explicit states `running → succeeded | failed`, and on boot, **sweep any `running` rows to `failed (interrupted)`** — the stale-row cure.
-- Overlap guard: per-task in-process lock (single process — a simple `Set` of running task ids, checked and set synchronously before starting). If due while running: skip and log `skipped_overlap` (and record it in history — a silent skip is a lie). Do NOT queue the missed run for later; that compounds.
-- Cron evaluation: use a minimal hand-rolled 5-field cron matcher (zero deps, same as everything else) evaluated against **UTC only** — see Pitfall 6.
+- Server-side per-row authorization in the unified-history endpoint: for each run, resolve its task's scope and check the matching authority — instance-scope → `hasInstanceRole(BACKUP_MANAGE/RESTORE_USE)`; workspace/project-scope → live workspace role (or the operator's surface-level right only sees rows, redacted of workspace names the caller lacks rights to). Never filter client-side.
+- Do NOT widen `workspacesForUser` to make this easy (see Pitfall 7) — compute the visible-set inside the history endpoint only.
+- Run rows already record workspace identity; redact name/label fields rather than dropping rows only if the product ruling says so — default fail-closed: drop rows the viewer has no right to, never send redacted ghosts.
+- Pin an e2e: Restore-Op (no workspace membership) requesting unified history sees exactly the instance-scope runs and zero workspace names.
 
-**Warning signs:** run history showing gaps with no row at all; a task stuck with one `running` row dated days ago; two `succeeded` rows 20 min apart on a 30-min cron that take 40 min each.
-
-**Phase to address:** Scheduler + run-history phase (after backup core, before S3/rotation) — the reconcile-from-DB + boot-sweep design must exist before rotation, because rotation decisions depend on honest run history.
+**Warning signs:** A non-member workspace name appears in a Restore Op's history filter dropdown; the endpoint returns rows for task ids the caller never had access to; client code doing `.filter(r => canSee)` over an unfiltered payload.
+**Phase to address:** Backup tasks console phase (unified history deliverable) — its success criteria must include the cross-scope authorization e2e.
 
 ---
 
-### Pitfall 6: Timezone and DST — whose midnight is it?
+### Pitfall 5: Role tabs enabling last-Super-Admin demotion or hiding implicit membership
 
-**What goes wrong:**
-A cron of `0 2 * * *` means different things to the server (UTC), the instance operator (their TZ), and the workspace (workspace-shared `tz` from v1.5). A European operator sets "02:00", the backup fires at 02:00 UTC = 03:00/04:00 local, and they report it as broken. DST is worse: a TZ-fixed schedule drifts an hour twice a year; a wall-clock schedule "02:00 Europe/Paris" simply does not exist one Sunday a year (2:00→3:00 spring-forward) and exists twice in autumn.
+**What goes wrong:** The Instance Roles tab redesign (one row per user, badges, rename, user picker in the Grant dialog) rebuilds the grant/revoke UI. Two traps: (a) a redesigned revoke affordance that bypasses or duplicates the existing last-operator demotion guard — the group-mapping sync already learned this and routes every removal through the shared guard funnel with last-operator/last-owner guards; (b) Super-Admins are AUTO-members of instance roles (implicit membership) — if the tab hides that, an operator sees themselves as revocable, clicks revoke, gets an opaque 403, and the UI looks broken.
+
+**Why it happens:** UI redesign re-implements affordances instead of riding the existing server funnel.
 
 **How to avoid:**
-Decide once, document in DEPLOY.md, and label it in the UI: **schedules are instance-local — the timezone comes from a per-task (or per-instance) explicit TZ field defaulting to UTC, evaluated with `Intl.DateTimeFormat` timezone support (already a proven pattern — `resolveTz` funnel from Phase 44).** Never infer TZ from the server clock. For the nonexistent spring-forward hour, define the behavior explicitly (fire at the next valid minute; record `dst_skew` in the run row). Never store "next run" precomputed across a DST boundary — always recompute from the cron + TZ (this also makes the reconcile scheduler of Pitfall 5 trivially DST-correct).
+- All mutations go through the existing audited endpoints (`instance_role_granted`/`instance_role_revoked`, server.js:8513/8615) — the tabs are render-only re-skins; zero new mutation path.
+- Render implicit (auto) membership with a distinct honest badge and a disabled/tooltip'd revoke for the last Super Admin; the refusal key for last-operator demotion must exist ×5 locales.
+- The broken Grant-dialog search is a picker bug — fix the picker, do not build a second search; reuse the Edit-team selectable picker pattern per the milestone goal.
+- Audit funnel for every mutation is already in place — do not add a parallel audit write.
 
-**Warning signs:** support tickets saying "backup ran at the wrong hour"; runs appearing one hour off after October/March.
-
-**Phase to address:** Scheduler phase — a task-table `tz` column is a schema decision that must land with the table, not retrofitted.
+**Warning signs:** A revoke button that always 403s in UAT; a Super Admin row without any indication of auto-membership; two different audit actions for the same demotion.
+**Phase to address:** Instance Roles governance phase (first phase of the milestone) — include "last-Super-Admin revoke shows disabled + localized reason" in its UAT.
 
 ---
 
-### Pitfall 7: Rotation deleting the only good backup — ordering and the "rotation deleted everything" failure
+### Pitfall 6: Revoked-key purge deleting the audit trail
 
-**What goes wrong:**
-The classic catastrophic bug: GFS rotation logic (keep 7 daily / 4 weekly / 12 monthly) computes the delete list from the *list of backups present*, but the newest backup upload failed — so the "newest" the rotation sees is yesterday's, and rotation deletes it as no longer in any retention window. Or the delete step runs *before* verifying the new upload succeeded, so "clean up old, then upload" leaves zero backups when the upload fails. Or a listing bug (Pitfall 4 eventual consistency) makes the rotator count wrong.
+**What goes wrong:** "Purge des clés révoquées" naively means `delete from api_keys where revoked_at is not null`. But key lifecycle is audited (`api_key_revoked` logSecurity + audit_log row at server.js:7741-7744, MCP `psk_live_` history, keys list rendering `revokedAt` at :7684) and the transparency/audit surfaces reference key ids. Deleting rows orphans audit entries pointing at nothing, erases the revocation history from the keys list, and can break forensic questions ("who had access in March?").
+
+**Why it happens:** "Purge" is read as "delete rows" when the product intent is "clean up the list".
 
 **How to avoid:**
-- **Inviolable ordering:** upload new backup → verify (checksum/ETag/size) → record run as succeeded → THEN rotate. Rotation only ever runs after a *verified successful* new backup exists in that destination.
-- **Never-delete-the-newest invariant enforced structurally:** the retention calculation always excludes the newest verified backup by ID from the deletable set — pass it in explicitly, don't derive "which is newest" from a listing.
-- **Delete list must be explicit and audited:** log every deletion (key, retention bucket, age) into the run history; a rotation that deletes N files records N deletion entries.
-- **Minimum floor:** refuse to rotate if the resulting set would be empty (defense against list corruption).
-- **S3 list-after-delete:** tolerate stale listings — delete by explicit key (from the recorded backup index, not from a fresh list), and treat "delete of already-deleted key" as success, not error.
+- Decide and ratify the semantics FIRST: purge = delete revoked ROWS but audit_log entries are append-only and must survive untouched (audit rows do not FK to api_keys — verify, and if any view joins key rows for label/prefix, snapshot label+prefix into the audit ctx at purge time before deletion).
+- Purge only `revoked_at IS NOT NULL`; never expired-but-unrevoked, never active. Scoped strictly to the caller's `user_id` (P-F pattern at :7919) if it's a self-service action.
+- If the audit entry for the purge itself is desired (`api_keys_purged`, count only), route it through `logSecurity`/audit funnel like every mutation — but never per-key audit re-writes.
+- Zero DDL expected here — if any column is added (e.g. a `purged_at`), mirror it SQLite+Postgres in the same commit.
 
-**Warning signs:** a destination whose backup count only ever decreases; rotation logs deleting a backup created <24 h ago; `ListObjects` returning keys that were deleted seconds ago.
-
-**Phase to address:** Rotation phase — with an e2e test that specifically proves "upload fails → rotation does not run" and "rotation never deletes the newest verified backup".
+**Warning signs:** Audit-log entries whose target key no longer resolves; a transparency view that renders blank rows; a purge endpoint that deletes rows still referenced by active MCP key-caches.
+**Phase to address:** Settings phase (API Keys purge deliverable) — semantics ratification belongs in its discuss-phase questions.
 
 ---
 
-### Pitfall 8: Partial restore leaving half-imported state
+### Pitfall 7: Cross-workspace listing implemented by widening `workspacesForUser`
 
-**What goes wrong:**
-A workspace restore imports rows across many tables (workspaces, memberships, projects, tasks, files, notifications, saved_views...). If the import runs statement-by-statement without a transaction and the process dies (or a constraint fires halfway), the instance is left with a workspace containing some tables' rows only — worse than the pre-restore state because it looks valid. Cross-scope restores (instance scope = many tables) magnify this.
+**What goes wrong:** The ruling: operators see ALL workspaces in the Backup/Restore pickers ONLY. The lazy implementation adds operator workspaces into `workspacesForUser` — and every other consumer (sidebar switcher, search, digest loop `server.js:2815`, notif fan-out, invite pickers, MCP tools) immediately inherits the widened authority. That is a full-isolation regression: a Backup Op would appear as a member of every workspace in the UI switcher and could receive digests for workspaces they can't read.
+
+**Why it happens:** `workspacesForUser` is the obvious "list the user's workspaces" seam, and modifying it is one line.
 
 **How to avoid:**
-- **One transaction per restore unit** (the workspace/project being restored), exactly like the existing migration discipline ("row-insert + doc-strip in ONE transaction"). SQLite: a single `BEGIN IMMEDIATE ... COMMIT`; pg: one transaction on one connection.
-- **Snapshot-first before any overwrite restore:** the guarded overwrite mode must take a full pre-restore snapshot (the same `VACUUM INTO`/pg-dump-style export of Pitfall 1) BEFORE the transaction opens — a snapshot taken after a partial import is useless.
-- **Files too:** file blobs restored from the archive go to temp names and rename atomically after the DB transaction commits; on rollback, delete temps. A DB row pointing at a missing file or an orphaned blob with no row is the file-flavored half-state.
-- **Verify after commit:** row counts restored vs manifest counts compared and logged; mismatch = restore recorded as `succeeded_with_warnings`, surfaced in UI, not silently green.
+- Explicit ruling out: `workspacesForUser` is FROZEN for this milestone. Compute the picker list inside the Backup/Restore endpoints from task scope + `hasInstanceRole` (a separate pure helper, e.g. `backupScopeWorkspaces(user)`), returning only the fields pickers need (id/slug/name) — never full workspace objects.
+- Verify by grep after implementation: no new caller passes the operator role into `workspacesForUser`; the sidebar/switcher payload is unchanged for operators.
+- e2e pin: log in as Backup Op → switcher lists only real memberships; Backup page pickers list all workspaces; digest loop skips non-member workspaces.
+- The digest loop already iterates real memberships — confirm the aggregated digest (Pitfall 2) cannot be fed workspace sections from the widened list.
 
-**Warning signs:** after a failed restore, workspaces with members but no projects; `PRAGMA foreign_key_check` violations post-restore; file rows whose blobs 404.
-
-**Phase to address:** Restore phase — transactional boundary is the restore phase's first requirement, before any UI.
-
----
-
-### Pitfall 9: ID collisions on import-as-new — and the `-restored` suffix trap
-
-**What goes wrong:**
-Import-as-new ("restore beside, with `-restored` suffix") naive-inserts the archived rows preserving IDs. Two failure modes: (a) PK collision with live rows of the same ids → constraint failure mid-transaction (feeding Pitfall 8); (b) the developer remaps IDs with `newId = max(id)+1` — which collides with concurrent inserts and breaks cross-references (task → project → workspace chains must ALL remap consistently; a partial remap links restored tasks onto *live* projects, silently corrupting real data).
-
-**How to avoid:**
-- Preserve ALL ids inside the restored subtree and make the restored *root* (workspace or project) unique: slug/name suffix `-restored` (+ numeric disambiguator on repeat). IDs only need to be unique within their table *globally* though — SQLite rowid PKs and pg sequences will collide with live rows. So the correct unit is: **remap the root id, preserve internal relative references** — i.e., export rows already keyed by their own ids, import with a deterministic remap table built in-memory first (old-id → new-id for every row in the subtree), validate the remap is total (every referenced id remapped), THEN insert in dependency order inside the one transaction of Pitfall 8.
-- Reserve the new id ranges before inserting (allocate all new ids up front) so no concurrent insert can steal them mid-import — single-process makes this easy with the same synchronous allocation the app already uses.
-- The `-restored` workspace must be born with **zero memberships except the restoring operator** — an import-as-new that silently restores the old membership list re-grants access to people who may have since been removed (access-control regression).
-
-**Warning signs:** restored tasks appearing inside a live project; FK check failures mentioning both archived and live ids; users reporting access to a "-restored" workspace they never joined.
-
-**Phase to address:** Restore phase (import-as-new is the default mode — it lands first within the phase).
-
----
-
-### Pitfall 10: Self-restore recursion — restoring backup_tasks (and other operational tables) into the live instance
-
-**What goes wrong:**
-The backup contains `backup_tasks` rows — including possibly the very task definition whose schedule is running *right now* (a "Run now" of an instance-scope restore). Restoring them blindly can: duplicate schedules (two intervals for the same cron), resurrect a deleted task (its rotation then deletes backups the operator thought were gone), or overwrite the live task row mid-run while its run-history is being written. Same hazard class for `instance_roles` (Pitfall 11), sessions, invites, recovery codes: restoring a *stale* `sessions` table resurrects revoked sessions.
-
-**How to avoid:**
-- **Classify tables at export time:** the manifest marks tables as `data` (restorable) vs `operational` (never restored in-place: backup_tasks, run history, instance_roles, sessions, login_challenges, recovery_codes, api keys, push subscriptions, webhooks, email_outbox). Operational tables are still IN the archive (they're needed for a full-instance restore-as-new) but the selective-restore UI offers them only under the overwrite mode's type-to-confirm.
-- Even in overwrite mode, restoring `backup_tasks` must go through the scheduler reconcile (Pitfall 5): reload-from-DB makes the new/changed schedules take effect and stale intervals die naturally — never hot-swap intervals directly.
-- An instance-scope restore should refuse (keyed refusal) to touch operational tables in overwrite mode by default; a dedicated "restore everything including scheduling" is a separate, explicitly typed confirmation.
-
-**Warning signs:** duplicated backup tasks after a restore; a deleted task reappearing and deleting backups; revoked sessions becoming valid.
-
-**Phase to address:** Restore phase (table classification is an export-side manifest decision — note it in the backup-core phase too so the manifest carries it from day one).
-
----
-
-### Pitfall 11: Privilege escalation via restore — the backup contains ALL users (and all secrets)
-
-**What goes wrong:**
-This is the security headline of the milestone. A **Backup Operator** (a new, lower role) can create and download instance-scope backups. The backup contains: every user's email, scrypt hashes, TOTP secrets (AES-GCM encrypted under MASTER_KEY — which lives in the same deployment), API keys (`psk_live_` hashes), webhook secrets, Entra mappings. A Restore Operator who can *restore* a backup they can *read* effectively gets: (a) offline cracking of all password hashes; (b) **overwrite-restore of the `users` table with an old snapshot where THEY were instance admin** — a privilege escalation that survives demotion; (c) restore of stale `instance_roles` re-granting removed operators.
-
-**How to avoid:**
-- **Restore-what-you-can-administer rule:** selective restore targets are scoped by the *caller's current live rights*, not the archive's. A Restore Operator may restore a *workspace* they currently administer; instance-scope and user-table restores require live instance-admin (or Super Admin). This check runs against live DB state at restore time — never against roles captured in the archive.
-- Backup *download* rights are stricter than backup *create/run* rights: an operator can trigger and see run status without downloading the archive bytes. Download of instance-scope archives = instance admin only.
-- Restore of `users`, `sessions`, `instance_roles`, `backup_tasks` requires Super Admin + type-to-confirm, regardless of archive scope.
-- After ANY overwrite restore that touched users/roles: force global session revocation (the existing operator-revocation machinery) and log to the audit funnel. The pre-restore snapshot (Pitfall 8) is the rollback for a malicious or mistaken restore.
-- `instance_roles` interplay: keep `users.is_instance_admin` as the bootstrapped Super Admin (D-112) and make `instance_roles` purely additive grants (Backup Operator / Restore Operator rows). Never let a restore of `instance_roles` *demote or remove* Super Admins (they're auto-members per the milestone goal); role rows restore additively or not at all.
-
-**Warning signs:** a Restore Operator UI showing instance-scope targets; archive download links served to non-admins; `instance_roles` restore changing Super Admin membership.
-
-**Phase to address:** Roles phase AND restore phase jointly — the role definitions must encode "restore authority ≠ read authority of the archive contents"; the restore endpoints enforce live-right scoping. This deserves an explicit security-contract entry (the Phase 30 pattern: threats list, `threats_open: 0`).
-
----
-
-### Pitfall 12: Checksum ambiguity — checksum of WHAT, verified by WHOM
-
-**What goes wrong:**
-The requirement says "sha256 checksum" but never says of what. Ambiguity breeds: checksum computed over the *manifest JSON* (not the archive bytes) — restores verify the wrong thing; checksum computed *while streaming to S3* over compressed bytes but *stored* as if over uncompressed; a checksum recorded in the run row but never actually verified on download/restore (it's decoration, not integrity); retry uploads re-hashing a file mutated in between (temp file reused) so the recorded checksum doesn't match the stored object.
-
-**How to avoid:**
-Define one canonical statement and pin it in the plan + tests: **the sha256 is of the final archive artifact bytes as written to the destination, computed once at export completion from the temp file, stored in the manifest AND the run row, and re-verified (a) after upload by size+ETag-part-count, and (b) at restore time by streaming-hash before any row is imported.** A restore that fails checksum verification refuses with a keyed refusal — never imports unverified bytes. Every upload attempt re-reads the same immutable temp file (Pitfall 4), so checksum and object can't diverge.
-
-**Warning signs:** restore succeeds on a truncated archive; checksum field differing between manifest and run row; verifying "checksum" by comparing to the S3 ETag (Pitfall 4).
-
-**Phase to address:** Backup core phase defines it (manifest schema), S3 phase implements transport verification, restore phase implements the restore-time gate.
-
----
-
-### Pitfall 13: Failure-email loops — SMTP down + every run failing = mail storm
-
-**What goes wrong:**
-Every failed backup sends a failure email. If SMTP is down (or rate-limited), the app's existing email retry/backoff (webhook-style claim-then-deliver) retries; meanwhile the next scheduled run also fails and also emails. With a 15-min cron, that's ~100 emails/day per task *plus* retries — and the operator's mailbox is the only signal channel, now flooded. Second variant: the failure email itself fails → retry → the retry-failure notification attempts another email → loop.
-
-**How to avoid:**
-- Reuse the proven `email_outbox` claim-then-deliver machinery (v2.4 pattern) with its capped retry (7-day purge, 5-strike) — no new email path.
-- **Failure-notify with state memory:** send a failure email only on *transition* into failure (last run succeeded, this one failed) and a *recovery* email on transition back to success. A task failing for 3 days emails once, not 288 times. Persist `last_notified_state` on the task row.
-- **Consecutive-failure escalation cap:** after N consecutive failures (e.g. 3), switch to a daily digest of the same failure instead of per-run emails; the run history carries the detail.
-- Never email about a *skipped-overlap* run (Pitfall 5) — that's a log entry, not an incident.
-- The failure email must include: task name, scope, run id, first error line, run-history deep link. Not the full stack (secrets/paths leak into mail).
-
-**Warning signs:** `email_outbox` growing unboundedly with identical subjects; operators reporting hundreds of identical mails; SMTP errors appearing inside backup failure emails recursively.
-
-**Phase to address:** Run history + notification phase — transition-based notify is a schema decision (`last_notified_state` on the task) that must land with the task table.
-
----
+**Warning signs:** An operator sees extra workspaces in the workspace switcher after this milestone; search results include non-member workspaces; `workspacesForUser` diff touches its signature or return shape.
+**Phase to address:** Cross-workspace pickers phase — "workspacesForUser untouched" is a hard success criterion to write into REQUIREMENTS out-of-scope notes.
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Copying the live `.db` file instead of `VACUUM INTO` | Faster backup | Torn snapshots, restore failures discovered *during the incident* | Never |
-| Tables exported in separate implicit transactions (pg) | Simpler code | FK-dangling archives; restore corrupts | Never — one REPEATABLE READ txn |
-| ETag treated as content checksum | Looks verified | Wrong integrity story; real corruption undetected | Never — store sha256 separately |
-| Rotation deleting before verifying new upload | Shorter code | Zero-backup window after upload failure | Never |
-| Schedules cached in intervals instead of reconciled from DB | Feels efficient | Ghost tasks, stale-interval incidents after restores/deletes | Never (single process makes reconcile cheap) |
-| Preserving archived user rows in a selective restore | "Complete" restore | Privilege escalation via stale roles | Only under Super Admin overwrite + session revocation |
-| Per-run failure emails without transition memory | Simple | Mail storms when SMTP degrades | MVP-only, capped at 1 email/run/day if truly temporary |
-| Buffering whole archive in memory for hash/upload | Simple signer | OOM at real backup sizes | Only if a hard size cap (e.g. 200 MB) is enforced and documented |
-
-## Integration Gotchas
-
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| S3 / MinIO / B2 | Virtual-host addressing; assuming ETag = md5; trailing checksum headers | Path-style; store sha256 locally; classic signed PUT/multipart without optional checksum trailers |
-| S3 clock | Trusting container clock | Distinct keyed refusal on `RequestTimeTooSkewed`; document NTP expectation in DEPLOY.md |
-| SMTP (existing mailer) | New email path for backup failures | Reuse `email_outbox` claim-then-deliver; transition-based send |
-| Docker / DATA_DIR | Writing backups inside the container FS only | Backups go under DATA_DIR (the mounted volume) — a local destination outside DATA_DIR is lost on redeploy |
-| Postgres (WR-04) | Assuming file-backup parity | Logical export in one REPEATABLE READ txn; explicitly different verification story per backend |
-
-## Performance Traps
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| Backup export on the request event loop | All API latency spikes during backup | Run export in chunks with `await` yields (the scheduler precedent); never one giant sync read | First backup over a few MB |
-| Row-by-row INSERT on restore | Restore of 10k tasks takes minutes, holds transaction | Batched multi-row INSERTs inside the one transaction | >~1k rows |
-| sha256 re-hash of entire archive on every retry | Upload retries take as long as first attempt | Hash once at export; retries reuse recorded hash | Large archives × flaky S3 |
-| VACUUM INTO blocking hot paths | Brief API stall at snapshot start | Accept (documented); schedule heavy instance backups off-peak via cron | DB > ~1 GB |
+| Second GFS bucket implementation in the naming path | Fast UI label work | Silent retention drift, wrong archives deleted | Never |
+| Collapsing the digest per-workspace claim into a per-user claim | Shorter code | Destroys D-11/D-12 semantics + ledger honesty | Never |
+| Client-side cron humanization | No server round-trip | Label lies at DST, dual parser forever | Never |
+| Filtering unified history on the client | One simple endpoint | Authorization leak (server sent everything) | Never |
+| Widening `workspacesForUser` for pickers | One-line change | Isolation regression across every consumer | Never (explicitly ruled out) |
+| Redesigning role tabs with new mutation endpoints | Fresher UX | Duplicated guards, split audit trail | Never — re-skin existing endpoints |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Backup archives readable/downloadable by any Backup Operator | All users' hashes, TOTP secrets, webhook HMACs exfiltrated | Download rights tiered above run rights; instance-scope download = instance admin |
-| Overwrite-restore of users/roles allowed from archive roles | Privilege escalation via stale snapshot; survives demotion | Live-rights scoping at restore time; users/roles restores = Super Admin only |
-| Restored `-restored` workspace keeps archived memberships | Removed users regain access silently | Import-as-new births with only the restoring operator as member |
-| Checksum stored but restore doesn't verify | Corrupt archive silently imported | Restore-time streaming-hash gate before any write |
-| Full stack traces in failure emails | Internal paths/secrets leak | Curated error line + deep link only |
-| Pre-restore snapshot skipped "because it's just a workspace restore" | Overwrite restore becomes unrecoverable | Snapshot mandatory before overwrite mode; type-to-confirm additionally required (milestone goal already specifies both — keep both) |
-
-## UX Pitfalls
-
-| Pitfall | User Impact | Better Approach |
-|---------|-------------|-----------------|
-| Cron strings shown raw to operators | "0 2 * * *" meaningless to non-devs | Preset picker (daily/weekly/monthly + custom cron with plain-language preview of next 3 runs incl. TZ) |
-| Restore UI offering overwrite as default | Accidental live-data destruction | Import-as-new default (milestone goal already sets this); overwrite behind type-to-confirm |
-| Rotation retention shown as abstract numbers | Operator can't tell what will survive | Show the projected deletion list for the current retention config before saving |
-| Silent skipped runs (overlap) | "Why didn't my backup run?" | Run history row with `skipped_overlap` state visible in UI |
-| Success email on every run | Inbox noise | Success = history row only; failure = transition email (Pitfall 13) |
+| Unified history returns unfiltered rows | Cross-workspace data leak to Restore Ops | Server-side per-run scope check (Pitfall 4) + e2e pin |
+| Widening `workspacesForUser` | Global authority widening beyond Backup/Restore | Frozen seam; separate picker helper |
+| Purge deleting audit rows | Forensic trail loss | Append-only audit_log; snapshot label/prefix into audit ctx before key-row deletion |
+| Existence oracle in pickers | Non-operator learns workspace names/slugs | Operators-only endpoints answer the full list; others keep 404/fail-closed |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Backup run:** Often missing boot-time sweep of stale `running` rows — verify a killed server leaves a `failed (interrupted)` row, not a forever-`running` one
-- [ ] **Backup run:** Often missing `skipped_overlap` recording — verify an overdue overlapping run appears in history
-- [ ] **Archive integrity:** Often missing manifest self-verification (row counts + file sha256s) — verify a corrupted archive fails the run, not the restore
-- [ ] **S3 upload:** Often missing multipart abort on failure — verify no orphaned parts after a killed run
-- [ ] **Rotation:** Often missing the "upload failed → no rotation" ordering test — verify it in e2e
-- [ ] **Restore:** Often missing restore-time checksum gate — verify a flipped byte in the archive refuses the restore
-- [ ] **Restore:** Often missing membership reset on import-as-new — verify a `-restored` workspace has only the operator
-- [ ] **Restore:** Often missing operational-table classification — verify `backup_tasks`/`users`/`instance_roles` are not selectable in default selective restore
-- [ ] **Roles:** Often missing live-rights scoping on restore endpoints — verify a demoted Restore Operator cannot restore instance scope even with an old archive
-- [ ] **Notifications:** Often missing transition-memory — verify 10 consecutive failures produce 1 email, not 10
-- [ ] **Postgres:** Often missing the pg export path entirely (SQLite-only testing) — verify REPEATABLE READ export e2e against `POSTGRES_TEST_URL`
-- [ ] **Locales:** Often missing the new refusal keys in all 5 catalogues — verify the i18n gate covers backup/restore keys
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Torn SQLite snapshot shipped | HIGH | Delete archive; re-run backup; if live DB damaged, restore from last verified backup + accept the gap |
-| Rotation deleted needed backups | HIGH | Check other destinations (local vs S3); pre-restore snapshots; else data loss — this is the unrecoverable pitfall, hence its structural prevention |
-| Half-imported restore | MEDIUM | Pre-restore snapshot restore (that's its purpose); or re-run restore after fixing the constraint |
-| Stale `running` row blocking task | LOW | Boot sweep fixes permanently; manual row update is the immediate fix |
-| Mail storm | LOW | Deploy transition-memory; purge duplicate `email_outbox` rows |
-| Corrupt S3 object | LOW | Re-run backup (rotation retains prior good copies — that's why verify-before-rotate matters) |
-| Privilege escalation via stale-role restore | HIGH | Audit funnel review; revocation sweep; fix scoping; assess exposure window from run history |
+- [ ] **GFS naming:** pure function shared by `archiveName` AND rotation; bucket stored on run row; sidecar filename = final uniquified name
+- [ ] **GFS labels:** UI uses `GFS_SCALE_KEYS` ×5 locales; filename uses machine tokens — no localized text in filenames
+- [ ] **Digest:** per-workspace claim intact; one outbox row per user/day; restart + MAILER-disabled paths don't double-send; empty sections don't claim
+- [ ] **Cron labels:** generated from `parseCron`; custom subset falls back to raw expr; ×5 locales; DST matrix extended to labels
+- [ ] **Unified history:** server-side scope filter; non-member workspaces absent even as redacted ghosts; e2e for Restore-Op visibility
+- [ ] **Role tabs:** implicit membership badge; last-Super-Admin revoke disabled with localized reason; zero new mutation endpoints
+- [ ] **Key purge:** audit trail survives; only `revoked_at` rows deleted; caller-scoped
+- [ ] **Cross-workspace:** `workspacesForUser` byte-unchanged; e2e switcher-vs-picker differential
+- [ ] **Milestone-wide:** every new i18n key lands ×5 in the same commit; any DDL mirrored SQLite+Postgres; every mutation audited
 
 ## Pitfall-to-Phase Mapping
 
-Suggested phase structure implied by the mapping (backup foundation → destinations → scheduling → restore → roles):
-
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| 1, 2 (snapshot fence, manifest) | Backup export core | Integrity-check restored snapshot; mid-write e2e produces consistent archive; manifest self-verify test |
-| 3, 4 (SigV4, multipart) | S3 destination | Golden-vector signer tests; MinIO e2e; orphaned-part absence after killed run |
-| 5 (scheduler reconciliation) | Scheduler + run history | Restart-mid-run test; overlap-skip test; stale-row boot sweep test |
-| 6 (timezone/DST) | Scheduler + run history | DST-boundary cron test via `resolveTz`; TZ column present in schema |
-| 7 (rotation ordering) | Rotation | e2e: failed upload → no deletion; newest-verified never in delete list |
-| 8 (restore transaction) | Restore | Kill-mid-restore test leaves zero rows; FK check clean post-restore |
-| 9 (id remap) | Restore | Remap-totality validator; `-restored` membership test |
-| 10 (self-restore recursion) | Backup core (manifest classification) + Restore | Operational tables absent from default selective restore; task reconcile after restore |
-| 11 (privilege escalation) | Roles + Restore | Security contract (Phase 30 pattern): live-rights scoping, download tiering, `threats_open: 0` |
-| 12 (checksum definition) | Backup core → Restore | Restore refuses flipped-byte archive; checksum identical in manifest + run row |
-| 13 (email loops) | Scheduler + run history (notify) | 10-failure → 1-email test; transition + recovery emails |
+| 1 GFS drift | Backup naming phase | Unit pin on shared pure function; rotation-preview e2e; sidecar hash/filename match test |
+| 2 Digest aggregation | Notifications digest-fix phase | 4×-repro regression test; claim-intact unit tests; per-user/day outbox pin |
+| 3 Cron humanization | Backup tasks console phase | Label↔`nextRunAt` DST matrix extension; ×5 locale gate |
+| 4 History leak | Backup tasks console phase | Restore-Op-no-membership e2e (0 workspace names) |
+| 5 Role tabs | Instance Roles governance phase | Last-Super-Admin disabled revoke UAT; audit single-source check |
+| 6 Key purge | Settings phase | Audit-entry survival test post-purge; revoked-only assertion |
+| 7 Scope widening | Cross-workspace pickers phase | `workspacesForUser` untouched grep gate + switcher/picker differential e2e |
 
 ## Sources
 
-- SQLite docs: WAL, `VACUUM INTO`, Online Backup API caveats (official "gotchas" documentation) — HIGH
-- Codebase-internal precedent: `vacuum into` pre-migration backups (server.js:3778+), WR-04 pg no-file-backup ruling, `--backup` CLI, v1.5 scheduler, v2.4 `email_outbox` claim-then-deliver, Phase 44 `resolveTz`, Phase 30 security-contract pattern — HIGH
-- AWS SigV4 signing process + S3 multipart/checksum trailer documentation; MinIO/B2 S3-compatibility notes — HIGH (mechanics) / MEDIUM (exact provider quirks may drift; verify against the pinned MinIO version at phase time)
-- GFS/Grandfather-Father-Son rotation post-mortems (community ops wisdom: "rotation deleted the only good backup" class of incident) — HIGH as failure mode, standard prevention is verify-before-rotate
-- Personal experience / known issues with single-process scheduler reconciliation and restore id-remap — MEDIUM
+- Code read directly (HIGH confidence): `server.js:2815-2925` (digest claim/outbox), `server.js:3844-4028` (GFS rotation, `gfsKeptPositions`), `server.js:9203-9310` (rotation projection), `server.js:5813` + capability gates, `server.js:7662-7747` (api keys), `export/backup.js:536-575, 707-846` (naming, sidecar, S3), `export/cron.js:83-178` (parser + DST walk), `src/pages/backup.js:136-380` (GFS_SCALE_KEYS, retention form)
+- `.planning/PROJECT.md` v3.3 shipped record + owner rulings for v3.4 (D-86 frozen format, D-10/D-11/D-12/D-13, POL-02, D-88-6/8/9, D-90-12/15/16)
 
 ---
-*Pitfalls research for: gr8r v3.3 Instance Operations — Backup, Restore & Roles*
-*Researched: 2026-11-21*
+*Pitfalls research for: gr8r v3.4 UX Polish & Backup Console Refinement*
+*Researched: 2026-11-23*
