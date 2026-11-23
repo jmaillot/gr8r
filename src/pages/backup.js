@@ -36,7 +36,7 @@ import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
 import { tzPreselect } from '../lib/timezones.js';
-import { refreshBackupTasks, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
+import { refreshBackupTasks, refreshRestoreBackups, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
