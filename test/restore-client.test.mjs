@@ -51,8 +51,8 @@ test('the restore section renders payload fields through esc() — render-only, 
     assert.match(pagesSrc, new RegExp(`${loc}: 'page\\.restore\\.`), `the ${loc} location is keyed`);
   }
   assert.match(pagesSrc, /const restoreRow = /, 'the list row renderer exists');
-  assert.match(pagesSrc, /esc\(r\.filename\)/, 'the archive filename renders as TEXT (payload verbatim)');
-  assert.match(pagesSrc, /t\('page\.restore\.locMissing'\)/, 'the missing-location badge is keyed (D-89-15 — the restore is refused keyed)');
+  assert.match(pagesSrc, /esc\(r\.filename\b/, 'the archive filename renders as TEXT (payload verbatim)');
+  assert.match(pagesSrc, /'page\.restore\.locMissing'/, 'the missing-location badge is keyed (D-89-15 — the restore is refused keyed)');
   /* D-89-13 render-verbatim: the client NEVER derives the final restore name
      — no `-restored` counter math, no slug computation under the page. */
   assert.ok(!pagesSrc.includes('-restored'), 'no `-restored` counter math under the page (D-89-13: the server derives the final name)');
@@ -71,7 +71,9 @@ test('the preview drawer opens ONLY from a manifest payload and renders it verba
   }
   /* D-89-12: missing-blob-flagged file rows render flagged with the count shown. */
   assert.match(pagesSrc, /missingBlobCount/, 'the missing-blob count rides the payload into the drawer');
-  assert.match(pagesSrc, /page\.restore\.previewCorrupt/, 'the corrupt-manifest copy is wired (the drawer never opens without a manifest)');
+  /* The corrupt-manifest contract lives on the ACTION side: the drawer never
+     opens without a manifest — the refusal closes it and toasts the copy. */
+  assert.match(actionsSrc, /page\.restore\.previewCorrupt/, 'a corrupt manifest toasts the previewCorrupt copy and the drawer stays closed');
   /* runRow idiom: the checksum renders a 12-char slice with the full digest in title. */
   assert.match(pagesSrc, /slice\(0, 12\)/, 'the checksum renders the runRow trunc/title idiom');
 });
@@ -123,8 +125,7 @@ test('restore empty/loading/history states mirror the backup card discipline', (
   assert.match(pagesSrc, /restorePollKickAllowed\(\)/, 'the restore kick honors the WR-02 failure cooldown');
   /* The page kick covers a mid-restore deep link — the shared tick re-fetches
      the restore current payload on page entry (backup.js:336 idiom). */
-  const kick = pagesSrc.slice(pagesSrc.indexOf('const flags = S.ui.backupTasks'), pagesSrc.indexOf('const body ='));
-  assert.ok(kick.includes('restorePollKickAllowed') && kick.includes('backupPollTick'), 'the page kick covers the restore surface (mid-restore re-entry)');
+  assert.match(pagesSrc, /flags\.canRestore && !S\.ui\.restoreRun && !S\.ui\.restorePending && restorePollKickAllowed\(\)/, 'the page kick covers the restore surface (mid-restore re-entry)');
 });
 
 test('the tracer happy path is wired: list fill → preview fetch → import-as-new → shared poll', () => {

@@ -4774,6 +4774,9 @@ let backupPollSeq = 0;
 let backupPollInflight = null;
 let backupPollTimer = null;
 const BACKUP_ACTIVE_STAGES = ['collecting', 'archiving', 'verifying', 'uploading'];
+/* 89-06 (D-89-29): the restore stage vocabulary — the ONE timer keeps
+   polling while EITHER surface reports an active stage. */
+const RESTORE_ACTIVE_STAGES = ['fetching', 'validating', 'restoring', 'verifying'];
 /* WR-02: cooldown between render-kicked ticks after a failure — no backoff
    here would let pageBackup's in-render kick re-fire on every render. */
 const BACKUP_POLL_FAILURE_COOLDOWN_MS = 30000;
@@ -4786,13 +4789,12 @@ export async function backupPollTick() {
   const my = ++backupPollSeq;
   backupPollInflight?.abort();
   backupPollInflight = new AbortController();
-  const res = await api.backupRunCurrent({ signal: backupPollInflight.signal });
+  const signal = backupPollInflight.signal;
+  const res = await api.backupRunCurrent({ signal });
   if (my !== backupPollSeq) return null;
   if (res.ok) {
     S.ui.backupRun = res.data;
     S.ui.backupPending = false;
-    /* D-07: the interval runs only while a run is active — done|failed|idle stops it. */
-    if (!BACKUP_ACTIVE_STAGES.includes(res.data?.stage)) backupStopPolling();
   } else {
     /* D-28: the central intercept owns the 401 teardown. Terminal refusals
        (403 role loss, 404 route gone) stop the loop AND surface the error —
@@ -4803,16 +4805,41 @@ export async function backupPollTick() {
        cooldown, so a persistent 500/network error degrades to one retry per
        BACKUP_POLL_FAILURE_COOLDOWN_MS instead of a render→fetch→render loop. */
     if (res.status === 401) return null;
-    backupStopPolling();
     S.ui.backupRun = null;
     S.ui.backupPending = false;
     if (res.status === 403 || res.status === 404) S.ui.backupErr = { status: res.status };
     S.ui.backupPollFailedAt = Date.now();
   }
+  /* 89-06 (D-89-1): the SAME tick also fetches the restore current payload —
+     ONE timer serves both surfaces, never a second interval. A backup-only
+     operator skips the restore half (fetch gating on the payload's flag, not
+     authority recomputation). Render-only: stage/finalName land verbatim. */
+  if (S.ui.backupTasks?.canRestore) {
+    const rres = await api.restoreRunCurrent({ signal });
+    if (my !== backupPollSeq) return null;
+    if (rres.ok) {
+      S.ui.restoreRun = rres.data;
+      S.ui.restorePending = false;
+    } else if (rres.status !== 401) {
+      S.ui.restoreRun = null;
+      S.ui.restorePending = false;
+      S.ui.restorePollFailedAt = Date.now();
+    }
+  }
+  /* D-07 + D-89-1: the interval runs while EITHER surface is active —
+     done|failed|idle on both stops the ONE timer. A tick that DISCOVERS an
+     active stage (mid-run page re-entry through the kick idiom) starts the
+     interval itself, so a re-entering operator keeps live progress. */
+  const backupActive = BACKUP_ACTIVE_STAGES.includes(S.ui.backupRun?.stage);
+  const restoreActive = !!S.ui.restoreRun?.runId && RESTORE_ACTIVE_STAGES.includes(S.ui.restoreRun.stage);
+  if ((backupActive || restoreActive) && !backupPollTimer) backupStartPolling();
+  if (!backupActive && !restoreActive) backupStopPolling();
   render();
   /* 87-04 piggyback: while the run poll ticks, refresh every OPEN per-task
-     history card so a finishing run's row lands without a manual toggle. */
+     history card so a finishing run's row lands without a manual toggle.
+     89-06: the restore history card rides the same piggyback. */
   refreshOpenBackupHistories();
+  refreshOpenRestoreHistories();
   return S.ui.backupRun;
 }
 
@@ -4824,6 +4851,45 @@ function backupStartPolling() {
 function backupStopPolling() {
   clearInterval(backupPollTimer);
   backupPollTimer = null;
+}
+
+/* =====================================================================
+   89-06 RESTORE (BKRST-01..04, D-89-14..23) — the restore surface's
+   client half, riding the SAME fill/poll machinery as the backup side:
+   ONE fill loop (refreshRestoreBackups) and the ONE backup poll tick
+   extended above to also fetch the restore current payload — never a
+   second interval (D-89-1: one global restore pipeline, one timer).
+   Render-only throughout: stages and final names land in state verbatim
+   from the payload; every refusal surfaces as a keyed toast through
+   call()'s central handling — the server is the authority, the section
+   never pre-validates authority.
+   ===================================================================== */
+let restoreFillSeq = 0;
+let restoreInflight = null;
+export async function refreshRestoreBackups() {
+  if (!api.enabled) return null;
+  const my = ++restoreFillSeq;
+  restoreInflight?.abort();
+  restoreInflight = new AbortController();
+  const res = await api.restoreBackups({ signal: restoreInflight.signal });
+  if (my !== restoreFillSeq) return null;
+  if (res.ok) {
+    S.ui.restoreList = { runs: Array.isArray(res.data?.runs) ? res.data.runs : [], err: false };
+  } else {
+    /* D-28: the central intercept owns the 401 teardown; any other refusal
+       degrades the section to its keyed unavailable row — never a blank. */
+    if (res.status !== 401) S.ui.restoreList = { runs: [], err: true };
+    return null;
+  }
+  render();
+  return S.ui.restoreList;
+}
+
+/* WR-02 restore half: cooldown between render-kicked ticks after a
+   restore-poll failure — the page's render-kick honors it, so a
+   persistent restore-poll error cannot loop render→fetch→render. */
+export function restorePollKickAllowed() {
+  return !S.ui.restorePollFailedAt || Date.now() - S.ui.restorePollFailedAt > BACKUP_POLL_FAILURE_COOLDOWN_MS;
 }
 
 A.backupRunNow = async () => {
@@ -5150,6 +5216,90 @@ A.backupRunErr = el => {
   const set = (S.ui.backupRunErrOpen = S.ui.backupRunErrOpen || new Set());
   if (set.has(el.dataset.id)) set.delete(el.dataset.id);
   else set.add(el.dataset.id);
+  render();
+};
+
+/* 89-06 restore history (D-89-20): ONE instance-wide card — newest-first
+   and the 50 cap are the SERVER's (the client derives none of it); the
+   fetch result stages verbatim in S.ui.restoreHistory. */
+const restoreHistoryFetch = async () => {
+  const res = await api.restoreRuns();
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    S.ui.restoreHistory = { runs: [], err: true };
+  } else {
+    S.ui.restoreHistory = { runs: Array.isArray(res.data?.runs) ? res.data.runs : [] };
+  }
+  render();
+};
+
+export async function refreshOpenRestoreHistories() {
+  if (!S.ui.restoreHistoryOpen) return;
+  await restoreHistoryFetch();
+}
+
+A.restoreHistory = async () => {
+  if (S.ui.restoreHistoryOpen) {
+    S.ui.restoreHistoryOpen = false;
+    render();
+    return;
+  }
+  S.ui.restoreHistoryOpen = true;
+  render();
+  await restoreHistoryFetch();
+};
+
+A.restoreRunErr = el => {
+  const set = (S.ui.restoreRunErrOpen = S.ui.restoreRunErrOpen || new Set());
+  if (set.has(el.dataset.id)) set.delete(el.dataset.id);
+  else set.add(el.dataset.id);
+  render();
+};
+
+/* The preview drawer: opens on a list row, streams the manifest, and NEVER
+   opens without one — a refusal closes it and surfaces the keyed copy
+   (corrupt manifests show the page.restore.previewCorrupt contract copy,
+   every other class its err.* key — D-89-17, D-89-33 families 2/3). */
+A.restorePreview = async el => {
+  const runId = el.dataset.id;
+  if (!runId) return;
+  S.ui.restorePreview = { runId };
+  S.ui.restorePreviewData = null;
+  render();
+  const res = await api.restorePreview(runId);
+  if (!res.ok) {
+    S.ui.restorePreview = null;
+    render();
+    if (res.status === 401) return;
+    if (res.data?.code === 'restoreManifestCorrupt') return toast(t('page.restore.previewCorrupt'), { kind: 'err' });
+    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.restorePreviewData = { data: res.data };
+  render();
+};
+
+A.restorePreviewClose = () => {
+  S.ui.restorePreview = null;
+  S.ui.restorePreviewData = null;
+  render();
+};
+
+/* Import-as-new trigger (D-33-2: the non-destructive default — single click,
+   NO confirm dialog). The accepted run id closes the drawer and hands over
+   to the pending panel until the first shared poll lands (render-only). */
+A.restoreNew = async el => {
+  const runId = el.dataset.id || S.ui.restorePreview?.runId;
+  if (!runId) return;
+  const res = await api.restoreRun({ runId, targetWorkspaceId: S.ui.restoreTarget || undefined });
+  if (!res.ok) {
+    if (res.status === 401) return;
+    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.restorePreview = null;
+  S.ui.restorePreviewData = null;
+  S.ui.restoreTarget = null;
+  S.ui.restorePending = true;
+  backupStartPolling();
   render();
 };
 

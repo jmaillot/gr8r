@@ -474,6 +474,52 @@ export const api = {
   async backupRuns({ taskId, signal } = {}) {
     return call('GET', `/api/backup/runs?taskId=${encodeURIComponent(taskId)}`, undefined, { signal });
   },
+  /* ==================================================================
+     89-06 (BKRST-01..04, D-89-14..23): the restore client surface. The
+     five restore methods sit beside the backup family; every route
+     refusal flows call()'s central keyed handling — no bespoke error
+     parsing here. The refusal vocabulary is the SERVER's, named exactly
+     as the 89-03/04/05 routes emit it:
+     - list (restoreBackups): backupRoleRequired (403 — RESTORE_USE gate)
+     - preview (restorePreview): tooManyAttempts (429, D-89-22/OQ5),
+       backupRoleRequired (403), taskNotFound (404 bad-id shape),
+       restoreArchiveMissing (404 — gone from both destinations, D-89-15),
+       restoreEntryRejected (400 — attacker-supplied entry, D-89-33),
+       restoreShaMismatch (400 — digest mismatch),
+       restoreManifestCorrupt (400 — structural corruption; the client
+       toasts page.restore.previewCorrupt for this class)
+     - trigger (restoreRun): tooManyAttempts (429), backupRoleRequired
+       (403), restoreInvalidRunId (400), restoreArchiveMissing (404),
+       restoreScopeUnsupported (400), restoreNoWorkspace (400 — D-89-23
+       live-membership targeting), backupRestoreInProgress (409 — the
+       shared D-89-1 vocabulary: one export OR one restore at a time)
+     - poll (restoreRunCurrent) / history (restoreRuns):
+       backupRoleRequired (403)
+     - destructive routes (methods land with Task 2's confirm wiring):
+       overwrite — backupManageRequired (403), restoreInvalidRunId /
+       restoreTargetMissing (400/404), confirmPhraseMismatch (400 — the
+       server re-validates the typed name against the LIVE row, D-89-27),
+       restoreTargetMismatch (400), backupRestoreInProgress (409);
+       instance DR — operatorOnly (403), confirmPhraseMismatch (400 —
+       !== 'RESTORE-INSTANCE'), restoreTargetMismatch (400),
+       backupRestoreInProgress (409)
+     Every payload is render-only — the client derives nothing.
+     ================================================================== */
+  async restoreBackups({ signal } = {}) {
+    return call('GET', '/api/backup/restore/backups', undefined, { signal });
+  },
+  async restorePreview(runId, { signal } = {}) {
+    return call('GET', `/api/backup/restore/preview?runId=${encodeURIComponent(runId)}`, undefined, { signal });
+  },
+  async restoreRun(body, { signal } = {}) {
+    return call('POST', '/api/backup/restore', body, { signal });
+  },
+  async restoreRunCurrent({ signal } = {}) {
+    return call('GET', '/api/backup/restore/current', undefined, { signal });
+  },
+  async restoreRuns({ signal } = {}) {
+    return call('GET', '/api/backup/restore/runs', undefined, { signal });
+  },
   /* 85-02 (D-16/D-29/D-30): the Instance Roles tab's route family — one
      listing GET (rows + recent activity), the audited grant POST and the
      revoke DELETE. Operator-only server-side; every refusal surfaces as a

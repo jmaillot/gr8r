@@ -36,7 +36,7 @@ import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
 import { tzPreselect } from '../lib/timezones.js';
-import { refreshBackupTasks, backupPollTick, backupPollKickAllowed } from '../actions/actions.js';
+import { refreshBackupTasks, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
@@ -309,6 +309,179 @@ const taskFormCard = () => {
   </div></div>`;
 };
 
+/* =====================================================================
+   89-06 RESTORE (BKRST-01..04, D-89-14..23) — the restore section on the
+   shared Backup page, gated on the payload's canRestore flag (D-22/D-23
+   — verbatim chrome, never recomputed). Render-only over the restore
+   payloads: the list rows, the manifest-derived preview drawer, the
+   poll stage panel and the history card render server fields verbatim
+   through esc() — the client never parses archive bytes, never derives
+   the final restore name (D-89-13: the server owns the restore-name
+   counter), never recomputes authority. The preview drawer reuses the
+   drawer idiom (same .drawer classes + scrim) rendered from the page
+   layer, because the overlay drawer is task-keyed (drawer.js renderLayer).
+   ===================================================================== */
+const RESTORE_LOCATION_KEYS = { local: 'page.restore.locLocal', s3: 'page.restore.locS3', missing: 'page.restore.locMissing' };
+const RESTORE_STAGE_KEYS = {
+  fetching: 'page.restore.stageFetching',
+  validating: 'page.restore.stageValidating',
+  restoring: 'page.restore.stageRestoring',
+  verifying: 'page.restore.stageVerifying',
+  done: 'page.restore.stageDone',
+  failed: 'page.restore.stageFailed',
+};
+
+/* List row: payload fields verbatim — location badge (local/S3/missing,
+   D-89-14/15), esc'd filename, size, date, 12-char sha slice with the full
+   digest in title (runRow idiom). The missing-location badge renders too —
+   the restore attempt on it is refused keyed err.restoreArchiveMissing. */
+const restoreRow = r => {
+  const startedMs = Number(r.startedAt);
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  return `<div style="padding:8px 0;border-top:1px solid var(--border)">
+    <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
+      <span class="badge${r.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[r.location] || 'page.restore.locMissing')}</span>
+      <span class="faint">${esc(r.filename || '')}</span>
+      <span class="faint">${esc(fsize(Number(r.sizeBytes) || 0))}</span>
+      <span class="faint">${esc(when)}</span>
+      ${r.sha256 ? `<span class="mono faint" title="${esc(r.sha256)}">${esc(String(r.sha256).slice(0, 12))}</span>` : ''}
+      <button class="btn btn-sm" data-a="restorePreview" data-id="${esc(r.runId)}">${ic('archive', 13)}${t('page.restore.previewAction')}</button>
+    </div>
+  </div>`;
+};
+
+/* Preview drawer body: manifest-derived counts ONLY (the payload carries no
+   archive bytes, D-89-17) — scope/tables/files/checksum render verbatim,
+   missing-blob-flagged file rows flagged with the count shown (D-89-12),
+   the skipped-tables note under the tables (D-89-7: report honesty). */
+const previewDetail = (label, value) =>
+  `<div><div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${label}</div><div class="mono" style="font-size:13px;margin-top:2px">${value}</div></div>`;
+
+const restorePreviewBody = d => {
+  const tables = Array.isArray(d.tables) ? d.tables : [];
+  const files = Array.isArray(d.files) ? d.files : [];
+  const flagged = files.filter(f => f.flagged);
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px">
+      ${previewDetail(t('page.restore.scopeLabel'), esc(String(d.scope?.kind ?? '')))}
+      ${previewDetail(t('page.restore.tablesLabel'), esc(String(tables.length)))}
+      ${previewDetail(t('page.restore.filesLabel'), esc(String(d.fileCount ?? files.length)))}
+      ${previewDetail(t('page.restore.checksumLabel'), `<span title="${esc(d.checksum || '')}">${esc(String(d.checksum || '').slice(0, 12))}</span>`)}
+    </div>
+    ${tables.length ? `<div class="faint" style="margin-top:10px;font-size:12px">${tables.map(tb => esc(tb.name)).join(' · ')}</div>` : ''}
+    <div class="hint" style="margin-top:8px">${t('page.restore.skippedTablesNote')}</div>
+    ${
+      flagged.length
+        ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><span class="faint" style="font-size:12px">${ic('circle-alert', 12)}${esc(String(d.missingBlobCount ?? flagged.length))}</span>${flagged.map(f => `<span class="badge">${esc(f.name)}</span>`).join('')}</div>`
+        : ''
+    }
+    <div class="row" style="gap:8px;margin-top:12px">
+      <button class="btn btn-primary" data-a="restoreNew" data-id="${esc(d.runId)}">${ic('rotate-ccw', 14)}${t('page.restore.restoreNewAction')}</button>
+    </div>`;
+};
+
+const restorePreviewDrawer = () => {
+  const p = S.ui.restorePreview;
+  if (!p) return '';
+  const d = S.ui.restorePreviewData;
+  const body = !d
+    ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.restore.listLoading')}</div>`
+    : restorePreviewBody(d.data);
+  return `<div class="drawer-scrim" data-a="restorePreviewClose"></div><div class="drawer"><div class="drawer-h"><strong>${t('page.restore.previewTitle')}</strong><button class="ibtn" data-a="restorePreviewClose" aria-label="${t('a11y.close')}">${ic('x', 15)}</button></div><div class="drawer-b">${body}</div></div>`;
+};
+
+/* D-89-29 stage progress: rendered verbatim from the restore current
+   payload — pending flag until the first poll lands (no fabricated stage),
+   stage badge + keyed label while active, done/failed terminal bodies. The
+   final name is the payload's own field (D-89-13 render-verbatim). */
+const restoreProgress = () => {
+  const run = S.ui.restoreRun;
+  if (S.ui.restorePending && !run?.runId)
+    return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.restore.stageLabel')}</h2></div><div class="panel-b faint" aria-busy="true">${t('page.restore.pending')}</div></div>`;
+  if (!run?.runId) return '';
+  let detail = '';
+  if (run.stage === 'done') {
+    detail = run.finalName ? `<p class="faint" style="margin:0">${t('page.restore.runDone', { name: esc(String(run.finalName)) })}</p>` : '';
+  } else if (run.stage === 'failed') {
+    detail = `<p class="faint" style="margin:0">${t('page.restore.runFailed')}</p>`;
+  } else if (RESTORE_STAGE_KEYS[run.stage]) {
+    detail = `<p class="faint" style="margin:0">${t(RESTORE_STAGE_KEYS[run.stage])}</p>`;
+  }
+  return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.restore.stageLabel')}</h2><span class="badge">${esc(String(run.stage || ''))}</span></div><div class="panel-b">${detail}</div></div>`;
+};
+
+/* History row: the restore_runs payload verbatim (server order, server cap —
+   no client re-sort, no client pagination). The summary is the server's JSON
+   report string: its skipped tables render under skipReportLabel (D-89-7 —
+   report-only, never hidden); the expandable error toggle mirrors runRow. */
+const restoreRunRow = run => {
+  const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
+  const startedMs = Number(run.started_at);
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  let skipped = [];
+  try {
+    const s = typeof run.summary === 'string' && run.summary ? JSON.parse(run.summary) : null;
+    skipped = Array.isArray(s?.skipped) ? s.skipped : [];
+  } catch {
+    skipped = [];
+  }
+  return `<div style="padding:8px 0;border-top:1px solid var(--border)">
+    <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
+      <span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span>
+      <span class="faint">${esc(String(run.final_name || ''))}</span>
+      <span class="faint">${esc(when)}</span>
+    </div>
+    ${
+      skipped.length
+        ? `<div class="faint" style="margin-top:4px;font-size:12px">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
+        : ''
+    }
+    ${
+      run.error
+        ? `<div style="margin-top:4px"><a href="#" data-a="restoreRunErr" data-id="${esc(run.id)}">${t('page.restore.errorToggle')}</a>${
+            errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
+          }</div>`
+        : ''
+    }
+  </div>`;
+};
+
+const restoreHistoryCard = () => {
+  const h = S.ui.restoreHistory;
+  const body = !h
+    ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.restore.historyLoading')}</div>`
+    : h.err
+      ? `<div class="faint" style="padding:8px 0">${t('page.restore.historyUnavailable')}</div>`
+      : !h.runs.length
+        ? `<div class="faint" style="padding:8px 0">${t('page.restore.historyEmpty')}</div>`
+        : h.runs.map(restoreRunRow).join('');
+  return `<div style="margin-top:10px">
+    <div class="row" style="gap:8px;align-items:center">
+      <strong style="font-size:13px">${t('page.restore.historyTitle')}</strong>
+      <span class="faint" style="font-size:12px">${t('page.restore.historyCap')}</span>
+    </div>
+    ${body}
+  </div>`;
+};
+
+const restoreSection = () => {
+  const list = S.ui.restoreList;
+  const listBody = !list
+    ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.restore.listLoading')}</div>`
+    : list.err
+      ? `<div class="faint" style="padding:8px 0">${t('page.restore.listUnavailable')}</div>`
+      : !list.runs.length
+        ? empty('archive', t('page.restore.listEmptyTitle'), t('page.restore.listEmptyBody'), '', 'sm', 3)
+        : list.runs.map(restoreRow).join('');
+  return `<div class="row" style="gap:8px;align-items:center;margin-top:16px">
+      <h2 style="margin:0">${t('page.restore.title')}</h2>
+      <button class="btn btn-sm" data-a="restoreHistory">${ic('history', 13)}${t('page.restore.historyTitle')}</button>
+    </div>
+    <p class="faint" style="margin:4px 0 0">${t('page.restore.lead')}</p>
+    ${restoreProgress()}
+    <div class="panel" style="margin-top:12px">${listBody}</div>
+    ${S.ui.restoreHistoryOpen ? restoreHistoryCard() : ''}`;
+};
+
 export function pageBackup() {
   /* The server decision, surfaced verbatim (governance.js:72-73 shape): the
      gate is the server's 403; the page only reports it — keyed role message,
@@ -328,12 +501,19 @@ export function pageBackup() {
      false (fail-closed), never a client-side guess. */
   const flags = S.ui.backupTasks || { tasks: [], canBackup: false, canRestore: false };
   const tasks = Array.isArray(flags.tasks) ? flags.tasks : [];
+  /* 89-06: the restore list fill — one loop, payload-flag gated (D-22:
+     the section and its fetches exist only for RESTORE_USE holders). */
+  if (flags.canRestore && !S.ui.restoreList) refreshRestoreBackups();
   /* D-07: pick up a run that is already active (page re-entry mid-run) — one
      payload-driven tick; the interval itself lives in actions.js and runs only
      while the payload reports an active stage. WR-02: the kick honors the
      post-failure cooldown, so a persistent server error cannot loop
      render→fetch→render. */
-  if (flags.canBackup && !S.ui.backupRun && !S.ui.backupPending && backupPollKickAllowed()) backupPollTick();
+  if (
+    (flags.canBackup && !S.ui.backupRun && !S.ui.backupPending && backupPollKickAllowed()) ||
+    (flags.canRestore && !S.ui.restoreRun && !S.ui.restorePending && restorePollKickAllowed())
+  )
+    backupPollTick();
   /* 87-04: the Phase 87 task console — the task list (payload rows verbatim)
      beside the 86-02 Run now card, with the builder form when staged open. */
   const body = tasks.length
@@ -351,5 +531,7 @@ export function pageBackup() {
       ${flags.canBackup && !S.ui.backupTaskForm ? `<button class="btn btn-primary" data-a="backupTaskNew">${ic('plus', 14)}${t('page.backup.taskNewAction')}</button>` : ''}
     </div>
     <div class="panel" style="margin-top:12px">${body}</div>
+    ${flags.canRestore ? restoreSection() : ''}
+    ${flags.canRestore ? restorePreviewDrawer() : ''}
   </div>`;
 }
