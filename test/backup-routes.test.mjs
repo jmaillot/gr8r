@@ -25,6 +25,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import url from 'node:url';
 import { test } from 'node:test';
 import { ADMIN, client, login, signup, startServer, withDb } from './helpers/server.mjs';
 
@@ -271,6 +272,83 @@ test('throttle is operator-keyed and consumes a try even on refusal: 5 refused a
     const other = await makeBackupOp(server, 'op-other@test.local');
     const ok = await other.post('/api/backup/runs', { scope: { kind: 'instance' } });
     assert.equal(ok.status, 200, 'a different operator is not throttled by the first operator\'s window');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* =====================================================================
+   Phase 92 golden legacy snapshot (D-05 byte-identity gate). The frozen
+   GET /api/backup/runs legacy branch must stay BYTE-identical when the
+   ?all=1 variant lands — this cell snapshots the FULL response body over
+   deterministic seeded rows (fixed ids, timestamps, filenames, hashes —
+   no live archives on disk, so location resolves to 'missing' every run)
+   and deep-equals the committed fixture. Regenerate the fixture ONLY by
+   inspection: run this file with GOLDEN_CAPTURE=1, review the diff, and
+   commit the fixture deliberately.
+   ===================================================================== */
+
+/* Deterministic seeding for the golden snapshot — shared by the assert and
+   the capture cells so they can never drift apart. Fixed task id + run ids
+   keep the fixture machine-independent. */
+async function seedGoldenHistory(server) {
+  const op = await makeBackupOp(server, 'op-golden@test.local');
+  const created = await op.post('/api/backup/tasks', { name: 'Golden', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+  assert.equal(created.status, 200, `create: ${JSON.stringify(created.data)}`);
+  const rawId = created.data.task.id;
+  withDb(server.dbPath, db => db.prepare('update backup_tasks set id = ? where id = ?').run('task-golden-1', rawId));
+  const seed = (id, at, extra = {}) =>
+    withDb(server.dbPath, db =>
+      db.prepare('insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at, finished_at, duration_ms, size_bytes, sha256, filename, error, uploaded) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(
+        id,
+        'taskId' in extra ? extra.taskId : 'task-golden-1',
+        JSON.stringify({ kind: 'instance', id: null }),
+        extra.trigger ?? 'scheduled',
+        extra.status ?? 'succeeded',
+        at,
+        at,
+        at + 45_000,
+        45_000,
+        1_048_576,
+        'a'.repeat(64),
+        extra.filename ?? `golden-${id}.tar.gz`,
+        extra.error ?? null,
+        0,
+      ),
+    );
+  const DAY = 24 * 3600 * 1000;
+  const base = Date.UTC(2026, 0, 2, 2, 30);
+  seed('golden-succ-1', base); // first of 2026 → yearly bucket
+  seed('golden-succ-2', base + DAY); // daily
+  seed('golden-fail-1', base + 2 * DAY, { status: 'failed', error: 'boom: golden failure' });
+  seed('golden-manual-succ', base + 3 * DAY, { taskId: null, trigger: 'manual', filename: 'golden-manual.tar.gz' });
+  seed('golden-manual-fail', base + 4 * DAY, { taskId: null, trigger: 'manual', status: 'failed', error: 'boom: golden manual failure' });
+  return op;
+}
+
+const GOLDEN_FIXTURE = path.join(path.dirname(url.fileURLToPath(import.meta.url)), 'fixtures', 'backup-runs-legacy-golden.json');
+
+test('golden legacy snapshot: GET /api/backup/runs responses stay byte-identical (D-05 gate)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await seedGoldenHistory(server);
+    const taskBody = (await op.get('/api/backup/runs?taskId=task-golden-1')).data;
+    const manualBody = (await op.get('/api/backup/runs?taskId=manual')).data;
+    const snapshot = { task: taskBody, manual: manualBody };
+    assert.deepEqual(snapshot, JSON.parse(fs.readFileSync(GOLDEN_FIXTURE, 'utf8')), 'the frozen legacy GET drifted — D-05 byte-identity violated');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('golden capture cell (GOLDEN_CAPTURE=1): writes the legacy snapshot fixture for inspection', { skip: process.env.GOLDEN_CAPTURE !== '1' }, async () => {
+  const server = await startServer({});
+  try {
+    const op = await seedGoldenHistory(server);
+    const taskBody = (await op.get('/api/backup/runs?taskId=task-golden-1')).data;
+    const manualBody = (await op.get('/api/backup/runs?taskId=manual')).data;
+    fs.writeFileSync(GOLDEN_FIXTURE, `${JSON.stringify({ task: taskBody, manual: manualBody }, null, 2)}\n`);
+    console.log(`golden fixture written: ${GOLDEN_FIXTURE} — INSPECT before committing`);
   } finally {
     await server.stop();
   }

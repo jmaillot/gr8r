@@ -232,3 +232,77 @@ test('keptPosition: positions are strictly monotonic with age within a bucket', 
     await server.stop();
   }
 });
+
+/* =====================================================================
+   Phase 92 (Task 1) — pinned GFS date tests: the verbatim-relocation
+   guard. These pin isoWeekKey/assignGfsBuckets behavior at the ISO
+   nearest-Thursday boundaries THROUGH the observable history surface,
+   so they must keep passing UNCHANGED when the pure functions relocate
+   verbatim into export/gfs.js (Task 2). All math is pure UTC — DST is
+   structurally irrelevant (no wall-clock zone ever enters the walk).
+   ===================================================================== */
+
+test('pinned GFS dates: ISO nearest-Thursday boundaries — Wed belongs to the previous week; Thu and Sun share the same ISO week', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-iso@test.local');
+    const taskId = await makeTask(server, op, 'ISO boundaries');
+    /* 2026-01-01 is a Thursday, ISO week 2026-W01 (which spans Mon Dec 29 – Sun Jan 4).
+       Jan 6/7/11 are Tue/Wed/Sun of ISO week 2026-W02 (Mon Jan 5 – Sun Jan 11):
+       the Wednesday belongs to W02 (the week of its nearest Thursday, Jan 8),
+       and the Sunday CLOSES the same W02 — so it must stay daily, never weekly. */
+    seedRun(server, taskId, { id: 'iso-thu', at: Date.UTC(2026, 0, 1, 12) }); // Thu Jan 1 → first of 2026 → yearly
+    seedRun(server, taskId, { id: 'iso-tue', at: Date.UTC(2026, 0, 6, 12) }); // Tue Jan 6 → first of W02 → weekly
+    seedRun(server, taskId, { id: 'iso-wed', at: Date.UTC(2026, 0, 7, 12) }); // Wed Jan 7 → same W02 → daily
+    seedRun(server, taskId, { id: 'iso-sun', at: Date.UTC(2026, 0, 11, 12) }); // Sun Jan 11 → same W02 → daily
+    const kept = keptByRunId(await history(op, taskId));
+    assert.equal(kept['iso-thu'].scale, 'yearly', 'the Jan 1 run is the first of the calendar year');
+    assert.equal(kept['iso-tue'].scale, 'weekly', 'the first run of ISO week W02 holds the weekly bucket');
+    assert.equal(kept['iso-wed'].scale, 'daily', 'the Wednesday of the SAME ISO week (nearest Thursday = Jan 8) is daily');
+    assert.equal(kept['iso-sun'].scale, 'daily', 'the Sunday closing the same ISO week is daily — ISO weeks end Sunday');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('pinned GFS dates: year rollover — Dec 29–31 land in W01 of the NEXT ISO year; Jan 1 opens the new isoYear', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-rollover@test.local');
+    const taskId = await makeTask(server, op, 'Rollover');
+    /* r1 Mon Jan 5 2026: first of the year (and of ISO 2026-W02) → yearly.
+       r2 Wed Dec 2 2026: first of December → monthly.
+       r3 Wed Dec 30 2026: ISO week is 2027-W01 (nearest Thursday = Jan 1 2027 —
+          the rollover case) but 2026 and December are both already seen → weekly.
+       r4 Mon Jan 4 2027: first of 2027 → yearly (Jan 1 of the new isoYear). */
+    seedRun(server, taskId, { id: 'roll-jan', at: Date.UTC(2026, 0, 5, 9) });
+    seedRun(server, taskId, { id: 'roll-dec', at: Date.UTC(2026, 11, 2, 9) });
+    seedRun(server, taskId, { id: 'roll-w01', at: Date.UTC(2026, 11, 30, 9) });
+    seedRun(server, taskId, { id: 'roll-2027', at: Date.UTC(2027, 0, 4, 9) });
+    const kept = keptByRunId(await history(op, taskId));
+    assert.equal(kept['roll-jan'].scale, 'yearly');
+    assert.equal(kept['roll-dec'].scale, 'monthly');
+    assert.equal(kept['roll-w01'].scale, 'weekly', 'Dec 30 2026 belongs to ISO week 2027-W01 — a NEW week despite the old calendar year/month');
+    assert.equal(kept['roll-2027'].scale, 'yearly', 'Jan 4 2027 is the first run of isoYear 2027');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('pinned GFS dates: DST-irrelevance — the walk is pure UTC (a run inside a European DST switch keeps UTC week math)', async () => {
+  const server = await startServer({});
+  try {
+    const op = await makeBackupOp(server, 'op-dst@test.local');
+    const taskId = await makeTask(server, op, 'DST pure UTC');
+    /* 2026-03-29 is the European spring-forward Sunday. Bucket math reads
+       UTC calendar fields only — the run at 01:30 UTC (02:30 local, a wall
+       time that does not exist in Europe/Paris that morning) still classifies
+       by its UTC date/week, untouched by any tz. */
+    seedRun(server, taskId, { id: 'dst-primer', at: Date.UTC(2026, 0, 2, 3) }); // yearly primer
+    seedRun(server, taskId, { id: 'dst-march', at: Date.UTC(2026, 2, 29, 1, 30) }); // first of March → monthly
+    const kept = keptByRunId(await history(op, taskId));
+    assert.equal(kept['dst-march'].scale, 'monthly', 'the DST-boundary run classifies from UTC fields alone');
+  } finally {
+    await server.stop();
+  }
+});
