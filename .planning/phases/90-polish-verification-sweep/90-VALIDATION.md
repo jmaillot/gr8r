@@ -48,12 +48,12 @@ created: "2026-11-23"
 | 90-xx-xx | TBD | 0+ | SACON-01 | T-90-01 | console roster-first; promote-search ≥2 chars server-validated; last-operator guard D-118/119 intact | route+source-assertion | `node --test test/governance-console.test.mjs` | ❌ W0 | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SACON-01 (SC-2) | T-90-02 | download stream tiering: backup-op = project/workspace runs, instance = super-admin only; missing-run keyed refusal; audit on success | route | `node --test test/backup-download.test.mjs` | ❌ W0 | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SC-2 | T-90-02 | verify-checksum: full re-hash local / S3 stream-back; operator throttle D-89-22; mismatch keyed refusal | route+MinIO e2e | `MINIO_TEST_URL=http://127.0.0.1:9001 node --test test/backup-checksum.test.mjs` | ❌ W0 | ⬜ pending |
-| 90-xx-xx | TBD | 0+ | SC-3 | — | rotation projection dry-run: GFS walk minus deletes, empty-state 0-run, operator throttle; kept-until bucket position per request | route | `node --test test/backup-rotation-preview.test.mjs` | ❌ W0 | ⬜ pending |
-| 90-xx-xx | TBD | 0+ | SC-3 | — | assignGfsBuckets bucket-position rendering: kept N/M per scale, moves on arrival simulation | unit | `node --test test/gfs-kept-until.test.mjs` | ❌ W0 | ⬜ pending |
+| 90-xx-xx | TBD | 0+ | SC-3 | — | rotation projection dry-run: GFS walk minus deletes, empty-state 0-run, operator throttle; kept-until bucket position per request | route | `node --test test/backup-rotation-preview.test.mjs` | ✅ 90-03 | ✅ done (90-03, 10/10) |
+| 90-xx-xx | TBD | 0+ | SC-3 | — | assignGfsBuckets bucket-position rendering: kept N/M per scale, moves on arrival simulation | unit | `node --test test/gfs-kept-until.test.mjs` | ✅ 90-03 | ✅ done (90-03, green) |
 | 90-xx-xx | TBD | 0+ | SC-4 | — | full-cycle e2e: task → backup → S3 upload → local delete → list badge s3 → preview → DR restore ON PG; run report + session revocation asserts | e2e (env-gated) | `POSTGRES_TEST_URL=… MINIO_TEST_URL=… node --test test/backup-restore-fullcycle-e2e.test.mjs` | ❌ W0 | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SC-4 | — | DST boundaries EU+US (2026/2027 transitions): 02:30 cron spring-forward = no fire, fall-back = first occurrence; digest 08:00 | unit (pure nextRunAt) | `node --test test/dst-cron-boundaries.test.mjs` | ❌ W0 | ⬜ pending |
-| 90-xx-xx | TBD | 0+ | D-90-22 | — | restoreList invalidation on terminal backup run (poll tick) | source-assertion | `node --test test/backup-history-client.test.mjs` (extend) | ⚠️ W0 (extend) | ⬜ pending |
-| 90-xx-xx | TBD | 0+ | D-90-23 | — | missingBlob flag surfaces on run + ⚠ history badge; writer emits at creation | route+unit | `node --test test/backup-export.test.mjs` (extend) | ⚠️ W0 (extend) | ⬜ pending |
+| 90-xx-xx | TBD | 0+ | D-90-22 | — | restoreList invalidation on terminal backup run (poll tick) | source-assertion | `node --test test/backup-history-client.test.mjs` (extend) | ✅ 90-03 | ✅ done (90-03, region-scoped pin) |
+| 90-xx-xx | TBD | 0+ | D-90-23 | — | missingBlob flag surfaces on run + ⚠ history badge; writer emits at creation | route+unit | `node --test test/backup-export.test.mjs` (extend) | ✅ 90-03 | ✅ done (90-03, writer-stamp case) |
 | 90-xx-xx | TBD | 0+ | D-90-20 | — | new i18n keys gated ×5 locales (de/en/es/fr/nl) | catalogue test (existing) | `npm test` (locale-parity included) | ✅ exists | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SC-5 | — | DEPLOY.md sections exist (timezone/NTP posture, engine vs legacy CLI) | doc assertion | manual review at verify-work | — | ⬜ pending |
 
@@ -63,9 +63,9 @@ created: "2026-11-23"
 
 - [ ] `test/governance-console.test.mjs` — stubs for console roster/search/promote (SACON-01)
 - [ ] `test/backup-download.test.mjs` + `test/backup-checksum.test.mjs` — stubs for SC-2
-- [ ] `test/backup-rotation-preview.test.mjs` + `test/gfs-kept-until.test.mjs` — stubs for SC-3
+- [x] `test/backup-rotation-preview.test.mjs` + `test/gfs-kept-until.test.mjs` — stubs for SC-3 (landed 90-03)
 - [ ] `test/backup-restore-fullcycle-e2e.test.mjs` + `test/dst-cron-boundaries.test.mjs` — stubs for SC-4
-- [ ] Extend existing `test/backup-history-client.test.mjs` (D-90-22 pins) and `test/backup-export.test.mjs` (D-90-23 writer-stamp case) rather than new files — per 90-03-PLAN.md assignments
+- [x] Extend existing `test/backup-history-client.test.mjs` (D-90-22 pins) and `test/backup-export.test.mjs` (D-90-23 writer-stamp case) rather than new files — per 90-03-PLAN.md assignments (landed 90-03)
 
 ---
 
