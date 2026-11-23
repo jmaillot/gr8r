@@ -183,8 +183,9 @@ test('the overwrite flow uses the exact-name confirmModal idiom — payload-name
   assert.match(pagesSrc, /data-a="restoreOverwrite"/, 'the drawer renders the overwrite CTA');
   /* D-89-21: the CTA renders only when the payload's canBackup flag is true
      AND the archive is workspace-scope — never recomputed authority. */
+  assert.match(pagesSrc, /const kind = d\.scope\?\.kind;/, 'the drawer CTAs gate on the preview payload\'s scope kind');
+  assert.match(pagesSrc, /kind === 'workspace'/, 'the overwrite CTA renders for workspace archives only');
   assert.match(pagesSrc, /flags\?\.canBackup/, 'the overwrite CTA gates on the payload flag');
-  assert.match(pagesSrc, /d\.scope\?\.kind === 'workspace'/, 'the overwrite CTA renders for workspace archives only');
   assert.match(pagesSrc, /btn-danger" data-a="restoreOverwrite"/, 'the overwrite CTA is destructive-styled, never accent');
   const h = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('A.restoreOverwrite =') + 1800);
   assert.ok(h.includes('confirmDlg('), 'the overwrite flow opens the existing confirm idiom');
@@ -201,7 +202,7 @@ test('the DR flow is Super-Admin-only with the literal RESTORE-INSTANCE phrase r
   assert.match(pagesSrc, /data-a="restoreInstance"/, 'the drawer renders the DR CTA');
   /* D-89-21: the CTA renders only for the auth payload's Super-Admin flag. */
   assert.match(pagesSrc, /api\.user\?\.isInstanceAdmin/, 'the DR CTA gates on the auth payload flag');
-  assert.match(pagesSrc, /d\.scope\?\.kind === 'instance'/, 'the DR CTA renders for instance archives only');
+  assert.match(pagesSrc, /kind === 'instance'/, 'the DR CTA renders for instance archives only');
   const dr = actionsSrc.slice(actionsSrc.indexOf('A.restoreInstance ='), actionsSrc.indexOf('A.restoreInstance =') + 1800);
   assert.match(dr, /<span class="mono">RESTORE-INSTANCE<\/span>/, 'the phrase renders untranslated in --mono inside the confirm body (machine constant, never a locale key)');
   assert.ok(dr.includes('confirmDlg('), 'the DR flow opens the existing confirm idiom');

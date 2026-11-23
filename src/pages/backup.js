@@ -357,12 +357,39 @@ const restoreRow = r => {
 const previewDetail = (label, value) =>
   `<div><div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${label}</div><div class="mono" style="font-size:13px;margin-top:2px">${value}</div></div>`;
 
-const restorePreviewBody = d => {
+const restorePreviewBody = (d, flags) => {
   const tables = Array.isArray(d.tables) ? d.tables : [];
   const files = Array.isArray(d.files) ? d.files : [];
   const flagged = files.filter(f => f.flagged);
+  const kind = d.scope?.kind;
+  /* D-89-21: authority is payload-flag chrome — overwrite renders only when
+     the tasks payload's canBackup flag is true AND the archive's source
+     workspace is a live membership (its EXACT current name is resolvable
+     from the same payload); DR renders only for the auth payload's
+     Super-Admin flag. Never recomputed authority. */
+  const target = kind === 'workspace' ? (api.workspaces || []).find(w => w.id === d.scope?.id) : null;
+  const memberships = Array.isArray(api.workspaces) ? api.workspaces : [];
+  const ctas = [];
+  if (kind === 'workspace' || kind === 'project')
+    ctas.push(`<button class="btn btn-primary" data-a="restoreNew" data-id="${esc(d.runId)}">${ic('rotate-ccw', 14)}${t('page.restore.restoreNewAction')}</button>`);
+  if (kind === 'workspace' && flags?.canBackup && target)
+    ctas.push(`<button class="btn btn-danger" data-a="restoreOverwrite" data-id="${esc(d.runId)}">${ic('pencil', 14)}${t('page.restore.restoreOverwriteAction')}</button>`);
+  if (kind === 'instance' && api.user?.isInstanceAdmin)
+    ctas.push(`<button class="btn btn-danger" data-a="restoreInstance" data-id="${esc(d.runId)}">${ic('hard-drive', 14)}${t('page.restore.restoreInstanceAction')}</button>`);
+  /* D-89-23 workspace picker (project archives): live memberships verbatim,
+     esc'd names, chosen target armed for the trigger — zero memberships
+     render NO picker (the empty-dropdown shape is never rendered). */
+  const picker =
+    kind === 'project' && memberships.length
+      ? `<div style="margin-top:12px"><div class="faint" style="font-size:12px;margin-bottom:6px">${t('page.restore.scopeLabel')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${memberships
+          .map(
+            w =>
+              `<button class="btn btn-sm${S.ui.restoreTarget === w.id ? ' btn-primary' : ''}" data-a="restoreTargetPick" data-id="${esc(w.id)}" title="${esc(w.name)}"><span class="trunc" style="max-width:180px">${esc(w.name)}</span></button>`,
+          )
+          .join('')}</div></div>`
+      : '';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px">
-      ${previewDetail(t('page.restore.scopeLabel'), esc(String(d.scope?.kind ?? '')))}
+      ${previewDetail(t('page.restore.scopeLabel'), esc(String(kind ?? '')))}
       ${previewDetail(t('page.restore.tablesLabel'), esc(String(tables.length)))}
       ${previewDetail(t('page.restore.filesLabel'), esc(String(d.fileCount ?? files.length)))}
       ${previewDetail(t('page.restore.checksumLabel'), `<span title="${esc(d.checksum || '')}">${esc(String(d.checksum || '').slice(0, 12))}</span>`)}
@@ -374,18 +401,17 @@ const restorePreviewBody = d => {
         ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><span class="faint" style="font-size:12px">${ic('circle-alert', 12)}${esc(String(d.missingBlobCount ?? flagged.length))}</span>${flagged.map(f => `<span class="badge">${esc(f.name)}</span>`).join('')}</div>`
         : ''
     }
-    <div class="row" style="gap:8px;margin-top:12px">
-      <button class="btn btn-primary" data-a="restoreNew" data-id="${esc(d.runId)}">${ic('rotate-ccw', 14)}${t('page.restore.restoreNewAction')}</button>
-    </div>`;
+    ${picker}
+    <div class="row" style="gap:8px;margin-top:12px">${ctas.join('')}</div>`;
 };
 
-const restorePreviewDrawer = () => {
+const restorePreviewDrawer = flags => {
   const p = S.ui.restorePreview;
   if (!p) return '';
   const d = S.ui.restorePreviewData;
   const body = !d
     ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.restore.listLoading')}</div>`
-    : restorePreviewBody(d.data);
+    : restorePreviewBody(d.data, flags);
   return `<div class="drawer-scrim" data-a="restorePreviewClose"></div><div class="drawer"><div class="drawer-h"><strong>${t('page.restore.previewTitle')}</strong><button class="ibtn" data-a="restorePreviewClose" aria-label="${t('a11y.close')}">${ic('x', 15)}</button></div><div class="drawer-b">${body}</div></div>`;
 };
 
@@ -404,7 +430,12 @@ const restoreProgress = () => {
   } else if (run.stage === 'failed') {
     detail = `<p class="faint" style="margin:0">${t('page.restore.runFailed')}</p>`;
   } else if (RESTORE_STAGE_KEYS[run.stage]) {
-    detail = `<p class="faint" style="margin:0">${t(RESTORE_STAGE_KEYS[run.stage])}</p>`;
+    detail = `<p class="faint" style="margin:0">${t(RESTORE_STAGE_KEYS[run.stage])}</p>${
+      /* D-89-13 render-verbatim: the server-derived final name (incl. the
+         counter) renders from the poll payload the moment the writer lands
+         it — no client-side name math. */
+      run.finalName ? `<p class="faint" style="margin:4px 0 0">${t('page.restore.newNameLead', { name: esc(String(run.finalName)) })}</p>` : ''
+    }`;
   }
   return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.restore.stageLabel')}</h2><span class="badge">${esc(String(run.stage || ''))}</span></div><div class="panel-b">${detail}</div></div>`;
 };
@@ -532,6 +563,6 @@ export function pageBackup() {
     </div>
     <div class="panel" style="margin-top:12px">${body}</div>
     ${flags.canRestore ? restoreSection() : ''}
-    ${flags.canRestore ? restorePreviewDrawer() : ''}
+    ${flags.canRestore ? restorePreviewDrawer(flags) : ''}
   </div>`;
 }

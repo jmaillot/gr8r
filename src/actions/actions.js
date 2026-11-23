@@ -4864,6 +4864,31 @@ function backupStopPolling() {
    call()'s central handling — the server is the authority, the section
    never pre-validates authority.
    ===================================================================== */
+/* 89-06 (D-89-23/27): the CLOSED refusal-toast map — every route-level
+   restore refusal code maps 1:1 onto its keyed copy; a restore code never
+   surfaces a freeform error string. restoreManifestCorrupt maps to the
+   UI-SPEC contract copy (page.restore.previewCorrupt). Unknown codes fall
+   to tErr's raw-message fallback (D-03) inside restoreToast itself. */
+const RESTORE_REFUSAL_TOASTS = {
+  backupRoleRequired: 'err.backupRoleRequired',
+  backupManageRequired: 'err.backupManageRequired',
+  operatorOnly: 'err.operatorOnly',
+  tooManyAttempts: 'err.tooManyAttempts',
+  restoreInvalidRunId: 'err.restoreInvalidRunId',
+  restoreArchiveMissing: 'err.restoreArchiveMissing',
+  restoreNoWorkspace: 'err.restoreNoWorkspace',
+  restoreScopeUnsupported: 'err.restoreScopeUnsupported',
+  backupRestoreInProgress: 'err.backupRestoreInProgress',
+  restoreEntryRejected: 'err.restoreEntryRejected',
+  restoreShaMismatch: 'err.restoreShaMismatch',
+  confirmPhraseMismatch: 'err.confirmPhraseMismatch',
+  restoreTargetMismatch: 'err.restoreTargetMismatch',
+  restoreTargetMissing: 'err.restoreTargetMissing',
+  restoreManifestCorrupt: 'page.restore.previewCorrupt',
+};
+const restoreToast = (code, raw) =>
+  RESTORE_REFUSAL_TOASTS[code] ? t(RESTORE_REFUSAL_TOASTS[code]) : tErr(code, null, raw || t('err.serverUnreachable'));
+
 let restoreFillSeq = 0;
 let restoreInflight = null;
 export async function refreshRestoreBackups() {
@@ -5271,8 +5296,7 @@ A.restorePreview = async el => {
     S.ui.restorePreview = null;
     render();
     if (res.status === 401) return;
-    if (res.data?.code === 'restoreManifestCorrupt') return toast(t('page.restore.previewCorrupt'), { kind: 'err' });
-    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+    return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
   }
   S.ui.restorePreviewData = { data: res.data };
   render();
@@ -5286,14 +5310,20 @@ A.restorePreviewClose = () => {
 
 /* Import-as-new trigger (D-33-2: the non-destructive default — single click,
    NO confirm dialog). The accepted run id closes the drawer and hands over
-   to the pending panel until the first shared poll lands (render-only). */
+   to the pending panel until the first shared poll lands (render-only).
+   D-89-23 client mirror: a project archive restores INTO a membership —
+   a trigger attempt without a picker selection surfaces the keyed refusal
+   immediately (the server refuses keyed anyway; the chrome mirrors, never
+   replaces). Workspace/instance scopes never need a target. */
 A.restoreNew = async el => {
   const runId = el.dataset.id || S.ui.restorePreview?.runId;
   if (!runId) return;
+  if (S.ui.restorePreviewData?.data?.scope?.kind === 'project' && !S.ui.restoreTarget)
+    return toast(restoreToast('restoreNoWorkspace'), { kind: 'err' });
   const res = await api.restoreRun({ runId, targetWorkspaceId: S.ui.restoreTarget || undefined });
   if (!res.ok) {
     if (res.status === 401) return;
-    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+    return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
   }
   S.ui.restorePreview = null;
   S.ui.restorePreviewData = null;
@@ -5301,6 +5331,72 @@ A.restoreNew = async el => {
   S.ui.restorePending = true;
   backupStartPolling();
   render();
+};
+
+A.restoreTargetPick = el => {
+  S.ui.restoreTarget = el.dataset.id || null;
+  render();
+};
+
+/* Overwrite trigger (D-89-21/27): the target is the archive's source
+   workspace — its EXACT live name comes from the auth payload's membership
+   list (api.workspaces); the server re-validates confirmName against the
+   LIVE row, so the client dialog is chrome, never the boundary. The shared
+   OK gate guarantees the typed value === typeName, so sending the captured
+   name is the established destructive idiom (delWorkspace precedent). The
+   drawer closes only on the ACCEPTED trigger — a refusal leaves it open. */
+A.restoreOverwrite = el => {
+  const runId = el.dataset.id || S.ui.restorePreview?.runId;
+  const scopeId = S.ui.restorePreviewData?.data?.scope?.id;
+  const target = api.workspaces.find(w => w.id === scopeId);
+  if (!runId || !target) return;
+  confirmDlg({
+    title: t('page.restore.confirmOverwriteTitle', { name: target.name }),
+    body: t('page.restore.confirmOverwriteBody', { name: esc(target.name) }),
+    ok: t('page.restore.confirmOverwriteOk'),
+    danger: true,
+    typeName: target.name,
+    run: async () => {
+      const res = await api.restoreOverwrite({ runId, targetId: target.id, confirmName: target.name });
+      if (!res.ok) {
+        if (res.status === 401) return;
+        return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+      }
+      S.ui.restorePreview = null;
+      S.ui.restorePreviewData = null;
+      S.ui.restoreTarget = null;
+      S.ui.restorePending = true;
+      backupStartPolling();
+      render();
+    },
+  });
+};
+
+/* Instance DR trigger (D-89-27/BKRST-04): typeName is the machine constant
+   RESTORE-INSTANCE — rendered untranslated in --mono inside the body, and
+   re-validated server-side !== 'RESTORE-INSTANCE' before anything else. */
+A.restoreInstance = el => {
+  const runId = el.dataset.id || S.ui.restorePreview?.runId;
+  if (!runId) return;
+  confirmDlg({
+    title: t('page.restore.confirmInstanceTitle'),
+    body: `${t('page.restore.confirmInstanceBody')}<div style="margin-top:8px"><span class="mono">RESTORE-INSTANCE</span></div>`,
+    ok: t('page.restore.confirmInstanceOk'),
+    danger: true,
+    typeName: 'RESTORE-INSTANCE',
+    run: async () => {
+      const res = await api.restoreInstance({ runId, confirmPhrase: 'RESTORE-INSTANCE' });
+      if (!res.ok) {
+        if (res.status === 401) return;
+        return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+      }
+      S.ui.restorePreview = null;
+      S.ui.restorePreviewData = null;
+      S.ui.restorePending = true;
+      backupStartPolling();
+      render();
+    },
+  });
 };
 
 /* =====================================================================

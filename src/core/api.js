@@ -520,6 +520,12 @@ export const api = {
   async restoreRuns({ signal } = {}) {
     return call('GET', '/api/backup/restore/runs', undefined, { signal });
   },
+  async restoreOverwrite(body, { signal } = {}) {
+    return call('POST', '/api/backup/restore/overwrite', body, { signal });
+  },
+  async restoreInstance(body, { signal } = {}) {
+    return call('POST', '/api/backup/restore/instance', body, { signal });
+  },
   /* 85-02 (D-16/D-29/D-30): the Instance Roles tab's route family — one
      listing GET (rows + recent activity), the audited grant POST and the
      revoke DELETE. Operator-only server-side; every refusal surfaces as a
