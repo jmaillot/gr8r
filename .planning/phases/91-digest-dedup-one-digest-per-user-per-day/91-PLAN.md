@@ -90,14 +90,14 @@ Restructure server.js:2815–2925 per the research coalescing shape:
 - DELETE the per-ws outbox insert (2881–2912) from inside the claim tx site.
 - Accumulate sections into `Map["${userId}:${localDate}"] → { email, locale, tz, sections: [] }` — gated on `MAILER.enabled` and the digest being non-empty, and INDEPENDENT of the claim result (already-claimed rows still contribute their section — this is the restart-hole fix; per research Q5). Per ws push `{ wsSlug: ws.slug, wsName: ws.name || 'Projects Studio', dueToday, overdue }` (D-03). Group by (userId, localDate), never userId alone (cross-tz users may legitimately get two digests — pitfall 1).
 - After the ws loop: for each map entry with `sections.length >= 1` (empty sections never claim, never render — SC1 belt-and-braces), one fail-absent tx per user: `insert or ignore into email_outbox` with `workspace_id` = first section's ws id (verified: text NOT NULL, no FK — server.js:678–693), `dedup_key = 'digest:user:${userId}:${localDate}'` (D-04, replacing the per-ws key), `kind = 'digest-aggregated'`, ctx = `{ type:'digest-aggregated', sections, logoUrl, unsubscribeUrl, locale, appUrl }`.
-- `unsubscribeUrl` uses the new global helper `unsubscribeUrlGlobal(unsubscribeHmacKey(), APP_URL, r.user_id)` (added in Task 3) ONLY under today's gates (MASTER_KEY present + `APP_URL.startsWith('https://')`, mirroring 2884–2886); omit otherwise.
+- `unsubscribeUrl` uses the new global helper `unsubscribeUrlGlobal(unsubscribeHmacKey(), APP_URL, r.user_id)` (added in Task 3 — forward reference is SAFE at this commit: the gate is `MASTER_KEY present + APP_URL.startsWith('https://')`, and the test harness runs without both, so the helper is never invoked here; the ctx simply omits `unsubscribeUrl`) ONLY under today's gates (mirroring 2884–2886); omit otherwise.
 - Delivery kick: ONE `runEmailDeliveryPass()` post-commit after the enqueue loop — NEVER inside a tx (POL-02 D-07). Log line's `digests` counter becomes users-enqueued count (2925).
 - MAILER-disabled behavior unchanged: no accumulation, no enqueue; `runEmailDeliveryPass` still returns immediately (3439). Per-ws claims still run (existing asymmetry, research Q1).
   </action>
   <verify>
     <automated>node --test test/digest.test.mjs</automated>
   </verify>
-  <done>Task 1's pinned tests go GREEN: 4-ws user → 1 email, `digest:user:` key, 4 sections, 4 byte-compat claims, second trigger deduped, restart-hole case passes. MAILER-disabled path still claims without enqueueing (existing test file coverage). Commit: feat(91): coalesce digest sends to one outbox row per user/day</done>
+  <done>Task 1's pinned COUNT/SHAPE/CLAIM assertions go GREEN: 4-ws user → exactly 1 outbox row with `digest:user:` key, 4 sections, 4 byte-compat claims, second trigger deduped, restart-hole case passes; no crash on the `digest-aggregated` kind (dispatch still falls through until Task 3). Task 1's body/template assertions (subject frame, D-03 sections, fr|en) go GREEN at Task 3's commit — they are gated there, not here. MAILER-disabled path still claims without enqueueing (existing test file coverage). Commit: feat(91): coalesce digest sends to one outbox row per user/day</done>
 </task>
 
 <task type="auto">
@@ -154,6 +154,9 @@ Restructure server.js:2815–2925 per the research coalescing shape:
 - `node --test test/unsubscribe-route.test.mjs` green after Task 4
 - `npm test` full suite green before `/gsd-verify-work`
 - ROADMAP SC1–SC4 each mapped: SC1/SC2 → Task 1+2; SC3 → Task 1 (restart-hole case) + Task 2 gates; SC4 → Task 1 assertion 3
+- SC3 supersession note: ROADMAP SC3's "user's locale (×5 locale keys)" clause is SUPERSEDED by locked decision D-05 (91-CONTEXT.md) — email locale is fr|en only, no app-side i18n keys. Verify SC3 against D-05, not the ROADMAP wording; state this explicitly in 91-SUMMARY.md
+- Root cause documentation (NOTIF-01): 91-SUMMARY.md must name the per-ws outbox insert (server.js:2881–2912) as the documented root cause of the 4× duplicate
+- Pre-existing suite failures (documented v3.3 deferred items — NOT this phase's scope): webhook-events/webhook-routes family, Phase-88 french-typography fr keys, `export/backup.js:666` logo junk-name, scheduler-overlap flake. Exclude them when judging the `npm test` full-suite gate.
 </verification>
 
 <success_criteria>
