@@ -1,5 +1,28 @@
 # Milestones
 
+## v3.3 Instance Operations — Backup, Restore & Roles (Shipped: 2026-11-23)
+
+**Phases completed:** 6 phases, 21 plans, 18 tasks
+
+**Key accomplishments:**
+- `instance_roles` table + pure `roles.js` capability funnel (ARCHIVE_READ reserved, Super-Admin short-circuit inside) behind Super-Admin-only audited grant/revoke routes and gated `/api/backup/tasks` stubs, with payload `canBackup`/`canRestore` flags and 55 pinned tests green.
+- gr8r backup v1 export pipeline: hand-rolled ustar+gzip writer, two-pass staged choreography (snapshot fence → collect+NDJSON → hash → tar → fail-closed self-verify → atomic rename), scope-containment file collection, and the frozen manifest entry-0 format Phases 87/88/89 consume — verified end-to-end on SQLite and LIVE Postgres (identical per-table sha256).
+- Frozen trigger/poll API over the 86-01 export pipeline — POST /api/backup/runs returns the D-18 UUID behind the full guard chain (throttle → gate → scope → concurrency, every refusal keyed AND audited), GET current serves the D-19 payload, and the Backup page grew a scope-picking Run now card with live stage progress rendered verbatim from the poll.
+- Exactly-one-bucket GFS rotation (yearly/monthly/weekly/daily, keep-N per bucket, newest-verified excluded by id) hooked into the writer-seam complete event, plus D-15/D-16 transition-only backup alert emails (backup_operator role + instance admins) via a third POL-02 outbox claim site and a full MIME mailer builder.
+- Backup page task console — builder-based schedule form (4 presets + Custom 5-field dropdowns, no free-text cron), reused tz combobox, toggle/delete/Run-now per task, verbatim per-task run history card, 5-locale parity.
+- Zero-dep SigV4 S3 client (`export/s3.js`) pinned by AWS-documented golden vectors, proven end-to-end with a signed PUT→GET roundtrip against the user-ratified `pgsty/minio:latest` image, plus keyed error mapping (s3ClockSkew, SC-3), D-88-15 probe, and the Phase 89 download seam.
+- Boot-frozen `S3_*` env custody with an additive `s3_enabled` column and a CHECK-widened `backup_runs` status enum (invites-rebuild idiom, dual-engine lockstep), plus the `s3Enabled` task gate with audited keyed refusals and a probe-at-save route returning keyed results (success / deleteFailed / badCreds / s3ClockSkew / unreachable + httpWarning) — all keys in 5 locales, same commit.
+- Zero-dependency ustar+gzip stream reader + D-89-33 allow-list gate + bounded staged extraction for the frozen 86 "gr8r backup v1" archive format, with keyed refusal classes ready for the 03/04 route handlers
+- restore_runs + restore_lock on both engines (single-row CAS, D-89-31), the D-89-29 stage-vocabulary writer seam, boot sweeps that heal stale runs and release stale claims, and the D-89-1 export-side mutual exclusion (trigger 409 + scheduler skipped_overlap while a restore holds the lock)
+- Honest dual-location restore list and a stream-verified manifest-derived preview route (BKRST-01) — run-row-truth badges, one-pass sha256+manifest verification, keyed refusal mapping for every 89-01 producer class, zero archive bytes to the client.
+- BKRST-02 import-as-new restore engine — pure planRemap with totality-validated full-ID remap, one-transaction restoreImportAsNew with a frozen `{ skipped: [{table, rows}], memberships: {skipped, inserted} }` skip report, POST /api/backup/restore trigger + poll/history routes behind the verbatim backup guard chain, and D-89-28 outcome emails riding the outbox transition gate with EN fallback pending plan 06.
+- Guarded overwrite + Super-Admin-only instance DR: snapshot-first destructive units behind server-revalidated type-to-confirm routes, with the D-89-1 mutual exclusion proven end-to-end
+- Restore client surface on the shared Backup page — 7-method api family, payload-flag-gated restore section (list + manifest preview drawer + stage panel + history card), ONE shared poll timer for both surfaces, exact-name/exact-phrase confirm flows, closed refusal-toast map, 67 new locale keys ×5 — closing the error-codes catalogue suite.
+- Kept-until retention visibility as an always-true bucket-position badge (`kept: 3/7 daily`), an on-demand mutation-free rotation-deletion preview endpoint behind the D-89-22 throttle, and the D-90-23 missing-blob warning stamp + D-90-22 restore-list invalidation — 13 new i18n keys ×5 locales in the same commits as the emitting markup.
+- 18-test DST boundary matrix on the pure cron contract (EU+US, spring+fall, 2026+2027, instants computed live through `nextRunAt` itself), one env-gated PG-parity e2e that drove the whole backup→S3→DR-restore cycle through the live containers — and exposed + fixed a real DR bug (uploaded-only archives were unrestorable) — plus the DEPLOY.md trust documentation (backup engines, NTP posture).
+
+---
+
 ## v3.2 Entra Group Mapping & Governance Backlog (Shipped: 2026-11-21)
 
 **Phases completed:** 5 phases, 12 plans, 9 tasks

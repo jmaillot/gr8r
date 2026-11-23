@@ -2,20 +2,18 @@
 gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
-current_phase: 90
-current_plan: Not started
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 90 complete — all phases complete
-last_updated: "2026-11-23T19:12:12.037Z"
+last_updated: "2026-11-23T19:29:46.337Z"
 last_activity: 2026-11-23
-last_activity_desc: Phase 90 complete
-state_head: 25396df54ad71125bba31ae80c6b1774a54d70a0
+last_activity_desc: Milestone v3.3 completed and archived
+state_head: f9ed028746bae0fa79c715d853f572c80ac5abd3
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 21
   completed_plans: 21
-  percent: 83
+current_phase: 90
 ---
 
 # Project State
@@ -30,11 +28,10 @@ before features.
 
 ## Current Position
 
-Phase: 90
-Current Plan: Not started
-Total Plans in Phase: 6
-Status: All phases complete
-Last activity: 2026-11-23 — Phase 90 complete
+Phase: Milestone v3.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-23 — Milestone v3.3 completed and archived
 
 ## Milestone v3.3 Phase Map
 
@@ -198,10 +195,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T19:15:00Z
-Stopped at: Phase 90 complete (UAT 7/7, verification 42/42) — milestone v3.3 ready for /gsd-complete-milestone
+Last session: 2026-11-23T19:40:00Z
+Stopped at: Milestone v3.3 completed and archived — ready for /gsd-new-milestone
 Resume file: None
 
 ## Operator Next Steps
 
-- Milestone v3.3 is 100% complete — run /gsd-complete-milestone v3.3 to archive and prepare the next milestone
+- Start the next milestone with /gsd-new-milestone
