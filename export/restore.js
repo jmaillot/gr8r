@@ -2104,20 +2104,30 @@ export async function restoreInstanceUnit(opts = {}) {
     const ROLE_OK = new Set(['owner', 'admin', 'member', 'viewer']);
     const keptMemberships = [];
     let membershipsSkipped = 0;
-    const usedMemberIds = new Set();
+    /* member_id is PER-WORKSPACE state (no uniqueness constraint; every
+       server-side resolution reads it filtered by workspace_id), so the
+       dedupe is scoped per archive workspace — a global set would force
+       the fallback shape (or skip the row entirely on a second collision)
+       for two workspaces legitimately reusing the same member_id string. */
+    const usedMemberIdsByWs = new Map();
     for (const r of arr(archiveRows.memberships)) {
       if (!r || !archiveWsIds.has(r.workspace_id)) continue;
       if (!r.user_id || !liveUserIds.has(r.user_id) || !ROLE_OK.has(r.role)) {
         membershipsSkipped += 1;
         continue;
       }
+      let used = usedMemberIdsByWs.get(r.workspace_id);
+      if (!used) {
+        used = new Set();
+        usedMemberIdsByWs.set(r.workspace_id, used);
+      }
       let memberId = typeof r.member_id === 'string' && r.member_id ? r.member_id : memberBase(r.user_id);
-      if (usedMemberIds.has(memberId)) memberId = `m_${r.user_id}`;
-      if (usedMemberIds.has(memberId)) {
+      if (used.has(memberId)) memberId = `m_${r.user_id}`;
+      if (used.has(memberId)) {
         membershipsSkipped += 1;
         continue;
       }
-      usedMemberIds.add(memberId);
+      used.add(memberId);
       keptMemberships.push({ wsId: r.workspace_id, userId: r.user_id, role: r.role, memberId, provenance: r.provenance ?? 'manual' });
     }
 
