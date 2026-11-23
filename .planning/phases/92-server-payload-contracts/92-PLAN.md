@@ -9,11 +9,16 @@ files_modified:
   - export/gfs.js
   - export/cron.js
   - export/backup.js
-  - db/db-adapter.mjs
+  - db-adapter.mjs
   - test/backup-routes.test.mjs
   - test/backup-scopes.test.mjs
   - test/backup-export.test.mjs
   - test/backup-rotation.test.mjs
+  - test/gfs-kept-until.test.mjs
+  - test/db-adapter.test.mjs
+  - test/migration.test.mjs
+  - test/backup-cron.test.mjs
+  - test/fixtures/backup-runs-legacy-golden.json
   - test/gfs-kept-until.test.mjs
   - test/backup-cron.test.mjs
 autonomous: false
@@ -107,32 +112,47 @@ db-adapter.mjs:995–1007 (ensureColumn dual-engine)
 
 <task type="tracer">
   <name>Task 2: export/gfs.js extraction + gfs_bucket storage end-to-end (one vertical slice)</name>
-  <files>export/gfs.js, server.js, db/db-adapter.mjs, test/backup-rotation.test.mjs, test/db-adapter.test.mjs</files>
+  <files>export/gfs.js, server.js, db-adapter.mjs, test/backup-rotation.test.mjs, test/db-adapter.test.mjs</files>
   <action>
-  One path through every layer: pure module → DDL → bucket-at-creation → backfill → rotation read.
+  One path through every layer: pure module → DDL → bucket-at-creation → rotation read. The BACKFILL (historical-row write) is NOT here — it lands in Task 4, after the checkpoint gate.
   1. Create export/gfs.js (zero imports, matching cron.js discipline) and RELOCATE VERBATIM `isoWeekKey` (server.js:3950) and `assignGfsBuckets` (server.js:3968) — no logic edits. Export both, plus `gfsBucketFor(priorSucceededAsc, newRow)` implemented by calling `assignGfsBuckets([...priorSucceededAsc, newRow])` and returning the last entry — zero new math, exactly one definition. Rewire ALL current consumers in server.js (`gfsKeptPositions` :4009, `runBackupRotationPass` :4047, rotation-preview dry-run ~:9311) to import from export/gfs.js in this commit. The Task-1 pinned date tests must pass unchanged.
-  2. Add `gfs_bucket` to backup_runs: append the column to SQLITE_SCHEMA as nullable TEXT with no default (null = not-yet-backfilled marker; matches `uploaded`/`checksum_ok` precedent server.js:803 area — comments must never end a line with a semicolon, runSchema splits on ';-newline'), let `pgSchemaVariant` derive pg DDL, and add boot-time `ensureColumn('backup_runs','gfs_bucket', …)` in db-adapter.mjs (precedent :995–1007). Same commit for both engines (BKNAME-02).
-  3. Bucket-at-creation (D-02): at the succeeded-run insert/complete site (writeBackupRunRow :3592–3821 region), query the task's prior succeeded runs ordered `created_at asc, id asc` (IDENTICAL tiebreak to rotation, Pitfall 1) and store `gfsBucketFor(...)` on the new row. NULL bucket stays legal only for non-succeeded runs.
-  4. Backfill sweep (D-02): at boot after ensureColumn, per task, idempotent `update backup_runs set gfs_bucket = ? where id in (…)` over succeeded rows where `gfs_bucket is null`, calling the shared `assignGfsBuckets` — same function, same ordering. Document in code as migration-not-mutation (not audit-funnel).
-  5. Rotation switch: `runBackupRotationPass` READS stored `gfs_bucket` and never re-derives from created_at. Defensive fallback: if a succeeded row's bucket is unexpectedly NULL at read time, run the per-task backfill inline for that task (keeps one definition; no duplicate math).
-  6. Extend test/backup-rotation.test.mjs: seeded two runs at identical created_at asserting the stored bucket matches batch derivation (same-second tiebreak pin, Pitfall 1); extend test/db-adapter.test.mjs (or migration.test.mjs) for dual-engine column presence + idempotent backfill (run sweep twice, second is a no-op).
-  This is the D-02 one-way data migration → the checkpoint below gates it.
+  2. Add `gfs_bucket` to backup_runs: append the column to SQLITE_SCHEMA as nullable TEXT with no default (null = not-yet-backfilled marker; matches `uploaded`/`checksum_ok` precedent server.js:803 area — comments must never end a line with a semicolon, runSchema splits on ';-newline'), let `pgSchemaVariant` derive pg DDL, and add boot-time `ensureColumn('backup_runs','gfs_bucket', …)` in db-adapter.mjs (precedent :995–1007). Same commit for both engines (BKNAME-02). NO backfill in this commit — the sweep is gated (Task 3 → Task 4).
+  3. Bucket-at-creation (D-02): at the succeeded-run insert/complete site (writeBackupRunRow :3592–3821 region), query the task's prior succeeded runs ordered `created_at asc, id asc` (IDENTICAL tiebreak to rotation, Pitfall 1) and store `gfsBucketFor(...)` on the new row. NULL bucket stays legal only for non-succeeded runs. This writes only NEW rows — never historical ones.
+  4. Rotation switch: `runBackupRotationPass` READS stored `gfs_bucket` and never re-derives from created_at. For a succeeded row whose bucket is unexpectedly NULL (pre-backfill rows), derive IN MEMORY per task with the shared function — display/keep math unchanged, NO write to the row (the write path is Task 4's gated sweep; no historical write may bypass the checkpoint).
+  5. Extend test/backup-rotation.test.mjs: seeded two runs at identical created_at asserting the stored bucket matches batch derivation (same-second tiebreak pin, Pitfall 1); extend test/db-adapter.test.mjs for dual-engine column presence (backfill tests land in Task 4).
   </action>
   <verify>
     <automated>node --test test/backup-rotation.test.mjs test/gfs-kept-until.test.mjs test/db-adapter.test.mjs test/migration.test.mjs</automated>
+    <fails_when>any test failure or non-zero exit — in particular a pinned date test failing after the verbatim relocation, or the dual-engine column-presence check failing on either engine</fails_when>
   </verify>
-  <done>export/gfs.js is the single definition; new succeeded runs store gfs_bucket at creation; backfill is idempotent and dual-engine; rotation reads the stored column; pinned date tests pass unchanged.</done>
+  <done>export/gfs.js is the single definition; new succeeded runs store gfs_bucket at creation (new rows only); rotation reads the stored column with in-memory fallback for NULL (zero historical writes); pinned date tests pass unchanged.</done>
 </task>
 
 <task type="checkpoint:decision" gate="blocking-human">
   <name>Checkpoint: gfs_bucket backfill migration gate</name>
-  <action>Before committing the backfill sweep (Task 2 step 4 touches existing rows — one-way data migration per D-02): confirm with the owner that the boot-time idempotent `where gfs_bucket is null` backfill over succeeded runs may run automatically at deployment. Additive nullable column, benign degradation (NULL reads fall back to inline per-task backfill), but the write to historical rows is irreversible without restore. Proceed on approval; skip this gate only if the orchestrator already carries a waiver for D-02.</action>
+  <action>Before Task 4 commits the backfill sweep (it writes to EXISTING backup_runs rows — one-way data migration per D-02): confirm with the owner that the boot-time idempotent `where gfs_bucket is null` backfill over succeeded runs may run automatically at deployment. Additive nullable column, benign degradation (Task 2's rotation path derives in memory without writing), but the write to historical rows is irreversible without restore. Proceed on approval; skip this gate only if the orchestrator already carries a waiver for D-02.</action>
   <verify><automated>echo "checkpoint resolved"</automated></verify>
   <done>Owner approves (or waives) the deployment-time backfill write to existing backup_runs rows.</done>
 </task>
 
 <task type="auto">
-  <name>Task 3: Archive naming — instance name, GFS marker, collision suffix, run labels</name>
+  <name>Task 4: gfs_bucket backfill sweep (post-gate)</name>
+  <files>server.js, db-adapter.mjs, test/db-adapter.test.mjs, test/migration.test.mjs</files>
+  <action>
+  D-02 backfill — ONLY after the Task-3 checkpoint approval:
+  1. At boot after ensureColumn (db-adapter.mjs, precedent :995–1007): per task, idempotent `update backup_runs set gfs_bucket = ? where id in (…)` over succeeded rows where `gfs_bucket is null`, calling the shared `assignGfsBuckets` — same function, same `created_at asc, id asc` ordering. Document in code as migration-not-mutation (not audit-funnel).
+  2. Optionally now allow Task 2's rotation NULL-fallback to remain read-only — do NOT change it; the sweep is the only historical writer.
+  3. Extend test/db-adapter.test.mjs (or migration.test.mjs): dual-engine idempotent backfill — run sweep twice, second is a no-op; seeded historical rows end up with buckets matching a fresh batch derivation.
+  </action>
+  <verify>
+    <automated>node --test test/db-adapter.test.mjs test/migration.test.mjs test/backup-rotation.test.mjs</automated>
+    <fails_when>any test failure or non-zero exit — in particular the second sweep mutating rows (idempotency broken) or historical buckets diverging from the shared-function derivation</fails_when>
+  </verify>
+  <done>Deployment-time backfill runs once at boot, idempotent, dual-engine, via the single shared GFS function; historical succeeded rows all carry gfs_bucket.</done>
+</task>
+
+<task type="auto">
+  <name>Task 5: Archive naming — instance name, GFS marker, collision suffix, run labels</name>
   <files>export/backup.js, server.js, test/backup-export.test.mjs</files>
   <action>
   BKNAME-01 / D-01 / D-03, all at the naming stage (archives never renamed post-creation):
@@ -144,12 +164,13 @@ db-adapter.mjs:995–1007 (ensureColumn dual-engine)
   </action>
   <verify>
     <automated>node --test test/backup-export.test.mjs test/backup-rotation.test.mjs</automated>
+    <fails_when>any test failure or non-zero exit — in particular a filename-format pin failing, the sidecar name differing from the final uniquified name, or a manual run carrying a GFS marker</fails_when>
   </verify>
   <done>Filenames and run labels carry the full five-segment shape with server-resolved names; manual runs have no GFS marker; collision suffixes precede `.tar.gz`; sidecar carries the final name; archives never renamed.</done>
 </task>
 
 <task type="auto" tdd="true">
-  <name>Task 4: describeCron descriptor + backupTaskShape field</name>
+  <name>Task 6: describeCron descriptor + backupTaskShape field</name>
   <files>export/cron.js, server.js, test/backup-cron.test.mjs</files>
   <behavior>
     - `0 3 * * *` → `{kind:'daily', hour:3, minute:0, raw:'0 3 * * *'}` (domRestricted=false && dowRestricted=false, singleton hour/minute sets)
@@ -166,12 +187,13 @@ db-adapter.mjs:995–1007 (ensureColumn dual-engine)
   </action>
   <verify>
     <automated>node --test test/backup-cron.test.mjs</automated>
+    <fails_when>any test failure or non-zero exit — in particular a behavior-table case misclassifying (daily/weekly/monthly/yearly vs custom) or custom carrying weekday/hour/minute fields</fails_when>
   </verify>
   <done>describeCron maps all five kinds + honest custom fallback from parseCron sets alone; backupTaskShape carries the descriptor; zero translated strings server-side.</done>
 </task>
 
 <task type="auto">
-  <name>Task 5: Unified runs variant — ?all=1 on the frozen route</name>
+  <name>Task 7: Unified runs variant — ?all=1 on the frozen route</name>
   <files>server.js, test/backup-routes.test.mjs</files>
   <action>
   D-05 at server.js:9238–9245:
@@ -182,18 +204,20 @@ db-adapter.mjs:995–1007 (ensureColumn dual-engine)
   </action>
   <verify>
     <automated>node --test test/backup-routes.test.mjs</automated>
+    <fails_when>any test failure or non-zero exit — ABOVE ALL the Task-1 golden fixture failing (legacy byte-identity broken), or a scope-invisible run leaking into ?all=1 results</fails_when>
   </verify>
   <done>Legacy responses byte-identical (golden test green); ?all=1 serves filtered, scope-checked, fail-closed cross-task history.</done>
 </task>
 
 <task type="auto">
-  <name>Task 6: Operator-gated GET /api/backup/scopes</name>
+  <name>Task 8: Operator-gated GET /api/backup/scopes</name>
   <files>server.js, test/backup-scopes.test.mjs</files>
   <action>
   D-06: mount beside the other /api/backup/* routes (~server.js:8775 region). Gate: `(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) || (await hasInstanceRole(user.id, CAP.RESTORE_USE)) || isInstanceAdmin(user)` (roles.js:24–40; Super Admin = isInstanceAdmin + SUPER_ACCESS per server.js:1282 pattern). Payload: `{ workspaces: [{ id, name, slug }] }` from a SEPARATE direct query (`select id, name, slug from workspaces where archived = 0 order by …`) — do NOT call `workspacesForUser` (server.js:1282, byte-unchanged mandate). No nested projects, no role echo (deferred). Flip the Task-1 scaffold tests to real assertions: 401/403 for unprivileged user (fail-closed), 200 + exact minimal payload for each of the three granted roles, payload shape strictness (only id/name/slug keys).
   </action>
   <verify>
     <automated>node --test test/backup-scopes.test.mjs test/backup-routes.test.mjs</automated>
+    <fails_when>any test failure or non-zero exit — in particular a non-operator getting 200, an extra key beyond id/name/slug in the payload, or the workspacesForUser guard detecting a change</fails_when>
   </verify>
   <done>Scopes endpoint returns the minimal payload for the three operator roles, 403 otherwise; workspacesForUser untouched (grep/golden guard).</done>
 </task>
