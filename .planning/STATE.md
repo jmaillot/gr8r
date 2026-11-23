@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 90
 current_phase_name: Polish & Verification Sweep
-current_plan: 4 (01–02 complete, 03 next)
+current_plan: 5 (01–02 complete, 03 next)
 status: executing
-stopped_at: Completed 90-03-PLAN.md
-last_updated: "2026-11-23T16:29:52.248Z"
+stopped_at: Completed 90-04-PLAN.md
+last_updated: "2026-11-23T17:22:34.797Z"
 last_activity: 2026-11-23
 last_activity_desc: Phase 89 complete, transitioned to Phase 90
-state_head: 25f65e1f555f469126d667238ff08466092e2527
+state_head: e6311fa6c793a300cab338db5b7457614418756d
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 21
-  completed_plans: 20
+  completed_plans: 21
 ---
 
 # Project State
@@ -31,7 +31,7 @@ before features.
 ## Current Position
 
 Phase: 90 — Polish & Verification Sweep
-Current Plan: 4 (01–02 complete, 03 next)
+Current Plan: 5 (01–02 complete, 03 next)
 Total Plans in Phase: 6
 Status: Ready to execute
 Last activity: 2026-11-23 — 90-02 complete (archive download + verify-checksum, 3 tasks, 4 commits)
@@ -105,6 +105,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 90 P01 | ~35 min | 2 tasks | 12 files |
 | Phase 90 P02 | 49min | 3 tasks | 17 files |
 | Phase 90 P90-03 | 49m | 3 tasks | 18 files |
+| Phase 90 P04 | 49m | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -163,6 +164,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 90]: 90-02: download route streams via awaited pipeline + rm-finally (house pipe-and-forget rejected — it would race the staged-temp removal); checksum mismatch is a 200 RESULT persisted server-side, never a refusal
 - [Phase 90]: D-90-16 refined delivered as bucket position (kept: {position}/{keep} {scale}), never a date — recomputed per request from CURRENT policy, never stored
 - [Phase 90]: Rotation projection is a strict dry-run: keep-N walk copied from runBackupRotationPass, stops after candidates — no unlink/status write/audit (D-90-12/13)
+- [Phase 90]: D-90-18 verified with corrected US facts: the US ambiguous hour is 01:xx (02:00 EDT -> 01:00 EST) — a US 02:30 cron occurs once; earlier-of-two pinned non-vacuously via 01:30 probes
+- [Phase 90]: Full-cycle e2e rides the INSTANCE scope (Rule 3): the DR route refuses non-instance archives (restoreTargetMismatch) — the only scope completing the DR leg
+- [Phase 90]: DR staged S3 temp drops POST-commit: it must survive the D-89-30 in-tx re-hash (sha256File(archivePath)) — a post-extract drop fails that re-hash with ENOENT
 
 ### Pending Todos
 
@@ -184,8 +188,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T16:29:52.110Z
-Stopped at: Completed 90-03-PLAN.md
+Last session: 2026-11-23T17:22:28.430Z
+Stopped at: Completed 90-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

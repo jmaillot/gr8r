@@ -64,6 +64,7 @@ insufficient_spec_items: # backstop markers abstained (held-out UI-state claims 
   - "90-03 backstop B (partial): detail rows .mono.trunc + title VERIFIED (backup.js:308); the 'list scrolls within the panel, never pushes save/cancel off-screen at 360px' half has no scroll container and no test — visual claim"
 coincidental_reliance_items: []
 gaps: [] # no FAILED must-have — status is human_needed on the strength of the items above
+covered_digest: v2:sha256:20e4d8b9494e8e40b7e7757ee82436310d33364ac5633f69593df2c6ae7ca22c
 ---
 
 # Phase 90: Polish & Verification Sweep — Verification Report
