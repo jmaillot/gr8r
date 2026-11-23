@@ -3,19 +3,18 @@ status: testing
 phase: 89-restore
 source: [89-VERIFICATION.md]
 started: 2026-11-23T10:20:00Z
-updated: 2026-11-23T10:20:00Z
+updated: 2026-11-23T12:10:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Secure-phase contract — run /gsd-secure-phase 89 to produce 89-SECURITY.md
+number: 5
+name: 5-locale consequence-text overflow check (de/fr)
 expected: |
-  89-SECURITY.md exists with threats_open: 0, following the 85-SECURITY.md register
-  shape — formally closing the goal's "zero-open-threats security contract" clause
-  and ROADMAP SC4 (four D-89-33 threat families: privilege-escalation-via-restore,
-  manifest/SQL injection, path traversal, DR instance_roles rebuild abuse).
-awaiting: user response
+  Switch locale to de or fr; open overwrite + DR confirm modals — consequence
+  text wraps, modal scrolls, nothing overflows .modal-b (BKRST-03/04,
+  89-VALIDATION.md manual-only item). Verified locally via browser this time.
+awaiting: agent verification
 
 ## Tests
 
@@ -36,18 +35,39 @@ note: Existing gr8r-minio-e2e container (port 9001, creds match test defaults) r
 
 ### 4. DR re-login wall felt end-to-end (two logged-in clients)
 expected: Every session INCLUDING the initiator is revoked AFTER commit; both clients land on re-login, next requests 401 (D-89-25). Route-level E2E covers revocation + 401; the two-client live flow is the 89-VALIDATION.md manual-only item.
-result: [pending]
+result: pass
+note: |
+  Two blockers found and resolved before the wall could be felt:
+  1. Client crash (prod, commit `0b829701`): `pageBackup`'s render kick called
+     `refreshRestoreBackups()` without importing it — free-identifier
+     ReferenceError inside the render boundary ("Something went wrong") for
+     ANY restore-capable user (super admin implicit, restore operator
+     explicit). Vite cannot catch free-identifier calls; restore-client tests
+     assert source, not runtime render. Fix: import added; 17/17 green.
+  2. Live-data inconsistencies, correctly REFUSED by the DR walker (fail-closed
+     per D-89-10/D-89-12) — 5 failed runs before a clean DR: (a) orphan
+     `files[]` entry in ws_default doc referencing deleted task
+     `t67073s6r4258` (diagnosed via direct tar inspection of the fresh
+     archive; earlier "clean instance" scans were bogus — they read
+     `JSON.parse(doc)` instead of `.data`); (b) doc-referenced blob
+     `a0s605e6p3w34` ("Connexion au portail SE3.docx") missing from
+     /data/files and from every archive. Both entries removed from the doc
+     with the container stopped.
+  Final DR run 2ac522b8: status done, ~0.8s, user's client bounced to
+  re-login with the session-revoked banner — the wall is felt.
+  Observations for a future phase (out of 89 scope): task deletion leaves an
+  orphan entry in doc.files[]; blob loss is silent until a DR. Doc↔disk
+  integrity sweep candidate.
 
 ### 5. 5-locale consequence-text overflow check (de/fr)
 expected: Switch locale to de or fr; open overwrite + DR confirm modals — consequence text wraps, modal scrolls, nothing overflows .modal-b (BKRST-03/04, 89-VALIDATION.md manual-only item).
 result: [pending]
-
 ## Summary
 
 total: 5
-passed: 3
+passed: 4
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
