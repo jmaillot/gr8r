@@ -2303,5 +2303,12 @@
   "page.governance.superSegAria": "Switch between Super Admin management and instance roles",
   "page.governance.superSegAdmins": "Super Admins",
   "page.governance.superRosterEmptyTitle": "No Super Admins",
-  "page.governance.superRosterEmptyBody": "The instance owner is always a Super Admin. Search below to promote one."
+  "page.governance.superRosterEmptyBody": "The instance owner is always a Super Admin. Search below to promote one.",
+  "page.governance.superLead": "Search to add a Super Admin; manage the roster inline. Demotion and session revocation stay on the roster.",
+  "page.governance.superSearchHint": "Type at least 2 characters to search every user by name or email. Matches that are not Super Admins can be promoted from here.",
+  "page.governance.superMatchCount": "Matches for “{query}”: {n}",
+  "page.governance.superCapNote": "Showing {shown} of {total} matches",
+  "page.governance.superShowMore": "Show 10 more",
+  "page.governance.superNoMatchesTitle": "No users match",
+  "page.governance.superNoMatchesBody": "No user name or email matches “{query}”."
 }

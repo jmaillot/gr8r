@@ -5516,6 +5516,7 @@ IN.govQ = el => {
 };
 IN.govOpQ = el => {
   S.ui.govOpQ = el.value;
+  S.ui.govSuperShown = null; // D-90-4: the candidate slice counter resets when the query changes
   render();
 };
 A.govSeg = el => {
@@ -5527,6 +5528,13 @@ A.govSeg = el => {
    their already-staged payloads). */
 A.govSuperSeg = el => {
   S.ui.govSuperSeg = el.dataset.v;
+  render();
+};
+/* 90-01 (D-90-4): the candidate slice counter — +10 per click; the query
+   input resets it (IN.govOpQ). The cap is the visible affordance, never
+   a growing default. */
+A.govSuperMore = () => {
+  S.ui.govSuperShown = (S.ui.govSuperShown || 10) + 10;
   render();
 };
 const govWsById = id => (S.ui.govWs || []).find(w => w.id === id);

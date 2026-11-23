@@ -140,7 +140,10 @@ export function superAdminsView() {
     .map(([v, k]) => `<button class="${segV === v ? 'on' : ''}" data-a="govSuperSeg" data-v="${v}" aria-pressed="${segV === v}">${t(k)}</button>`)
     .join('')}</div>`;
   const body = segV === 'roles' ? rolesCard() : superRosterView();
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.superTitle')}</h2><div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">${seg}</div>${body}</div>`;
+  /* D-90-3: the admins view carries its own lead — searching = adding, the
+     roster = managing; the separation is visible in the layout. */
+  const lead = segV === 'admins' ? `<p class="hint" style="margin:0 0 10px">${t('page.governance.superLead')}</p>` : '';
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.superTitle')}</h2><div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap">${seg}</div>${lead}${body}</div>`;
 }
 
 /* The Super Admins roster (D-90-2): is_instance_admin rows ONLY from the
@@ -169,8 +172,41 @@ function superRosterView() {
             : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
     );
   const search = `<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-op-q" data-in="govOpQ" placeholder="${t('page.governance.searchOp')}" value="${esc(S.ui.govOpQ || '')}" aria-label="${t('page.governance.searchOp')}"></div></div>`;
-  const list = admins.length ? admins.map(rosterRow).join('') : empty('users', t('page.governance.superRosterEmptyTitle'), t('page.governance.superRosterEmptyBody'), '', 'sm', 1);
-  return `${search}<div class="panel">${list}</div>`;
+  /* D-90-3: the persistent threshold hint — no nag chrome, it explains the
+     2-character floor once, always visible below the input. */
+  const hint = `<p class="hint" style="margin:0 0 10px">${t('page.governance.superSearchHint')}</p>`;
+  const roster = `<div class="panel">${admins.length ? admins.map(rosterRow).join('') : empty('users', t('page.governance.superRosterEmptyTitle'), t('page.governance.superRosterEmptyBody'), '', 'sm', 1)}</div>`;
+  /* D-90-3: the search floor is 2 characters — below it ONLY the roster
+     renders (no candidates block at all). At/above it the PINNED filter
+     expression (name OR email, lowercase substring — the govOpQ idiom)
+     searches ALL users over the SAME payload, and non-admin matches render
+     as promote-ONLY candidates: no revoke-sessions on a candidate row
+     (seed constraint) — revocation stays a roster action. The promote CTA
+     is the UNCHANGED A.operatorPromote refetch reconcile (D-90-5): the
+     candidate leaves the results and joins the roster with NO page reload. */
+  let candidatesHtml = '';
+  const qRaw = (S.ui.govOpQ || '').trim();
+  const q = qRaw.toLowerCase();
+  if (q.length >= 2) {
+    const matches = all.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+    const candidates = matches.filter(u => !u.is_instance_admin);
+    const candRow = u =>
+      srow(
+        `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(u.email || '')}</span></span>`,
+        u.last_login_at ? ago(u.last_login_at) : '—',
+        `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button></span>`,
+      );
+    /* D-90-4: cap 10 + show-more (+10 per click) — the cap note is ALWAYS
+       visible above the list so the cap itself is visible; the slice
+       counter resets when the query changes (IN.govOpQ). No infinite
+       scroll, ever. */
+    const shown = S.ui.govSuperShown || 10;
+    const slice = candidates.slice(0, shown);
+    candidatesHtml = `<div style="margin-top:12px"><div class="label">${t('page.governance.superMatchCount', { query: esc(qRaw), n: String(candidates.length) })}</div>${candidates.length
+      ? `<div class="hint" style="margin:4px 0 8px">${t('page.governance.superCapNote', { shown: String(Math.min(shown, candidates.length)), total: String(candidates.length) })}</div><div class="panel">${slice.map(candRow).join('')}</div>${candidates.length > shown ? `<div class="row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" data-a="govSuperMore">${t('page.governance.superShowMore')}</button></div>` : ''}`
+      : empty('search', t('page.governance.superNoMatchesTitle'), t('page.governance.superNoMatchesBody', { query: esc(qRaw) }), '', 'sm', 1)}</div>`;
+  }
+  return `${search}${hint}${roster}${candidatesHtml}`;
 }
 
 /* =====================================================================

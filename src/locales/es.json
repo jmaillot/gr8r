@@ -2303,5 +2303,12 @@
   "page.governance.superSegAria": "Cambiar entre la gestión de Super Admins y los roles de la instancia",
   "page.governance.superSegAdmins": "Super Admins",
   "page.governance.superRosterEmptyTitle": "No hay Super Admins",
-  "page.governance.superRosterEmptyBody": "El propietario de la instancia siempre es un Super Admin. Busque abajo para promocionar uno."
+  "page.governance.superRosterEmptyBody": "El propietario de la instancia siempre es un Super Admin. Busque abajo para promocionar uno.",
+  "page.governance.superLead": "Busque para añadir un Super Admin; gestione la lista en línea. La degradación y la revocación de sesiones permanecen en la lista.",
+  "page.governance.superSearchHint": "Escriba al menos 2 caracteres para buscar todos los usuarios por nombre o correo. Las coincidencias que no sean Super Admins pueden promocionarse desde aquí.",
+  "page.governance.superMatchCount": "Coincidencias para «{query}»: {n}",
+  "page.governance.superCapNote": "Mostrando {shown} de {total} coincidencias",
+  "page.governance.superShowMore": "Mostrar 10 más",
+  "page.governance.superNoMatchesTitle": "Ningún usuario coincide",
+  "page.governance.superNoMatchesBody": "Ningún nombre o correo de usuario coincide con «{query}»."
 }

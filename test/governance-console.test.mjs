@@ -3,14 +3,23 @@
    client-source assertions for the seg-staged console, per the
    governance-client precedent (no DOM harness → source assertions).
 
-   Pinned invariants (plan 90-01, D-90-1..2 — task 1; extended by task 2):
+   Pinned invariants (plan 90-01, D-90-1..6):
    (1) the seg control mirrors the govSeg idiom (role=group + aria-pressed,
        default 'admins' — roster-first, D-90-1/2); NO tab component exists
    (2) the roster renders is_instance_admin rows ONLY and carries the
        D-118/D-119 inline-confirm stages verbatim (D-90-2)
-   (3) govSuperSeg joins govOrphanTeardown; the section mounts only for
-       isInstanceAdmin (D-112 gate unchanged)
-   (4) the task-1 console keys resolve ×5 catalogues (D-90-20/D-12)
+   (3) the search floor is 2 characters; ≥2 searches ALL users on name AND
+       email lowercase substring; candidates are promote-ONLY — no
+       revoke-sessions on candidate rows (D-90-3, seed constraint)
+   (4) cap 10 + show-more (+10 per click), visible cap note, slice counter
+       resets when the query changes (D-90-4)
+   (5) post-promote reconcile rides the EXISTING A.operatorPromote refetch
+       — candidate leaves results, joins roster, no page reload (D-90-5)
+   (6) both empty states are keyed (roster guard + zero-match search,
+       D-90-6)
+   (7) govSuperSeg/govSuperShown join govOrphanTeardown; the section
+       mounts only for isInstanceAdmin (D-112 gate unchanged)
+   (8) the 12 console keys resolve ×5 catalogues (D-90-20/D-12)
    ===================================================================== */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -72,12 +81,69 @@ test('the roster renders is_instance_admin rows ONLY and carries the D-118/D-119
   assert.match(a, /api\.operatorRevokeSessions\(id\)/);
 });
 
-/* (3) teardown + mount gate */
-test('govSuperSeg joins govOrphanTeardown, ROUTE_TEARDOWN still resolves to it, and the section mounts only for isInstanceAdmin', () => {
+/* (7) teardown + mount gate */
+test('govSuperSeg/govSuperShown join govOrphanTeardown, ROUTE_TEARDOWN still resolves to it, and the section mounts only for isInstanceAdmin', () => {
   const p = page();
   assert.match(p, /S\.ui\.govSuperSeg = null;/, 'the seg stage is not torn down on route exit');
+  assert.match(p, /S\.ui\.govSuperShown = null;/, 'the slice counter is not torn down on route exit');
   assert.match(p, /ROUTE_TEARDOWN\.governance = govOrphanTeardown;/, 'the governance teardown registry moved');
   assert.match(p, /api\.user\?\.isInstanceAdmin \? superAdminsView\(\) : ''/, 'the section is not gated on the server isInstanceAdmin payload (D-112)');
+});
+
+/* (3b) search floor + name/email filter + promote-only candidates */
+test('the candidate search floors at 2 chars, filters on name AND email lowercase substring, and renders promote-only rows (D-90-3)', () => {
+  const r = rosterView();
+  assert.match(r, /q\.length >= 2/, 'the 2-character floor guarding the candidates block is missing');
+  assert.match(
+    r,
+    /\(u\.name \|\| ''\)\.toLowerCase\(\)\.includes\(q\) \|\| \(u\.email \|\| ''\)\.toLowerCase\(\)\.includes\(q\)/,
+    'the pinned name/email lowercase-substring expression drifted',
+  );
+  assert.match(r, /matches\.filter\(u => !u\.is_instance_admin\)/, 'admin matches are not excluded from the candidates block');
+  // candidate rows carry ONLY the promote action
+  const cand = r.match(/const candRow = u =>[\s\S]*?\n      \);/);
+  assert.ok(cand, 'candRow not found');
+  assert.match(cand[0], /data-a="operatorPromote"/, 'the candidate row lost the promote CTA');
+  assert.doesNotMatch(cand[0], /operatorRevoke/, 'a revoke-sessions control leaked onto a candidate row (seed constraint)');
+  // the promote action itself is the UNCHANGED refetch reconcile — no reload (D-90-5)
+  const a = actions();
+  assert.match(
+    a,
+    /A\.operatorPromote = async el => \{[\s\S]{0,400}?await refreshOperatorUsers\(\);[\s\S]{0,120}?toast\(t\('settings\.operator\.toastPromoted'\)\);/,
+    'the promote reconcile drifted off the refetch + keyed-toast idiom',
+  );
+});
+
+/* (4) cap 10 + show-more + cap note + query-change reset */
+test('candidates slice by govSuperShown, show-more adds 10, the cap note renders shown/total, and the query resets the slice (D-90-4)', () => {
+  const r = rosterView();
+  assert.match(r, /candidates\.slice\(0, shown\)/, 'the candidate slice cap is missing');
+  assert.match(r, /S\.ui\.govSuperShown \|\| 10/, 'the slice counter does not default to 10');
+  assert.match(r, /data-a="govSuperMore"/, 'the show-more control is missing');
+  assert.match(r, /shown: String\(Math\.min\(shown, candidates\.length\)\)/, 'the cap note does not render the shown count');
+  assert.match(r, /total: String\(candidates\.length\)/, 'the cap note does not render the total count');
+  const a = actions();
+  assert.match(a, /A\.govSuperMore = \(\) => \{\s*S\.ui\.govSuperShown = \(S\.ui\.govSuperShown \|\| 10\) \+ 10;/, 'show-more does not reveal +10 per click');
+  assert.match(a, /IN\.govOpQ = el => \{\s*S\.ui\.govOpQ = el\.value;\s*S\.ui\.govSuperShown = null;/, 'the slice counter does not reset when the query changes');
+});
+
+/* (6) both empty states are keyed */
+test('zero matches and an empty roster render through the keyed empty states (D-90-6)', () => {
+  const r = rosterView();
+  assert.match(r, /empty\('search', t\('page\.governance\.superNoMatchesTitle'\), t\('page\.governance\.superNoMatchesBody', \{ query: esc\(qRaw\) \}\)/, 'the zero-match empty state is missing/unkeyed');
+  assert.match(r, /empty\('users', t\('page\.governance\.superRosterEmptyTitle'\), t\('page\.governance\.superRosterEmptyBody'\)/, 'the roster-empty guard is missing/unkeyed');
+});
+
+/* (8) the query echo renders through esc() on the candidate side too */
+test('candidate payload strings render through esc() and the query echo never interpolates raw (T-79-10 backstop)', () => {
+  const r = rosterView();
+  const cand = r.match(/const candRow = u =>[\s\S]*?\n      \);/);
+  assert.ok(cand, 'candRow not found');
+  assert.match(cand[0], /\$\{esc\(u\.name \|\| ''\)\}/, 'the candidate name cell lost esc()');
+  assert.match(cand[0], /\$\{esc\(u\.email \|\| ''\)\}/, 'the candidate email cell lost esc()');
+  assert.match(cand[0], /data-id="\$\{esc\(u\.id\)\}"/, 'the candidate action id lost esc()');
+  assert.doesNotMatch(cand[0], /\$\{u\.(name|email)\}/, 'a payload string escapes escaping in the candidate row');
+  assert.doesNotMatch(r, /t\('page\.governance\.super(MatchCount|NoMatchesBody)'[^)]*\{ query: qRaw \}/, 'the query echo interpolates RAW (must render through esc())');
 });
 
 /* esc() discipline: the roster row interpolations never render raw payload strings */
@@ -91,16 +157,30 @@ test('roster payload strings render through esc() (T-79-10 backstop)', () => {
   assert.doesNotMatch(row[0], /\$\{u\.(name|email)\}/, 'a payload string escapes escaping in the roster row');
 });
 
-/* locale parity: the task-1 console keys ×5 catalogues (D-90-20/D-12) */
-test('the task-1 page.governance.super.* keys resolve in all 5 catalogues (D-90-20)', () => {
+/* locale parity: all 12 console keys ×5 catalogues (D-90-20/D-12) */
+test('the 12 page.governance.super.* keys resolve in all 5 catalogues (D-90-20)', () => {
   const KEYS = [
     'page.governance.superTitle',
     'page.governance.superSegAria',
     'page.governance.superSegAdmins',
+    'page.governance.superLead',
+    'page.governance.superSearchHint',
+    'page.governance.superMatchCount',
+    'page.governance.superCapNote',
+    'page.governance.superShowMore',
+    'page.governance.superNoMatchesTitle',
+    'page.governance.superNoMatchesBody',
     'page.governance.superRosterEmptyTitle',
     'page.governance.superRosterEmptyBody',
   ];
   for (const [lang, cat] of Object.entries({ en, fr, de, es, nl })) {
     for (const k of KEYS) assert.ok(cat[k], `${lang} catalogue lost ${k}`);
+  }
+  // placeholder parity across locales (D-07)
+  const ph = s => (String(s).match(/\{[a-z]+\}/g) || []).sort();
+  for (const k of ['page.governance.superMatchCount', 'page.governance.superCapNote', 'page.governance.superNoMatchesBody']) {
+    for (const [lang, cat] of Object.entries({ fr, de, es, nl })) {
+      assert.deepEqual(ph(cat[k]), ph(en[k]), `${lang} placeholder drift on ${k}`);
+    }
   }
 });

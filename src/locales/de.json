@@ -2303,5 +2303,12 @@
   "page.governance.superSegAria": "Zwischen der Super-Admin-Verwaltung und den Instanzrollen wechseln",
   "page.governance.superSegAdmins": "Super Admins",
   "page.governance.superRosterEmptyTitle": "Keine Super Admins",
-  "page.governance.superRosterEmptyBody": "Der Instanz-Eigentümer ist immer ein Super Admin. Suchen Sie unten, um einen zu befördern."
+  "page.governance.superRosterEmptyBody": "Der Instanz-Eigentümer ist immer ein Super Admin. Suchen Sie unten, um einen zu befördern.",
+  "page.governance.superLead": "Suchen Sie, um einen Super Admin hinzuzufügen; verwalten Sie die Liste direkt. Herabstufung und Sitzungswiderruf bleiben in der Liste.",
+  "page.governance.superSearchHint": "Geben Sie mindestens 2 Zeichen ein, um alle Benutzer nach Name oder E-Mail zu suchen. Treffer, die keine Super Admins sind, können hier befördert werden.",
+  "page.governance.superMatchCount": "Treffer für „{query}“: {n}",
+  "page.governance.superCapNote": "{shown} von {total} Treffern angezeigt",
+  "page.governance.superShowMore": "10 weitere anzeigen",
+  "page.governance.superNoMatchesTitle": "Keine Treffer",
+  "page.governance.superNoMatchesBody": "Kein Benutzername und keine E-Mail passt zu „{query}“."
 }

@@ -2303,5 +2303,12 @@
   "page.governance.superSegAria": "Wisselen tussen het beheer van Super Admins en de instantierollen",
   "page.governance.superSegAdmins": "Super Admins",
   "page.governance.superRosterEmptyTitle": "Geen Super Admins",
-  "page.governance.superRosterEmptyBody": "De instantie-eigenaar is altijd een Super Admin. Zoek hieronder om er een te promoten."
+  "page.governance.superRosterEmptyBody": "De instantie-eigenaar is altijd een Super Admin. Zoek hieronder om er een te promoten.",
+  "page.governance.superLead": "Zoek om een Super Admin toe te voegen; beheer de lijst inline. Demotie en sessie-intrekking blijven op de lijst.",
+  "page.governance.superSearchHint": "Typ minstens 2 tekens om elke gebruiker op naam of e-mail te zoeken. Resultaten die geen Super Admin zijn, kunnen hier worden gepromoveerd.",
+  "page.governance.superMatchCount": "Resultaten voor „{query}”: {n}",
+  "page.governance.superCapNote": "{shown} van {total} resultaten getoond",
+  "page.governance.superShowMore": "Toon 10 meer",
+  "page.governance.superNoMatchesTitle": "Geen gebruikers gevonden",
+  "page.governance.superNoMatchesBody": "Geen gebruikersnaam of e-mail komt overeen met „{query}”."
 }
