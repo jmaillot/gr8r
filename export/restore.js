@@ -1313,11 +1313,17 @@ export async function restoreOverwriteUnit(opts = {}) {
   const operatorId = operator?.id ?? (typeof opts.operatorId === 'string' ? opts.operatorId : null);
   const targetWorkspaceId = typeof opts.targetWorkspaceId === 'string' ? opts.targetWorkspaceId : null;
   const hooks = opts._hooks && typeof opts._hooks === 'object' ? opts._hooks : {};
+  /* D-89-32: the route ALWAYS claims the restore_lock before firing this
+     unit — the unit owns releasing it on EVERY exit (the finally
+     discipline via the failWith funnel + the success path). */
+  const releaseLock = typeof opts.releaseLock === 'function' ? opts.releaseLock : null;
+  const release = async () => { if (releaseLock) { try { await releaseLock(); } catch { /* best-effort */ } } };
 
   const failWith = async err => {
     const code = typeof err?.code === 'string' ? err.code : null;
     const persisted = code ? `${code}: ${err.message}` : err.message;
     await emitRestoreEvent({ kind: 'fail', runId, error: persisted, finishedAt: Date.now() });
+    await release();
     return { ok: false, runId, code: code ?? 'restoreFailed', error: persisted };
   };
 
@@ -1706,6 +1712,7 @@ export async function restoreOverwriteUnit(opts = {}) {
     const finalName = srcRow.name ?? targetRow.name;
     await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName, finishedAt: Date.now() });
     cleanup(); // success sweep — staging and the swap dir are spent
+    await release(); // D-89-32: the route's lock claim ends with the unit
     return {
       ok: true,
       runId,

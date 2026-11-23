@@ -86,7 +86,7 @@ import { buildMspdi } from './export/mspdi.js';
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
-import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -3598,10 +3598,16 @@ setRestoreRunWriter(writeRestoreRunRow);
    post-commit via runEmailDeliveryPass().catch(...) — never awaited into
    any response. Locale keys defer to plan 06 (page.restore email keys ×5,
    the 87-03 handoff precedent) — the builder's key-shaped-fallback detector
-   renders the English literals in the meantime. DR (plan 05) deliberately
-   skips this gate — the re-login wall is its notification. */
+   renders the English literals in the meantime. DR (trigger 'instance')
+   skips this gate — the re-login wall is its notification (D-89-28,
+   enforced by the trigger check below). */
 async function handleRestoreRunOutcome(runId, outcome, { error = '', finalName = null } = {}) {
   if (!MAILER.enabled) return;
+  /* D-89-28: DR (trigger 'instance') skips the outcome email — the
+     post-commit global session revocation (D-89-25) IS its notification:
+     every recipient is force-logged-out before any claim could matter. */
+  const run = await db.get('select trigger from restore_runs where id = ?', [runId]);
+  if (run?.trigger === 'instance') return;
   const recipients = await db.all(
     `select distinct u.email, u.locale from instance_roles ir
        join users u on u.id = ir.user_id
@@ -9370,6 +9376,107 @@ async function handleApi(req, res, url) {
     }).catch(err => logWarn(`instance restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:instance', null, 'instance');
     logInfo(`instance restore run started: ${restoreRunId} by ${user.email}`);
+    return json(res, 200, { runId: restoreRunId });
+  }
+
+  /* -------------- overwrite trigger (Phase 89, plan 89-05, BKRST-03) --------------
+     POST /api/backup/restore/overwrite { runId, targetId, confirmName } —
+     the guarded destructive overwrite. Guard chain VERBATIM from the
+     destructive funnel above (never reordered — sameOrigin first, house
+     rule), with overwrite-specific gates (D-89-21/22/27):
+     - the throttle is operator-keyed restoreoverwrite|<id> 5/15min
+       consuming a try per attempt, refused or not (D-89-22);
+     - the capability gate is CAP.BACKUP_MANAGE (D-89-21: overwrite
+       authority = Backup Operator/Super Admin), refusal keyed
+       backupManageRequired (the existing backup family code — NO new
+       refusal code) + audited restore_refused:overwriteRoleRequired;
+     - confirmName is re-validated SERVER-side against the target's exact
+       CURRENT name read from the live workspaces row (D-89-27/P8 — the
+       client confirmModal typeName is chrome, never the boundary);
+       anything other than === on the live name → keyed
+       confirmPhraseMismatch + audited, checked BEFORE archive resolution
+       so a refused phrase is a near-zero-read trigger with zero state
+       change;
+     - the archive scope kind must match the target kind (workspace — the
+       engine's overwrite containment is workspace-only, 86-D-01);
+       mismatch → keyed restoreTargetMismatch BEFORE any lock claim;
+     - concurrency slot identical to import-as-new/DR (D-89-1): an active
+       export OR a claimed restore_lock refuses 409
+       backupRestoreInProgress + audited restore_refused:restoreInProgress;
+     - claimRestoreLock → start row (trigger 'overwrite') → fire-and-forget
+       restoreOverwriteUnit (the unit's finally ALWAYS releases the lock and
+       sweeps staging; its automatic pre_restore snapshot rides the 86
+       runExport core BEFORE any mutation — P7/D-89-5) → audited
+       restore_started:overwrite → 200 { runId } (D-89-2: the run id leaves
+       BEFORE the pipeline finishes). */
+  if (pathname === '/api/backup/restore/overwrite' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`restoreoverwrite|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'restore_refused:overwriteRoleRequired');
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can trigger an overwrite restore');
+    }
+    const body = await readJson(req);
+    const backupRunId = typeof body?.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.runId) ? body.runId : null;
+    if (!backupRunId) {
+      return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
+    }
+    const targetId = typeof body?.targetId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.targetId) ? body.targetId : null;
+    if (!targetId) {
+      await auditBackupTask(user, 'restore_refused:restoreTargetMissing');
+      return fail(res, 400, 'restoreTargetMissing', 'That overwrite target is invalid');
+    }
+    /* D-89-27: the phrase IS the target's live name — read the CURRENT row
+       and compare exactly. The client dialog is never the boundary. */
+    const targetRow = await db.get('select id, name from workspaces where id = ?', [targetId]);
+    if (!targetRow) {
+      await auditBackupTask(user, 'restore_refused:restoreTargetMissing');
+      return fail(res, 404, 'restoreTargetMissing', 'That overwrite target does not exist');
+    }
+    if (typeof body?.confirmName !== 'string' || body.confirmName !== targetRow.name) {
+      await auditBackupTask(user, 'restore_refused:confirmPhraseMismatch');
+      return fail(res, 400, 'confirmPhraseMismatch', 'The typed name does not match the target workspace');
+    }
+    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
+    if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
+      await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    let scope = null;
+    try {
+      scope = JSON.parse(row.scope);
+    } catch {
+      scope = null;
+    }
+    if (!scope || scope.kind !== 'workspace') {
+      await auditBackupTask(user, 'restore_refused:restoreTargetMismatch');
+      return fail(res, 400, 'restoreTargetMismatch', 'An overwrite needs an archive whose scope matches the target workspace');
+    }
+    const active = getRunState();
+    const exportActive = !!active && ['collecting', 'archiving', 'verifying', 'uploading'].includes(active.stage);
+    if (exportActive || (await restoreLockHeld())) {
+      await auditBackupTask(user, 'restore_refused:restoreInProgress');
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
+    }
+    const claimed = await claimRestoreLock(user.id);
+    if (!claimed) {
+      await auditBackupTask(user, 'restore_refused:restoreInProgress');
+      return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
+    }
+    const restoreRunId = uid();
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: 'workspace', id: targetId }, trigger: 'overwrite', startedAt: now() });
+    restoreOverwriteUnit({
+      runId: restoreRunId,
+      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      scope: { kind: 'workspace', id: targetId },
+      operator: { id: user.id, email: user.email },
+      targetWorkspaceId: targetId,
+      releaseLock: () => releaseRestoreLock(user.id),
+    }).catch(err => logWarn(`overwrite restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
+    await auditBackupTask(user, 'restore_started:overwrite', null, 'workspace');
+    logInfo(`overwrite restore run started: ${restoreRunId} (${targetId}) by ${user.email}`);
     return json(res, 200, { runId: restoreRunId });
   }
 

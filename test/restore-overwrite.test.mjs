@@ -559,7 +559,7 @@ test('89-05 overwrite route outbox gate: a done overwrite claims one restore_ale
      rows are pinned). */
   const srv = await startServer({
     dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-outbox-')),
-    env: { SMTP_HOST: '127.0.0.1', SMTP_PORT: '1', SMTP_REQUIRE_TLS: 'false' },
+    env: { SMTP_HOST: '127.0.0.1', SMTP_PORT: '1', SMTP_REQUIRE_TLS: 'false', MAIL_FROM: 'noreply@test.local', APP_URL: 'http://127.0.0.1:1' },
   });
   const ro = openReader(srv);
   try {
