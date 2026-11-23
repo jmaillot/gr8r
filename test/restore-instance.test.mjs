@@ -37,6 +37,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import http from 'node:http';
 
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-instance-dr-'));
 process.env.DATA_DIR = DATA_DIR;
@@ -266,6 +267,75 @@ test('89-05 DR scope guard: a workspace-scope archive refuses keyed restoreTarge
   assert.equal(result.code, 'restoreTargetMismatch', `keyed: ${result.code ?? result.error}`);
   assert.deepEqual(await wsIds(), before, 'zero state change');
   assert.equal(backupsCount(), 3, 'the snapshot still came first (instance source + ws export + pre_restore snapshot)');
+});
+
+/* ---------- 90-review WR-01: staged-temp cleanup on the early exits ---- */
+
+/* In-process S3-shaped sink (test/backup-s3-upload.test.mjs idiom) — the
+   90-04 S3-fallback seam needs an object to pull when the local copy is
+   rotated away. The sink ignores signatures and answers any GET. */
+function startSink(handler) {
+  return new Promise(resolve => {
+    const server = http.createServer(handler);
+    server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+  });
+}
+const sinkConfig = (port, bucket = 'gr8r') => ({
+  endpoint: `http://127.0.0.1:${port}`,
+  bucket,
+  accessKeyId: 'test',
+  secretAccessKey: 'test-secret',
+  region: 'us-east-1',
+  pathStyle: true,
+});
+
+const stagingEntries = () =>
+  fs.existsSync(restore.restoreStagingDir()) ? fs.readdirSync(restore.restoreStagingDir()) : [];
+
+test('90-review WR-01: the staged S3-fallback temp never outlives the response on the post-download failure exits (D-89-16 rm-finally)', async () => {
+  await resetWorld();
+  const archiveBytes = fs.readFileSync(path.join(BACKUPS_DIR, sourceRun.filename));
+  fs.rmSync(path.join(BACKUPS_DIR, sourceRun.filename)); // S3 posture: rotation-away is the NORM
+  const { server, port } = await startSink((req, res) => {
+    if (req.method === 'GET') return res.writeHead(200).end(archiveBytes);
+    res.writeHead(400).end();
+  });
+  const s3Fallback = { backupRun: { filename: sourceRun.filename, sha256: sourceRun.sha256, uploaded: 1 }, s3Config: sinkConfig(port) };
+  /* The pre-DR snapshot export writes backup-instance-<ts>.tar.gz — the
+     SAME second-timestamp name sourceRun carries. Drop the local copy
+     before EACH unit call so every run resolves through the S3 seam
+     (a leftover snapshot would satisfy the local-path check and skip it). */
+  const dropLocal = () => fs.rmSync(path.join(BACKUPS_DIR, sourceRun.filename), { force: true });
+  try {
+    assert.equal(stagingEntries().length, 0, 'restore-staging starts clean');
+
+    /* Exit A — the snapshot-block catch: afterSnapshot throws AFTER the
+       staged download succeeded. Pre-fix this leaked the whole instance
+       credentials archive into restore-staging until the boot-only sweep. */
+    dropLocal();
+    const r1 = await drUnit({ ...s3Fallback, _hooks: { afterSnapshot: () => { throw new Error('injected snapshot-block failure'); } } });
+    assert.equal(r1.ok, false, `DR refused as injected: ${r1?.error}`);
+    assert.equal(stagingEntries().length, 0, `the staged archive is dropped on the snapshot-catch exit (left behind: ${stagingEntries().join(', ')})`);
+    assert.equal(stagingEntries().length, 0, `the staged archive is dropped on the snapshot-catch exit (left behind: ${stagingEntries().join(', ')})`);
+
+    /* Exit B — streamVerifyArchive failure: afterSnapshot corrupts the
+       staged temp so post-snapshot verification refuses on the digest. */
+    dropLocal();
+    const r2 = await drUnit({
+      ...s3Fallback,
+      _hooks: {
+        afterSnapshot: () => {
+          const tmp = path.join(restore.restoreStagingDir(), stagingEntries()[0]);
+          fs.writeFileSync(tmp, 'CORRUPTED'); // digest now differs → verification refuses
+        },
+      },
+    });
+    assert.equal(r2.ok, false, `verify refused as injected: ${r2?.error}`);
+    assert.ok(String(r2.code || '').startsWith('restore'), `keyed refusal, got: ${r2.code}`);
+    assert.equal(stagingEntries().length, 0, `the staged archive is dropped on the verify-fail exit (left behind: ${stagingEntries().join(', ')})`);
+  } finally {
+    server.close();
+  }
 });
 
 /* ---------- route: POST /api/backup/restore/instance ---------- */

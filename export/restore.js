@@ -2052,6 +2052,11 @@ export async function restoreInstanceUnit(opts = {}) {
   try {
     snapshot = await runExport({ kind: 'instance' }, { trigger: 'manual' });
     if (!snapshot?.ok) {
+      /* 90-review WR-01: this exit predates cleanup()'s declaration below,
+         so the staged S3 temp needs its own rm-finally here — a repeated
+         snapshot failure would otherwise accumulate full instance
+         credential archives in restore-staging until the boot-only sweep. */
+      dropStagedTmp();
       return failWith(keyed('restoreSnapshotFailed', `restore: pre-DR snapshot failed: ${snapshot?.error ?? 'unknown export failure'}`));
     }
     /* Flag 1: the tag lives on the restore_runs row + audit. */
@@ -2063,13 +2068,27 @@ export async function restoreInstanceUnit(opts = {}) {
     }
     if (typeof hooks.afterSnapshot === 'function') await hooks.afterSnapshot();
   } catch (err) {
+    /* 90-review WR-01: the snapshot-block catch sits before cleanup()'s
+       declaration too — drop the staged temp explicitly (D-89-16
+       rm-finally: the staged temp never outlives the response). */
+    dropStagedTmp();
     if (stagingDir) rmStaging(stagingDir);
     if (swapDir) rmStaging(swapDir);
     return failWith(err);
   }
 
   const dirs = blobsDirs();
+  /* 90-review WR-01: cleanup() is the funnel every post-snapshot failure
+     exit already walks — folding the staged-temp drop in here covers the
+     streamVerifyArchive-fail, restoreTargetMismatch, remap/blob/swap and
+     tx-catch exits in one place. Safety against D-89-30: cleanup() NEVER
+     runs on the success path before the in-tx re-hash (sha256File(
+     archivePath) inside the tx) — its only success-path call is the
+     post-commit sweep, where dropStagedTmp() already ran (stagedTmp is
+     null, the drop is a no-op). Refusal classes are untouched — cleanup
+     only ever precedes a return. */
   const cleanup = () => {
+    dropStagedTmp();
     if (stagingDir) rmStaging(stagingDir);
     if (swapDir) rmStaging(swapDir);
   };
