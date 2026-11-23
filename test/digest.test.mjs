@@ -873,3 +873,128 @@ test('UNSUB-01/D-05 gate 2: an http://APP_URL digest carries NO List-Unsubscribe
   assert.ok(digest.text.includes(settingsUrl), 'footer settings link still renders in the decoded text part');
   assert.ok(digest.html.includes(settingsUrl), 'footer settings link still renders in the decoded HTML part');
 });
+
+/* =====================================================================
+   Phase 91 — digest dedup (NOTIF-01, SC1/SC2/SC3/SC4). A digest-enrolled
+   user in N workspaces receives exactly ONE aggregated email per local
+   day, carrying one section per workspace (D-01..D-05). The per-ws
+   reminders_sent claim stays byte-compatible (SC4); only the transport
+   (email_outbox) coalesces onto the user/day dedup key
+   digest:user:{userId}:{localDate}. Pinned RED FIRST (SC2): before the
+   fix these tests fail on exactly the 4× duplication / per-ws outbox
+   rows; they go green after the server.js coalescing + mailer template.
+   ===================================================================== */
+
+const outboxRow = dedupKey =>
+  withDb(server.dbPath, db => db.prepare('select * from email_outbox where dedup_key = ?').get(dedupKey));
+const outboxOldWsKeys = wsId =>
+  withDb(server.dbPath, db =>
+    db
+      .prepare("select dedup_key from email_outbox where kind = 'digest' and dedup_key like ?")
+      .all(`digest:${wsId}:%`)
+      .map(r => r.dedup_key),
+  );
+
+test('Phase 91 SC1/SC2: a digest user in 4 workspaces receives exactly ONE aggregated email/day — 4 sections inside, claims byte-compatible, per-ws outbox keys gone', async () => {
+  const DUE = '2026-09-01';
+  const fixtures = [];
+  for (let i = 1; i <= 4; i++) {
+    fixtures.push(await makeWorkspace(m => [task(m, { key: `K91-${i}`, title: `Task ${i}`, due: DUE })], DIGEST_ONLY));
+  }
+  const { userId, email } = fixtures[0];
+  assert.ok(fixtures.every(f => f.userId === userId), 'all four workspaces share the one enrolled user');
+
+  const payloadsBefore = smtp.payloads.length;
+  const res = await trigger(at8(DUE));
+  assert.ok(res.digests >= 1, 'digest pass enqueues');
+  await waitFor(smtp, 1, 'the aggregated digest email');
+  const sent = smtp.payloads.slice(payloadsBefore).map(decode).filter(x => x.text.includes('K91-'));
+  assert.equal(sent.length, 1, `exactly ONE email total for the 4-ws user (got ${sent.length} — the pinned 4× duplicate)`);
+  assert.equal(sent[0].to, email, 'the single email lands on the enrolled address');
+
+  /* D-04: ONE outbox row on the user/day dedup key, kind digest-aggregated. */
+  const row = outboxRow(`digest:user:${userId}:${DUE}`);
+  assert.ok(row, 'exactly-one outbox row with dedup_key digest:user:{userId}:{localDate}');
+  assert.equal(row.kind, 'digest-aggregated', 'kind is digest-aggregated');
+  const ctx = JSON.parse(row.ctx);
+  assert.equal(ctx.type, 'digest-aggregated', 'ctx type is digest-aggregated');
+  assert.equal(ctx.sections.length, 4, 'the aggregated ctx carries 4 per-ws sections');
+  for (let i = 1; i <= 4; i++) {
+    const section = ctx.sections.find(s => s.wsSlug === fixtures[i - 1].ws.slug);
+    assert.ok(section, `section ${i} present with its wsSlug`);
+    assert.ok(section.wsName, `section ${i} carries wsName (D-03)`);
+    assert.equal(section.dueToday.length, 1, `section ${i} lists its due-today task`);
+    assert.equal(section.dueToday[0].key, `K91-${i}`, `section ${i} carries the right task key`);
+    assert.deepEqual(section.overdue, [], `section ${i} has no overdue tasks`);
+  }
+
+  /* SC4: per-ws reminders_sent claims stay byte-compatible — 4 rows. */
+  for (const { ws } of fixtures) {
+    assert.deepEqual(digestKeys(ws.id), [`${ws.id}:${userId}:digest:${DUE}`], `byte-compatible claim for ${ws.slug}`);
+  }
+
+  /* The old per-ws transport key appears NOWHERE in email_outbox for these ws. */
+  for (const { ws } of fixtures) {
+    assert.deepEqual(outboxOldWsKeys(ws.id), [], `no legacy per-ws outbox row for ${ws.slug}`);
+  }
+
+  /* Body/frame (D-03/D-05, green at the template commit): per-ws section
+     titles present, fr|en locale only, one footer. */
+  for (let i = 1; i <= 4; i++) {
+    const { ws } = fixtures[i - 1];
+    assert.ok(sent[0].text.includes(ws.name), `section title for ${ws.slug} renders in the text part`);
+    assert.ok(sent[0].text.includes(`http://app.test/w/${ws.slug}/task/K91-${i}`), `deep link for ${ws.slug}`);
+  }
+  assert.match(sent[0].subject, /Daily digest|R\u00e9sum\u00e9 quotidien/, 'locale-fr|en subject frame');
+
+  /* Dedup + catch-up honesty: a SECOND same-day trigger sends nothing new
+     and claims nothing new. */
+  const claimsAfterFirst = fixtures.reduce((n, { ws }) => n + digestKeys(ws.id).length, 0);
+  const second = await trigger(at14(DUE));
+  assert.equal(second.digests, 0, 'second trigger enqueues nothing');
+  await new Promise(r => setTimeout(r, 500));
+  assert.equal(smtp.payloads.length - payloadsBefore, 1, 'still exactly one email after the second trigger');
+  assert.equal(outboxRow(`digest:user:${userId}:${DUE}`) ? 1 : 0, 1, 'outbox row count unchanged (dedup key collides)');
+  const claimsAfterSecond = fixtures.reduce((n, { ws }) => n + digestKeys(ws.id).length, 0);
+  assert.equal(claimsAfterSecond, claimsAfterFirst, 'second trigger claims nothing new (catch-up honesty)');
+});
+
+test('Phase 91 SC3: restart hole — partial claims before the crash still yield ONE email with ALL 4 sections', async () => {
+  const DUE = '2026-09-02';
+  const fixtures = [];
+  for (let i = 1; i <= 4; i++) {
+    fixtures.push(await makeWorkspace(m => [task(m, { key: `K91R-${i}`, title: `Restart ${i}`, due: DUE })], DIGEST_ONLY));
+  }
+  const { userId, email } = fixtures[0];
+  /* Simulate the crash window: 2 of the 4 per-ws claims landed (committed),
+     but the aggregated enqueue never happened. Honest mechanism — direct
+     reminders_sent inserts for ws 1 and 2. */
+  withDb(server.dbPath, db => {
+    const stmt = db.prepare('insert or ignore into reminders_sent (dedup_key, workspace_id, created_at) values (?,?,?)');
+    for (const { ws } of fixtures.slice(0, 2)) stmt.run(`${ws.id}:${userId}:digest:${DUE}`, ws.id, Date.now());
+  });
+
+  const payloadsBefore = smtp.payloads.length;
+  const res = await trigger(at8(DUE));
+  void res;
+  await waitFor(smtp, 1, 'the restart-hole digest email');
+  const sent = smtp.payloads.slice(payloadsBefore).map(decode).filter(x => x.text.includes('K91R-'));
+  assert.equal(sent.length, 1, `exactly ONE email after the partial-claim restart (got ${sent.length})`);
+
+  /* Sections accumulate independent of the claim result — ALL 4 workspaces
+     are in the ctx, including the two whose claims already existed. */
+  const row = outboxRow(`digest:user:${userId}:${DUE}`);
+  assert.ok(row, 'the aggregated outbox row exists after the re-run');
+  const ctx = JSON.parse(row.ctx);
+  assert.equal(ctx.sections.length, 4, 'ALL 4 sections survive the restart (no section loss)');
+  for (const { ws } of fixtures) {
+    assert.ok(ctx.sections.some(s => s.wsSlug === ws.slug), `section for ${ws.slug} present despite pre-existing claim`);
+  }
+
+  /* Claims converge on the byte-compatible ledger: 4 total (2 pre-existing
+     collided, 2 new claimed by the re-run). */
+  for (const { ws } of fixtures) {
+    assert.deepEqual(digestKeys(ws.id), [`${ws.id}:${userId}:digest:${DUE}`], `claim ledger honest for ${ws.slug}`);
+  }
+  assert.equal(sent[0].to, email, 'single recipient');
+});
