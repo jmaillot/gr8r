@@ -159,7 +159,13 @@ Plans:
 4. The full backup/restore flow passes a PG-parity e2e sweep (POSTGRES_TEST_URL, REPEATABLE READ export) and DST-boundary cron tests; all new i18n keys are gated ×5 locales.
 5. DEPLOY.md documents timezone/NTP posture and the distinction between the new backup engine and the legacy `--backup` CLI.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 90-01-PLAN.md — Super Admin console: roster-first seg section + promote-search (SACON-01, SC-1)
+- [ ] 90-02-PLAN.md — Archive download (tiered stream route) + verify-checksum with additive columns (SC-2)
+- [ ] 90-03-PLAN.md — Rotation projection + kept-until bucket position + missingBlob/restoreList polissages (SC-3)
+- [ ] 90-04-PLAN.md — Verification sweep: DST cron boundaries + full-cycle PG e2e + DEPLOY.md (SC-4, SC-5)
 **UI hint**: yes
 
 ## Progress
