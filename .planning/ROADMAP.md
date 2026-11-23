@@ -25,7 +25,7 @@
 - [x] **Phase 86: Export Core ("gr8r backup v1")** — pure backup.js fence, snapshot fence, archive format freeze + manifest + table classification, local destination, manual Run now (completed 2026-11-21)
 - [x] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email (completed 2026-11-22)
 - [x] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify (completed 2026-11-22)
-- [ ] **Phase 89: Restore** — preview-from-manifest, import-as-new (-restored) default, guarded overwrite with pre-restore snapshot, Super-Admin-only instance DR restore + security contract
+- [x] **Phase 89: Restore** — preview-from-manifest, import-as-new (-restored) default, guarded overwrite with pre-restore snapshot, Super-Admin-only instance DR restore + security contract (completed 2026-11-23)
 - [ ] **Phase 90: Polish & Verification Sweep** — Super Admin console role-first listing, verify-checksum action, archive download tiering, PG parity e2e, DST cron tests
 
 ## Phase Details
@@ -126,7 +126,7 @@ Plans:
 4. A Super Admin can restore a full instance from an instance-scope backup — Super-Admin-only, type-to-confirm, global session revocation — and the phase ships an explicit security contract (Phase 30 pattern) with threats_open: 0 covering privilege-escalation-via-restore.
 5. Restore authority is scoped by LIVE rights, never archive contents; instance-scope archive download stays instance-admin-only (the Phase 85 tiering, now enforced).
 
-**Plans**: 6/6 plans executed
+**Plans**: 6/6 plans complete
 Plans:
 **Wave 1**
 - [x] 89-01-PLAN.md — Restore engine foundations: ustar+gzip stream reader (86-writer layout spec), frozen entry allow-list, bounded staged extraction + restore-staging sweep (tracer: golden round-trip vs 86-written archives)
@@ -170,7 +170,7 @@ Plans:
 | 86. Export Core ("gr8r backup v1") | 2/2 | Complete    | 2026-11-21 |
 | 87. Scheduler, Tasks, Run History & Rotation | 4/4 | In Progress|  |
 | 88. S3 Destination | 3/3 | Complete    | 2026-11-22 |
-| 89. Restore | 6/6 | In Progress|  |
+| 89. Restore | 6/6 | Complete    | 2026-11-23 |
 | 90. Polish & Verification Sweep | 0/? | Not started | - |
 
 ## Phase Ordering Rationale

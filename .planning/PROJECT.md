@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-21 — v3.3 milestone started*
+*Last updated: 2026-11-23 — Phase 89 (Restore) complete: 6/6 plans, verification 6/6, UAT 5/5 (live DR on prod NAS: run done + re-login wall felt; security contract threats_open: 0). Fail-closed posture validated in production — two live-data inconsistencies (orphan doc.files[] entry, missing blob) correctly refused by the DR walker (D-89-10/D-89-12).*
 
 ## Current Milestone: v3.3 Instance Operations — Backup, Restore & Roles
 
