@@ -7,7 +7,7 @@
 
 ## Phases
 
-- [ ] **Phase 91: Digest Dedup — One Digest Per User Per Day** - Root-cause and fix the 4× daily digest duplication with per-user outbox coalescing and a pinned regression test
+- [x] **Phase 91: Digest Dedup — One Digest Per User Per Day** - Root-cause and fix the 4× daily digest duplication with per-user outbox coalescing and a pinned regression test
 - [ ] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
 - [ ] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
 - [ ] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
@@ -26,7 +26,7 @@
   4. Per-workspace digest history (reminders_sent claim) remains byte-compatible for non-aggregated consumers — no reshaping of the per-workspace semantic claim.
 **Plans**: 1 plan
 Plans:
-- [ ] 91-PLAN.md — pinned red regression test (4-ws → 1 email), per-user outbox coalescing, digest-aggregated templating, global unsubscribe (0x02)
+- [x] 91-PLAN.md — pinned red regression test (4-ws → 1 email), per-user outbox coalescing, digest-aggregated templating, global unsubscribe (0x02)
 
 ### Phase 92: Server Payload Contracts
 **Goal**: The server serves every read-shape the client phases render — roles aggregation, cron descriptor, resolved names, GFS-marked archive naming with stored bucket, unified runs, and the operator scope listing — with the client still deriving nothing.

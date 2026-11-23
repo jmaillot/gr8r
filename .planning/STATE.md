@@ -23,10 +23,10 @@ progress:
 
 ## Current Position
 
-- **Phase:** 91 (Digest Dedup — One Digest Per User Per Day)
-- **Plan:** not yet planned — run `/gsd-plan-phase 91` (or `/gsd-discuss-phase 91` first; research flags digest coalescing design as a discuss-phase topic)
-- **Status:** Roadmap created, awaiting phase planning
-- **Progress:** ░░░░░ 0/5 phases (v3.4)
+- **Phase:** 91 complete ✓ (verified 2026-11-23, 9/9 must-haves; commits afdd6450..725145e1) — next: Phase 92
+- **Plan:** phase 92 not yet planned — run `/gsd-plan-phase 92`
+- **Status:** Phase 91 done — Phase 92 (Server Payload Contracts) ready
+- **Progress:** █░░░░ 1/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
 
