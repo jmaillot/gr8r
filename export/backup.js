@@ -823,6 +823,21 @@ export async function runExport(scope, meta = {}) {
       }
     }
 
+    /* Phase 90 (D-90-23, 90-03): the honest data-quality stamp — count the
+       manifest entries the D-04 collectors flagged missingBlob and persist
+       it on the run row BEFORE the run is marked terminal, beside the
+       uploaded-flag write above (same single-write-site posture). NEVER in
+       a catch path (D-89-15): a failed run's row carries no stamp — a
+       warning about a completed archive's contents must never decorate a
+       run that produced none. */
+    const missingBlobCount = Array.isArray(manifest.files) ? manifest.files.filter(f => f.missingBlob === true).length : 0;
+    try {
+      await dbRun('update backup_runs set missing_blob_count = ? where id = ?', [missingBlobCount, runId]);
+    } catch {
+      /* best-effort observability — a stamp failure never fails a run whose
+         archive is already published (the uploaded-write posture). */
+    }
+
     completeRun(filename, sha256);
     await emitRunEvent({
       kind: 'complete', runId, ...runMeta, filename, sha256, sizeBytes: size,

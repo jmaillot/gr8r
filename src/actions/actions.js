@@ -4790,6 +4790,9 @@ export async function backupPollTick() {
   backupPollInflight?.abort();
   backupPollInflight = new AbortController();
   const signal = backupPollInflight.signal;
+  /* 90-03 (D-90-22): the previous stage captured BEFORE the payload write —
+     the transition compare happens after the fetch below. */
+  const backupPrevStage = S.ui.backupRun?.stage || null;
   const res = await api.backupRunCurrent({ signal });
   if (my !== backupPollSeq) return null;
   if (res.ok) {
@@ -4832,6 +4835,15 @@ export async function backupPollTick() {
      interval itself, so a re-entering operator keeps live progress. */
   const backupActive = BACKUP_ACTIVE_STAGES.includes(S.ui.backupRun?.stage);
   const restoreActive = !!S.ui.restoreRun?.runId && RESTORE_ACTIVE_STAGES.includes(S.ui.restoreRun.stage);
+  /* 90-03 (D-90-22): stage-transition compare INSIDE the existing tick —
+     when the polled backup run crossed from an active stage into a terminal
+     one THIS tick, the just-finished archive changes what the restore list
+     should show, so invalidate the shared state by nulling it. The page's
+     in-render kick (backup.js — the `!S.ui.restoreList` guard) then
+     refetches EXACTLY ONCE — the tick NEVER invokes the restore refresh
+     action itself and never refetches unconditionally inside the 1s tick
+     (Pitfall 8: invalidate here, refetch at the render boundary). */
+  if (BACKUP_ACTIVE_STAGES.includes(backupPrevStage) && !backupActive) S.ui.restoreList = null;
   if ((backupActive || restoreActive) && !backupPollTimer) backupStartPolling();
   if (!backupActive && !restoreActive) backupStopPolling();
   render();

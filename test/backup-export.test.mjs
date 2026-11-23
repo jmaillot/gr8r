@@ -280,6 +280,48 @@ test('missing blob records a missingBlob flag and the run still succeeds', () =>
   })();
 });
 
+/* ---- Task 3 (90-03, D-90-23): the honest data-quality writer stamp ----
+   The run-completion path counts the manifest's missingBlob entries and
+   stamps backup_runs.missing_blob_count BEFORE the run is marked terminal —
+   never in a catch path (D-89-15 posture). A clean export stamps 0. */
+test('90-03: the writer stamps missing_blob_count — flagged count for a missing-blob run, 0 for a clean run', () => {
+  return (async () => {
+    /* Minimal writer seam (mirrors server.js's writeBackupRunRow start/
+       complete rows) so the stamp's UPDATE has a row to land on — the test
+       harness has no server to install the real one. */
+    let capturedId = null;
+    backup.setBackupRunWriter(async event => {
+      if (event.kind === 'start') {
+        capturedId = event.runId;
+        await db.run(
+          'insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values (?,?,?,?,?,?,?)',
+          [event.runId, null, JSON.stringify({ kind: event.scope?.kind ?? 'project' }), 'manual', 'running', event.startedAt, NOW],
+        );
+      } else if (event.kind === 'complete') {
+        await db.run("update backup_runs set status = 'succeeded', filename = ? where id = ?", [event.filename, event.runId]);
+      }
+    });
+    try {
+      /* Missing-blob run: ws-miss/p-miss (seeded above) references 'gone',
+         absent from FILES_DIR → exactly one flagged manifest entry. */
+      const missRun = await backup.runExport({ kind: 'project', id: 'p-miss' });
+      assert.equal(missRun.ok, true);
+      const missRow = await db.get('select missing_blob_count from backup_runs where id = ?', [capturedId]);
+      assert.equal(missRow?.missing_blob_count, 1, 'the flagged count rides the run row before the terminal write');
+      assert.equal(missRun.ok === true && backup.getRunState().stage, 'done', 'the run completed — the stamp is not a terminal-state substitute');
+
+      /* Clean run: ws1/p1 — both files present, zero flagged entries. */
+      const cleanRun = await backup.runExport({ kind: 'project', id: 'p1' });
+      assert.equal(cleanRun.ok, true);
+      const cleanRow = await db.get('select missing_blob_count from backup_runs where id = ?', [capturedId]);
+      assert.equal(cleanRow?.missing_blob_count, 0, 'a clean export stamps 0 — the client renders no badge on 0');
+    } finally {
+      backup.setBackupRunWriter(null); // restore the seam for the other suites
+      await db.run('delete from backup_runs');
+    }
+  })();
+});
+
 /* ---- Task 2: self-verification fail-closed (D-15/T-86-03) ---- */
 test('manifest self-verification mismatch fails closed on a corrupted staged byte', () => {
   return (async () => {

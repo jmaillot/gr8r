@@ -2245,6 +2245,7 @@
   "page.backup.deletionsHide": "Ausblenden",
   "page.backup.deletionsEmpty": "Noch keine Läufe für diese Aufgabe — nichts zu projizieren.",
   "page.backup.deletionsLoading": "Projizierung…",
+  "page.backup.missingBlobWarn": "{n} fehlende(r) Blob(s) — die Notfall-Wiederherstellung wird dieses Archiv verweigern",
   "page.restore.title": "Wiederherstellung",
   "page.restore.lead": "Daten aus einem gr8r-Backup-Archiv zurückholen. Wiederherstellungen laufen im Hintergrund — der Import als neu ist der Standard.",
   "page.restore.listEmptyTitle": "Noch keine Backups",

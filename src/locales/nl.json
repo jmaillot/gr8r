@@ -2245,6 +2245,7 @@
   "page.backup.deletionsHide": "Verbergen",
   "page.backup.deletionsEmpty": "Nog geen runs voor deze taak — niets te projecteren.",
   "page.backup.deletionsLoading": "Projecteren…",
+  "page.backup.missingBlobWarn": "{n} ontbrekende blob(s) — noodherstel zal dit archief weigeren",
   "page.restore.title": "Herstel",
   "page.restore.lead": "Haal gegevens terug uit een gr8r-back-uparchief. Herstellingen draaien op de achtergrond — importeren als nieuw is de standaard.",
   "page.restore.listEmptyTitle": "Nog geen back-ups",

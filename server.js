@@ -813,6 +813,15 @@ const SCHEMA = `
        ensureColumns — no data migration. */
     checksum_ok          integer,
     checksum_checked_at  text,
+    /* Phase 90 (D-90-23, 90-03): the per-run honest data-quality warning —
+       how many manifest entries the export flagged missingBlob (the D-04
+       record-and-continue collectors). The writer stamps it beside the
+       uploaded-flag write, once before the run is marked terminal, never in
+       a catch path. Additive, def byte-identical on both engines (Pitfall
+       P-B); existing rows default 0 via the boot ensureColumn — no data
+       migration (a comment here must never end a line with a semicolon,
+       runSchema splits statements on ';-newline'). */
+    missing_blob_count   integer not null default 0,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);
@@ -995,6 +1004,9 @@ async function initDb() {
   // default — null = never checked. No data migration.
   await adapterEnsureColumn('backup_runs', 'checksum_ok', 'integer');
   await adapterEnsureColumn('backup_runs', 'checksum_checked_at', 'text');
+  // Phase 90 (D-90-23, 90-03): the per-run missing-blob warning count — def
+  // byte-identical to the SCHEMA declaration (Pitfall P-B), default 0.
+  await adapterEnsureColumn('backup_runs', 'missing_blob_count', 'integer not null default 0');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -9179,7 +9191,7 @@ async function handleApi(req, res, url) {
           : (r.uploaded === 1 ? 's3' : 'missing'),
       }));
     if (taskId === 'manual') {
-      const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
       return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
@@ -9201,7 +9213,7 @@ async function handleApi(req, res, url) {
       [taskId],
     );
     const kept = succeededAsc.length ? gfsKeptPositions(task, succeededAsc) : null;
-    const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
     return json(res, 200, {
       runs: historyChrome(rows).map(r => {
         const kp = kept?.get(r.id);

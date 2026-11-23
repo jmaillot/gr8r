@@ -169,6 +169,7 @@ const runRow = run => {
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
       <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
+      ${Number(run.missing_blob_count) > 0 ? `<span class="badge red">${ic('triangle-alert', 12)}${t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) })}</span>` : ''}
       ${kept ? `<span class="badge"><span class="mono">${t('page.backup.keptPosition', { position: kept.position, keep: kept.keep, scale: t(GFS_SCALE_KEYS[kept.scale]) })}</span></span>` : ''}
       <span class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</span>
       <span class="faint">${esc(when)}</span>

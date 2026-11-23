@@ -472,6 +472,12 @@ export const SQLITE_SCHEMA = `
        boot; existing dbs get the additive ensureColumn twin). */
     checksum_ok          integer,
     checksum_checked_at  text,
+    /* Phase 90 (D-90-23, 90-03): the per-run honest data-quality warning —
+       how many manifest entries the export flagged missingBlob. Mirrors the
+       server.js SCHEMA declaration byte-for-byte (pg tables are created
+       fresh from this variant each boot; existing dbs get the additive
+       ensureColumn twin). */
+    missing_blob_count   integer not null default 0,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);

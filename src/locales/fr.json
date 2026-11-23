@@ -2285,6 +2285,7 @@
   "page.backup.deletionsHide": "Masquer",
   "page.backup.deletionsEmpty": "Aucune exécution pour cette tâche — rien à projeter.",
   "page.backup.deletionsLoading": "Projection…",
+  "page.backup.missingBlobWarn": "{n} blob(s) manquant(s) — la restauration de secours refusera cette archive",
   "page.restore.title": "Restauration",
   "page.restore.lead": "Rétablissez les données depuis une archive de sauvegarde gr8r. Les restaurations s’exécutent en arrière-plan — l’import comme nouveau reste le choix par défaut.",
   "page.restore.listEmptyTitle": "Aucune sauvegarde pour l’instant",

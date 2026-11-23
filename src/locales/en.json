@@ -2245,6 +2245,7 @@
   "page.backup.deletionsHide": "Hide",
   "page.backup.deletionsEmpty": "No runs yet for this task — nothing to project.",
   "page.backup.deletionsLoading": "Projecting…",
+  "page.backup.missingBlobWarn": "{n} missing blob(s) — disaster restore will refuse this archive",
   "page.restore.title": "Restore",
   "page.restore.lead": "Bring data back from a gr8r backup archive. Restores run in the background — import as new is the default.",
   "page.restore.listEmptyTitle": "No backups yet",

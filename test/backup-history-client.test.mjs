@@ -282,3 +282,38 @@ test('90-03: the kept-position badge renders ONLY when the payload carries keptP
   assert.ok(!/keptPosition[^;]*(\+|\*|Math\.|getUTC|getTime|toISOString)/.test(pagesSrc), 'no retention arithmetic on keptPosition anywhere in the page');
   assert.ok(!/retention_daily|retention_weekly|retention_monthly|retention_yearly/.test(runRowBody), 'the run/history renderer never reads retention counts — the client computes nothing');
 });
+
+/* =====================================================================
+   Phase 90 (90-03 task 3): two polish pins.
+   (D-90-23) the ⚠ missing-blob warning badge — payload-count chrome:
+   renders ONLY when the payload's missing_blob_count > 0, red badge +
+   triangle-alert glyph + the missingBlobWarn interpolation verbatim.
+   (D-90-22) the restore-list invalidation lives INSIDE the existing
+   backupPollTick as a stage-transition compare — the tick NULLS the shared
+   S.ui.restoreList when the polled run crosses active→terminal; the page's
+   in-render kick refetches exactly once. The tick never calls the restore
+   refresh action directly and never refetches unconditionally.
+   ===================================================================== */
+test('90-03: the ⚠ missing-blob badge is payload-count chrome (count > 0 only, triangle-alert, red)', () => {
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const runRow ='), pagesSrc.indexOf('const historyCard ='));
+  assert.match(
+    runRowBody,
+    /Number\(run\.missing_blob_count\) > 0 \? `<span class="badge red">\$\{ic\('triangle-alert', 12\)\}\$\{t\('page\.backup\.missingBlobWarn', \{ n: Number\(run\.missing_blob_count\) \}\)\}<\/span>` : ''/,
+    'the badge renders only on count > 0, red badge class + triangle-alert glyph + the missingBlobWarn interpolation verbatim',
+  );
+});
+
+test('90-03: backupPollTick invalidates the shared restore list on the backup active→terminal stage transition (D-90-22)', () => {
+  /* Region-scoped to the tick function body — assertions must not leak to
+     the restore tick half or the polling helpers. */
+  const tick = pagesSrc === '' ? '' : actionsSrc.slice(
+    actionsSrc.indexOf('export async function backupPollTick'),
+    actionsSrc.indexOf('refreshOpenBackupHistories()', actionsSrc.indexOf('export async function backupPollTick')),
+  );
+  assert.match(tick, /const backupPrevStage = S\.ui\.backupRun\?\.stage \|\| null/, 'the previous stage is captured BEFORE the payload write');
+  assert.match(tick, /BACKUP_ACTIVE_STAGES\.includes\(backupPrevStage\) && !backupActive\) S\.ui\.restoreList = null/, 'the active→terminal transition nulls the shared restore-list state');
+  assert.ok(!tick.includes('refreshRestoreBackups'), 'the tick NEVER calls the restore refresh action directly (Pitfall 8 — invalidate here, refetch at the render boundary)');
+  /* The render boundary: the page's in-render kick refetches exactly once
+     when the shared state is null. */
+  assert.match(pagesSrc, /!S\.ui\.restoreList\) refreshRestoreBackups\(\)/, 'the in-render kick refetches the restore list exactly once when null');
+});
