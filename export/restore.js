@@ -70,6 +70,7 @@ import crypto from 'node:crypto';
 import { Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
+import { createInterface } from 'node:readline';
 import { backupsRoot, TABLES, runExport } from './backup.js';
 import { downloadToStaged, s3BackupKey } from './s3.js';
 
@@ -557,6 +558,45 @@ const memberBase = userId => `m_${String(userId).slice(0, 8)}`;
    belt-and-braces paths (lock-release failure, emitter trouble). */
 const logRestoreWarn = msg => console.warn(`[restore] ${msg}`);
 
+/* Staged ndjson read-back (P3 posture parity): the writer paginates at
+   PAGE_SIZE and the reader half of this module is memory-bounded — the
+   restore read-back must not buffer whole tables either. Rows are
+   RETAINED only for the tables the restore units actually consume;
+   every other table (the unbounded-by-design operational append logs:
+   audit_log, security_log, webhook_deliveries, email_outbox, …) is
+   streamed line-by-line and COUNTED only — the import unit's per-table
+   count-vs-manifest verification still sees the true read-back count,
+   but those bytes never accumulate in RAM (an OOM crash here would land
+   AFTER the pre-restore snapshot on the destructive paths). */
+const RESTORE_CONSUMED_TABLES = new Set(['workspaces', 'memberships', 'team_members', 'invites', 'instance_roles']);
+async function readStagedTables(manifest, stagingDir) {
+  const archiveRows = {};
+  const archiveCounts = {};
+  for (const t of arr(manifest.tables)) {
+    const file = path.join(stagingDir, t.path ?? `${t.name}.ndjson`);
+    const rows = RESTORE_CONSUMED_TABLES.has(t.name) ? [] : null;
+    let count = 0;
+    if (fs.existsSync(file)) {
+      const lines = createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+      try {
+        for await (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const row = JSON.parse(line);
+            count += 1;
+            if (rows) rows.push(row);
+          } catch { /* sha-verified bytes always parse; skip defensively anyway */ }
+        }
+      } finally {
+        lines.close(); // release the readline instance + its file handle
+      }
+    }
+    if (rows) archiveRows[t.name] = rows;
+    archiveCounts[t.name] = count;
+  }
+  return { archiveRows, archiveCounts };
+}
+
 /* Writer seam — the restore.js twin of backup.js setBackupRunWriter.
    server.js installs ONE emitter at boot; every engine-level stage event
    lands in restore_runs through it. Best-effort: a broken emitter never
@@ -952,24 +992,9 @@ export async function restoreImportAsNew(opts = {}) {
     return failWith(err);
   }
 
-  /* Read the staged table ndjson back into row objects (local staging
-     only — the archive's bytes were hash-verified by extractArchive). */
-  const archiveRows = {};
-  for (const t of arr(manifest.tables)) {
-    const file = path.join(stagingDir, t.path ?? `${t.name}.ndjson`);
-    const rows = [];
-    if (fs.existsSync(file)) {
-      for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          rows.push(JSON.parse(line));
-        } catch {
-          /* a line that survived the sha check always parses; skip defensively anyway */
-        }
-      }
-    }
-    archiveRows[t.name] = rows;
-  }
+  /* Read the staged table ndjson back (streaming — WR fix: rows retained
+     only for consumed tables; the rest is counted, never buffered). */
+  const { archiveRows, archiveCounts } = await readStagedTables(manifest, stagingDir);
 
   /* Live users are the identity universe (D-33-10): one read, then pure
      validation inside planRemap. */
@@ -1143,7 +1168,7 @@ export async function restoreImportAsNew(opts = {}) {
          5. whole-archive sha256 re-confirmed. */
       assertFragmentTotality(plan.data, plan.map);
       for (const t of arr(manifest.tables)) {
-        const read = (archiveRows[t.name] ?? []).length;
+        const read = archiveCounts[t.name] ?? 0;
         if (read !== t.rows) {
           throw keyed('restoreVerificationFailed', `restore: table ${t.name} staged rows (${read}) disagree with the manifest (${t.rows})`);
         }
@@ -1413,18 +1438,9 @@ export async function restoreOverwriteUnit(opts = {}) {
       return failWith(keyed('restoreEntryRejected', `restore: overwrite refused — the archive carried ${extracted.skipped.length} entry/entries outside its manifest contract (first: "${first.name}", ${first.code})`, { name: first.name }));
     }
 
-    const archiveRows = {};
-    for (const t of arr(manifest.tables)) {
-      const file = path.join(stagingDir, t.path ?? `${t.name}.ndjson`);
-      const rows = [];
-      if (fs.existsSync(file)) {
-        for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-          if (!line.trim()) continue;
-          try { rows.push(JSON.parse(line)); } catch { /* sha-verified bytes always parse; skip defensively anyway */ }
-        }
-      }
-      archiveRows[t.name] = rows;
-    }
+    /* Streaming read-back (WR fix) — rows retained only for consumed
+       tables; the rest is counted, never buffered. */
+    const { archiveRows, archiveCounts } = await readStagedTables(manifest, stagingDir);
 
     const srcRow = (archiveRows.workspaces ?? []).find(r => r?.id === scope.id);
     if (!srcRow) {
@@ -2049,18 +2065,9 @@ export async function restoreInstanceUnit(opts = {}) {
        path-escape families already refused fatally upstream. Count them. */
     const skippedEntries = extracted.skipped.length;
 
-    const archiveRows = {};
-    for (const t of arr(manifest.tables)) {
-      const file = path.join(stagingDir, t.path ?? `${t.name}.ndjson`);
-      const rows = [];
-      if (fs.existsSync(file)) {
-        for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
-          if (!line.trim()) continue;
-          try { rows.push(JSON.parse(line)); } catch { /* sha-verified bytes always parse */ }
-        }
-      }
-      archiveRows[t.name] = rows;
-    }
+    /* Streaming read-back (WR fix) — rows retained only for consumed
+       tables; the rest is counted, never buffered. */
+    const { archiveRows, archiveCounts } = await readStagedTables(manifest, stagingDir);
 
     const archiveWsRows = (archiveRows.workspaces ?? []).filter(r => r && typeof r.id === 'string' && r.id);
     if (archiveWsRows.length === 0) {
