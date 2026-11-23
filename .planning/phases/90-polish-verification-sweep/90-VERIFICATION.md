@@ -41,6 +41,7 @@ covered_files:
   - test/backup-history-client.test.mjs
   - test/gfs-kept-until.test.mjs
   - test/backup-rotation-preview.test.mjs
+  - test/restore-instance.test.mjs
   - test/backup-export.test.mjs
   - test/dst-cron-boundaries.test.mjs
   - test/backup-restore-fullcycle-e2e.test.mjs
@@ -64,7 +65,7 @@ insufficient_spec_items: # backstop markers abstained (held-out UI-state claims 
   - "90-03 backstop B (partial): detail rows .mono.trunc + title VERIFIED (backup.js:308); the 'list scrolls within the panel, never pushes save/cancel off-screen at 360px' half has no scroll container and no test — visual claim"
 coincidental_reliance_items: []
 gaps: [] # no FAILED must-have — status is human_needed on the strength of the items above
-covered_digest: v2:sha256:20e4d8b9494e8e40b7e7757ee82436310d33364ac5633f69593df2c6ae7ca22c
+covered_digest: v2:sha256:0f26fd2e9df0c1b95f0f5e111ee823cf9f279069096412ddee728d9df9461727
 ---
 
 # Phase 90: Polish & Verification Sweep — Verification Report
