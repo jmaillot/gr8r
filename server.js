@@ -847,7 +847,7 @@ const SCHEMA = `
     claimed_by  text,
     claimed_at  integer
   );
-  insert or ignore into restore_lock (id, claimed_by, claimed_at) values (1, null, null);
+  insert into restore_lock (id, claimed_by, claimed_at) values (1, null, null) on conflict do nothing;
 `;
 
 async function initDb() {

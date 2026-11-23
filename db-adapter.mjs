@@ -490,16 +490,19 @@ export const SQLITE_SCHEMA = `
     created_at       integer not null
   );
   create index if not exists restore_runs_created on restore_runs(created_at);
-  /* RESTORE LOCK (Phase 89, 89-02, D-89-31): pg twin — the engine-neutral
-     global restore claim, single-row CAS (claimed_by is null is the
-     compare-and-set); seed insert-or-ignore idempotent so a second boot
-     writes nothing. claimed_at is registered in PG_EPOCH_COLUMNS below. */
+  /* RESTORE LOCK (Phase 89, 89-02, D-89-31): engine-neutral global restore
+     claim, single-row CAS (claimed_by is null is the compare-and-set); seed
+     idempotent via "on conflict do nothing" — valid on BOTH engines (SQLite
+     3.24+ and pg 9.5+), so the pg variant passes it through verbatim. Must
+     NOT use "insert or ignore": pgSchemaVariant is a DDL-only rewrite and
+     sqlite-only DML here fails pg boot with 42601 (UAT-89 gap G-89-2).
+     claimed_at is registered in PG_EPOCH_COLUMNS below. */
   create table if not exists restore_lock (
     id          integer primary key check (id = 1),
     claimed_by  text,
     claimed_at  integer
   );
-  insert or ignore into restore_lock (id, claimed_by, claimed_at) values (1, null, null);
+  insert into restore_lock (id, claimed_by, claimed_at) values (1, null, null) on conflict do nothing;
   /* openDb() adds this after the ensureColumn additive migrations
      (server.js:401) — carried here so the pg variant matches boot. */
   create unique index if not exists workspaces_slug_idx on workspaces(slug);
