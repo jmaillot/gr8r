@@ -481,3 +481,38 @@ test('89-05 DR route E2E: the run lands done; every session INCLUDING the Super-
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('89-05 DR route CR regression: a rotated-away archive (local file gone) refuses keyed restoreArchiveMissing AND releases the restore_lock — no 409 wedge for later restores/backups', async () => {
+  const { dataDir, srv, admin, runId } = await bootWithInstanceArchive();
+  const ro = openReader(srv);
+  try {
+    /* "Rotation" simulation: delete the archive file the backup_runs row
+       points at BEFORE the trigger. The route does not check local file
+       existence before claiming the lock — this lands in the unit's
+       restoreArchiveMissing early-failure path, post-claim. */
+    const row0 = ro.get('select filename from backup_runs where id = ?', runId);
+    assert.ok(row0?.filename, 'the instance backup run row carries a filename');
+    fs.rmSync(path.join(dataDir, 'backups', row0.filename), { force: true });
+
+    const res = await admin.post('/api/backup/restore/instance', { runId, confirmPhrase: 'RESTORE-INSTANCE' });
+    assert.equal(res.status, 200, `trigger accepted (fire-and-forget): ${JSON.stringify(res.data)}`);
+
+    const failed = await pollDb(ro, db => db.get("select * from restore_runs where id = ? and status = 'failed'", res.data.runId) ?? null);
+    assert.ok(failed, 'the run row flips to failed');
+    assert.match(String(failed.error ?? ''), /restoreArchiveMissing/, 'the refusal is keyed restoreArchiveMissing');
+
+    /* THE REGRESSION: the failure funnel must release the claimed lock.
+       Before the fix, claimed_by stayed set — every later restore trigger
+       409'd and every backup run (manual + scheduled, D-89-1) refused
+       skipped_overlap until reboot. */
+    assert.equal(ro.get('select claimed_by from restore_lock where id = 1').claimed_by, null, 'the lock released on the early failure path');
+
+    /* The lock is genuinely free: a follow-up trigger must NOT 409. */
+    const second = await admin.post('/api/backup/restore/instance', { runId, confirmPhrase: 'RESTORE-INSTANCE' });
+    assert.notEqual(second.status, 409, `the follow-up trigger is not wedged by a stale claim: ${JSON.stringify(second.data)}`);
+  } finally {
+    ro.close();
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

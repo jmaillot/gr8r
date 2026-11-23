@@ -1956,11 +1956,20 @@ export async function restoreInstanceUnit(opts = {}) {
   const operatorId = operator?.id ?? (typeof opts.operatorId === 'string' ? opts.operatorId : null);
   const hooks = opts._hooks && typeof opts._hooks === 'object' ? opts._hooks : {};
   const releaseLock = typeof opts.releaseLock === 'function' ? opts.releaseLock : null;
+  /* The lock-release funnel is declared FIRST (mirrors the overwrite unit):
+     the route claims restore_lock before firing this unit, so EVERY exit —
+     including the pre-snapshot keyed refusals and the snapshot-block catch
+     below — must release it, or every later restore trigger 409s and every
+     backup run (manual + scheduled, D-89-1) refuses skipped_overlap until
+     reboot. The inner paths' explicit cleanup()+release() calls stay
+     harmless (release is idempotent — CAS on claimed_by = the caller). */
+  const release = async () => { if (releaseLock) { try { await releaseLock(); } catch { /* best-effort */ } } };
 
   const failWith = async err => {
     const code = typeof err?.code === 'string' ? err.code : null;
     const persisted = code ? `${code}: ${err.message}` : err.message;
     await emitRestoreEvent({ kind: 'fail', runId, error: persisted, finishedAt: Date.now() });
+    await release();
     return { ok: false, runId, code: code ?? 'restoreFailed', error: persisted };
   };
 
@@ -2002,7 +2011,7 @@ export async function restoreInstanceUnit(opts = {}) {
     if (stagingDir) rmStaging(stagingDir);
     if (swapDir) rmStaging(swapDir);
   };
-  const release = async () => { if (releaseLock) { try { await releaseLock(); } catch { /* best-effort */ } } };
+  /* release is declared above failWith — the funnel owns it. */
 
   /* Engine-side scope-kind re-check — AFTER the snapshot (the net is
      unconditional; DR restores instance-scope archives only). */
