@@ -70,7 +70,6 @@ import crypto from 'node:crypto';
 import { Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
-import { createInterface } from 'node:readline';
 import { backupsRoot, TABLES, runExport } from './backup.js';
 import { downloadToStaged, s3BackupKey } from './s3.js';
 
@@ -569,6 +568,27 @@ const logRestoreWarn = msg => console.warn(`[restore] ${msg}`);
    but those bytes never accumulate in RAM (an OOM crash here would land
    AFTER the pre-restore snapshot on the destructive paths). */
 const RESTORE_CONSUMED_TABLES = new Set(['workspaces', 'memberships', 'team_members', 'invites', 'instance_roles']);
+/* Streams staged ndjson line-by-line over an fs read stream (node:readline is
+   NOT on the export builtin allow-list pinned by test/export-prohibition.test.mjs;
+   fs is). Buffer-holds-one-line: memory stays O(longest row), never O(file). */
+async function* ndjsonLines(filePath) {
+  const input = fs.createReadStream(filePath, { encoding: 'utf8' });
+  let buf = '';
+  try {
+    for await (const chunk of input) {
+      buf += chunk;
+      let idx;
+      while ((idx = buf.indexOf('\n')) !== -1) {
+        yield buf.slice(0, idx);
+        buf = buf.slice(idx + 1);
+      }
+    }
+    if (buf) yield buf; // final line without a trailing newline
+  } finally {
+    input.destroy(); // release the file handle
+  }
+}
+
 async function readStagedTables(manifest, stagingDir) {
   const archiveRows = {};
   const archiveCounts = {};
@@ -577,9 +597,8 @@ async function readStagedTables(manifest, stagingDir) {
     const rows = RESTORE_CONSUMED_TABLES.has(t.name) ? [] : null;
     let count = 0;
     if (fs.existsSync(file)) {
-      const lines = createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
       try {
-        for await (const line of lines) {
+        for await (const line of ndjsonLines(file)) {
           if (!line.trim()) continue;
           try {
             const row = JSON.parse(line);
@@ -587,8 +606,9 @@ async function readStagedTables(manifest, stagingDir) {
             if (rows) rows.push(row);
           } catch { /* sha-verified bytes always parse; skip defensively anyway */ }
         }
-      } finally {
-        lines.close(); // release the readline instance + its file handle
+      } catch (err) {
+        if (err?.code === 'ENOENT') { /* vanished between existsSync and open — treat as empty */ }
+        else throw err;
       }
     }
     if (rows) archiveRows[t.name] = rows;
