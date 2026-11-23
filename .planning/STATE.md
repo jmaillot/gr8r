@@ -4,18 +4,18 @@ milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 90
 current_phase_name: Polish & Verification Sweep
-current_plan: 3 (01 complete, 02 next)
+current_plan: 4 (01–02 complete, 03 next)
 status: executing
-stopped_at: Completed 90-02-PLAN.md
-last_updated: "2026-11-23T15:37:12.973Z"
+stopped_at: Completed 90-03-PLAN.md
+last_updated: "2026-11-23T16:29:52.248Z"
 last_activity: 2026-11-23
 last_activity_desc: Phase 89 complete, transitioned to Phase 90
-state_head: 2daeae777a52b3ce87428da303984e780633248a
+state_head: 25f65e1f555f469126d667238ff08466092e2527
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -31,7 +31,7 @@ before features.
 ## Current Position
 
 Phase: 90 — Polish & Verification Sweep
-Current Plan: 3 (01–02 complete, 03 next)
+Current Plan: 4 (01–02 complete, 03 next)
 Total Plans in Phase: 6
 Status: Ready to execute
 Last activity: 2026-11-23 — 90-02 complete (archive download + verify-checksum, 3 tasks, 4 commits)
@@ -104,6 +104,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 89 P06 | 92 min | 3 tasks | 14 files |
 | Phase 90 P01 | ~35 min | 2 tasks | 12 files |
 | Phase 90 P02 | 49min | 3 tasks | 17 files |
+| Phase 90 P90-03 | 49m | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,8 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 90]: 90-01: tree-wide data-a/data-v pins bumped 610→613 / 93→94 (i18n-shell + i18n-toast) — govSuperSeg/govSuperMore markup + operatorPromote's second occurrence; D-12 same-commit pin procedure
 - [Phase 90]: 90-02: history payload projects location/uploaded/checksum but NOT raw scope JSON — the pre-existing D-14 projection contract wins over the plan's additive scope field (zero client consumers; tier enforced server-side)
 - [Phase 90]: 90-02: download route streams via awaited pipeline + rm-finally (house pipe-and-forget rejected — it would race the staged-temp removal); checksum mismatch is a 200 RESULT persisted server-side, never a refusal
+- [Phase 90]: D-90-16 refined delivered as bucket position (kept: {position}/{keep} {scale}), never a date — recomputed per request from CURRENT policy, never stored
+- [Phase 90]: Rotation projection is a strict dry-run: keep-N walk copied from runBackupRotationPass, stops after candidates — no unlink/status write/audit (D-90-12/13)
 
 ### Pending Todos
 
@@ -181,8 +184,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T15:37:12.840Z
-Stopped at: Completed 90-02-PLAN.md
+Last session: 2026-11-23T16:29:52.110Z
+Stopped at: Completed 90-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
