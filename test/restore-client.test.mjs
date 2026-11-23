@@ -173,3 +173,122 @@ test('5-locale key parity for the 89-06 restore surface', () => {
     }
   }
 });
+
+/* =====================================================================
+   Task 2 (D-89-23/27): destructive confirm flows + workspace picker +
+   the CLOSED refusal-toast map.
+   ===================================================================== */
+test('the overwrite flow uses the exact-name confirmModal idiom — payload-named target, OK-gated, danger-styled', () => {
+  assert.match(pagesSrc, /page\.restore\.restoreOverwriteAction/, 'the overwrite CTA copy is wired');
+  assert.match(pagesSrc, /data-a="restoreOverwrite"/, 'the drawer renders the overwrite CTA');
+  /* D-89-21: the CTA renders only when the payload's canBackup flag is true
+     AND the archive is workspace-scope — never recomputed authority. */
+  assert.match(pagesSrc, /flags\?\.canBackup/, 'the overwrite CTA gates on the payload flag');
+  assert.match(pagesSrc, /d\.scope\?\.kind === 'workspace'/, 'the overwrite CTA renders for workspace archives only');
+  assert.match(pagesSrc, /btn-danger" data-a="restoreOverwrite"/, 'the overwrite CTA is destructive-styled, never accent');
+  const h = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('A.restoreOverwrite =') + 1800);
+  assert.ok(h.includes('confirmDlg('), 'the overwrite flow opens the existing confirm idiom');
+  assert.ok(h.includes('typeName: target.name'), 'typeName is the target\'s EXACT current name from the payload (D-89-27)');
+  assert.ok(h.includes('danger: true'), 'the overwrite confirm is danger-styled');
+  assert.ok(h.includes('page.restore.confirmOverwriteTitle') && h.includes('page.restore.confirmOverwriteBody'), 'the consequence copy is keyed (target + pre_restore snapshot + not undoable)');
+  assert.ok(h.includes('page.restore.confirmOverwriteOk'), 'the OK label is keyed');
+  assert.ok(h.includes('api.restoreOverwrite(') && h.includes('confirmName: target.name'), 'OK calls the overwrite route with the confirm value');
+  assert.ok(h.includes('S.ui.restorePending = true') && h.includes('backupStartPolling()'), 'the accepted overwrite hands over to the pending panel + shared poll');
+});
+
+test('the DR flow is Super-Admin-only with the literal RESTORE-INSTANCE phrase rendered untranslated in --mono', () => {
+  assert.match(pagesSrc, /page\.restore\.restoreInstanceAction/, 'the DR CTA copy is wired');
+  assert.match(pagesSrc, /data-a="restoreInstance"/, 'the drawer renders the DR CTA');
+  /* D-89-21: the CTA renders only for the auth payload's Super-Admin flag. */
+  assert.match(pagesSrc, /api\.user\?\.isInstanceAdmin/, 'the DR CTA gates on the auth payload flag');
+  assert.match(pagesSrc, /d\.scope\?\.kind === 'instance'/, 'the DR CTA renders for instance archives only');
+  const dr = actionsSrc.slice(actionsSrc.indexOf('A.restoreInstance ='), actionsSrc.indexOf('A.restoreInstance =') + 1800);
+  assert.match(dr, /<span class="mono">RESTORE-INSTANCE<\/span>/, 'the phrase renders untranslated in --mono inside the confirm body (machine constant, never a locale key)');
+  assert.ok(dr.includes('confirmDlg('), 'the DR flow opens the existing confirm idiom');
+  assert.ok(dr.includes("confirmPhrase: 'RESTORE-INSTANCE'"), 'OK calls the DR route with the literal phrase value (the shared OK gate guarantees the typed value matches)');
+  assert.ok(dr.includes("typeName: 'RESTORE-INSTANCE'"), 'typeName is the literal phrase (server re-validates !==)');
+  assert.ok(dr.includes('danger: true'), 'the DR confirm is danger-styled');
+  assert.ok(dr.includes('page.restore.confirmInstanceTitle') && dr.includes('page.restore.confirmInstanceBody'), 'the consequence copy is keyed (OQ4 operand-loss sentence included)');
+  assert.ok(dr.includes('page.restore.confirmInstanceOk'), 'the OK label is keyed');
+  assert.ok(dr.includes('api.restoreInstance('), 'OK calls the DR route');
+  assert.ok(dr.includes('S.ui.restorePending = true') && dr.includes('backupStartPolling()'), 'the accepted DR hands over to the pending panel + shared poll');
+  /* The machine constant never leaks into any locale catalogue. */
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    for (const v of Object.values(cat)) {
+      if (typeof v === 'string') assert.ok(!v.includes('RESTORE-INSTANCE'), `the machine constant stays out of the ${loc} catalogue`);
+    }
+  }
+});
+
+test('project archives show the workspace picker — live memberships verbatim, zero memberships hides it and mirrors the keyed refusal', () => {
+  assert.match(pagesSrc, /page\.restore\.newNameLead/, 'the server-derived final-name preview is wired (D-89-13 render-verbatim from the poll payload)');
+  assert.match(pagesSrc, /data-a="restoreTargetPick"/, 'the picker is a keyed action');
+  assert.match(pagesSrc, /api\.workspaces/, 'the picker options come from the api client (live memberships payload — never fabricated)');
+  assert.match(pagesSrc, /memberships\.length/, 'zero memberships render NO picker — the empty-dropdown DOM shape is never rendered (D-89-23)');
+  const pick = pagesSrc.slice(pagesSrc.indexOf('restoreTargetPick'), pagesSrc.indexOf('restoreTargetPick') + 900);
+  assert.ok(/esc\(w\.name\)|esc\(String\(w\.name\)\)/.test(pick), 'workspace names render through esc()');
+  const rn = actionsSrc.slice(actionsSrc.indexOf('A.restoreNew ='), actionsSrc.indexOf('A.restoreNew =') + 1200);
+  assert.ok(rn.includes("'restoreNoWorkspace'"), 'a project trigger attempt without a target mirrors the keyed refusal (server still authoritative)');
+});
+
+test('restore refusals ride the CLOSED toast map — every route-level code maps 1:1 onto a ×5 key, no freeform strings', () => {
+  const start = actionsSrc.indexOf('RESTORE_REFUSAL_TOASTS = {');
+  assert.ok(start > 0, 'the closed refusal map is declared');
+  const map = actionsSrc.slice(start, actionsSrc.indexOf('};', start));
+  const codes = [
+    'backupRoleRequired', 'backupManageRequired', 'operatorOnly', 'tooManyAttempts',
+    'restoreInvalidRunId', 'restoreArchiveMissing', 'restoreNoWorkspace', 'restoreScopeUnsupported',
+    'backupRestoreInProgress', 'restoreEntryRejected', 'restoreShaMismatch',
+    'confirmPhraseMismatch', 'restoreTargetMismatch', 'restoreTargetMissing',
+  ];
+  for (const c of codes) assert.match(map, new RegExp(`${c}:\\s*'`), `the map covers ${c}`);
+  assert.match(map, /restoreManifestCorrupt:\s*'page\.restore\.previewCorrupt'/, 'the corrupt class maps to the UI-SPEC contract copy');
+  const mappedKeys = [...map.matchAll(/'(err\.[A-Za-z]+|page\.restore\.[A-Za-z]+)'/g)].map(x => x[1]);
+  assert.ok(mappedKeys.length >= codes.length + 1, 'every entry maps onto a locale key');
+  for (const k of mappedKeys) {
+    for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+      const cat = JSON.parse(read(`src/locales/${loc}.json`));
+      assert.ok(Object.hasOwn(cat, k), `${loc} is missing the mapped key ${k}`);
+    }
+  }
+  /* Every restore action routes refusals through the map — no freeform tErr
+     path for restore codes (unknown codes fall to tErr's raw-message D-03
+     fallback inside restoreToast itself). */
+  for (const a of ['A.restorePreview =', 'A.restoreNew =', 'A.restoreOverwrite =', 'A.restoreInstance =']) {
+    const slice = actionsSrc.slice(actionsSrc.indexOf(a), actionsSrc.indexOf(a) + 1600);
+    assert.match(slice, /restoreToast\(/, `${a} surfaces refusals through the closed map`);
+  }
+});
+
+test('5-locale key parity for the Task-2 destructive surface', () => {
+  const required = [
+    'page.restore.restoreOverwriteAction', 'page.restore.restoreInstanceAction',
+    'page.restore.newNameLead',
+    'page.restore.confirmOverwriteTitle', 'page.restore.confirmOverwriteBody', 'page.restore.confirmOverwriteOk',
+    'page.restore.confirmInstanceTitle', 'page.restore.confirmInstanceBody', 'page.restore.confirmInstanceOk',
+    /* The 89-04 handoff: email alert keys are top-level (backup.alert.* idiom),
+       consumed by the server's buildRestoreAlertMessage via tFor. */
+    'restore.alert.done.subject', 'restore.alert.done.body',
+    'restore.alert.failed.subject', 'restore.alert.failed.body',
+  ];
+  const sets = new Set();
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    sets.add(Object.keys(cat).filter(k => k.startsWith('page.restore.')).sort().join('|'));
+    for (const key of required) assert.ok(Object.hasOwn(cat, key), `${loc} is missing ${key}`);
+  }
+  assert.equal(sets.size, 1, 'page.restore.* key sets stay identical across the five locales (same-commit doctrine)');
+  /* The DR-operand-loss sentence lands verbatim in every locale (OQ4). */
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    assert.ok(String(cat['page.restore.confirmInstanceBody']).length > 120, `${loc} confirmInstanceBody carries the full consequence copy (OQ4)`);
+  }
+  /* The error-codes catalogue closure: the Task-2 refusal keys land too. */
+  for (const code of ['confirmPhraseMismatch', 'restoreTargetMismatch', 'restoreTargetMissing']) {
+    for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+      const cat = JSON.parse(read(`src/locales/${loc}.json`));
+      assert.ok(typeof cat[`err.${code}`] === 'string' && cat[`err.${code}`] !== '', `${loc} err.${code} is non-empty`);
+    }
+  }
+});
