@@ -52,8 +52,8 @@ created: "2026-11-23"
 | 90-xx-xx | TBD | 0+ | SC-3 | — | assignGfsBuckets bucket-position rendering: kept N/M per scale, moves on arrival simulation | unit | `node --test test/gfs-kept-until.test.mjs` | ❌ W0 | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SC-4 | — | full-cycle e2e: task → backup → S3 upload → local delete → list badge s3 → preview → DR restore ON PG; run report + session revocation asserts | e2e (env-gated) | `POSTGRES_TEST_URL=… MINIO_TEST_URL=… node --test test/backup-restore-fullcycle-e2e.test.mjs` | ❌ W0 | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SC-4 | — | DST boundaries EU+US (2026/2027 transitions): 02:30 cron spring-forward = no fire, fall-back = first occurrence; digest 08:00 | unit (pure nextRunAt) | `node --test test/dst-cron-boundaries.test.mjs` | ❌ W0 | ⬜ pending |
-| 90-xx-xx | TBD | 0+ | D-90-22 | — | restoreList invalidation on terminal backup run (poll tick) | source-assertion | `node --test test/backup-client.test.mjs` (extend) | ⚠️ W0 (extend) | ⬜ pending |
-| 90-xx-xx | TBD | 0+ | D-90-23 | — | missingBlob flag surfaces on run + ⚠ history badge; writer emits at creation | route+unit | `node --test test/backup-missing-blob.test.mjs` | ❌ W0 | ⬜ pending |
+| 90-xx-xx | TBD | 0+ | D-90-22 | — | restoreList invalidation on terminal backup run (poll tick) | source-assertion | `node --test test/backup-history-client.test.mjs` (extend) | ⚠️ W0 (extend) | ⬜ pending |
+| 90-xx-xx | TBD | 0+ | D-90-23 | — | missingBlob flag surfaces on run + ⚠ history badge; writer emits at creation | route+unit | `node --test test/backup-export.test.mjs` (extend) | ⚠️ W0 (extend) | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | D-90-20 | — | new i18n keys gated ×5 locales (de/en/es/fr/nl) | catalogue test (existing) | `npm test` (locale-parity included) | ✅ exists | ⬜ pending |
 | 90-xx-xx | TBD | 0+ | SC-5 | — | DEPLOY.md sections exist (timezone/NTP posture, engine vs legacy CLI) | doc assertion | manual review at verify-work | — | ⬜ pending |
 
@@ -65,7 +65,7 @@ created: "2026-11-23"
 - [ ] `test/backup-download.test.mjs` + `test/backup-checksum.test.mjs` — stubs for SC-2
 - [ ] `test/backup-rotation-preview.test.mjs` + `test/gfs-kept-until.test.mjs` — stubs for SC-3
 - [ ] `test/backup-restore-fullcycle-e2e.test.mjs` + `test/dst-cron-boundaries.test.mjs` — stubs for SC-4
-- [ ] Extend existing `test/backup-client.test.mjs` (D-90-22) rather than new file
+- [ ] Extend existing `test/backup-history-client.test.mjs` (D-90-22 pins) and `test/backup-export.test.mjs` (D-90-23 writer-stamp case) rather than new files — per 90-03-PLAN.md assignments
 
 ---
 
