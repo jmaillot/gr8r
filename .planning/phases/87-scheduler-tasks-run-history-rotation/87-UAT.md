@@ -4,6 +4,10 @@ phase: 87-scheduler-tasks-run-history-rotation
 source: [87-VERIFICATION.md]
 started: 2026-11-22T05:05:00Z
 updated: 2026-11-22T09:20:00Z
+audit_acknowledged:
+  milestone: v3.3
+  at: 2026-11-23
+  gap_snapshot: "passed::scenarios=0"
 ---
 
 ## Current Test
@@ -20,6 +24,7 @@ awaiting: user response
 ## Tests
 
 ### 1. Live-clock scheduled fire (real 60s tick, no injected clock)
+
 expected: |
   Create a backup task with cron `* * * * *` on a live dev server.
   Within ~90 seconds: a 'scheduled' history row, archive + .sha256 sidecar in
@@ -28,6 +33,7 @@ result: PASS (2026-11-22) — human-verified on the Docker deployment (archives
   on the separate host mount); scheduled row + archive + sidecar confirmed.
 
 ### 2. End-to-end rotation lifecycle (file + DB + UI)
+
 expected: |
   Configure a task with low retention (e.g. hourly keep 2), trigger 3+ runs
   (Run now or scheduled), then trigger a rotation pass. Expect: oldest archives
@@ -73,5 +79,6 @@ Instance and workspace Run-now verified end-to-end in a real browser
 (Playwright against a live server): archives + sidecars produced.
 
 ## Round-2 retest (2026-11-22) — human verified: all 4 PASS
+
 New-task form renders ✓ | Run-now instance default fires ✓ | friendly
 archive filenames ✓ | Run progress panel spacing ✓. Ready for Test 1.

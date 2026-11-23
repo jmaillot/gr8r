@@ -1,3 +1,5 @@
 
 ## 86-02
+
 - [RESOLVED during wave-2 post-merge] The locale-account "unknown code is rejected with 400" flake is CLOSED. Root cause: locale-registry-fixture.test.mjs materialized src/locales/xx.json in the REAL tree while its vite build ran; a concurrently-booting test server.js snapshotted LOCALE_CODES via readdirSync and accepted 'xx'. The executor's earlier tmpdir-lockfile mutex only serialized cooperating fixture suites, not the other test files. Final fix (ad408886): the fixture now builds from an isolated repo copy (node_modules symlinked, .git/data/dist excluded) — src/locales/ is never touched. Full suite 2100/0 green.
+  status: acknowledged
