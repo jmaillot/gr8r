@@ -161,7 +161,7 @@ function superRosterView() {
   const admins = all.filter(u => u.is_instance_admin);
   const rosterRow = u =>
     srow(
-      `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
+      `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom" title="${esc(u.name || '')}">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom" title="${esc(u.email)}">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
       u.last_login_at ? ago(u.last_login_at) : '—',
       S.ui.operatorRevoke === u.id
         ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
@@ -192,7 +192,7 @@ function superRosterView() {
     const candidates = matches.filter(u => !u.is_instance_admin);
     const candRow = u =>
       srow(
-        `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(u.email || '')}</span></span>`,
+        `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom" title="${esc(u.name || '')}">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom" title="${esc(u.email || '')}">${esc(u.email || '')}</span></span>`,
         u.last_login_at ? ago(u.last_login_at) : '—',
         `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button></span>`,
       );

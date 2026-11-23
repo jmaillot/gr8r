@@ -157,6 +157,22 @@ test('roster payload strings render through esc() (T-79-10 backstop)', () => {
   assert.doesNotMatch(row[0], /\$\{u\.(name|email)\}/, 'a payload string escapes escaping in the roster row');
 });
 
+/* 90-UAT item 3 (owner chose FIX): trunc+title discipline on the console
+   rows — every truncating name/email span carries title="…" (through esc())
+   so the full value is reachable on hover, matching the UI-SPEC long-text
+   backstop used elsewhere. */
+test('console roster + candidate rows carry title= on their truncating cells (90-UAT item 3)', () => {
+  const r = rosterView();
+  const row = r.match(/const rosterRow = u =>[\s\S]*?\n    \);/);
+  assert.ok(row, 'rosterRow not found');
+  assert.match(row[0], /title="\$\{esc\(u\.name \|\| ''\)\}"/, 'the roster name cell lost title=');
+  assert.match(row[0], /title="\$\{esc\(u\.email\)\}"/, 'the roster email cell lost title=');
+  const cand = r.match(/const candRow = u =>[\s\S]*?\n      \);/);
+  assert.ok(cand, 'candRow not found');
+  assert.match(cand[0], /title="\$\{esc\(u\.name \|\| ''\)\}"/, 'the candidate name cell lost title=');
+  assert.match(cand[0], /title="\$\{esc\(u\.email \|\| ''\)\}"/, 'the candidate email cell lost title=');
+});
+
 /* locale parity: all 12 console keys ×5 catalogues (D-90-20/D-12) */
 test('the 12 page.governance.super.* keys resolve in all 5 catalogues (D-90-20)', () => {
   const KEYS = [
