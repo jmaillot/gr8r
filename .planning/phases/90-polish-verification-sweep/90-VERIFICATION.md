@@ -49,7 +49,7 @@ covered_files:
   - test/i18n-shell.test.mjs
   - test/i18n-toast.test.mjs
   - test/client-surfaces.test.mjs
-covered_digest: v4:sha256:576ddb8316d73106041bdef2abecbdf470a58e547baf5ec83b6ba97b0bf44eee # freshness re-pass: recomputed after milestone-close planning-file edits re-staled the v2 a50e3d9a digest; no source/test file changed (git log 0ad87056..b18462be touches .planning only)
+covered_digest: v2:sha256:49a5eecab2c012d75b74545cb9bbc48d19723a0793eba3be7df91ebdd734578f # freshness re-pass: recomputed after milestone-close planning-file edits re-staled the v2 a50e3d9a digest; no source/test file changed (git log 0ad87056..b18462be touches .planning only)
 re_verification:
   previous_status: passed # canonicalized per #4663 after UAT 7/7 (90-UAT.md complete); file content was stale — covered source files drifted after the last verifier run
   re_pass: freshness # 2026-11-23 — milestone-close edits (c0144e3d, b18462be: STATE.md disclosure rows, deferred-items.md acknowledgment restructures) re-staled the digest; source unchanged since 0ad87056, all 42 findings carried forward unchanged

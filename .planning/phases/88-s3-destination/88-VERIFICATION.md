@@ -23,7 +23,7 @@ covered_files:
   - .planning/phases/88-s3-destination/88-01-SUMMARY.md
   - .planning/phases/88-s3-destination/88-02-SUMMARY.md
   - .planning/phases/88-s3-destination/88-03-SUMMARY.md
-covered_digest: "v4:sha256:d24d6216b3ce7055a1733ccdd9cded821491ecce624279171097dce82c703f87"
+covered_digest: "v2:sha256:2e4a6ca7203af1633b5ea37f309d33c8a5bf7bb7e8f4d72c08b03184b5809495"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -79,7 +79,7 @@ Delta checks, all green on the live tree:
 | S3 seam greps (table above) | grep over live server.js / export/backup.js / src/pages/backup.js / docs/DEPLOY.md | every seam present at shifted offsets | ✓ PASS |
 | 5-locale parity (re-checked with exact key list) | node flatten across en/fr/nl/de/es | 10 s3 keys + backup-page s3 keys identical in all 5 (s3Toggle, statusUploadFailed, stageUploading, partsProgress, s3NotConfigured, invalidS3Enabled, s3ClockSkew, s3NoBucket, s3ProbeSuccess/DeleteFailed/Unreachable/BadCreds/HttpWarning, restore.locS3) | ✓ PASS |
 | Core engine git identity | `git log 44a60b37..HEAD -- export/s3.js test/backup-s3-*.test.mjs` | empty — no commits | ✓ CLEAN |
-| Fresh digest | `gsd_run query verification.fingerprint` over the 19 covered files | `v4:sha256:d24d6216b3ce7055a1733ccdd9cded821491ecce624279171097dce82c703f87` | ✓ COMPUTED |
+| Fresh digest | `gsd_run query verification.fingerprint` over the 19 covered files | `v2:sha256:2e4a6ca7203af1633b5ea37f309d33c8a5bf7bb7e8f4d72c08b03184b5809495` | ✓ COMPUTED |
 
 Full `npm test` deliberately NOT run: known pre-existing failures are tracked in deferred-items.md and are out of scope for this freshness pass (per orchestrator contract). The fr french-typography locale keys are a documented pre-existing fr-catalogue failure — the S3 behavior surface is not implicated (the i18n scan itself exits 0 with 0 dead keys, and S3 key parity across all 5 locales is exact).
 

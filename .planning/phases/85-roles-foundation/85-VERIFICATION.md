@@ -26,7 +26,7 @@ covered_files:
   - .planning/phases/85-roles-foundation/85-02-PLAN.md
   - .planning/phases/85-roles-foundation/85-01-SUMMARY.md
   - .planning/phases/85-roles-foundation/85-02-SUMMARY.md
-covered_digest: "v4:sha256:f92f0d606a73382400995bd00013a0fd3240072cc4f369f44837a49768e99ca7"
+covered_digest: "v2:sha256:9e80f9fccc023f4c3266c5477948cd710a46fc78e719d9d2d66339cc4e72aa64"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:

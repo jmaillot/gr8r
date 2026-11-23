@@ -32,7 +32,15 @@ covered_files:
   - test/backup-rotation.test.mjs
   - test/backup-history-client.test.mjs
   - test/email-outbox.test.mjs
-covered_digest: "v4:sha256:30377572fc5ded58647c6f8474ffd1492fc639d5c39fcb4649389ec40d9f7591"
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-01-PLAN.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-01-SUMMARY.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-02-PLAN.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-02-SUMMARY.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-03-PLAN.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-03-SUMMARY.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-04-PLAN.md
+  - .planning/phases/87-scheduler-tasks-run-history-rotation/87-04-SUMMARY.md
+covered_digest: "v2:sha256:498584e59877838295d47e9101c0ea926683ce49b030ae8dae71a48a3df1ed89"
 advisory:
   - finding: "test/backup-scheduler.test.mjs overlap test remains timing-sensitive (polling loop, prior pass line 187 flake); this freshness run it passed deterministically inside the 6-file combined run."
     category: other

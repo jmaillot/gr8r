@@ -29,7 +29,7 @@ covered_files:
   - src/locales/es.json
   - src/locales/fr.json
   - src/locales/nl.json
-covered_digest: "v4:sha256:ef52266a570e075357c6b71199ff2e8c298ac41bcf5db62856153ce46221de7d"
+covered_digest: "v2:sha256:7e2388165b064cfa6830d82e3dedb361015a0e438f4967a6299f29fd8e5ecced"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
