@@ -8,7 +8,7 @@ updated: 2026-11-23T19:20:00Z
 
 ## Current Test
 
-[items 1–6 driven live (Playwright headless, repro server :8110, isolated DATA_DIR); item 3 + 7 await owner decision]
+[items 1–6 PASS (2 after fixes); item 7 owner-pending — owner deferred the §9 read to later]
 
 ## Tests
 
@@ -22,7 +22,7 @@ result: **PASS after fix** (2026-11-23, Playwright headless). **Finding:** the s
 
 ### 3. `.trunc + title` deviation — governance roster/candidate rows
 expected (per backstop): long names/emails truncate with ellipsis AND carry `title="…"` for hover-full-value. Verifier found `title=` ABSENT from governance roster/candidate rows (the esc() half is test-pinned). Decision: accept the deviation or fix.
-result: pending — **owner decision**
+result: **PASS after fix** (2026-11-23). Owner chose FIX. Roster + candidate rows now carry `title="${esc(...)}"` on both the name and email truncating cells (`69b6b95c`); esc() discipline preserved and pinned same-commit (governance-console suite 32/32). Live re-drive: roster spans expose `title="Admin"` / `title="root@uat.local"` ✓.
 
 ### 4. 360px wrap backstop — console search / seg / cap note
 expected: At 360px viewport the governance console seg-control, search input and cap note wrap without horizontal overflow.
