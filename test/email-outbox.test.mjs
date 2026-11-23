@@ -508,7 +508,7 @@ with tarfile.open(out, "w:gz", format=tarfile.USTAR_FORMAT) as t:
   }
 });
 
-test('89-04: the EN fallback copy renders honestly while the restore.alert.* keys are pending (plan 06 handoff)', async () => {
+test('89-06: the restore.alert.* catalogue copy renders — the plan-06 locale handoff is complete', async () => {
   const { buildRestoreAlertMessage } = await import('../mailer.js');
   const config = { from: 'noreply@test.local', fromName: 'Projects Studio' };
   /* MIME bodies travel base64 — decode the text/plain + text/html segments
@@ -519,9 +519,9 @@ test('89-04: the EN fallback copy renders honestly while the restore.alert.* key
       .slice(1)
       .map(section => Buffer.from((section.split(/\r?\n\r?\n/)[1] ?? '').trim(), 'base64').toString('utf8'))
       .join('\n');
-  for (const [outcome, subjectPrefix] of [
-    ['failed', 'Restore failed:'],
-    ['done', 'Restore completed:'],
+  for (const [outcome, subjectPrefix, bodyNeedle] of [
+    ['failed', 'Restore failed:', 'Check the restore history'],
+    ['done', 'Restore completed:', 'restored copy is live'],
   ]) {
     const msg = buildRestoreAlertMessage(config, {
       to: 'op@test.local',
@@ -532,12 +532,15 @@ test('89-04: the EN fallback copy renders honestly while the restore.alert.* key
       locale: null,
     });
     assert.equal(msg.to, 'op@test.local');
-    assert.ok(msg.data.includes(`Subject: ${subjectPrefix} Acme-restored`), `EN subject for ${outcome}`);
+    assert.ok(msg.data.includes(`Subject: ${subjectPrefix} Acme-restored`), `catalogue subject for ${outcome}`);
     assert.ok(msg.data.includes('Auto-Submitted: auto-generated'), 'auto-submitted header discipline');
     assert.ok(msg.data.includes('Content-Type: multipart/alternative'), 'same MIME bones as the backup alert family');
     const body = decoded(msg);
-    assert.ok(body.includes('Check the restore history') || body.includes('restored copy is live'), `EN body fallback for ${outcome}`);
+    assert.ok(body.includes(bodyNeedle), `catalogue body for ${outcome}`);
     if (outcome === 'failed') assert.ok(body.includes('restoreEntryRejected'), 'the error rides the copy');
-    assert.ok(body.includes('backup operator of this instance'), 'EN footer fallback');
+    /* The handoff is complete: the footer renders the generic
+       notif.email.body.footer copy (the backup.alert.* family behavior
+       since 87-04), not the builder's interim EN fallback literal. */
+    assert.ok(body.includes('notification settings'), 'the generic catalogue footer renders');
   }
 });

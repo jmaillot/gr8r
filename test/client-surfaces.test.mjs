@@ -252,8 +252,13 @@ test86('the stage markup renders verbatim from the polled payload — no client-
   const prog = p.match(/const runProgress = \(\) => \{[\s\S]*?\n\};/);
   assert.ok(prog, 'runProgress not found');
   assert.match(prog[0], /esc\(run\.stage\)/, 'the stage is not rendered verbatim through esc()');
-  /* the page never hardcodes stage names — the payload is the only source */
-  assert.doesNotMatch(p, /collecting|archiving|verifying/, 'a hardcoded stage name leaked into the page');
+  /* the page never hardcodes BACKUP stage names — the payload is the only
+     source. 89-06: the RESTORE stage names appear ONLY as RESTORE_STAGE_KEYS
+     lookup keys (the render is t(map[payload.stage]), never a client-side
+     branch on a stage literal) — so the file-level ban keeps its intent by
+     targeting derivation branches, not the keyed map. */
+  assert.doesNotMatch(prog[0], /collecting|archiving|verifying/, 'a hardcoded backup stage name leaked into runProgress');
+  assert.doesNotMatch(p, /===\s*'(?:collecting|archiving|verifying|fetching|validating|restoring)'/, 'a stage-literal branch leaked into the page — stage rendering is a keyed map lookup');
   /* on done the archive filename + sha256 render as text; no download action */
   assert.match(prog[0], /esc\(run\.filename \|\| ''\)/, 'the archive filename is not esc()d');
   assert.match(prog[0], /esc\(run\.sha256 \|\| ''\)/, 'the sha256 is not esc()d');
@@ -264,7 +269,10 @@ test86('the poll loop rides the seq + AbortController anti-stale pattern and sto
   const a = src86('src/actions/actions.js');
   assert.match(a, /let backupPollSeq = 0;/, 'the poll seq is missing');
   assert.match(a, /backupPollInflight\?\.abort\(\);/, 'the in-flight abort is missing');
-  assert.match(a, /api\.backupRunCurrent\(\{ signal: backupPollInflight\.signal \}\)/, 'the poll does not ride the abort signal');
+  /* 89-06: the ONE tick fetches BOTH currents through the hoisted signal —
+     the restore half rides the same AbortController as the backup half. */
+  assert.match(a, /const signal = backupPollInflight\.signal;/, 'the poll does not hoist the abort signal');
+  assert.match(a, /api\.backupRunCurrent\(\{ signal \}\)/, 'the poll does not ride the abort signal');
   assert.match(a, /clearInterval\(backupPollTimer\)/, 'the interval stop is missing');
   /* the trigger goes through api.backupRun (call()) and toasts keyed refusals.
      UAT fix 2026-11-22: the wire scope is normalized first (instance omits the

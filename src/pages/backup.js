@@ -341,7 +341,7 @@ const restoreRow = r => {
   return `<div style="padding:8px 0;border-top:1px solid var(--border)">
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge${r.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[r.location] || 'page.restore.locMissing')}</span>
-      <span class="faint">${esc(r.filename || '')}</span>
+      <span class="faint mono trunc" style="display:inline-block;max-width:280px" title="${esc(r.filename || '')}">${esc(r.filename || '')}</span>
       <span class="faint">${esc(fsize(Number(r.sizeBytes) || 0))}</span>
       <span class="faint">${esc(when)}</span>
       ${r.sha256 ? `<span class="mono faint" title="${esc(r.sha256)}">${esc(String(r.sha256).slice(0, 12))}</span>` : ''}
@@ -458,7 +458,7 @@ const restoreRunRow = run => {
   return `<div style="padding:8px 0;border-top:1px solid var(--border)">
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span>
-      <span class="faint">${esc(String(run.final_name || ''))}</span>
+      <span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>
       <span class="faint">${esc(when)}</span>
     </div>
     ${

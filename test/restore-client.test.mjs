@@ -204,10 +204,14 @@ test('the DR flow is Super-Admin-only with the literal RESTORE-INSTANCE phrase r
   assert.match(pagesSrc, /api\.user\?\.isInstanceAdmin/, 'the DR CTA gates on the auth payload flag');
   assert.match(pagesSrc, /kind === 'instance'/, 'the DR CTA renders for instance archives only');
   const dr = actionsSrc.slice(actionsSrc.indexOf('A.restoreInstance ='), actionsSrc.indexOf('A.restoreInstance =') + 1800);
-  assert.match(dr, /<span class="mono">RESTORE-INSTANCE<\/span>/, 'the phrase renders untranslated in --mono inside the confirm body (machine constant, never a locale key)');
+  /* The machine constant is a NAMED source constant (never a bare text node —
+     the i18n scanner's zero-findings verdict), interpolated into the mono
+     span inside the confirm body. */
+  assert.match(actionsSrc, /const DR_CONFIRM_PHRASE = 'RESTORE-INSTANCE';/, 'the DR phrase is a named machine constant');
+  assert.match(dr, /<span class="mono">\$\{DR_CONFIRM_PHRASE\}<\/span>/, 'the phrase renders untranslated in --mono inside the confirm body');
   assert.ok(dr.includes('confirmDlg('), 'the DR flow opens the existing confirm idiom');
-  assert.ok(dr.includes("confirmPhrase: 'RESTORE-INSTANCE'"), 'OK calls the DR route with the literal phrase value (the shared OK gate guarantees the typed value matches)');
-  assert.ok(dr.includes("typeName: 'RESTORE-INSTANCE'"), 'typeName is the literal phrase (server re-validates !==)');
+  assert.ok(dr.includes('confirmPhrase: DR_CONFIRM_PHRASE'), 'OK calls the DR route with the literal phrase value (the shared OK gate guarantees the typed value matches)');
+  assert.ok(dr.includes('typeName: DR_CONFIRM_PHRASE'), 'typeName is the literal phrase (server re-validates !==)');
   assert.ok(dr.includes('danger: true'), 'the DR confirm is danger-styled');
   assert.ok(dr.includes('page.restore.confirmInstanceTitle') && dr.includes('page.restore.confirmInstanceBody'), 'the consequence copy is keyed (OQ4 operand-loss sentence included)');
   assert.ok(dr.includes('page.restore.confirmInstanceOk'), 'the OK label is keyed');
@@ -291,5 +295,98 @@ test('5-locale key parity for the Task-2 destructive surface', () => {
       const cat = JSON.parse(read(`src/locales/${loc}.json`));
       assert.ok(typeof cat[`err.${code}`] === 'string' && cat[`err.${code}`] !== '', `${loc} err.${code} is non-empty`);
     }
+  }
+});
+
+/* =====================================================================
+   Task 3 — the four held-out UI-state backstop rows (89-UI-SPEC.md
+   190-193) as structural assertions, then the consideration-matrix tally.
+   ===================================================================== */
+test('backstop: long-text render sites truncate with title attrs and the counter name renders fully', () => {
+  /* The list row's filename and the history row's final name truncate via
+     the .trunc idiom (display:inline-block + max-width, backup.js:90) with
+     the FULL value in the title attr. */
+  assert.match(pagesSrc, /<span class="faint mono trunc" style="display:inline-block;max-width:\d+px" title="\$\{esc\(r\.filename \|\| ''\)\}">/, 'the archive filename truncates with the full value in title');
+  assert.match(pagesSrc, /<span class="faint trunc" style="display:inline-block;max-width:\d+px" title="\$\{esc\(String\(run\.final_name \|\| ''\)\)\}">/, 'the history final name truncates with the full value in title');
+  /* The sha256 12-char slice + full-in-title idiom (backup.js:148). */
+  assert.match(pagesSrc, /title="\$\{esc\(r\.sha256\)\}">\$\{esc\(String\(r\.sha256\)\.slice\(0, 12\)\)\}/, 'the checksum renders the 12-char slice with the full digest in title');
+  /* A `-restored-2` counter name renders FULLY in the stage panel — the
+     done/active bodies interpolate the payload name inside a wrapping <p>,
+     never a trunc span (no client name math either, D-89-13). */
+  const progress = pagesSrc.slice(pagesSrc.indexOf('const restoreProgress ='), pagesSrc.indexOf('const restoreRunRow ='));
+  assert.match(progress, /page\.restore\.newNameLead/, 'the active body carries the final-name preview');
+  assert.match(progress, /page\.restore\.runDone/, 'the done body carries the payload name');
+  assert.ok(!progress.includes('trunc'), 'the stage panel never truncates the counter name — it renders fully and wraps');
+  /* The picker's workspace names carry title attrs for the truncated form. */
+  assert.match(pagesSrc, /data-a="restoreTargetPick" data-id="\$\{esc\(w\.id\)\}" title="\$\{esc\(w\.name\)\}"/, 'picker names truncate with the full value in title');
+});
+
+test('backstop: near-miss confirm input keeps OK disabled with no error chrome; the DR operand renders --mono untranslated', () => {
+  const modalsSrc = read('src/overlays/modals.js');
+  /* The shared confirm idiom: OK carries the disabled attribute until the
+     typed value exactly matches typeName — a near-miss never enables it. */
+  assert.match(modalsSrc, /const ok = !needs \|\| \(S\.ui\.confirmText \|\| ''\) === needs;/, 'the OK gate compares the typed value EXACTLY against typeName');
+  assert.match(modalsSrc, /data-a="confirmOk" \$\{ok \? '' : 'disabled'\}/, 'a near-miss typed name keeps OK disabled');
+  /* No error chrome exists in the confirm modal — the disabled state IS the
+     whole feedback surface. */
+  const modal = modalsSrc.slice(modalsSrc.indexOf('function confirmModal'), modalsSrc.indexOf('function confirmModal') + 1600);
+  assert.ok(!modal.includes('err.'), 'the confirm modal shows no keyed error copy on near-miss input — no error chrome');
+  assert.ok(!/class="[^"]*error/.test(modal), 'the confirm modal renders no error element');
+  /* The DR operand renders in --mono, untranslated (named machine constant). */
+  const dr = actionsSrc.slice(actionsSrc.indexOf('A.restoreInstance ='), actionsSrc.indexOf('A.restoreInstance =') + 1800);
+  assert.match(dr, /<span class="mono">\$\{DR_CONFIRM_PHRASE\}<\/span>/, 'the DR phrase renders untranslated in --mono');
+  assert.ok(!dr.includes("t('page.restore.confirmPhrase'") && !dr.includes('err.restoreInstance'), 'the phrase is never routed through a locale key');
+});
+
+test('backstop: consequence copy wraps inside the modal body — no nowrap or overflow-hidden introduced', () => {
+  /* The overwrite/DR bodies pass plain interpolated text into the shared
+     .modal-b region — no nowrap, no overflow-hidden, no fixed height, so
+     the longest locale copy wraps and the modal scrolls via existing
+     behavior. */
+  for (const a of ['A.restoreOverwrite =', 'A.restoreInstance =']) {
+    const slice = actionsSrc.slice(actionsSrc.indexOf(a), actionsSrc.indexOf(a) + 1600);
+    assert.ok(!/white-space:\s*nowrap/.test(slice), `${a} introduces no nowrap`);
+    assert.ok(!/overflow:\s*hidden/.test(slice), `${a} introduces no overflow-hidden`);
+    assert.ok(!/max-height/.test(slice), `${a} introduces no fixed height`);
+  }
+  /* The shared modal renders the body as-is inside .modal-b (plain text
+     nodes — the existing wrap/scroll posture applies untouched). */
+  const modalsSrc = read('src/overlays/modals.js');
+  const modal = modalsSrc.slice(modalsSrc.indexOf('function confirmModal'), modalsSrc.indexOf('function confirmModal') + 1600);
+  assert.match(modal, /\$\{m\.body\}/, 'the confirm body renders verbatim inside .modal-b');
+  assert.ok(!/white-space:\s*nowrap/.test(modal), 'the shared confirm modal introduces no nowrap');
+});
+
+test('consideration-matrix tally — all 18 explicit rows are pinned by at least one cell', () => {
+  /* The tally lives IN this file and reads its own test names, so an edit
+     that drops a pinned cell (or a row's last assertion cell) fails here. */
+  const self = read('test/restore-client.test.mjs');
+  const titles = [...self.matchAll(/^test\('([^']+)'/gm)].map(m => m[1]);
+  const rows = [
+    ['empty | restore list', 'restore empty/loading/history states'],
+    ['empty | restore history', 'restore empty/loading/history states'],
+    ['empty | preview drawer + confirm modal', 'the preview drawer opens ONLY'],
+    ['loading | restore list + history + preview', 'restore empty/loading/history states'],
+    ['error | page load / 403', 'restore empty/loading/history states'],
+    ['error | corrupt manifest', 'restore refusals ride the CLOSED toast map'],
+    ['error | dual-location missing', 'the restore section renders payload fields'],
+    ['error | refusals (lock, membership, throttle, authority)', 'restore refusals ride the CLOSED toast map'],
+    ['pending | trigger accepted, first poll not landed', 'restore stages render verbatim'],
+    ['active-run re-entry | mid-restore page load', 'the poll loop is ONE timer'],
+    ['populated | restore list', 'the restore section renders payload fields'],
+    ['populated | restore history', 'restore empty/loading/history states'],
+    ['populated | preview drawer + confirm modal', 'the preview drawer opens ONLY'],
+    ['partial | skipped-operational-tables report', 'restore empty/loading/history states'],
+    ['partial | missing-blob files in preview', 'the preview drawer opens ONLY'],
+    ['zero-one-many | restore list entries', 'restore empty/loading/history states'],
+    ['zero-one-many | S3-located entries', 'the restore section renders payload fields'],
+    ['zero-one-many | workspace picker options', 'project archives show the workspace picker'],
+  ];
+  assert.equal(rows.length, 18, 'the explicit-row count matches the UI-consideration probe');
+  for (const [row, cell] of rows) {
+    assert.ok(
+      titles.some(tn => tn.startsWith(cell) || tn.includes(cell)),
+      `the "${row}" row must stay pinned by a cell named "${cell}" — dropping it breaks the consideration matrix`,
+    );
   }
 });

@@ -2299,7 +2299,7 @@
   "backup.alert.recovered.subject": "Backup recovered: {task}",
   "backup.alert.recovered.body": "The last backup run of “{task}” succeeded again — the earlier failure has cleared.",
   "restore.alert.done.subject": "Restore completed: {name}",
-  "restore.alert.done.body": "The restore run for \"{name}\" completed — the restored copy is live under its new name.",
+  "restore.alert.done.body": "The restore run for “{name}” completed — the restored copy is live under its new name.",
   "restore.alert.failed.subject": "Restore failed: {name}",
-  "restore.alert.failed.body": "The restore run for \"{name}\" failed. Check the restore history for details."
+  "restore.alert.failed.body": "The restore run for “{name}” failed. Check the restore history for details."
 }

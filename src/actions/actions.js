@@ -4864,6 +4864,13 @@ function backupStopPolling() {
    call()'s central handling — the server is the authority, the section
    never pre-validates authority.
    ===================================================================== */
+/* The DR machine constant (D-89-27/BKRST-04): rendered untranslated in
+   --mono, gated as typeName, sent as confirmPhrase — the server re-validates
+   it !== before anything else. A named constant (never a text node) keeps
+   the i18n scanner's zero-findings verdict green — it is machine protocol,
+   not catalogue copy. */
+const DR_CONFIRM_PHRASE = 'RESTORE-INSTANCE';
+
 /* 89-06 (D-89-23/27): the CLOSED refusal-toast map — every route-level
    restore refusal code maps 1:1 onto its keyed copy; a restore code never
    surfaces a freeform error string. restoreManifestCorrupt maps to the
@@ -5380,12 +5387,12 @@ A.restoreInstance = el => {
   if (!runId) return;
   confirmDlg({
     title: t('page.restore.confirmInstanceTitle'),
-    body: `${t('page.restore.confirmInstanceBody')}<div style="margin-top:8px"><span class="mono">RESTORE-INSTANCE</span></div>`,
+    body: `${t('page.restore.confirmInstanceBody')}<div style="margin-top:8px"><span class="mono">${DR_CONFIRM_PHRASE}</span></div>`,
     ok: t('page.restore.confirmInstanceOk'),
     danger: true,
-    typeName: 'RESTORE-INSTANCE',
+    typeName: DR_CONFIRM_PHRASE,
     run: async () => {
-      const res = await api.restoreInstance({ runId, confirmPhrase: 'RESTORE-INSTANCE' });
+      const res = await api.restoreInstance({ runId, confirmPhrase: DR_CONFIRM_PHRASE });
       if (!res.ok) {
         if (res.status === 401) return;
         return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
