@@ -101,6 +101,40 @@ export function parseCron(expr) {
   };
 }
 
+/* Phase 92 (D-04): the structured cron descriptor — derived from parseCron
+   output ONLY (field Sets + restriction flags; the field-set SIZES decide
+   restriction, so a full-range step pattern behaves like a wildcard).
+   Classification: daily = dom+dow both unrestricted with singleton hour and
+   minute; weekly = dow-only restricted with singleton dow; yearly = dom
+   restricted with singleton dom AND singleton mon; monthly = dom restricted
+   (singleton dom); everything else — steps, ranges, multi-values, any
+   non-singleton set, mon-only restriction, vixie dom+dow OR — is `custom`,
+   carrying ONLY `raw` (an honest fallback; a malformed expression whose
+   parseCron is null lands here too). Always includes `raw`. NO server-side
+   translated strings — the client localizes via t() keys (Phase 94). */
+export function describeCron(expr) {
+  const p = parseCron(expr);
+  if (!p) return { kind: 'custom', raw: String(expr) };
+  const singleton = s => (s.size === 1 ? [...s][0] : null);
+  const hour = singleton(p.hour);
+  const minute = singleton(p.minute);
+  const weekday = singleton(p.dow);
+  const timeSingleton = hour !== null && minute !== null;
+  if (!p.domRestricted && !p.dowRestricted && timeSingleton) {
+    return { kind: 'daily', hour, minute, raw: expr };
+  }
+  if (!p.domRestricted && p.dowRestricted && weekday !== null && timeSingleton) {
+    return { kind: 'weekly', weekday, hour, minute, raw: expr };
+  }
+  if (p.domRestricted && p.dom.size === 1 && p.mon.size === 1 && timeSingleton) {
+    return { kind: 'yearly', hour, minute, raw: expr };
+  }
+  if (p.domRestricted && p.dom.size === 1 && timeSingleton) {
+    return { kind: 'monthly', hour, minute, raw: expr };
+  }
+  return { kind: 'custom', raw: expr };
+}
+
 /* Inline label→zone funnel — byte-equivalent to tz.js resolveTz, duplicated
    instead of imported so this module keeps zero non-stdlib imports (the
    Wave-0 acceptance pins "no imports beyond node builtins"). */

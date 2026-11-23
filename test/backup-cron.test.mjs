@@ -108,3 +108,46 @@ test('a cron matching nothing inside the bounded horizon returns null (leap day 
      ~366-day cap → documented null, never an infinite scan. */
   assert.equal(nextRunAt('0 0 29 2 *', 'Europe/Paris', Date.UTC(2026, 2, 1, 0, 0)), null);
 });
+
+/* =====================================================================
+   Phase 92 (D-04) — describeCron: the structured cron descriptor.
+   Derived from parseCron output ONLY (field sets + restriction flags) —
+   no regex on the raw string, no server-side translated strings (the
+   client localizes via t() keys in Phase 94). `custom` renders the raw
+   expression honestly and carries NO weekday/hour/minute fields.
+   ===================================================================== */
+import { describeCron } from '../export/cron.js';
+
+test('describeCron: daily — unrestricted dom+dow, singleton hour and minute', () => {
+  assert.deepEqual(describeCron('0 3 * * *'), { kind: 'daily', hour: 3, minute: 0, raw: '0 3 * * *' });
+});
+
+test('describeCron: weekly — dow-only restricted with singleton dow', () => {
+  assert.deepEqual(describeCron('0 0 * * 1'), { kind: 'weekly', weekday: 1, hour: 0, minute: 0, raw: '0 0 * * 1' });
+});
+
+test('describeCron: monthly — dom-only restricted (singleton dom), dow unrestricted', () => {
+  assert.deepEqual(describeCron('0 4 1 * *'), { kind: 'monthly', hour: 4, minute: 0, raw: '0 4 1 * *' });
+});
+
+test('describeCron: yearly — singleton dom AND singleton mon', () => {
+  assert.deepEqual(describeCron('0 5 1 1 *'), { kind: 'yearly', hour: 5, minute: 0, raw: '0 5 1 1 *' });
+});
+
+test('describeCron: custom — multi-value minute set, weekday/hour/minute ABSENT', () => {
+  const got = describeCron('*/15 * * * *');
+  assert.equal(got.kind, 'custom');
+  assert.equal(got.raw, '*/15 * * * *');
+  assert.equal('weekday' in got, false);
+  assert.equal('hour' in got, false);
+  assert.equal('minute' in got, false);
+});
+
+test('describeCron: custom — dow range is not singleton', () => {
+  const got = describeCron('0 6 * * 1-5');
+  assert.deepEqual(got, { kind: 'custom', raw: '0 6 * * 1-5' });
+});
+
+test('describeCron: honest custom fallback for a malformed expression', () => {
+  assert.deepEqual(describeCron('not a cron'), { kind: 'custom', raw: 'not a cron' });
+});
