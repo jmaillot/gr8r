@@ -1,7 +1,7 @@
 ---
 phase: 89-restore
-verified: 2026-11-23T08:57:44Z
-status: gaps_found
+verified: 2026-11-23T10:14:00Z
+status: human_needed
 score: 5/6 must-haves verified
 covered_files:
   - .planning/phases/89-restore/89-01-PLAN.md
@@ -29,18 +29,17 @@ covered_files:
   - src/locales/es.json
   - src/locales/fr.json
   - src/locales/nl.json
-covered_digest: "v4:sha256:ba3400e4a916057123d757174d4f854fcad6ce1659eac57e3fdaa0adf7a4cf52"
+covered_digest: "v4:sha256:2adcedc634a4e51642c3acb778acf12ace761d7a737e55eb0708a0aa1d30cee6"
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "The full suite is green except the two pinned pre-existing failures (french-typography D-05, webhook-routes D-06) — the WR-04 review fix broke the phase-86 import-hygiene pin"
-    status: failed
-    reason: "Commit 0b1b0a8a (fix 89 WR-04, streamed ndjson read-back) introduced `import { createInterface } from 'node:readline'` into export/restore.js:73. test/export-prohibition.test.mjs:119 pins a CLOSED allow-list of node builtins for export/ modules and node:readline is not on it. The test fails standalone (reproduced this session). The wave-5 '2303/2326, only D-05+D-06' evidence predates this commit — the regression was introduced after that baseline and is NOT one of the pinned failures."
-    artifacts:
-      - path: "export/restore.js"
-        issue: "Line 73 imports node:readline — outside the closed builtin allow-list enforced by test/export-prohibition.test.mjs"
-    missing:
-      - "Either replace the readline line-reader in restoreInstanceUnit/restoreOverwriteUnit with a streaming reader using allow-listed builtins (stream/string_decoder), or amend the test/export-prohibition.test.mjs allow-list with an explicit, justified node:readline entry — then re-run the pin solo AND the restore battery"
+re_verification:
+  previous_status: gaps_found
+  previous_score: 5/6
+  gaps_closed:
+    - "The WR-04 fix broke the phase-86 import-hygiene pin — CLOSED by commit 4280cb2a: node:readline removed entirely from export/restore.js; readStagedTables now streams via the fs-only async generator ndjsonLines() (createReadStream + single-line buffer split). fs IS on the export builtin allow-list; no new import. Pin re-run solo this pass: 4/4 PASS. Restore battery + pin re-run: 107 tests — 106 pass, 1 env-gated skip, 0 fail. Line-at-a-time memory (O(longest row)), sha-verified parse with defensive skip, and ENOENT tolerance all preserved."
+  gaps_remaining: []
+  regressions: []
+  note: "Full npm test suite NOT re-run this pass (orchestrator-scoped re-check); the fix's blast radius is export/restore.js readStagedTables, covered end-to-end by the 107-test battery (import/overwrite/instance/preview/security/routes/client/s3-e2e + the pin). restore-routes outbox gate passes solo within the battery (known load flake, advisory below)."
 advisory:
   - finding: "test/restore-routes.test.mjs '89-05 overwrite route outbox gate: a done overwrite claims one restore_alert per recipient' fails only under full-suite parallel load (reproduced once in the full run); passes solo (re-run twice this session: battery 102/103, solo 19/19)"
     category: other
@@ -73,9 +72,9 @@ human_verification:
 # Phase 89: Restore Verification Report
 
 **Phase Goal:** Operators can safely bring data back — preview from the manifest, import-as-new by default, guarded overwrite for experts, and privilege-escalation-via-restore closed with a zero-open-threats security contract.
-**Verified:** 2026-11-23T08:57:44Z
-**Status:** gaps_found (1 gap — a regression introduced by the WR-04 review fix AFTER the wave-5 baseline)
-**Re-verification:** No — initial verification
+**Verified:** 2026-11-23T10:14:00Z
+**Status:** human_needed (all code-level gaps closed on re-verification; 5 human verification items outstanding)
+**Re-verification:** Yes — after gap closure (fix commit 4280cb2a)
 
 ## Goal Achievement
 
@@ -131,10 +130,10 @@ human_verification:
 
 | Behavior | Command | Result | Status |
 | -------- | ------- | ------ | ------ |
-| Restore battery (8 files) | `node --test --test-concurrency=2 test/restore-*.test.mjs` | 103 tests, 102 pass, 1 env-gated skip, 0 fail | ✓ PASS |
-| Full suite | `npm test` | 2327 tests, 2302 pass, 4 fail, 21 skipped — failures: D-05 + D-06 (pinned pre-existing) + **export-prohibition import-hygiene (NEW GAP, see below)** + restore-routes outbox gate (load-flake, passes solo ×2) | ✗ FAIL (1 real gap) |
-| restore-routes solo | `node --test test/restore-routes.test.mjs` | 19/19 pass incl. outbox gate | ✓ PASS (confirms load-flake) |
-| export-prohibition solo | `node --test test/export-prohibition.test.mjs` | 3/4 pass; import-hygiene assertion FAILS standalone: `export/restore.js imports 'node:readline'` | ✗ FAIL (the gap) |
+| Restore battery + import-hygiene pin (9 files) — re-run on re-verification | `node --test --test-concurrency=2 test/restore-*.test.mjs test/export-prohibition.test.mjs` | 107 tests, 106 pass, 1 env-gated skip (s3 e2e), 0 fail | ✓ PASS |
+| export-prohibition pin solo — previously-failed gap, re-checked on re-verification | `node --test test/export-prohibition.test.mjs` | 4/4 pass — incl. "every module under export/ imports only node builtins, writer subpaths and src/ relative modules" | ✓ PASS (gap closed) |
+| Full suite | `npm test` | Not re-run this pass — fix blast radius (export/restore.js readStagedTables) fully covered by the battery + pin above; prior-pass full-suite result carried: only D-05 + D-06 (pinned pre-existing) + export-prohibition (now fixed) + restore-routes outbox gate (load flake, passes solo) | ⏭ SKIPPED (scope) |
+| restore-routes solo | `node --test test/restore-routes.test.mjs` | 19/19 pass incl. outbox gate (prior pass ×2; battery pass this pass confirms) | ✓ PASS (confirms load-flake) |
 
 ### Probe Execution
 
@@ -157,7 +156,7 @@ No orphaned requirements — REQUIREMENTS.md maps BKRST-01..04 all to Phase 89 a
 
 | File | Line | Pattern | Severity | Impact |
 | ---- | ---- | ------- | -------- | ------ |
-| export/restore.js | 73 | `node:readline` import outside the closed export/ builtin allow-list (introduced by WR-04 fix 0b1b0a8a) | 🛑 Blocker | Breaks the phase-86 import-hygiene pin (test/export-prohibition.test.mjs fails standalone) |
+| export/restore.js | 571-590 | ~~`node:readline` import outside the closed export/ builtin allow-list~~ — RESOLVED on re-verification by commit 4280cb2a: import removed, replaced by fs-only `ndjsonLines()` async generator (fs is allow-listed; no new import); pin 4/4 solo | 🛑→✓ RESOLVED | Pin green; semantics preserved (line-at-a-time, defensive skip, ENOENT tolerance) |
 | export/restore.js | 272/405/407/1862/1866/2214 | `return null` / `catch(() => {})` sentinels | ℹ️ Info | Legitimate streaming sentinels with inline rationale comments; exercised by passing tests |
 
 No TBD/FIXME/XXX/PLACEHOLDER debt markers in any phase-touched file.
@@ -173,11 +172,11 @@ See the five items in the frontmatter `human_verification` list:
 
 ### Gaps Summary
 
-**One gap, and it is a regression introduced after the wave-5 baseline:** the WR-04 review fix (commit 0b1b0a8a, 2026-11-23 09:44) made `export/restore.js` import `node:readline` for its streamed ndjson read-back — a builtin that is not on the closed allow-list pinned by `test/export-prohibition.test.mjs`. The pin fails standalone (reproduced). The orchestrator's clean full-suite evidence (2303/2326) predates this commit, so the claim "only failures = D-05 + D-06" no longer holds. The fix is mechanical (swap to a stream/string_decoder line reader, or add a justified `node:readline` entry to the allow-list) and must be followed by re-running the pin solo plus the restore battery.
+**No open gaps.** The single gap from the initial verification — commit 0b1b0a8a (WR-04 fix) breaking the phase-86 import-hygiene pin by importing `node:readline` into `export/restore.js` — is **closed by commit 4280cb2a**: the readline import was removed entirely and `readStagedTables` now streams staged ndjson through the fs-only async generator `ndjsonLines()` (`createReadStream` + single-line buffer split; `fs` is on the allow-list; no new imports). Re-checked on re-verification: the pin passes 4/4 solo, and the restore battery + pin pass 107 tests (106 pass, 1 env-gated skip, 0 fail). The must-have the fix serves — restore units consuming staged tables without whole-file buffering — still holds behaviorally: the import/overwrite/instance units run through real staged archives via `readStagedTables` with line-at-a-time memory (O(longest row)), sha-verified parse with defensive skip, and ENOENT tolerance preserved.
 
-Everything else the goal promises exists, is wired, and is behaviorally test-verified at the code level: honest dual-location listing, streaming manifest preview with sha256 re-verification, import-as-new with totality-gated remap and restorer-only membership, snapshot-first guarded overwrite, Super-Admin DR with post-commit session revocation, live-rights authority scoping, and the ×5-locale client surface. The zero-open-threats security contract remains to be formally rendered by `/gsd-secure-phase 89`, exactly as the Phase-85 precedent prescribes — it is routed to human verification, not counted as a code failure.
+**Status is `human_needed`, not `passed`:** the five human verification items remain — the `89-SECURITY.md` zero-open-threats contract (routed to post-verify `/gsd-secure-phase 89` per the Phase-85 precedent), the PG-parity pins and MinIO S3 e2e (env-gated), the DR two-client re-login wall, and the 5-locale modal overflow check. Everything else the goal promises exists, is wired, and is behaviorally test-verified at the code level: honest dual-location listing, streaming manifest preview with sha256 re-verification, import-as-new with totality-gated remap and restorer-only membership, snapshot-first guarded overwrite, Super-Admin DR with post-commit session revocation, live-rights authority scoping, and the ×5-locale client surface.
 
 ---
 
-_Verified: 2026-11-23T08:57:44Z_
+_Verified: 2026-11-23T10:14:00Z (initial pass) · re-verified 2026-11-23T10:14:00Z after gap closure (commit 4280cb2a)_
 _Verifier: the agent (gsd-verifier)_
