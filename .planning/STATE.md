@@ -5,17 +5,17 @@ milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 89
 current_phase_name: restore
 current_plan: 6
-status: executing
-stopped_at: Completed 89-05-PLAN.md
-last_updated: "2026-11-23T06:10:31.624Z"
+status: verifying
+stopped_at: Completed 89-06-PLAN.md
+last_updated: "2026-11-23T08:03:32.424Z"
 last_activity: 2026-11-22
 last_activity_desc: Phase 89 execution started
-state_head: 84d248efb1fbfb111b6af7c97aeaac45bf1eaa6a
+state_head: 51a59f24c553f07e0c74eb7cffbe94e6fb1b34e0
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 17
-  completed_plans: 16
+  completed_plans: 17
 ---
 
 # Project State
@@ -33,7 +33,7 @@ before features.
 Phase: 89 (restore) — EXECUTING
 Current Plan: 6
 Total Plans in Phase: 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-22 — 89-04 complete (import-as-new engine + trigger routes + outcome emails)
 
 ## Milestone v3.3 Phase Map
@@ -101,6 +101,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 89 P03 | 26m | 3 tasks | 6 files |
 | Phase 89 P04 | 77m | 3 tasks | 6 files |
 | Phase 89 P05 | 41min | 3 tasks | 9 files |
+| Phase 89 P06 | 92 min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,8 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 89]: D-89-28 enforced: handleRestoreRunOutcome skips trigger='instance' runs — the post-commit global session revocation is DR's notification — The skip existed only as a comment; the DR no-claims test passed solely because its fixture left MAILER disabled
 - [Phase 89]: Overwrite route validates confirmName against the target's exact CURRENT live name (D-89-27) BEFORE archive resolution; CAP.BACKUP_MANAGE gate keyed backupManageRequired (no new refusal code) — A refused phrase is a near-zero-read trigger with zero state change; the client confirmModal is chrome, never the boundary
 - [Phase 89]: 89-05 TDD evidence committed (tdd/red-89-05-task1..3.json); Task 3 RED re-captured after the prior executor stalled on crashing fixtures (RED_EVIDENCE_OK) — Never commit RED evidence whose failures do not match the actual failing cells — the prior fixture crashed (Unknown named parameter '0') instead of failing intentionally
+- [Phase 89]: 89-06: restore client is render-only payload chrome — overwrite gates on canBackup payload flag, DR on isInstanceAdmin auth flag, closed RESTORE_REFUSAL_TOASTS map 1:1 onto x5 keys, ONE shared poll timer for both surfaces
+- [Phase 89]: 89-06: DR phrase is a named machine constant (DR_CONFIRM_PHRASE, scanner-clean); preview drawer renders from the page layer with shared drawer classes — drawer.js untouched
 
 ### Pending Todos
 
@@ -171,8 +174,8 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T06:10:19.511Z
-Stopped at: Completed 89-05-PLAN.md
+Last session: 2026-11-23T08:03:32.306Z
+Stopped at: Completed 89-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

@@ -126,7 +126,7 @@ Plans:
 4. A Super Admin can restore a full instance from an instance-scope backup — Super-Admin-only, type-to-confirm, global session revocation — and the phase ships an explicit security contract (Phase 30 pattern) with threats_open: 0 covering privilege-escalation-via-restore.
 5. Restore authority is scoped by LIVE rights, never archive contents; instance-scope archive download stays instance-admin-only (the Phase 85 tiering, now enforced).
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 Plans:
 **Wave 1**
 - [x] 89-01-PLAN.md — Restore engine foundations: ustar+gzip stream reader (86-writer layout spec), frozen entry allow-list, bounded staged extraction + restore-staging sweep (tracer: golden round-trip vs 86-written archives)
@@ -142,7 +142,7 @@ Plans:
 - [x] 89-05-PLAN.md — BKRST-03/04 destructive paths: guarded overwrite (server-revalidated confirm, pre_restore snapshot, staged blob swap, repair net) + Super-Admin DR (instance_roles rebuild exception, post-commit global session revocation)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 89-06-PLAN.md — Client restore surface + ×5 locale copy: list/preview drawer, confirm flows (D-89-27), poll/stage panel, history + skip report, all 22 UI-SPEC consideration rows pinned
+- [x] 89-06-PLAN.md — Client restore surface + ×5 locale copy: list/preview drawer, confirm flows (D-89-27), poll/stage panel, history + skip report, all 22 UI-SPEC consideration rows pinned
 
 **Gaps for discuss-phase**: overwrite-restore concurrency model (maintenance banner / read-only window / applies-next-restart); row-shaped tables (saved_views, webhooks) vs doc-splice-only for project-scope restore; MCP mirror for backup endpoints in/out of v1.
 **UI hint**: yes
@@ -170,7 +170,7 @@ Plans:
 | 86. Export Core ("gr8r backup v1") | 2/2 | Complete    | 2026-11-21 |
 | 87. Scheduler, Tasks, Run History & Rotation | 4/4 | In Progress|  |
 | 88. S3 Destination | 3/3 | Complete    | 2026-11-22 |
-| 89. Restore | 5/6 | In Progress|  |
+| 89. Restore | 6/6 | In Progress|  |
 | 90. Polish & Verification Sweep | 0/? | Not started | - |
 
 ## Phase Ordering Rationale
