@@ -188,6 +188,13 @@ Items acknowledged and deferred at milestone close, most recent first:
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
 | pre-existing failure | webhook-events.test.mjs "due task with subscribed hook yields exactly ONE due.reminder delivery" fails (0≠1 claim row) — reproduced on the pre-78 tree (5b4aae51 server.js); unrelated to the creation gate | open | 78-01 | v3.1 |
+| acknowledged debt | v3.3 close: 86-02 locale-flake resolution note (closed, record only) | acknowledged | v3.3 close | v3.3 |
+| acknowledged debt | v3.3 close: 87-04/87-03 out-of-scope test-failure notes (backup-rotation suite, webhook-events family) | acknowledged | v3.3 close | v3.3 |
+| acknowledged debt | v3.3 close: 89-03 WAL-visibility harness quirk + housekeeping (debris dir since removed) | acknowledged | v3.3 close | v3.3 |
+| acknowledged debt | v3.3 close: 89-04 out-of-scope discoveries (doc-PUT tx pitfall, write-suction, stale snapshot, webhook-routes date-drift, backup-scheduler load-flake, tFor latent fallback, plan-06 locale handoff) | acknowledged | v3.3 close | v3.3 |
+| acknowledged debt | v3.3 close: 89-05 out-of-scope discoveries (error-codes/french-typography pre-existing, time-window webhook-events flake, restore-overwrite fixture fixes for the record) | acknowledged | v3.3 close | v3.3 |
+| acknowledged debt | v3.3 close: 89-01 debris dir (removed at cleanup), webhook-events, logo junk-name quirk (export/backup.js:666) | acknowledged | v3.3 close | v3.3 |
+| acknowledged debt | v3.3 close: 90-01 pre-existing failures french-typography + webhook-routes (byte-identical at phase-start tree) | acknowledged | v3.3 close | v3.3 |
 
 ## Session Continuity
 

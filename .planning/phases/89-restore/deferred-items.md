@@ -2,15 +2,28 @@
 
 Out-of-scope discoveries logged during execution (never auto-fixed per the scope-boundary rule).
 
-| # | Found during | Item | Why deferred |
-|---|--------------|------|--------------|
-| 1 | 89-01 execution | Untracked directory `"[object Promise]/"` at the repo root (files/ + logos/ subdirs, dated 2026-11-21 — predates this session). Looks like debris from an earlier string-interpolation bug. | Not created by this plan; removal is a user cleanup decision (never `git clean` from an agent). |
-| 2 | 89-01 execution | `test/webhook-events.test.mjs` — "due task with subscribed hook yields exactly ONE due.reminder delivery" fails. Known since 78-01. | Pre-existing, unrelated to backups/restore. |
-| 3 | 89-01 execution | `export/backup.js:666` — `String(doc.logo)` on an object-shaped `doc.logo` produces `"[object Promise]"`-style junk names for logo collection. Possibly the origin of item 1. | Pre-existing writer quirk; touching it would change 86 behavior mid-restore-phase. Flag for a follow-up fix. |
+## 89-01 execution — item 1: debris directory
+
+- Untracked directory `"[object Promise]/"` at the repo root (files/ + logos/ subdirs, dated 2026-11-21 — predates this session). Looked like debris from an earlier string-interpolation bug (origin: `export/backup.js:666` `String(doc.logo)` on object-shaped `doc.logo`, item 3 below). Not created by any plan; removal was a user cleanup decision.
+  status: acknowledged
+
+<!-- resolved 2026-11-23: the debris dir was removed during the v3.3 milestone cleanup. -->
+
+## 89-01 execution — item 2: webhook-events failure
+
+- `test/webhook-events.test.mjs` — "due task with subscribed hook yields exactly ONE due.reminder delivery" fails. Known since 78-01. Pre-existing, unrelated to backups/restore.
+  status: acknowledged
+
+## 89-01 execution — item 3: logo junk-name quirk
+
+- `export/backup.js:666` — `String(doc.logo)` on an object-shaped `doc.logo` produces `"[object Promise]"`-style junk names for logo collection. Possibly the origin of item 1. Pre-existing writer quirk; touching it would change 86 behavior mid-restore-phase. Flag for a follow-up fix.
+  status: acknowledged
 
 ## 89-03 (2026-11-22)
+
 - [harness] WAL-visibility race: raw DatabaseSync access AFTER a run's `wal_checkpoint(truncate)` + `vacuum into` (export/backup.js:358-361) can lose visibility of server-connection writes (reproduced: post-run signup 201 but row invisible to a fresh handle; wal unlinked mid-test). Not a product bug — harness pattern is "keep withDb access pre-run" (comment in test/restore-preview.test.mjs). Candidate for a future test-harness plan.
 - [housekeeping] Untracked `"[object Promise]/"` debris dir in repo root predates 89-03 — origin unknown, untouched.
+  status: acknowledged
 
 ## 89-04 out-of-scope discoveries (2026-11-22)
 
@@ -22,6 +35,7 @@ Out-of-scope discoveries logged during execution (never auto-fixed per the scope
 - **[pre-existing, load-flaky] test/backup-scheduler.test.mjs "skipped_overlap":** passes standalone (13/13); fails only under full `npm test` parallel load (timing). Same for `error-codes`/`french-typography` documented pre-existing failures.
 - **[latent, same family] buildBackupAlertMessage try/catch i18n fallback:** tFor returns the KEY for a missing catalogue entry (never throws), so a try/catch EN fallback never fires. Harmless today (backup.alert.* keys landed in 87-04) — buildRestoreAlertMessage (89-04) uses the key-shaped-return detector instead; refactoring the backup builder is out of scope.
 - **[handoff] plan 06 locale keys:** page.restore email keys (restore.alert.done.subject/body, restore.alert.failed.subject/body — 4 keys + greeting reuse) land ×5 locales there; EN literals render meanwhile (verified by test).
+  status: acknowledged
 
 ## 89-05 out-of-scope discoveries (2026-11-23)
 
@@ -31,3 +45,4 @@ Out-of-scope discoveries logged during execution (never auto-fixed per the scope
 - **[housekeeping] stray `node server.js` process** leaked by the stalled prior executor's test runs (running since 2026-11-22 ~23:29, cwd = repo). Random port, harmless to tests; a user kill is a cleanup decision.
 - **[pre-existing, time-window] test/webhook-events.test.mjs "no double-fire" (orchestrator attribution, 2026-11-23 ~06:25Z):** the due.reminder funnel opens at 08:00 in the member's tz (fixture = UTC → 08:00Z) and the test pins the task due to the current UTC date, so the test cannot pass between 00:00Z and 08:00Z. Evidence: fails solo at 05:36Z and 06:00Z (actual 0 claims, expected 1); passed in the wave-3 post-merge evening run (21:00Z+, passing window); test file unchanged since before wave 3 and runReminderPass untouched by 89-04/89-05 diffs (their claim/dedup deltas are restore-alert email_outbox rows only). First VISIBLE now because this phase's overnight runs are the first to land in the dead window. Same environment-sensitive family as the backup-scheduler load-flake. Self-heals after 08:00Z (09:00 CET). Do not chase in wave-5 verification; count as pinned while the run clock is inside the window.
 - **[fixed this session, for the record] test/restore-overwrite.test.mjs fixture bugs** the stalled session left uncommitted (node:sqlite array-params ×3, closeWorld wrong temp path, outbox MAIL_FROM missing) — fixed in ad867909/84d248ef, ledgered here only as the record of why Task 3's RED evidence was re-captured.
+  status: acknowledged
