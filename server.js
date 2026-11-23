@@ -9136,37 +9136,31 @@ async function handleApi(req, res, url) {
     const taskId = url.searchParams.get('taskId');
     if (!taskId) return fail(res, 400, 'taskNotFound', 'That backup task does not exist');
     /* Phase 90 (SC-2, 90-02 task 1): history rows gain the render-only chrome
-       inputs the location badge + download CTA gate on — scope parsed
-       defensively (legacy/corrupt JSON renders null, never throws into the
-       list) and location derived SERVER-side from run-row truth + local fs
-       membership ONLY (D-89-14: never live S3 probing), the exact derivation
-       the restore list uses below. The client renders these verbatim and
-       never derives location or authority itself (D-23 doctrine). */
+       inputs the location badge + download/verify CTAs gate on — location
+       derived SERVER-side from run-row truth + local fs membership ONLY
+       (D-89-14: never live S3 probing), the exact derivation the restore
+       list uses below. The client renders these verbatim and never derives
+       location or authority itself (D-23 doctrine). The raw scope JSON stays
+       INTERNAL (D-14 projection contract, pinned in backup-scheduler): the
+       instance tier is enforced server-side (download route), so the
+       payload carries only the derived location flag — uploaded rides along
+       as the honest tier input, checksum fields arrive with task 3. */
     const historyChrome = rows =>
-      rows.map(r => {
-        let scope = null;
-        try {
-          scope = JSON.parse(r.scope);
-        } catch {
-          scope = null;
-        }
-        return {
-          ...r,
-          scope,
-          location: r.filename
-            ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
-            : (r.uploaded === 1 ? 's3' : 'missing'),
-        };
-      });
+      rows.map(r => ({
+        ...r,
+        location: r.filename
+          ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
+          : (r.uploaded === 1 ? 's3' : 'missing'),
+      }));
     if (taskId === 'manual') {
-      const rows = await db.all('select id, task_id, scope, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
       return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     if (!(await db.get('select id from backup_tasks where id = ?', [taskId]))) {
       return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     }
-    const rows = await db.all('select id, task_id, scope, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
     return json(res, 200, { runs: historyChrome(rows) });
   }
 

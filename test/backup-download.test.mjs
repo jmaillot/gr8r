@@ -140,7 +140,7 @@ test('operator + workspace run → 200 stream with the stored filename, byte-ide
     const row = history.data.runs.find(r => r.id === runId);
     assert.ok(row, 'the run is in the manual history');
     assert.equal(row.location, 'local', 'the server derived location from run-row truth + fs membership (D-89-14)');
-    assert.deepEqual(row.scope, { kind: 'workspace', id: 'w1' }, 'scope rides the payload parsed');
+    assert.ok(!('scope' in row), 'the raw scope JSON stays unprojected (D-14 projection contract — the instance tier is enforced server-side)');
   } finally {
     await server.stop();
     fs.rmSync(dataDir, { recursive: true, force: true });

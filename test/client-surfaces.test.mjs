@@ -262,7 +262,13 @@ test86('the stage markup renders verbatim from the polled payload — no client-
   /* on done the archive filename + sha256 render as text; no download action */
   assert.match(prog[0], /esc\(run\.filename \|\| ''\)/, 'the archive filename is not esc()d');
   assert.match(prog[0], /esc\(run\.sha256 \|\| ''\)/, 'the sha256 is not esc()d');
-  assert.doesNotMatch(p, /data-a="backupDownload"/, 'a download action leaked into the page (Phase 90 prohibition)');
+  /* 90-02: the Phase-90 download tier now OWNS the download action — the v1
+     prohibition flips to the ownership pin (D-12 same-commit discipline):
+     the CTA exists on the history rows (payload-gated), while the stage
+     card's done detail still renders filename + sha256 as text with NO
+     download CTA. */
+  assert.match(p, /data-a="backupDownload"/, 'the 90-02 download CTA is present — Phase 90 owns the download tier');
+  assert.doesNotMatch(prog[0], /data-a="backupDownload"/, 'runProgress renders no download CTA — the history rows own the action');
 });
 
 test86('the poll loop rides the seq + AbortController anti-stale pattern and stops on done|failed (D-07)', () => {
