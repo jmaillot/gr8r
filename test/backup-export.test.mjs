@@ -500,3 +500,86 @@ test('88-03: no S3 destination installed — run completes without any upload at
   assert.equal(run.ok, true);
   assert.equal(backup.getRunState().stage, 'done');
 });
+
+/* =====================================================================
+   Phase 92 (BKNAME-01, D-01/D-03) — archive naming: the five-segment
+   server-resolved shape `<instance-name>-<scope>-<slug>-<gfs>-<date>`,
+   manual runs with NO GFS marker, the -2 collision suffix BEFORE
+   .tar.gz, and the sha256 sidecar written from the FINAL uniquified
+   name (archives never renamed).
+   ===================================================================== */
+const todayUtc = () => {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+};
+
+test('92 naming: GR8R_INSTANCE_NAME respected; scheduled run carries the GFS marker; manual run omits it (D-01/D-03)', () => {
+  return (async () => {
+    process.env.GR8R_INSTANCE_NAME = 'PjStudio!';
+    backup.setBackupGfsBucketProvider(async () => 'daily');
+    const created = [];
+    try {
+      const scheduled = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { taskId: 't-naming', trigger: 'scheduled' });
+      assert.equal(scheduled.ok, true, scheduled.error);
+      created.push(scheduled.filename);
+      /* scope ws1 name "WS ws1" → slug ws-ws1; ws token; marker; UTC date */
+      assert.equal(scheduled.filename, `pjstudio-ws-ws-ws1-daily-${todayUtc()}.tar.gz`, 'five-segment scheduled shape');
+
+      const manual = await backup.runExport({ kind: 'instance' });
+      assert.equal(manual.ok, true, manual.error);
+      created.push(manual.filename);
+      assert.equal(manual.filename, `pjstudio-instance-${todayUtc()}.tar.gz`, 'manual run: NO GFS marker');
+    } finally {
+      delete process.env.GR8R_INSTANCE_NAME;
+      backup.setBackupGfsBucketProvider(null);
+      for (const f of created) {
+        fs.rmSync(path.join(BACKUPS_DIR, f), { force: true });
+        fs.rmSync(path.join(BACKUPS_DIR, `${f}.sha256`), { force: true });
+      }
+    }
+  })();
+});
+
+test('92 naming: hostname fallback slugified when GR8R_INSTANCE_NAME unset (D-03)', () => {
+  return (async () => {
+    delete process.env.GR8R_INSTANCE_NAME;
+    try {
+      assert.match(backup.instanceSlug(), /^[a-z0-9-]+$/, 'hostname slugified');
+      assert.equal(backup.instanceSlug(), backup.instanceSlug().trim());
+    } finally {
+      /* nothing to clean */
+    }
+  })();
+});
+
+test('92 naming: collision suffix -2 lands BEFORE .tar.gz and the sidecar carries the FINAL name (D-01)', () => {
+  return (async () => {
+    process.env.GR8R_INSTANCE_NAME = 'collide';
+    try {
+      const date = todayUtc();
+      /* Seed the exact target the run will pick: collide-instance-<today>.tar.gz */
+      const preExisting = path.join(BACKUPS_DIR, `collide-instance-${date}.tar.gz`);
+      fs.writeFileSync(preExisting, 'earlier archive');
+      const run = await backup.runExport({ kind: 'instance' });
+      assert.equal(run.ok, true, run.error);
+      assert.equal(run.filename, `collide-instance-${date}-2.tar.gz`, 'suffix inserted before .tar.gz, never a rename');
+      assert.ok(fs.existsSync(path.join(BACKUPS_DIR, run.filename)), 'final archive exists');
+      const sidecar = fs.readFileSync(path.join(BACKUPS_DIR, `${run.filename}.sha256`), 'utf8');
+      assert.ok(sidecar.includes(`${run.filename}\n`), 'the sha256 sidecar names the FINAL uniquified filename');
+      assert.match(sidecar, /^[0-9a-f]{64}/, 'sidecar leads with the whole-archive hash');
+      fs.rmSync(path.join(BACKUPS_DIR, run.filename), { force: true });
+      fs.rmSync(path.join(BACKUPS_DIR, `${run.filename}.sha256`), { force: true });
+      fs.rmSync(preExisting, { force: true });
+    } finally {
+      delete process.env.GR8R_INSTANCE_NAME;
+    }
+  })();
+});
+
+test('92 naming: runLabel mirrors the filename structure for the UI payload (Phase 94 renders without deriving)', () => {
+  const label = backup.runLabel({ instance: 'pjstudio', scope: 'workspace', label: 'Marketing', gfsBucket: 'weekly', createdAt: Date.UTC(2026, 10, 23, 12) });
+  assert.equal(label, 'pjstudio-ws-marketing-weekly-2026-11-23');
+  const manual = backup.runLabel({ instance: 'pjstudio', scope: 'instance', label: '', gfsBucket: null, createdAt: Date.UTC(2026, 10, 23, 12) });
+  assert.equal(manual, 'pjstudio-instance-2026-11-23', 'manual label carries no GFS segment');
+});

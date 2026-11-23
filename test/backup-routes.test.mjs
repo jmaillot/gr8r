@@ -89,7 +89,7 @@ test('holder POST returns a UUID immediately; polling reaches done with filename
     assert.equal(payload.stage, 'done', `expected done, got: ${JSON.stringify(payload)}`);
     assert.deepEqual(payload.scope, { kind: 'instance', id: null });
     assert.ok(typeof payload.startedAt === 'string' && !Number.isNaN(Date.parse(payload.startedAt)), 'startedAt is an ISO timestamp');
-    assert.match(payload.filename, /^backup-instance-\d{8}-\d{6}\.tar\.gz$/, 'the D-14 filename shape');
+    assert.match(payload.filename, /^[a-z0-9-]+-instance-\d{4}-\d{2}-\d{2}\.tar\.gz$/, 'the Phase 92 filename shape (instance segment + UTC date, manual = no GFS marker)');
     assert.match(payload.sha256, /^[0-9a-f]{64}$/, 'the whole-archive sha256');
 
     /* the archive really landed, and the .sha256 sidecar matches the final bytes */

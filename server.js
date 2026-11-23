@@ -84,8 +84,8 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot, sha256AndSize } from './export/backup.js';
-import { parseCron, nextRunAt } from './export/cron.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, setBackupGfsBucketProvider, backupsRoot, sha256AndSize } from './export/backup.js';
+import { parseCron, nextRunAt, describeCron } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
@@ -3672,6 +3672,21 @@ const writeBackupRunRow = async event => {
   }
 };
 setBackupRunWriter(writeBackupRunRow);
+
+/* Phase 92 (BKNAME-01/D-02): the GFS marker provider for archive naming —
+   the SAME single pure function bucket-at-creation uses (one definition).
+   Called once per scheduled run, after the start-event row insert, so the
+   row exists; derives from the row + prior succeeded history in the
+   rotation ordering (created_at asc, id asc — Pitfall-1 tiebreak). */
+setBackupGfsBucketProvider(async ({ taskId, runId }) => {
+  const row = await db.get('select id, created_at from backup_runs where id = ?', [runId]);
+  if (!row) return null;
+  const prior = await db.all(
+    "select id, created_at from backup_runs where task_id = ? and status = 'succeeded' and id <> ? order by created_at asc, id asc",
+    [taskId, runId],
+  );
+  return gfsBucketFor(prior, row);
+});
 
 /* =====================================================================
    RESTORE RUNS + GLOBAL RESTORE LOCK (Phase 89, 89-02, BKRST-02/D-89-31).
@@ -8814,11 +8829,15 @@ async function handleApi(req, res, url) {
     }
     return false;
   };
-  /* A stored task row → API shape (scope parsed back to the object form). */
+  /* A stored task row → API shape (scope parsed back to the object form).
+     Phase 92 (D-04): `schedule` rides along as the structured cron
+     descriptor (describeCron, from parseCron output only) — the client
+     localizes the kind via t() keys (Phase 94) and never derives or
+     translates server strings. */
   const backupTaskShape = row => {
     let scope;
     try { scope = JSON.parse(row.scope); } catch { scope = {}; }
-    return { ...row, scope };
+    return { ...row, scope, schedule: describeCron(row.cron) };
   };
   if (pathname === '/api/backup/tasks' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');

@@ -58,6 +58,7 @@
    ===================================================================== */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
@@ -531,15 +532,29 @@ function collectInstanceFiles(dirs, stagingDir, files) {
   walk(dirs.dataDir);
 }
 
-/* ---- Filename (D-14): backup-<scope-kind>-<scope-id>-<YYYYMMDD-HHMMSS>.tar.gz ---- */
-/* 87-02 (D-11): scheduled fires pass { taskId } through meta — the archive is
-   named backup-task-<taskId>-<ts>.tar.gz (greppable on disk for rotation and
-   restore); manual run names stay frozen per 86-D-14.
-   UAT feedback 2026-11-22: a human-readable SLUG of the scope's name rides in
-   the filename when one resolves (backup-instance-… / backup-workspace-<slug>-… /
-   backup-project-<slug>-…). Ids stay as a fallback (label is best-effort —
-   lookup failure never fails a run). Rotation matches by prefix/regex on the
-   recorded filename in backup_runs, so the extra segment is inert to it. */
+/* ---- Filename (D-14): <instance-name>-<scope>-<slug>-<gfs>-<date>.tar.gz ---- */
+/* Phase 92 (BKNAME-01, D-01/D-03): the five-segment server-resolved shape.
+   <instance-name> = GR8R_INSTANCE_NAME env var (D-03 ruling 2026-11-24: no
+   settings table exists — env is the zero-DDL mechanism) with a slugified
+   hostname fallback. Scheduled runs (meta.taskId set) carry the stored
+   GFS marker; manual runs (taskId null) OMIT the <gfs> segment entirely.
+   Collision suffixes (-2, -3 …) are inserted BEFORE .tar.gz at creation
+   (see the uniquify loop in runExport) — archives are never renamed.
+   Rotation is id-based, so the format change is inert to it. */
+
+/* Scope token for the filename/label shape — server-side resolution only,
+   never raw ids when a friendly slug resolves. */
+export function scopeTokenFor(kind) {
+  if (kind === 'workspace') return 'ws';
+  return kind === 'project' ? 'project' : 'instance';
+}
+
+/* Instance name segment: GR8R_INSTANCE_NAME env var, else the machine
+   hostname, slugified (D-03). Resolved ONCE per export run (Pitfall 5). */
+export function instanceSlug() {
+  return slugify(process.env.GR8R_INSTANCE_NAME || os.hostname() || 'gr8r-instance') || 'gr8r-instance';
+}
+
 const slugify = s =>
   String(s || '')
     .normalize('NFKD')
@@ -573,12 +588,29 @@ async function scopeLabel(scope) {
 function archiveName(scope, now, meta = {}) {
   const d = new Date(now);
   const p = n => String(n).padStart(2, '0');
-  const ts = `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`;
+  const date = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+  const parts = [meta.instance || instanceSlug(), scopeTokenFor(scope.kind)];
   const label = slugify(meta.label);
-  if (meta.taskId) return `backup-task-${label ? `${label}-` : ''}${meta.taskId}-${ts}.tar.gz`;
-  return scope.kind === 'instance'
-    ? `backup-instance-${ts}.tar.gz`
-    : `backup-${scope.kind}-${label || scope.id}-${ts}.tar.gz`;
+  if (label) parts.push(label);
+  /* D-01: only scheduled runs (meta.taskId set) carry the GFS marker —
+     manual runs omit the <gfs> segment entirely. */
+  if (meta.taskId && meta.gfsBucket) parts.push(meta.gfsBucket);
+  parts.push(date);
+  return `${parts.join('-')}.tar.gz`;
+}
+
+/* Phase 92 (BKNAME-01, run labels): the UI-facing label for a run row — the
+   SAME instance-scope-gfs structure as the archive filename, so Phase 94
+   renders identical strings without deriving anything client-side. */
+export function runLabel({ instance, scope, label = '', gfsBucket = null, createdAt }) {
+  const d = new Date(createdAt);
+  const p = n => String(n).padStart(2, '0');
+  const parts = [instance || instanceSlug(), scopeTokenFor(scope)];
+  const slug = slugify(label);
+  if (slug) parts.push(slug);
+  if (gfsBucket) parts.push(gfsBucket);
+  parts.push(`${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`);
+  return parts.join('-');
 }
 
 function rmStaging(stagingDir) {
@@ -616,6 +648,17 @@ async function emitRunEvent(event) {
   } catch { /* history-write trouble never fails a run (see contract above) */ }
 }
 
+/* ---- GFS marker seam (Phase 92, BKNAME-01/D-02): server.js installs ONE
+   provider that derives the bucket for a scheduled run from its stored
+   row + prior succeeded history (the single pure gfsBucketFor function).
+   Consulted ONCE per run, right after the claim — never per path join
+   (Pitfall 5). Provider absence/failure ⇒ no marker (the manual-name
+   shape degrades gracefully). ---- */
+let gfsBucketProvider = null;
+export function setBackupGfsBucketProvider(fn) {
+  gfsBucketProvider = typeof fn === 'function' ? fn : null;
+}
+
 /* ---- The export run. Returns the final run-state object.
    meta (87-02): { taskId: null, trigger: 'manual' | 'scheduled' } — rides
    through the writer seam and the task-scoped archive name. ---- */
@@ -624,6 +667,8 @@ export async function runExport(scope, meta = {}) {
     taskId: typeof meta.taskId === 'string' && meta.taskId ? meta.taskId : null,
     trigger: meta.trigger === 'scheduled' ? 'scheduled' : 'manual',
     label: '', // UAT 2026-11-22: friendly slug for the filename — resolved below, best-effort
+    instance: '', // Phase 92 (D-03): instance-name segment, resolved ONCE below (Pitfall 5)
+    gfsBucket: null, // Phase 92 (D-01): scheduled runs only — resolved ONCE below
   };
   const runId = claimRun(scope);
   if (!runId) return { ok: false, code: 'backupRunInProgress' };
@@ -631,8 +676,22 @@ export async function runExport(scope, meta = {}) {
      between the request and claimRun — that widens the D-10 race window the
      claim-race test pins. Inside the claim it's pure filename nicety. */
   runMeta.label = await scopeLabel(scope);
+  /* Phase 92 (D-01/D-03): instance name resolved ONCE per run (Pitfall 5). */
+  runMeta.instance = instanceSlug();
   const startedAtMs = currentRun.startedAt;
   await emitRunEvent({ kind: 'start', runId, ...runMeta, scope, startedAt: startedAtMs });
+  /* Phase 92 (D-01): GFS marker — resolved ONCE per run, AFTER the
+     start-event row insert so the provider can read the run's own row.
+     The provider derives the bucket from the row + prior succeeded
+     history (the single pure gfsBucketFor walk); a failure degrades to
+     no marker (the manual-name shape). */
+  if (runMeta.taskId && gfsBucketProvider) {
+    try {
+      runMeta.gfsBucket = (await gfsBucketProvider({ taskId: runMeta.taskId, runId })) || null;
+    } catch {
+      runMeta.gfsBucket = null;
+    }
+  }
   const dirs = dataDirs();
   const stagingDir = path.join(dirs.backupStagingDir, `backup-${runId}`);
   try {
@@ -746,19 +805,19 @@ export async function runExport(scope, meta = {}) {
        archive in backups/. */
     if (currentRun.cancelled) throw new Error('backup: cancelled — server shutdown');
     const { sha256, size } = await sha256AndSize(tarPath);
-    let filename = archiveName(scope, Date.now(), runMeta);
-    /* Collision guard (89-05, Rule 1): archiveName is second-granular, so
-       two same-scope exports in the same second produce the same name and
-       renameSync would silently CLOBBER the earlier archive — the earlier
-       backup_runs row then points at bytes that no longer exist (backup
-       loss, caught only later by a restore's sha check). Uniquify with an
-       inert numeric suffix; the D-14 format is unchanged for the first
-       archive of a second and rotation matches by prefix/regex (the
-       suffix segment is inert to it, per the 87-02 note above). */
-    let uniquifier = 0;
+    /* Phase 92 (D-01): resolve the name ONCE, then uniquify by inserting
+       the -2/-3 suffix BEFORE .tar.gz — never a rename/retry loop on the
+       final name, and the sidecar below is written from this FINAL
+       uniquified filename (Pitfall 3: the sha256 sidecar carries the
+       authoritative name; archives are never renamed post-creation). */
+    const baseName = archiveName(scope, Date.now(), runMeta);
+    let filename = baseName;
+    let uniquifier = 1;
     while (fs.existsSync(path.join(dirs.backupsDir, filename)) && uniquifier < 100) {
+      /* D-01: the first collision gets -2, then -3 … — suffix BEFORE
+         .tar.gz, checked against the real fs each round. */
+      filename = baseName.replace(/\.tar\.gz$/, `-${uniquifier + 1}.tar.gz`);
       uniquifier += 1;
-      filename = archiveName(scope, Date.now(), runMeta).replace(/\.tar\.gz$/, `-${uniquifier}.tar.gz`);
     }
     const destination = path.join(dirs.backupsDir, filename);
     const sidecarStaged = path.join(stagingDir, 'archive.sha256.staged');
