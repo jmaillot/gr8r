@@ -138,15 +138,23 @@ const runRow = run => {
   const errOpen = S.ui.backupRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at);
   const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  /* 90-02 (D-90-9): the location badge reuses the restore location keys
+     (payload verbatim, neutral badge, accent for s3) and the download CTA is
+     payload-flag chrome — it renders ONLY when the server-derived location
+     says the bytes exist (local | s3); a missing run renders ZERO download
+     CTAs, never a disabled/dead button. The client never derives location
+     itself (D-23 doctrine). */
   return `<div style="padding:8px 0;border-top:1px solid var(--border)">
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
+      <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
       <span class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</span>
       <span class="faint">${esc(when)}</span>
       <span class="faint">${t('page.backup.durLabel')}: ${esc(durText(Number(run.duration_ms)))}</span>
       <span class="faint">${t('page.backup.sizeLabel')}: ${esc(fsize(Number(run.size_bytes) || 0))}</span>
       ${run.sha256 ? `<span class="mono faint" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</span>` : ''}
       ${run.filename ? `<span class="mono faint">${esc(run.filename)}</span>` : ''}
+      ${run.location === 'local' || run.location === 's3' ? `<button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>` : ''}
     </div>
     ${
       run.error

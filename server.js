@@ -55,6 +55,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
+import { pipeline } from 'node:stream/promises';
 /* Phase 45: the raw node:sqlite import moved out — db-adapter.mjs owns the
    handle. server.js only ever sees the adapter facade + transitional shims. */
 import { createMailer, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage } from './mailer.js';
@@ -9119,16 +9120,39 @@ async function handleApi(req, res, url) {
     }
     const taskId = url.searchParams.get('taskId');
     if (!taskId) return fail(res, 400, 'taskNotFound', 'That backup task does not exist');
+    /* Phase 90 (SC-2, 90-02 task 1): history rows gain the render-only chrome
+       inputs the location badge + download CTA gate on — scope parsed
+       defensively (legacy/corrupt JSON renders null, never throws into the
+       list) and location derived SERVER-side from run-row truth + local fs
+       membership ONLY (D-89-14: never live S3 probing), the exact derivation
+       the restore list uses below. The client renders these verbatim and
+       never derives location or authority itself (D-23 doctrine). */
+    const historyChrome = rows =>
+      rows.map(r => {
+        let scope = null;
+        try {
+          scope = JSON.parse(r.scope);
+        } catch {
+          scope = null;
+        }
+        return {
+          ...r,
+          scope,
+          location: r.filename
+            ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
+            : (r.uploaded === 1 ? 's3' : 'missing'),
+        };
+      });
     if (taskId === 'manual') {
-      const rows = await db.all('select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
-      return json(res, 200, { runs: rows });
+      const rows = await db.all('select id, task_id, scope, uploaded, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     if (!(await db.get('select id from backup_tasks where id = ?', [taskId]))) {
       return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
     }
-    const rows = await db.all('select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
-    return json(res, 200, { runs: rows });
+    const rows = await db.all('select id, task_id, scope, uploaded, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    return json(res, 200, { runs: historyChrome(rows) });
   }
 
   /* -------------- restore read surface (Phase 89, 89-03, BKRST-01/D-89-14) --------------
@@ -9623,6 +9647,105 @@ async function handleApi(req, res, url) {
         skippedEntries: verified.skippedEntries,
         checksum: verified.sha256,
       });
+    } finally {
+      if (stagedPath) fs.rmSync(stagedPath, { force: true }); // D-89-16: the staged temp never outlives the response
+    }
+  }
+
+  /* -------------- archive download (Phase 90, 90-02, SC-2 / D-90-7..10) --------------
+     GET /api/backup/download?runId=<id> — the tiered streaming download of a
+     stored archive. Guard funnel copied VERBATIM from the preview route above
+     in the house order (never reordered — Shared Pattern 1): sameOrigin →
+     requireUser → operator-keyed throttle → capability gate → runId regex →
+     row read. tooMany(`backupdownload|<user>`, 10, 15min) sits BEFORE the
+     capability gate and consumes a try even on refusal (D-89-22 — the
+     streaming cost is the guarded resource). Capability = BACKUP_MANAGE ||
+     RESTORE_USE (both operator roles may retrieve). Tiering (D-90-7 /
+     T-90-02): scope.kind === 'instance' is a full-credential dump — Super
+     Admin ONLY, keyed backupDownloadAdminOnly + audited, checked AFTER the
+     role gate and BEFORE location resolution (no pre-gate existence oracle,
+     T-86-06); runId is regex-gated before any row read. Archive resolution
+     from run-row truth ONLY (D-89-14): local file → stream straight off
+     BACKUPS_DIR (zero staging leg, D-90-8); else uploaded = 1 → the 88-01
+     downloadToStaged seam into restore-staging with the temp removed in a
+     finally AFTER the stream completes (D-89-16: the temp never outlives the
+     response); else keyed restoreArchiveMissing + audit — the fail-closed
+     double with the CTA the client hides (D-90-9). The Content-Disposition
+     carries the stored archive name through fileDisposition — the ONLY
+     header-escaping path (D-90-8, T-12-08). Success-only audit
+     backup_download:<runId> written once every gate passed and the source is
+     confirmed resolvable (D-90-10); every refusal audits
+     backup_download_refused:<code>. No MCP mirror (D-89-19 posture). */
+  if (pathname === '/api/backup/download' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    /* D-89-22/OQ5: the streaming cost is the resource being guarded — a
+       refused attempt still consumed a try. */
+    if (tooMany(`backupdownload|${user.id}`, 10, 15 * 60 * 1000)) {
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    }
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      await auditBackupTask(user, 'backup_download_refused:backupRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a backup operator can download backup archives');
+    }
+    const runId = url.searchParams.get('runId') ?? '';
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(runId)) {
+      return fail(res, 404, 'taskNotFound', 'That backup run does not exist');
+    }
+    const row = await db.get(
+      'select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?',
+      [runId],
+    );
+    if (!row || !row.filename) {
+      await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    let scope = null;
+    try {
+      scope = JSON.parse(row.scope);
+    } catch {
+      scope = null;
+    }
+    /* T-90-02: the instance tier is the confidentiality boundary — checked
+       AFTER the role gate, BEFORE any location resolution or byte leaves. */
+    if (scope?.kind === 'instance' && !isInstanceAdmin(user)) {
+      await auditBackupTask(user, 'backup_download_refused:backupDownloadAdminOnly');
+      return fail(res, 403, 'backupDownloadAdminOnly', 'Only a Super Admin can download an instance-scope archive');
+    }
+    const localPath = path.join(backupsRoot(), row.filename);
+    const hasLocal = fs.existsSync(localPath);
+    let stagedPath = null;
+    try {
+      if (!hasLocal) {
+        if (row.uploaded !== 1) {
+          await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+          return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+        }
+        if (!S3.enabled) {
+          await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+          return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
+        }
+        /* The 88-01 seam re-verifies the digest on the stream-back itself —
+           a mismatch refuses keyed before any byte reaches the client. */
+        const back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+        stagedPath = back.tmpPath;
+      }
+      /* D-90-10: the success audit rides the confirmed-resolvable path —
+         every refusal above carried its own backup_download_refused row. */
+      await auditBackupTask(user, `backup_download:${runId}`);
+      const streamPath = stagedPath || localPath;
+      res.writeHead(200, {
+        'Content-Type': 'application/gzip',
+        'Content-Length': fs.statSync(streamPath).size,
+        'Content-Disposition': fileDisposition(row.filename, false),
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      /* Awaited so the finally below removes the staged temp only after the
+         last byte left (pipe-and-forget would delete mid-stream, D-89-16). */
+      await pipeline(fs.createReadStream(streamPath, { highWaterMark: 64 * 1024 }), res);
+      return;
     } finally {
       if (stagedPath) fs.rmSync(stagedPath, { force: true }); // D-89-16: the staged temp never outlives the response
     }

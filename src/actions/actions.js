@@ -4879,6 +4879,7 @@ const DR_CONFIRM_PHRASE = 'RESTORE-INSTANCE';
 const RESTORE_REFUSAL_TOASTS = {
   backupRoleRequired: 'err.backupRoleRequired',
   backupManageRequired: 'err.backupManageRequired',
+  backupDownloadAdminOnly: 'err.backupDownloadAdminOnly',
   operatorOnly: 'err.operatorOnly',
   tooManyAttempts: 'err.tooManyAttempts',
   restoreInvalidRunId: 'err.restoreInvalidRunId',
@@ -5249,6 +5250,41 @@ A.backupRunErr = el => {
   if (set.has(el.dataset.id)) set.delete(el.dataset.id);
   else set.add(el.dataset.id);
   render();
+};
+
+/* 90-02 (SC-2, D-90-7/8): the archive download — a GET that streams the
+   stored archive through the ONE client download path (54-02): read the
+   bytes as a Blob, derive the filename from the server's Content-Disposition,
+   hand it to saveBlob. Success NEVER calls res.text() — the payload is the
+   tar.gz archive. Refusals surface through the closed RESTORE_REFUSAL_TOASTS
+   map (the server is the authority, the client never pre-validates); the CTA
+   stays disabled until the fetch settles (double-click prevention). */
+A.backupDownload = async el => {
+  el.disabled = true;
+  try {
+    let res;
+    try {
+      res = await fetch(`/api/backup/download?runId=${encodeURIComponent(el.dataset.id || '')}`, {
+        method: 'GET',
+        credentials: 'same-origin',
+      });
+    } catch {
+      return toast(t('err.serverUnreachable'), { kind: 'err' });
+    }
+    if (!res.ok) {
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        /* non-JSON error body */
+      }
+      return restoreToast(data?.code, data?.error);
+    }
+    const [{ saveBlob, filenameFrom }] = await Promise.all([import('../core/download.js')]);
+    saveBlob(await res.blob(), filenameFrom(res.headers.get('Content-Disposition')));
+  } finally {
+    el.disabled = false;
+  }
 };
 
 /* 89-06 restore history (D-89-20): ONE instance-wide card — newest-first

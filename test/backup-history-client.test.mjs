@@ -135,6 +135,7 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.scheduleSummaryPrefix',
     'page.backup.historyAction', 'page.backup.historyTitle', 'page.backup.historyCap', 'page.backup.historyEmpty',
     'page.backup.historyLoading', 'page.backup.historyUnavailable', 'page.backup.errorToggle',
+    'page.backup.downloadAction',
     'page.backup.durLabel', 'page.backup.sizeLabel',
     'page.backup.statusRunning', 'page.backup.statusSucceeded', 'page.backup.statusFailed',
     'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
@@ -195,4 +196,31 @@ test('Phase 88 SC-1 wiring: a successful save carrying s3Probe toasts the keyed 
   /* The probe toasts ride a 200 — a refusal still goes through the central
      tErr funnel, never through the probe mapping. */
   assert.ok(handler.indexOf('res.data?.s3Probe') > handler.indexOf('!res.ok'), 'the probe mapping reads only successful saves');
+});
+
+/* =====================================================================
+   Phase 90 (90-02, SC-2 / D-90-9): the history rows grow the server-derived
+   location badge + the payload-gated download CTA — the client renders the
+   payload verbatim and never derives location or authority itself (D-89-21
+   payload-flag chrome, D-23 doctrine).
+   ===================================================================== */
+test('90-02: the download CTA renders ONLY for payload location local|s3 — the location badge rides the payload', () => {
+  /* The CTA is payload-flag chrome: a missing run renders ZERO download CTAs,
+     never a disabled/dead button (D-90-9). */
+  assert.match(
+    pagesSrc,
+    /run\.location === 'local' \|\| run\.location === 's3' \? `<button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="\$\{esc\(run\.id\)\}"/,
+    'the download CTA renders only for local|s3 from the payload flag',
+  );
+  /* The badge reuses the restore location vocabulary (locLocal/locS3/
+     locMissing) — neutral badge, accent only for s3, never green/red. */
+  assert.match(pagesSrc, /RESTORE_LOCATION_KEYS\[run\.location\] \|\| 'page\.restore\.locMissing'/, 'the badge reuses the restore location keys');
+  assert.match(pagesSrc, /class="badge\$\{run\.location === 's3' \? ' accent' : ''\}"/, 'the badge is neutral with the s3 accent');
+  /* One download path (54-02): Blob + the server's Content-Disposition →
+     saveBlob — success never calls res.text(). */
+  assert.match(actionsSrc, /A\.backupDownload =/, 'the download action exists');
+  assert.match(actionsSrc, /backupDownloadAdminOnly: 'err\.backupDownloadAdminOnly'/, 'the closed refusal map grew 1:1 with the new code');
+  assert.match(actionsSrc, /filenameFrom\(res\.headers\.get\('Content-Disposition'\)\)/, 'the filename derives from the server header');
+  assert.match(actionsSrc, /saveBlob\(await res\.blob\(\)/, 'the bytes ride saveBlob');
+  assert.match(actionsSrc, /credentials: 'same-origin'/, 'the GET rides the same-origin session cookies');
 });
