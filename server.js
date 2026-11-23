@@ -84,7 +84,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
@@ -803,6 +803,16 @@ const SCHEMA = `
        ensureColumn at boot — D-89-14: run-row truth only, never live S3
        state. */
     uploaded     integer not null default 0,
+    /* Phase 90 (D-90-11, 90-02): the verify-checksum result — nullable until
+       the first verify lands (null = never checked, 1 = match, 0 = mismatch —
+       a comment here must never end a line with a semicolon, runSchema splits
+       statements on ';-newline'). checksum_checked_at is the SERVER ISO
+       timestamp of that verify. Both outcomes persist, so the client badge
+       re-renders payload-derived (D-23 doctrine). Def byte-identical on both
+       engines (Pitfall P-B); existing rows default null via the boot
+       ensureColumns — no data migration. */
+    checksum_ok          integer,
+    checksum_checked_at  text,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);
@@ -980,6 +990,11 @@ async function initDb() {
      lie about S3 state. The 88-2 rebuild above predates the column, so
      this ensureColumn must come AFTER it. */
   await adapterEnsureColumn('backup_runs', 'uploaded', 'integer not null default 0');
+  // Phase 90 (D-90-11, 90-02): the verify-checksum result columns — defs
+  // byte-identical to the SCHEMA declaration (Pitfall P-B); nullable, no
+  // default — null = never checked. No data migration.
+  await adapterEnsureColumn('backup_runs', 'checksum_ok', 'integer');
+  await adapterEnsureColumn('backup_runs', 'checksum_checked_at', 'text');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -9746,6 +9761,92 @@ async function handleApi(req, res, url) {
          last byte left (pipe-and-forget would delete mid-stream, D-89-16). */
       await pipeline(fs.createReadStream(streamPath, { highWaterMark: 64 * 1024 }), res);
       return;
+    } finally {
+      if (stagedPath) fs.rmSync(stagedPath, { force: true }); // D-89-16: the staged temp never outlives the response
+    }
+  }
+
+  /* -------------- verify-checksum (Phase 90, 90-02, D-90-11) --------------
+     POST /api/backup/verify-checksum (JSON body { runId }) — re-hash the
+     whole archive hash-on-the-pipe and compare against the stored sha256.
+     Guard funnel: sameOrigin → requireUser → operator-keyed throttle
+     (verifychecksum, 10/15min, BEFORE the capability gate — the re-hash cost
+     is the guarded resource, D-89-22; a refused attempt still consumes a
+     try) → capability BACKUP_MANAGE || RESTORE_USE — the preview tier,
+     D-89-21 parity, deliberately NO scope-kind restriction: the response
+     discloses only ok/timestamp, never archive content; the instance-scope
+     binary restriction stays exclusive to the download route — → runId
+     regex → row lookup → resolution identical to the preview route: local
+     file → exported sha256AndSize on the pipe (no staging leg); else
+     uploaded = 1 → S3.enabled else keyed 404, then the 88-01
+     downloadToStaged seam (it re-hashes mid-stream and throws keyed on a
+     digest mismatch — that keyed throw IS the verify result, caught and
+     persisted, never a 5xx) with the staged temp removed in finally; else
+     keyed restoreArchiveMissing + audit. A mismatch is a RESULT
+     (200 { ok: false }), not a refusal — the durable keyed badge is the
+     feedback (UI-SPEC), so BOTH outcomes persist checksum_ok +
+     checksum_checked_at (server timestamp) and the response carries only
+     ok + checkedAt. */
+  if (pathname === '/api/backup/verify-checksum' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`verifychecksum|${user.id}`, 10, 15 * 60 * 1000)) {
+      return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    }
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      await auditBackupTask(user, 'backup_verify_refused:backupRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a backup operator can verify backup archives');
+    }
+    const body = await readJson(req);
+    const runId = String(body?.runId ?? '');
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(runId)) {
+      return fail(res, 404, 'taskNotFound', 'That backup run does not exist');
+    }
+    const row = await db.get(
+      'select id, task_id, sha256, filename, uploaded from backup_runs where id = ?',
+      [runId],
+    );
+    if (!row || !row.filename) {
+      await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+    }
+    const localPath = path.join(backupsRoot(), row.filename);
+    const hasLocal = fs.existsSync(localPath);
+    let stagedPath = null;
+    try {
+      let ok;
+      if (hasLocal) {
+        /* The exported primitive: one streaming pass, hash-on-the-pipe —
+           the archive is never buffered whole (Shared Pattern 5). */
+        ok = (await sha256AndSize(localPath)).sha256 === row.sha256;
+      } else {
+        if (row.uploaded !== 1) {
+          await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+          return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+        }
+        if (!S3.enabled) {
+          await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+          return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
+        }
+        /* The 88-01 seam re-hashes ON the stream-back and refuses keyed
+           (s3Class sha256Mismatch) — that keyed throw IS the verify result
+           (mismatch semantics above), so it is caught and persisted, never
+           surfaced as a 5xx. The seam removed its own temp on the throw. */
+        try {
+          const back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+          stagedPath = back.tmpPath;
+          ok = back.sha256 === row.sha256; // the seam already refused on any mismatch
+        } catch (err) {
+          if (err?.s3Class === 'sha256Mismatch') ok = false;
+          else throw err;
+        }
+      }
+      /* Both outcomes persist with the SERVER timestamp — the client badge
+         re-renders payload-derived (D-89-21 chrome doctrine). */
+      const checkedAt = new Date().toISOString();
+      await db.run('update backup_runs set checksum_ok = ?, checksum_checked_at = ? where id = ?', [ok ? 1 : 0, checkedAt, runId]);
+      return json(res, 200, { ok, checkedAt });
     } finally {
       if (stagedPath) fs.rmSync(stagedPath, { force: true }); // D-89-16: the staged temp never outlives the response
     }

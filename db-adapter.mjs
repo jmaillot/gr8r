@@ -463,6 +463,15 @@ export const SQLITE_SCHEMA = `
        byte-for-byte (pg tables are created fresh from this variant each
        boot; existing dbs get the additive ensureColumn twin). */
     uploaded     integer not null default 0,
+    /* Phase 90 (D-90-11, 90-02): the verify-checksum result — nullable until
+       the first verify lands (null = never checked, 1 = match, 0 = mismatch —
+       a comment here must never end a line with a semicolon, runSchema splits
+       statements on ';-newline'). checksum_checked_at is the SERVER ISO
+       timestamp of that verify. Mirrors the server.js SCHEMA declaration
+       byte-for-byte (pg tables are created fresh from this variant each
+       boot; existing dbs get the additive ensureColumn twin). */
+    checksum_ok          integer,
+    checksum_checked_at  text,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);

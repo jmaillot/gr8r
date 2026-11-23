@@ -295,7 +295,9 @@ function sha256File(filePath) {
   });
 }
 
-async function sha256AndSize(filePath) {
+/* 90-02 (D-90-11): exported for the verify-checksum route — the streaming
+   re-hash primitive (hash-on-the-pipe, never buffer-then-hash). */
+export async function sha256AndSize(filePath) {
   let size = 0;
   const hex = await new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
