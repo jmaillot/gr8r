@@ -9536,6 +9536,7 @@ async function handleApi(req, res, url) {
     restoreInstanceUnit({
       runId: restoreRunId,
       backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      s3Config: S3.enabled ? S3.config() : null, // the 88-01 seam — DR must fetch a rotated-away archive (90-04 e2e, Rule 1)
       operator: { id: user.id, email: user.email },
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`instance restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only

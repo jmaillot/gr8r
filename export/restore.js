@@ -2013,7 +2013,33 @@ export async function restoreInstanceUnit(opts = {}) {
     return failWith(keyed('restoreOperatorMissing', 'restore: DR requires an operator identity'));
   }
 
-  const archivePath = opts.archivePath ?? (backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null);
+  /* ---- fetching (mirrors the runRestore fetching stage above): local
+     archive in place → use it; else the uploaded copy comes home through
+     the 88-01 downloadToStaged seam into restore-staging (same-fs with
+     the archives — D-89-16), digest-verified on the pipe. Rotation-away
+     is the NORM for an S3-posture instance (the local archive is the
+     transient copy) — DR refusing an uploaded-only run made the
+     survival-in-S3 contract unreachable end-to-end (90-04 e2e find,
+     Rule 1). GUARDED: the seam throw routes through failWith so the
+     funnel releases the restore_lock (89-05 CR contract — a stranded
+     lock wedges every later restore AND backup run). */
+  let stagedTmp = null;
+  const dropStagedTmp = () => {
+    if (stagedTmp) { try { fs.unlinkSync(stagedTmp); } catch { /* best-effort — the sweep collects leftovers */ } stagedTmp = null; }
+  };
+  let archivePath = opts.archivePath ?? null;
+  const localPath = backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null;
+  if (!archivePath && localPath && fs.existsSync(localPath)) archivePath = localPath;
+  if (!archivePath && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object' && backupRun.filename) {
+    try {
+      const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    } catch (err) {
+      dropStagedTmp();
+      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
+    }
+  }
   if (!archivePath || !fs.existsSync(archivePath)) {
     return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
   }
@@ -2077,6 +2103,7 @@ export async function restoreInstanceUnit(opts = {}) {
       extracted = await extractArchive(archivePath, stagingDir, manifest, { tolerateSkips: true });
     } catch (err) {
       stagingDir = null; // extractArchive already rmStaging()ed its own tree (D-89-32)
+      dropStagedTmp();
       cleanup();
       await release();
       return failWith(err);
@@ -2084,6 +2111,10 @@ export async function restoreInstanceUnit(opts = {}) {
     /* Shape-miss skips are LEGITIMATE here (projects.db et al.); the
        path-escape families already refused fatally upstream. Count them. */
     const skippedEntries = extracted.skipped.length;
+    /* The staged S3 temp stays alive through the D-89-30 pre-commit re-hash
+       (sha256File(archivePath) inside the tx) — dropping it here would fail
+       that re-hash with ENOENT on any S3-located archive (90-04 e2e find).
+       The post-commit drop below owns the rm-finally half. */
 
     /* Streaming read-back (WR fix) — rows retained only for consumed
        tables; the rest is counted, never buffered. */
@@ -2360,6 +2391,7 @@ export async function restoreInstanceUnit(opts = {}) {
     } catch (err) {
       /* rollback happened inside dbTx — repair the file layer FROM THE
          SNAPSHOT (D-89-3) and sweep. */
+      dropStagedTmp(); // the staged S3 temp is never consumed past a failed tx
       try {
         await repairFromSnapshot(path.join(backupsRoot(), snapshot.filename), snapshot.sha256, swappedDests, dirs);
       } catch (repairErr) {
@@ -2369,6 +2401,8 @@ export async function restoreInstanceUnit(opts = {}) {
       await release();
       return failWith(err);
     }
+
+    dropStagedTmp(); // POST-commit: extract + the D-89-30 re-hash both consumed the staged S3 temp (D-89-16 rm-finally)
 
     /* POST-commit, in the 9115-9133 order — the run task completed FIRST,
        then the side effect: removed blobs unlink (ENOENT-tolerant), and
@@ -2411,6 +2445,7 @@ export async function restoreInstanceUnit(opts = {}) {
     } catch (repairErr) {
       logRestoreWarn(`DR ${runId}: snapshot repair after unexpected failure ALSO failed: ${repairErr?.message ?? repairErr}`);
     }
+    dropStagedTmp();
     cleanup();
     await release();
     return failWith(err);
