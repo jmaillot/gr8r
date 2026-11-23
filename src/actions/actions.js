@@ -4791,15 +4791,19 @@ export async function backupPollTick() {
   backupPollInflight = new AbortController();
   const signal = backupPollInflight.signal;
   /* 90-03 (D-90-22): the previous stage captured BEFORE the payload write —
-     the transition compare happens after the fetch below. backupPending is
-     captured with it: the FIRST poll of a just-triggered run (UAT 90 finding)
-     can land ALREADY TERMINAL on a small instance — the run finishes inside
-     the trigger POST, prevStage was never an active stage, so the plain
-     active→terminal compare misses it and the restore list would stay stale
-     ("No backups yet" under a fresh done run). pending=true at tick start
-     means this tick IS the first poll of a trigger. */
+     the transition compare happens after the fetch below. Pending and the
+     run identity (startedAt — the D-19 frozen payload field) are captured
+     with it: the restore list must invalidate whenever a DIFFERENT finished
+     run just landed, and two UAT-90 shapes are invisible to a stage-only
+     compare — (a) the first poll of a just-triggered run landing already
+     terminal (run finishes inside the trigger POST), (b) run N+1 finishing
+     while run N was ALREADY the terminal prevStage (terminal→terminal — the
+     common shape here: /current returns the last run even at page load).
+     Both are "a finished archive just appeared": identity change catches
+     them; identity REPEAT on a settled terminal run keeps the tick silent
+     (no refetch loop, exactly-once per finished run). */
   const backupPrevStage = S.ui.backupRun?.stage || null;
-  const backupPrevPending = !!S.ui.backupPending;
+  const backupPrevRunId = S.ui.backupRun?.startedAt || null;
   const res = await api.backupRunCurrent({ signal });
   if (my !== backupPollSeq) return null;
   if (res.ok) {
@@ -4844,17 +4848,18 @@ export async function backupPollTick() {
   const restoreActive = !!S.ui.restoreRun?.runId && RESTORE_ACTIVE_STAGES.includes(S.ui.restoreRun.stage);
   /* 90-03 (D-90-22): stage-transition compare INSIDE the existing tick —
      when the polled backup run crossed from an active stage into a terminal
-     one THIS tick, the just-finished archive changes what the restore list
-     should show, so invalidate the shared state by nulling it. The UAT-90
-     fast-run arm: the first poll of a just-triggered run landing terminal
-     (prevStage null + pending captured true + a real stage written now) is
-     the SAME "a finished archive just appeared" event — same invalidation.
-     The page's in-render kick (backup.js — the `!S.ui.restoreList` guard)
-     then refetches EXACTLY ONCE — the tick NEVER invokes the restore refresh
-     action itself and never refetches unconditionally inside the 1s tick
-     (Pitfall 8: invalidate here, refetch at the render boundary). */
-  const backupLandedTerminal = backupPrevStage === null && backupPrevPending && !!S.ui.backupRun?.stage;
-  if ((BACKUP_ACTIVE_STAGES.includes(backupPrevStage) || backupLandedTerminal) && !backupActive) S.ui.restoreList = null;
+     one THIS tick, or a DIFFERENT finished run just landed (UAT-90 shapes:
+     trigger-POST-terminal first poll, terminal→terminal run N+1), the
+     just-finished archive changes what the restore list should show, so
+     invalidate the shared state by nulling it. The page's in-render kick
+     (backup.js — the `!S.ui.restoreList` guard) then refetches EXACTLY ONCE
+     — the tick NEVER invokes the restore refresh action itself and never
+     refetches unconditionally inside the 1s tick (Pitfall 8: invalidate
+     here, refetch at the render boundary). A settled terminal run polling
+     with the SAME identity never re-invalidates. */
+  const backupNowRunId = S.ui.backupRun?.startedAt || null;
+  const backupFinishedArrived = !backupActive && !!backupNowRunId && backupNowRunId !== backupPrevRunId;
+  if ((BACKUP_ACTIVE_STAGES.includes(backupPrevStage) || backupFinishedArrived) && !backupActive) S.ui.restoreList = null;
   if ((backupActive || restoreActive) && !backupPollTimer) backupStartPolling();
   if (!backupActive && !restoreActive) backupStopPolling();
   render();
