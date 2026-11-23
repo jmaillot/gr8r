@@ -256,43 +256,43 @@ test('MAILER disabled: producers skip claiming and the pass leaves rows untouche
 
 /* ------------------- Task 2: digest claim articulation (D-07) ------------------- */
 
-test('digest: one outbox row per claimed digest, committed inside the reminders_sent claim tx', async () => {
+test('digest: one outbox row per claimed digest — Phase 91: the row is the AGGREGATED user/day transport claim', async () => {
   const mem = await makeDigestFixture('2026-01-15', { email_digest: true, email_reminder: false, due_reminder: false, past_due: false });
   const result = await triggerReminders('2026-01-15T08:00:00Z');
   assert.equal(result.digests, 1, 'one digest claimed');
   const ledger = withDb(server.dbPath, db => db.prepare('select dedup_key from reminders_sent where workspace_id = ?').all(ws.id).map(x => x.dedup_key).filter(k => k.includes(':digest:')));
-  assert.equal(ledger.length, 1, 'exactly one semantic claim (D-12 preserved)');
-  const rows = withDb(server.dbPath, db => db.prepare("select * from email_outbox where dedup_key = ?").all(`digest:${ws.id}:${mem.user_id}:2026-01-15`));
-  assert.equal(rows.length, 1, 'exactly ONE transport claim per digest');
-  assert.equal(rows[0].kind, 'digest');
+  assert.equal(ledger.length, 1, 'exactly one semantic claim, byte-compatible (SC4/D-12 preserved)');
+  const rows = withDb(server.dbPath, db => db.prepare('select * from email_outbox where dedup_key = ?').all(`digest:user:${mem.user_id}:2026-01-15`));
+  assert.equal(rows.length, 1, 'exactly ONE transport claim per USER/DAY (Phase 91 D-04)');
+  assert.equal(rows[0].kind, 'digest-aggregated');
   assert.equal(rows[0].recipient, 'outbox-owner@test.local');
   const ctx = JSON.parse(rows[0].ctx);
-  assert.equal(ctx.type, 'digest');
-  assert.equal(ctx.workspace, 'Outbox Ws');
+  assert.equal(ctx.type, 'digest-aggregated');
   assert.equal(ctx.appUrl, 'http://app.test');
+  assert.deepEqual(ctx.sections.map(s => s.wsSlug), ['outbox-ws'], 'the single workspace rides as one section');
   assert.deepEqual(
-    ctx.dueToday.map(t => t.title),
+    ctx.sections[0].dueToday.map(t => t.title),
     ['Digest task'],
-    'the digest content snapshot rides the ctx (rebuilt at delivery time)',
+    'the digest content snapshot rides the section ctx (rebuilt at delivery time)',
   );
 
-  /* Re-run the same clock — the ledger claim collides, nothing is claimed,
-     no second outbox row (Phase 38 no-double-send, D-07). */
+  /* Re-run the same clock — the ledger claim AND the user/day outbox key
+     collide, nothing is claimed, no second outbox row (no-double-send). */
   const replay = await triggerReminders('2026-01-15T08:00:00Z');
   assert.equal(replay.digests, 0, 'the re-run claims nothing');
   assert.equal(withDb(server.dbPath, db => db.prepare('select count(*) as n from reminders_sent where workspace_id = ?').get(ws.id).n), 1, 'ledger unchanged');
   assert.equal(outboxCount("dedup_key like 'digest:%'"), 1, 'still exactly one outbox row');
 
-  /* Delivery rides the pass — the ctx rebuilds into a sendDigest call.
-     The post-commit kick already consumed attempt 1 against the dead SMTP
-     port, so drain past the scheduled retry (D-06 backoff[0]). */
+  /* Delivery rides the pass — the ctx rebuilds into a sendDigestAggregated
+     call. The post-commit kick already consumed attempt 1 against the dead
+     SMTP port, so drain past the scheduled retry (D-06 backoff[0]). */
   const pass = await trigger({ now: Date.now() + 120_000, send: { ok: true } });
   assert.ok(pass.data.delivered >= 1, 'the digest row is delivered (earlier retries may land in the same drain)');
-  const call = callsOf(pass).find(c => c.type === 'digest');
-  assert.ok(call, 'the pass rebuilt the digest email');
+  const call = callsOf(pass).find(c => c.type === 'digest-aggregated');
+  assert.ok(call, 'the pass rebuilt the aggregated digest email');
   assert.equal(call.to, 'outbox-owner@test.local');
-  assert.equal(call.wsSlug, 'outbox-ws');
-  assert.deepEqual(call.dueToday.map(t => t.title), ['Digest task']);
+  assert.equal(call.sections[0].wsSlug, 'outbox-ws');
+  assert.deepEqual(call.sections[0].dueToday.map(t => t.title), ['Digest task']);
   assert.equal(emailRow(rows[0].id).status, 'delivered');
 });
 

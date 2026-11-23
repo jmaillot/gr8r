@@ -146,6 +146,24 @@ function unsubscribeUrl(key, appUrl, wsId, userId) {
   return `${String(appUrl).replace(/\/+$/, '')}/unsubscribe/${makeUnsubscribeToken(key, wsId, userId)}`;
 }
 
+/* Phase 91 (D-02): the GLOBAL user-scoped unsubscribe token — version 0x02,
+   payload = 0x02 ‖ userId(36B) (37 bytes), SAME HMAC-SHA256 framing, same
+   key derivation and base64url alphabet as the frozen 0x01 contract. The
+   0x01 format and its pinned length check are NOT mutated (Pitfall 5);
+   handler-side acceptance of 0x02 lands with the route changes. */
+const UNSUB_USER_TOKEN_VERSION = 0x02;
+const UNSUB_USER_PAYLOAD_BYTES = 1 + UNSUB_ID_BYTES;
+
+function makeUserUnsubscribeToken(key, userId) {
+  const payload = Buffer.concat([Buffer.from([UNSUB_USER_TOKEN_VERSION]), Buffer.from(String(userId), 'utf8')]);
+  const mac = crypto.createHmac('sha256', key).update(payload).digest();
+  return Buffer.concat([payload, mac]).toString('base64url');
+}
+
+function unsubscribeUrlGlobal(key, appUrl, userId) {
+  return `${String(appUrl).replace(/\/+$/, '')}/unsubscribe/${makeUserUnsubscribeToken(key, userId)}`;
+}
+
 /* Length-guard-then-timingSafeEqual — the server.js timingSafeHex form
    (L414). Phase 42's route consumes this exact verification path. */
 function verifyUnsubscribeToken(key, tokenB64url) {
@@ -995,9 +1013,150 @@ function buildDigestMessage(config, msg) {
   };
 }
 
-/* TFA-MAIL: security alert — a 2FA factor was added or removed on the
-   account. Unlike notification emails this is NOT gated by workspace prefs:
-   security alerts always reach the account address. */
+/* =====================================================================
+   Phase 91 (NOTIF-01, D-03/D-05): the AGGREGATED daily digest — one
+   email per user/day carrying one section per workspace. Sibling of
+   buildDigestMessage with the same MIME bones, locale discipline
+   (fr|en only, English-literal fallback frame — D-05) and header gate
+   (RFC 8058 headers only on an https unsubscribeUrl). Neutral app-level
+   header (D-03): the From name / logo ride the APP, each section is
+   titled with its own workspace name and renders its dueToday/overdue
+   lists with per-section deep links. ONE global footer with the ONE
+   global unsubscribeUrl (D-02) — no per-section unsubscribe links
+   (deferred). When the ctx carries no unsubscribeUrl (no MASTER_KEY or
+   http APP_URL — same gates as before), the footer falls back to the
+   FIRST section's settings anchor so the footer still renders.
+   ===================================================================== */
+function buildDigestAggregatedMessage(config, msg) {
+  const to = bareAddress(msg.to);
+  if (!addressOk(to)) throw new Error('Digest email address is invalid');
+
+  const locale = msg.locale === 'fr' ? 'fr' : 'en';
+  const appUrl = text(msg.appUrl).replace(/\/+$/, '');
+  const logoUrl = text(msg.logoUrl);
+  const appName = config.fromName || 'Projects Studio';
+  const sections = (Array.isArray(msg.sections) ? msg.sections : []).filter(s => s && text(s.wsSlug));
+  if (!sections.length) throw new Error('digest-aggregated ctx carries no sections');
+
+  const taskLabel = t => (t.project ? `${truncate(t.project, 80)} — ${truncate(t.title, 80)}` : truncate(t.title, 80));
+  const taskUrlFor = (slug, t) => (t?.key ? `${appUrl}/w/${slug}/task/${encodeURIComponent(t.key)}` : `${appUrl}/w/${slug}/`);
+  const sectionCount = s => (Array.isArray(s.dueToday) ? s.dueToday.length : 0) + (Array.isArray(s.overdue) ? s.overdue.length : 0);
+
+  /* Footer link (D-02): the ONE global unsubscribeUrl when the server
+     pre-built it; otherwise the first section's settings anchor — the
+     footer NEVER disappears (headers omission never suppresses it). */
+  const settingsUrl = `${appUrl}/w/${sections[0].wsSlug}/settings#notif-email`;
+  const footerUrl = text(msg.unsubscribeUrl) || settingsUrl;
+
+  let frame;
+  try {
+    frame = {
+      greeting: tFor(locale, 'notif.email.greeting'),
+      subject: tFor(locale, 'notif.digest.subject', { count: sections.reduce((n, s) => n + sectionCount(s), 0) }),
+      dueToday: tFor(locale, 'notif.digest.dueToday'),
+      overdue: tFor(locale, 'notif.digest.overdue'),
+      footer: tFor(locale, 'notif.digest.footer'),
+      unsubscribe: tFor(locale, 'notif.digest.unsubscribe'),
+    };
+  } catch {
+    /* SC-5 boundary guard: any render failure degrades to English literals. */
+    frame = {
+      greeting: 'Hi,',
+      subject: `Daily digest: ${sections.reduce((n, s) => n + sectionCount(s), 0)} task(s)`,
+      dueToday: 'Due today',
+      overdue: 'Overdue',
+      footer: "You receive this because of your notification settings. If you weren't expecting it, you can ignore this email.",
+      unsubscribe: 'Unsubscribe from these emails',
+    };
+  }
+  const { greeting, subject, dueToday: dueLabel, overdue: overdueLabel, footer, unsubscribe } = frame;
+
+  /* D-03 section title: « Workspace : Marketing — 2 tâches » shape — the
+     workspace name, then its task count (locale fr|en). */
+  const sectionTitle = s => `${text(s.wsName) || 'Projects Studio'} — ${sectionCount(s)} ${locale === 'fr' ? 'tâche(s)' : 'task(s)'}`;
+  const textSection = s => {
+    const due = Array.isArray(s.dueToday) ? s.dueToday : [];
+    const late = Array.isArray(s.overdue) ? s.overdue : [];
+    const lines = [sectionTitle(s)];
+    for (const t of due) lines.push(`${dueLabel}:`, `- ${taskLabel(t)}\r\n  ${taskUrlFor(s.wsSlug, t)}`);
+    for (const t of late) lines.push(`${overdueLabel}:`, `- ${taskLabel(t)}\r\n  ${taskUrlFor(s.wsSlug, t)}`);
+    return lines;
+  };
+  const textBody = [greeting, '', ...sections.flatMap(textSection), '', `${footer} ${footerUrl}`].join('\r\n');
+
+  const htmlItems = (slug, items) =>
+    items
+      .map(
+        t =>
+          `<li style="margin:0 0 8px"><a href="${escapeHtml(taskUrlFor(slug, t))}" style="color:#3b5bdb;text-decoration:none">${escapeHtml(taskLabel(t))}</a></li>`,
+      )
+      .join('');
+  const htmlSection = s => {
+    const due = Array.isArray(s.dueToday) ? s.dueToday : [];
+    const late = Array.isArray(s.overdue) ? s.overdue : [];
+    const block = (label, items) =>
+      items.length
+        ? `<p style="margin:14px 0 6px;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:#6b665c">${escapeHtml(label)}</p><ul style="margin:0;padding-left:18px;list-style:disc">${htmlItems(s.wsSlug, items)}</ul>`
+        : '';
+    return `<p style="margin:20px 0 6px;font-size:15px;font-weight:600;border-top:1px solid #e7e3da;padding-top:14px">${escapeHtml(sectionTitle(s))}</p>${block(dueLabel, due)}${block(overdueLabel, late)}`;
+  };
+  const htmlBody = `<!doctype html>
+<html lang="${locale}">
+<body style="margin:0;padding:0;background:#f6f5f2;color:#26241f;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f5f2;padding:32px 16px">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e7e3da;border-radius:14px;padding:32px">
+        <tr><td>
+          ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(appName)}" style="max-height:48px;display:block" />` : ''}
+          <p style="margin:0 0 14px;font-size:16px;line-height:1.55">${escapeHtml(greeting)}</p>
+          ${sections.map(htmlSection).join('')}
+          <p style="margin:20px 0 0;font-size:13px;line-height:1.55;color:#6b665c">${escapeHtml(footer)} <a href="${escapeHtml(footerUrl)}" style="color:#3b5bdb;text-decoration:none">${escapeHtml(unsubscribe)}</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const boundary = `projects_${crypto.randomBytes(12).toString('hex')}`;
+  const headers = [
+    `From: ${formatAddress(appName, config.from)}`,
+    `To: <${to}>`,
+    ...(config.replyTo ? [`Reply-To: <${config.replyTo}>`] : []),
+    `Subject: ${encodeWord(subject)}`,
+    /* Same RFC 8058 gate as the per-ws digest: https unsubscribeUrl only,
+       wholly server-built (no CR/LF-carrying input interpolated). */
+    ...(msg.unsubscribeUrl && msg.unsubscribeUrl.startsWith('https://')
+      ? [`List-Unsubscribe: <${msg.unsubscribeUrl}>`, 'List-Unsubscribe-Post: List-Unsubscribe=One-Click']
+      : []),
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: <${crypto.randomUUID()}@${domainOf(config.from)}>`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    'Auto-Submitted: auto-generated',
+    'X-Mailer: Projects Studio',
+  ];
+
+  const body = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(textBody),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+    base64Body(htmlBody),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
+
+  return {
+    to,
+    data: [...headers, '', body].join('\r\n') + '\r\n',
+  };
+}
 function buildSecurityAlertMessage(config, msg) {
   const to = bareAddress(msg.to);
   if (!addressOk(to)) throw new Error('Security alert address is invalid');
@@ -1177,7 +1336,7 @@ function buildInviteMessage(config, invite) {
    verifyUnsubscribeToken exported pure — the token contract Phase 42's
    endpoint consumes, frozen by test/unsubscribe-token.test.mjs. Keys are
    arguments; the mailer module itself never touches MASTER_KEY. */
-export { encodeWord, truncate, buildDigestMessage, makeUnsubscribeToken, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage, buildBackupAlertMessage, buildRestoreAlertMessage };
+export { encodeWord, truncate, buildDigestMessage, buildDigestAggregatedMessage, makeUnsubscribeToken, unsubscribeUrl, makeUserUnsubscribeToken, unsubscribeUrlGlobal, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage, buildBackupAlertMessage, buildRestoreAlertMessage };
 
 export function createMailer(env = process.env) {
   const config = readConfig(env);
@@ -1230,6 +1389,17 @@ export function createMailer(env = process.env) {
       const session = new SmtpSession(config);
       try {
         await session.send(buildDigestMessage(config, msg));
+      } finally {
+        session.destroy();
+      }
+    },
+    /* Phase 91 (NOTIF-01, D-03/D-04): one user/day, ONE aggregated digest
+       email with per-workspace sections. Fire-and-forget — the delivery
+       pass replays the stored ctx, so retries are pure re-renders. */
+    async sendDigestAggregated(msg) {
+      const session = new SmtpSession(config);
+      try {
+        await session.send(buildDigestAggregatedMessage(config, msg));
       } finally {
         session.destroy();
       }

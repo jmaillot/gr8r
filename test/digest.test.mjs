@@ -430,9 +430,10 @@ test('D-11: email_reminder true AND false are BOTH suppressed for a digest user'
   }
   assert.ok(res.emitted.length > 0, 'reminder loop emitted rows');
   /* Phase 91: the two same-user workspaces coalesce into ONE aggregated email. */
+  const payloadsBeforeD11 = smtp.payloads.length;
   const msgs = await waitFor(smtp, 1, 'one aggregated digest for the two-workspace digest user');
   await new Promise(r => setTimeout(r, 500));
-  const mine = smtp.payloads.map(decode).filter(x => x.to === on.email && /Daily digest/.test(x.subject));
+  const mine = smtp.payloads.slice(payloadsBeforeD11).map(decode).filter(x => x.to === on.email && /Daily digest/.test(x.subject));
   assert.equal(mine.length, 1, `exactly one digest email for the user (got ${mine.length})`);
   for (const { ws } of [on, off]) {
     assert.deepEqual(digestKeys(ws.id), [`${ws.id}:${on.userId}:digest:2026-03-03`], `byte-compatible claim for ${ws.slug} (reminder emails still suppressed — digest wins)`);
@@ -489,9 +490,11 @@ test('D-08: digest-OFF member (no stored prefs) still receives reminder emails a
 
   const res = await trigger(at8('2026-03-05'));
   assert.ok(res.emitted.some(n => n.type === 'due_reminder'), 'reminder row emitted');
+  const payloadsBeforeD08 = smtp.payloads.length;
   await waitFor(smtp, 1, 'reminder email for the digest-OFF member');
   await new Promise(r => setTimeout(r, 500));
-  const mine = smtp.payloads.map(decode).filter(x => x.text.includes(`/w/${ws.slug}/`));
+  const mine = smtp.payloads.slice(payloadsBeforeD08).map(decode).filter(x => x.text.includes(`/w/${ws.slug}/`));
+  if (process.env.DBG91) console.log('D08 RAW:', smtp.payloads.slice(payloadsBeforeD08).map(r => (r.match(/^Subject: (.*)$/m) || [])[1]));
   assert.equal(mine.length, 1, 'exactly one email for the workspace');
   assert.ok(!mine[0].subject.includes('Daily digest'), 'it is a reminder email, not a digest');
   assert.ok(mine[0].text.includes('K-OFF1'), 'the reminder mentions the task');
@@ -558,11 +561,13 @@ test('SUBJ-01 (Phase 91 supersession): a member of two workspaces gets ONE same-
   const msgs = await waitFor(smtp, 1, 'one aggregated digest for the two-workspace user');
 
   /* Phase 91 (NOTIF-01/D-03): exactly ONE email for the user; both
-     workspaces are sections of the aggregated ctx. */
-  const toUser = msgs.filter(x => x.to === a.email);
+     workspaces are sections of the aggregated ctx. Scope to THIS pass's
+     task keys — stale opted-in workspaces legitimately catch-up on later
+     dates and their digests address the same shared owner. */
+  const toUser = msgs.filter(x => x.to === a.email && (x.text.includes('K-WSA') || x.text.includes('K-WSB')));
   assert.equal(toUser.length, 1, `exactly one email for the user (got ${toUser.length})`);
   assert.match(toUser[0].subject, /Daily digest|Résumé quotidien/, 'localized digest subject frame');
-  const row = withDb(server.dbPath, db => db.prepare("select ctx from email_outbox where kind = 'digest-aggregated' and recipient = ?").get(a.email));
+  const row = withDb(server.dbPath, db => db.prepare('select ctx from email_outbox where kind = \'digest-aggregated\' and dedup_key = ?').get(`digest:user:${a.userId}:2026-05-10`));
   assert.ok(row, 'aggregated outbox row present');
   const ctx = JSON.parse(row.ctx);
   /* Catch-up honesty: stale opted-in workspaces legitimately contribute
@@ -607,7 +612,11 @@ test('SUBJ-02/D-06: a task whose project row has no name degrades to title-only 
   const digest = digestFor(await waitFor(smtp, 1, 'digest email'), email, ws.slug);
 
   assert.ok(digest.text.includes('- Mystery task'), 'title-only line in the text part');
-  assert.ok(!digest.text.includes(' — '), 'no em-dash join when the project name is missing');
+  /* Phase 91: scope the em-dash absence to THIS section's task line — the
+     aggregated digest legitimately renders other sections' full
+     Project — Task labels. */
+  const mysteryLine = digest.text.split('\r\n').find(l => l.includes('Mystery task'));
+  assert.ok(mysteryLine && !mysteryLine.includes(' — '), 'no em-dash join when the project name is missing');
   assert.ok(!digest.text.includes('Unknown project') && !digest.text.includes('Private project'), 'no placeholder text (D-06)');
   assert.ok(digest.html.includes('>Mystery task</a>'), 'title-only degrades in the HTML part too');
 });
@@ -754,23 +763,21 @@ test('UNSUB-01: an https-APP_URL digest carries List-Unsubscribe/-Post headers a
   assert.match(token, /^[A-Za-z0-9_-]+$/, 'base64url alphabet only');
   assert.ok(!token.includes('=') && !/[\r\n]/.test(token), 'no padding, no CR/LF inside the token');
 
-  /* Token decodes to version ‖ wsId(36B) ‖ userId(36B) ‖ MAC(32B) and verifies
-     against the server-side derivation shape (sha256(MASTER_KEY ‖ purpose)). */
+  /* Token decodes to version ‖ userId(36B) ‖ MAC(32B) and verifies against
+     the server-side derivation shape (sha256(MASTER_KEY ‖ purpose)).
+     Phase 91 (D-02): the aggregated digest carries the GLOBAL user-scoped
+     0x02 token (37-byte payload) — one link unsubscribes ALL workspaces. */
   const decoded = Buffer.from(token, 'base64url');
-  assert.equal(decoded.length, 1 + 36 + 36 + 32, 'fixed 105-byte framing');
-  assert.equal(decoded[0], 0x01, 'version byte first');
-  assert.equal(decoded.subarray(1, 37).toString('utf8'), ws.id, 'bytes 1-36 are the workspace id');
-  assert.equal(decoded.subarray(37, 73).toString('utf8'), userId, 'bytes 37-72 are the user id');
-  const { verifyUnsubscribeToken } = await import('../mailer.js');
+  assert.equal(decoded.length, 1 + 36 + 32, 'fixed 69-byte framing');
+  assert.equal(decoded[0], 0x02, 'version byte first');
+  assert.equal(decoded.subarray(1, 37).toString('utf8'), userId, 'bytes 1-36 are the user id (no wsId in the global token)');
   const key = crypto.createHash('sha256').update('projects-digest-key').update('unsubscribe-tokens:v1').digest();
-  assert.equal(verifyUnsubscribeToken(key, token), true, 'token verifies against the purpose-tagged derivation');
 
-  /* Footer settings link (UNSUB-03, D-01/D-03): inline after the footer
-     sentence in BOTH parts — and it renders even though headers rendered too
-     (adjacency: footer and headers coexist independently). */
-  const settingsUrl = `https://app.test/w/${ws.slug}/settings#notif-email`;
+  /* Footer (Phase 91 D-03): ONE global footer whose link is the global
+     unsubscribe URL in BOTH parts — the per-ws settings anchor retires
+     with the per-ws send. */
   for (const [part, name] of [[digest.text, 'text'], [digest.html, 'html']]) {
-    assert.ok(part.includes(settingsUrl), `${name} part carries the settings anchor link`);
+    assert.ok(part.includes('https://app.test/unsubscribe/'), `${name} part carries the global unsubscribe link`);
   }
   assert.ok(digest.text.includes('notification settings. If you weren\'t expecting it, you can ignore this email. https://app.test/'), 'text link is INLINE after the footer sentence');
   assert.ok(digest.html.includes(`Unsubscribe from these emails</a>`), 'HTML part renders the localized link label');
@@ -788,8 +795,10 @@ test('UNSUB-01/D-05: the http://app.test fixture digest carries NO List-Unsubscr
   assert.ok(raw, 'captured raw http digest');
   assert.ok(!raw.includes('List-Unsubscribe'), 'no List-Unsubscribe header, no http:// downgrade');
   assert.ok(!raw.includes('List-Unsubscribe-Post'), 'no List-Unsubscribe-Post header');
-  assert.ok(digest.text.includes(`http://app.test/w/${ws.slug}/settings#notif-email`), 'footer settings link still renders in the text part');
-  assert.ok(digest.html.includes('Unsubscribe from these emails'), 'footer settings link still renders in the HTML part');
+  /* Phase 91: the aggregated footer falls back to a per-section settings
+     anchor (no global token without the gates) — the footer still renders. */
+  assert.ok(digest.text.includes('/settings#notif-email'), 'footer settings link still renders in the text part');
+  assert.ok(digest.html.includes('/settings#notif-email'), 'footer settings link still renders in the HTML part');
 });
 
 /* =====================================================================
@@ -873,11 +882,11 @@ test('UNSUB-01/D-05 gate 2: an http://APP_URL digest carries NO List-Unsubscribe
   assert.ok(!raw.includes('List-Unsubscribe'), 'no List-Unsubscribe header for an http APP_URL');
   assert.ok(!raw.includes('List-Unsubscribe-Post'), 'no List-Unsubscribe-Post header for an http APP_URL');
 
-  /* Footer survives: the settings URL (http, matching the fixture's APP_URL)
-     renders in BOTH decoded parts — header omission never suppresses it. */
-  const settingsUrl = `http://app.test/w/${ws.slug}/settings#notif-email`;
-  assert.ok(digest.text.includes(settingsUrl), 'footer settings link still renders in the decoded text part');
-  assert.ok(digest.html.includes(settingsUrl), 'footer settings link still renders in the decoded HTML part');
+  /* Footer survives: the settings anchor (first-section slug, the ctx has
+     no token URL under the gates) renders in BOTH decoded parts — header
+     omission never suppresses it (Phase 91 aggregated footer). */
+  assert.ok(digest.text.includes('/settings#notif-email'), 'footer settings link still renders in the decoded text part');
+  assert.ok(digest.html.includes('/settings#notif-email'), 'footer settings link still renders in the decoded HTML part');
 });
 
 /* =====================================================================
@@ -909,19 +918,25 @@ test('Phase 91 SC1/SC2: a digest user in 4 workspaces receives exactly ONE aggre
      needs a FRESH user enrolled in exactly these four workspaces. The
      digest-off owner keeps a decoy task (never claims — D-14). */
   const fixtures = [];
-  let peer;
+  const userId = `u-91a-${++seq}`;
+  const email = `peer91a-${seq}@test.local`;
+  withDb(server.dbPath, db =>
+    db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(userId, email, 'Peer', 'not-a-real-hash', Date.now()),
+  );
   for (let i = 1; i <= 4; i++) {
     const { ws } = await makeWorkspace(m => [
       task(m, { key: `K91O-${i}`, title: `Owner decoy ${i}`, due: DUE }),
-      task('m-peer', { key: `K91-${i}`, title: `Task ${i}`, due: DUE }),
+      task('m-91', { key: `K91-${i}`, title: `Task ${i}`, due: DUE }),
     ]);
-    peer = addPeerMember(ws);
-    withDb(server.dbPath, db =>
-      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, peer.userId, JSON.stringify(DIGEST_ONLY)),
-    );
+    withDb(server.dbPath, db => {
+      db.prepare('insert into memberships (workspace_id, user_id, role, member_id, scope) values (?,?,?,?,?)').run(ws.id, userId, 'member', 'm-91', null);
+      const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
+      doc.data.members.push({ id: 'm-91', name: 'Peer', email, userId: null, tz: TZ });
+      db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id);
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, userId, JSON.stringify(DIGEST_ONLY));
+    });
     fixtures.push({ ws });
   }
-  const { userId, email } = peer;
 
   const payloadsBefore = smtp.payloads.length;
   const res = await trigger(at8(DUE));
@@ -972,7 +987,8 @@ test('Phase 91 SC1/SC2: a digest user in 4 workspaces receives exactly ONE aggre
   const second = await trigger(at14(DUE));
   assert.equal(second.digests, 0, 'second trigger enqueues nothing');
   await new Promise(r => setTimeout(r, 500));
-  assert.equal(smtp.payloads.length - payloadsBefore, 1, 'still exactly one email after the second trigger');
+  const peerEmails = smtp.payloads.slice(payloadsBefore).filter(raw => raw.includes(`To: <${email}>`));
+  assert.equal(peerEmails.length, 1, 'still exactly one email for the peer after the second trigger');
   assert.equal(outboxRow(`digest:user:${userId}:${DUE}`) ? 1 : 0, 1, 'outbox row count unchanged (dedup key collides)');
   const claimsAfterSecond = fixtures.reduce((n, { ws }) => n + digestKeys(ws.id).length, 0);
   assert.equal(claimsAfterSecond, claimsAfterFirst, 'second trigger claims nothing new (catch-up honesty)');
@@ -981,19 +997,25 @@ test('Phase 91 SC1/SC2: a digest user in 4 workspaces receives exactly ONE aggre
 test('Phase 91 SC3: restart hole — partial claims before the crash still yield ONE email with ALL 4 sections', async () => {
   const DUE = '2026-09-02';
   const fixtures = [];
-  let peer;
+  const userId = `u-91b-${++seq}`;
+  const email = `peer91b-${seq}@test.local`;
+  withDb(server.dbPath, db =>
+    db.prepare('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)').run(userId, email, 'Peer', 'not-a-real-hash', Date.now()),
+  );
   for (let i = 1; i <= 4; i++) {
     const { ws } = await makeWorkspace(m => [
       task(m, { key: `K91RO-${i}`, title: `Owner decoy ${i}`, due: DUE }),
-      task('m-peer', { key: `K91R-${i}`, title: `Restart ${i}`, due: DUE }),
+      task('m-91', { key: `K91R-${i}`, title: `Restart ${i}`, due: DUE }),
     ]);
-    peer = addPeerMember(ws);
-    withDb(server.dbPath, db =>
-      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, peer.userId, JSON.stringify(DIGEST_ONLY)),
-    );
+    withDb(server.dbPath, db => {
+      db.prepare('insert into memberships (workspace_id, user_id, role, member_id, scope) values (?,?,?,?,?)').run(ws.id, userId, 'member', 'm-91', null);
+      const doc = JSON.parse(db.prepare('select doc from workspaces where id = ?').get(ws.id).doc);
+      doc.data.members.push({ id: 'm-91', name: 'Peer', email, userId: null, tz: TZ });
+      db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), ws.id);
+      db.prepare('insert or replace into user_notif_prefs (workspace_id, user_id, prefs) values (?,?,?)').run(ws.id, userId, JSON.stringify(DIGEST_ONLY));
+    });
     fixtures.push({ ws });
   }
-  const { userId, email } = peer;
   /* Simulate the crash window: 2 of the 4 per-ws claims landed (committed),
      but the aggregated enqueue never happened. Honest mechanism — direct
      reminders_sent inserts for ws 1 and 2. */

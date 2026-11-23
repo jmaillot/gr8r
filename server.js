@@ -58,7 +58,7 @@ import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 /* Phase 45: the raw node:sqlite import moved out — db-adapter.mjs owns the
    handle. server.js only ever sees the adapter facade + transitional shims. */
-import { createMailer, unsubscribeUrl, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage } from './mailer.js';
+import { createMailer, unsubscribeUrl, unsubscribeUrlGlobal, verifyUnsubscribeToken, decodeUnsubscribePayload, buildUnsubscribePage } from './mailer.js';
 import { createOidc, pkcePair, verifyIdToken } from './oidc.js';
 import { buildOtpauthUri, generateRecoveryCode, generateTotpSecret, normalizeRecoveryCode, recoveryHash, verifyTotpCode } from './totp.js';
 import { referencesHidden } from './src/lib/redaction.js';
@@ -2916,6 +2916,12 @@ async function runReminderPass({ now: at = new Date() } = {}) {
           });
         }
         if (!claimed) continue;
+        /* Phase 91: the log/response `digests` counter is the users-ENQUEUED
+           count when MAILER is on (the enqueue loop below increments it).
+           MAILER-disabled servers keep the OLD semantic count — claims still
+           run (the digest-honesty ledger, research Q1 asymmetry) and the
+           response still reports them even though nothing is enqueued. */
+        if (!MAILER.enabled) digests++;
         /* POL-02: post-commit delivery kick moved to ONE post-loop kick after
            the aggregated enqueue (Phase 91) — NEVER inside a transaction
            (POL-02 D-07). The reminder loop above keeps its own kick. */
@@ -2939,11 +2945,10 @@ async function runReminderPass({ now: at = new Date() } = {}) {
     let enqueued = false;
     try {
       const logoUrl = acc.sections.find(s => s.logoUrl)?.logoUrl || null;
-      /* Task 2 interim: per-ws unsubscribe URL on the first section's ws —
-         Task 3 swaps this to the global user-scoped unsubscribeUrlGlobal
-         token (D-02) under the same gates. */
+      /* Phase 91 (D-02): GLOBAL user-scoped unsubscribe token (0x02) under
+         the same MASTER_KEY + https APP_URL gates the per-ws link had. */
       const unsubscribe = unsubscribeHmacKey() && APP_URL.startsWith('https://')
-        ? unsubscribeUrl(unsubscribeHmacKey(), APP_URL, acc.sections[0].wsId, acc.userId)
+        ? unsubscribeUrlGlobal(unsubscribeHmacKey(), APP_URL, acc.userId)
         : null;
       await db.tx(async () => {
         const r = await db.run('insert or ignore into email_outbox (id, workspace_id, dedup_key, kind, recipient, ctx, created_at) values (?,?,?,?,?,?,?)', [
@@ -3451,17 +3456,9 @@ async function deliverEmail(d, atMs, sendFn) {
     sendFn ||
     (async (kind, a) => {
       if (kind === 'digest') return MAILER.sendDigest(a);
-      /* Phase 91 Task 2 INTERIM projection (replaced by the aggregated
-         template + sendDigestAggregated dispatch in Task 3): a single-
-         section aggregated row renders through the existing per-ws builder
-         so the transport coalescing lands without crashing delivery.
-         Multi-section rows render their first section here — the full
-         D-03 template is Task 3's commit. */
-      if (kind === 'digest-aggregated') {
-        const s = a?.sections?.[0];
-        if (!s) throw new Error('digest-aggregated ctx carries no sections');
-        return MAILER.sendDigest({ ...a, workspace: s.wsName, wsSlug: s.wsSlug, dueToday: s.dueToday, overdue: s.overdue });
-      }
+      /* Phase 91 (NOTIF-01, D-03/D-04): one aggregated row = one send; the
+         stored ctx is replayed verbatim on every retry (pure re-render). */
+      if (kind === 'digest-aggregated') return MAILER.sendDigestAggregated(a);
       if (kind === 'backup_alert') return MAILER.sendBackupAlert(a);
       if (kind === 'restore_alert') return MAILER.sendRestoreAlert(a);
       return MAILER.sendNotif(a);
@@ -3487,8 +3484,26 @@ async function deliverEmail(d, atMs, sendFn) {
  * harness drives attempts without SMTP). MAILER-disabled servers return
  * immediately — producers skip claiming, so the pass leaves any row
  * untouched (open question 2: claim-based retry only matters when SMTP is
- * configured but down). Fail-absent. */
+ * configured but down). Fail-absent.
+ *
+ * Phase 91 (Rule-1 fix): passes are SERIALIZED on a module-level promise
+ * chain. The digest coalescing kicks the pass post-commit right after the
+ * reminder loop's own post-commit kick — two concurrent passes re-select a
+ * row whose attempt was already bumped and deliverEmail's
+ * `where attempt = ?` claim matches again, double-sending. Chaining keeps
+ * POL-02 D-07 (post-commit kick, never in tx) while closing the same-tick
+ * double-send window; every caller still gets its own full drain. */
+let emailDeliveryChain = Promise.resolve();
 async function runEmailDeliveryPass({ now: at, send: sendFn } = {}) {
+  const run = emailDeliveryChain.then(() => runEmailDeliveryPassNow({ now: at, send: sendFn }));
+  emailDeliveryChain = run.then(
+    () => {},
+    () => {},
+  );
+  return run;
+}
+
+async function runEmailDeliveryPassNow({ now: at, send: sendFn } = {}) {
   const atMs = at instanceof Date ? at.getTime() : Number.isFinite(at) ? at : now();
   const tally = { purged: 0, due: 0, delivered: 0, failed: 0, dead: 0, skipped: 0 };
   if (!MAILER.enabled) return tally;
