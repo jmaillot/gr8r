@@ -8,13 +8,10 @@ updated: 2026-11-23T12:10:00Z
 
 ## Current Test
 
-number: 5
-name: 5-locale consequence-text overflow check (de/fr)
+number: — (all tests processed)
+name: —
 expected: |
-  Switch locale to de or fr; open overwrite + DR confirm modals — consequence
-  text wraps, modal scrolls, nothing overflows .modal-b (BKRST-03/04,
-  89-VALIDATION.md manual-only item). Verified locally via browser this time.
-awaiting: agent verification
+awaiting: —
 
 ## Tests
 
@@ -61,13 +58,25 @@ note: |
 
 ### 5. 5-locale consequence-text overflow check (de/fr)
 expected: Switch locale to de or fr; open overwrite + DR confirm modals — consequence text wraps, modal scrolls, nothing overflows .modal-b (BKRST-03/04, 89-VALIDATION.md manual-only item).
-result: [pending]
+result: pass
+note: |
+  Verified headlessly against a live repro server (Playwright, bundle
+  `0b829701`): locale forced via PATCH /api/auth/me (the account locale wins
+  over localStorage per adoptAccountLocale). All 4 combos measured at 360px
+  viewport (mobile-narrow stress): DR confirm modal de + fr, overwrite modal
+  de + fr — no horizontal overflow inside .modal-b or any descendant
+  (scrollWidth == clientWidth everywhere), overflowY auto, document-level
+  overflow absent; consequence text wraps cleanly (screenshots reviewed,
+  /tmp/opencode/gr8r-uat/*.png). Workspace-scope backup created to reach the
+  overwrite CTA (instance-scope archives render only the DR CTA, D-89-21
+  authority chrome working as designed). Console shows only a benign
+  AbortError from the SPA abort-on-navigate fetch pattern.
 ## Summary
 
 total: 5
-passed: 4
+passed: 5
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
