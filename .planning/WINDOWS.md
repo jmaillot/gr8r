@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 12
+open_count: 13
 waived_count: 0
 fixed_count: 0
-total_count: 12
-last_updated: 2026-11-23T06:11:33.501Z
+total_count: 13
+last_updated: 2026-11-23T14:43:40.279Z
 ---
 
 # Broken Windows Ledger
@@ -27,6 +27,7 @@ last_updated: 2026-11-23T06:11:33.501Z
 | 10 | 87 | deviation | test/backup-rotation.test.mjs |  | D-16 recovery test asserts via delivery-kick log (test-process DB read-visibility quirk after export snapshot fence; see 87-03-SUMMARY deviations) | open |  | 2026-11-21T23:43:30.530Z |  |
 | 11 | 87 | unrun-verify | test/webhook-events.test.mjs |  | pre-existing due.reminder claim failure (out of 87-03 scope), recorded in deferred-items.md | open |  | 2026-11-21T23:43:30.746Z |  |
 | 12 | 89 | deviation | .planning/phases/89-restore/89-05-SUMMARY.md |  | npm test baseline carries 4 pre-existing failures + scheduler load-flake (see deferred-items 89-05 section); no 89-05-introduced failures | open |  | 2026-11-23T06:11:33.501Z |  |
+| 13 | 90 | deviation | .planning/phases/90-polish-verification-sweep/deferred-items.md |  | 90-01: npm test carries 2 pre-existing failures (french-typography Phase-88 S3 keys; webhook-routes health test) — verified pre-existing at a7e59e51, out of scope, logged to deferred-items.md | open |  | 2026-11-23T14:43:40.279Z |  |
 
 ````json
 [
@@ -183,6 +184,19 @@ last_updated: 2026-11-23T06:11:33.501Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-11-23T06:11:33.501Z",
+    "resolved_at": null,
+    "milestone": "v3.3"
+  },
+  {
+    "id": 13,
+    "kind": "deviation",
+    "phase": "90",
+    "file": ".planning/phases/90-polish-verification-sweep/deferred-items.md",
+    "line": null,
+    "description": "90-01: npm test carries 2 pre-existing failures (french-typography Phase-88 S3 keys; webhook-routes health test) — verified pre-existing at a7e59e51, out of scope, logged to deferred-items.md",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-11-23T14:43:40.279Z",
     "resolved_at": null,
     "milestone": "v3.3"
   }

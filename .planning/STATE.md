@@ -6,16 +6,16 @@ current_phase: 90
 current_phase_name: Polish & Verification Sweep
 current_plan: Not started
 status: planning
-stopped_at: Phase 90 context gathered
-last_updated: "2026-11-23T12:39:00.116Z"
+stopped_at: Completed 90-01-PLAN.md
+last_updated: "2026-11-23T14:45:01.871Z"
 last_activity: 2026-11-23
 last_activity_desc: Phase 89 complete, transitioned to Phase 90
-state_head: 2ed09abd384170896b670c9b9037e83a12d377f0
+state_head: 49b06b126cfe81f64d3c56391c25618bd6dc7b3e
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 21
+  completed_plans: 18
 ---
 
 # Project State
@@ -31,10 +31,10 @@ before features.
 ## Current Position
 
 Phase: 90 — Polish & Verification Sweep
-Current Plan: Not started
+Current Plan: 2 (01 complete, 02 next)
 Total Plans in Phase: 6
-Status: Ready to plan
-Last activity: 2026-11-23 — Phase 89 complete, transitioned to Phase 90
+Status: Executing
+Last activity: 2026-11-23 — 90-01 complete (Super Admins console, 2 tasks, 2 commits)
 
 ## Milestone v3.3 Phase Map
 
@@ -102,6 +102,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | Phase 89 P04 | 77m | 3 tasks | 6 files |
 | Phase 89 P05 | 41min | 3 tasks | 9 files |
 | Phase 89 P06 | 92 min | 3 tasks | 14 files |
+| Phase 90 P01 | ~35 min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 89]: 89-05 TDD evidence committed (tdd/red-89-05-task1..3.json); Task 3 RED re-captured after the prior executor stalled on crashing fixtures (RED_EVIDENCE_OK) — Never commit RED evidence whose failures do not match the actual failing cells — the prior fixture crashed (Unknown named parameter '0') instead of failing intentionally
 - [Phase 89]: 89-06: restore client is render-only payload chrome — overwrite gates on canBackup payload flag, DR on isInstanceAdmin auth flag, closed RESTORE_REFUSAL_TOASTS map 1:1 onto x5 keys, ONE shared poll timer for both surfaces
 - [Phase 89]: 89-06: DR phrase is a named machine constant (DR_CONFIRM_PHRASE, scanner-clean); preview drawer renders from the page layer with shared drawer classes — drawer.js untouched
+- [Phase 90]: 90-01: console keys split across commits per emitting markup — superRosterEmpty* landed with task 1 (its empty branch renders there), the 7 search keys with task 2; keys never precede or lag markup (plan executor's call)
+- [Phase 90]: 90-01: 3 orphaned keys removed (settings.operator.title/lead, page.governance.noMatchesOpBody) — i18n-scan dead-key gate; removed x5 same commit as the orphaning markup; net catalogue +9
+- [Phase 90]: 90-01: tree-wide data-a/data-v pins bumped 610→613 / 93→94 (i18n-shell + i18n-toast) — govSuperSeg/govSuperMore markup + operatorPromote's second occurrence; D-12 same-commit pin procedure
 
 ### Pending Todos
 
@@ -174,9 +178,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T12:38:59.976Z
-Stopped at: Phase 90 context gathered
-Resume file: .planning/phases/90-polish-verification-sweep/90-CONTEXT.md
+Last session: 2026-11-23T14:45:01.734Z
+Stopped at: Completed 90-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

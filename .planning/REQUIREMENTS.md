@@ -46,7 +46,7 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 
 ### Backlog (SACON)
 
-- [ ] **SACON-01**: The Super Admin console lists Super Admins by default; typing searches all users by name and email, non-admin matches render as promote candidates with a result cap (show-more control), and a successful promotion shows a keyed success toast, removes the candidate from results, and adds them to the roster without a page reload.
+- [x] **SACON-01**: The Super Admin console lists Super Admins by default; typing searches all users by name and email, non-admin matches render as promote candidates with a result cap (show-more control), and a successful promotion shows a keyed success toast, removes the candidate from results, and adds them to the roster without a page reload.
 
 ## Future Requirements (deferred)
 
@@ -80,4 +80,4 @@ Delegate instance operations to Backup/Restore Operator roles — scheduled mult
 | BKRST-02 | Phase 89 | Complete |
 | BKRST-03 | Phase 89 | Complete |
 | BKRST-04 | Phase 89 | Complete |
-| SACON-01 | Phase 90 | Pending |
+| SACON-01 | Phase 90 | Complete |
