@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 phase: 90-polish-verification-sweep
 source: [90-VERIFICATION.md]
 started: 2026-11-23T17:45:00Z
@@ -8,7 +8,7 @@ updated: 2026-11-23T19:20:00Z
 
 ## Current Test
 
-[items 1–6 PASS (2 after fixes); item 7 owner-pending — owner deferred the §9 read to later]
+[COMPLETE — 7/7 PASS (items 2, 3, 6 PASS after same-commit fixes fb356ee9 / 69b6b95c / cf1ba1b5; item 7 owner verify row)]
 
 ## Tests
 
@@ -38,4 +38,4 @@ result: **PASS after fix** (2026-11-23, Playwright headless, 1280px). **Finding 
 
 ### 7. DEPLOY.md accuracy — owner reads the two §9 trust sections
 expected: Owner reads §9 additions (backup engines: new scheduler/tasks/run-history vs legacy `node server.js --backup`; NTP/clock posture: chrony, accepted drift, what breaks on drift — crons + GFS retention) against deployment reality. Manual-only (D-90-21, owner verify row).
-result: pending — **owner decision**
+result: **PASS** (2026-11-23). Owner read both §9 additions (docs/DEPLOY.md:790–838) and confirmed them conformant to deployment reality — **owner verify row** (D-90-21).
