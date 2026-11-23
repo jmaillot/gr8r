@@ -1026,3 +1026,79 @@ test('SETTINGS-03: a doc carrying invoices hydrates and the field is gone after 
   await server.stop();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+/* =====================================================================
+   Phase 92 (D-02, owner-approved 2026-11-24) — the gfs_bucket backfill
+   sweep: deployment-time, idempotent, via the ONE shared GFS function.
+   Reboot pattern (this suite's own idiom): seed historical succeeded
+   rows with NULL buckets, reboot the server against the same dataDir,
+   and prove (a) every succeeded row ends up with the bucket the batch
+   derivation says, (b) a bucket written at creation is never touched,
+   (c) a third boot is a no-op (idempotency).
+   ===================================================================== */
+import { assignGfsBuckets } from '../export/gfs.js';
+import { ADMIN, signup } from './helpers/server.mjs';
+
+async function makeBackupOp(server, email) {
+  const joined = await signup(server.base, { name: 'Backup Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const grant = await operator.post('/api/auth/operator/instance-roles', { userId: withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get(email).id), role: 'backup_operator' });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  return (await login(server.base, email, 'password-1234')).client;
+}
+
+test('gfs_bucket backfill sweep: historical NULL rows filled at boot via the shared function; creation-written buckets untouched; second boot is a no-op', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-gfs-backfill-'));
+  let server = await startServer({ dataDir });
+  try {
+    const op = await makeBackupOp(server, 'op-backfill@test.local');
+    const created = await op.post('/api/backup/tasks', { name: 'Backfill', scope: { kind: 'instance' }, cron: '30 2 * * *' });
+    const taskId = created.data.task.id;
+    const DAY = 24 * 3600 * 1000;
+    const base = Date.UTC(2026, 0, 2, 2, 30);
+    const seed = (id, at, gfs = null) =>
+      withDb(server.dbPath, db =>
+        db.prepare('insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at, gfs_bucket) values (?,?,?,?,?,?,?,?)').run(
+          id, taskId, JSON.stringify({ kind: 'instance' }), 'scheduled', 'succeeded', at, at, gfs,
+        ),
+      );
+    const y = seed('bf-yearly', base); // 2026 yearly
+    const m = seed('bf-monthly', base + 31 * DAY); // Feb monthly
+    const w = seed('bf-weekly', base + 38 * DAY); // W07 weekly
+    const d1 = seed('bf-daily1', base + 39 * DAY);
+    const d2 = seed('bf-daily2', base + 40 * DAY);
+    // One row carries a bucket ALREADY written at creation — the sweep must
+    // never overwrite it even if the value looks unusual.
+    seed('bf-prewritten', base + 41 * DAY, 'daily');
+
+    // Reboot: boot 2 runs the sweep.
+    await server.stop();
+    server = await startServer({ dataDir });
+
+    const rows = withDb(server.dbPath, db => db.prepare('select id, created_at, gfs_bucket from backup_runs where task_id = ? order by created_at asc, id asc').all(taskId));
+    const expected = assignGfsBuckets(rows);
+    for (const r of rows) {
+      assert.ok(r.gfs_bucket, `${r.id} carries a stored bucket after the sweep`);
+      if (r.id === 'bf-prewritten') {
+        assert.equal(r.gfs_bucket, 'daily', 'a creation-written bucket is never overwritten');
+      } else {
+        assert.equal(r.gfs_bucket, expected.get(r.id), `${r.id} matches the shared-function batch derivation`);
+      }
+    }
+    assert.equal(rows.find(r => r.id === 'bf-yearly').gfs_bucket, 'yearly');
+    assert.equal(rows.find(r => r.id === 'bf-monthly').gfs_bucket, 'monthly');
+    assert.equal(rows.find(r => r.id === 'bf-weekly').gfs_bucket, 'weekly');
+    void y; void m; void w; void d1; void d2;
+
+    // Reboot again: boot 3 — the sweep must be a strict no-op (idempotent).
+    const before = JSON.stringify(rows);
+    await server.stop();
+    server = await startServer({ dataDir });
+    const after2 = JSON.stringify(withDb(server.dbPath, db => db.prepare('select id, created_at, gfs_bucket from backup_runs where task_id = ? order by created_at asc, id asc').all(taskId)));
+    assert.equal(after2, before, 'the second sweep mutated nothing — `where gfs_bucket is null` idempotency holds');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

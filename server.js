@@ -1019,6 +1019,13 @@ async function initDb() {
   // default (null = not-yet-backfilled marker, the gated boot sweep's WHERE
   // clause). Def byte-identical to the SCHEMA declaration (Pitfall P-B).
   await adapterEnsureColumn('backup_runs', 'gfs_bucket', 'text');
+  // Phase 92 (D-02, owner-approved 2026-11-24): deployment-time backfill —
+  // migration, NOT a user-triggered mutation (no audit-funnel row: it is a
+  // boot DDL-companion like the additive columns above). Idempotent over
+  // `gfs_bucket is null`, one shared GFS function, dual-engine statement
+  // shapes (parameterized select/update — the T-45-08 pg-safe lint covers
+  // both engines).
+  await backfillGfsBuckets();
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -3981,6 +3988,42 @@ async function handleBackupTaskOutcome(taskId, runId, outcome, errorText) {
    feeds naming, rotation, gfsKeptPositions and the backfill). server.js
    imports them beside the cron module. The pinned date tests
    (test/gfs-kept-until.test.mjs) prove the relocation behavior-neutral. */
+
+/* Phase 92 (D-02): boot backfill sweep — the ONLY writer of HISTORICAL
+   backup_runs rows (bucket-at-creation covers new rows). Per task: walk ALL
+   succeeded runs oldest-first through the ONE shared pure function, then
+   write only the rows whose stored bucket is still NULL — the `where
+   gfs_bucket is null` guard makes the sweep idempotent (a second boot is a
+   no-op) and keeps any bucket written at creation untouched: the batch walk
+   MUST span every succeeded run (not just the NULL ones), because a
+   non-NULL predecessor consumes its calendar slots (exactly-one-bucket,
+   D-10). Owner-approved one-way migration (decision 2026-11-24). */
+async function backfillGfsBuckets() {
+  const taskIds = (await db.all('select distinct task_id as id from backup_runs where task_id is not null')).map(r => r.id);
+  let filled = 0;
+  for (const taskId of taskIds) {
+    try {
+      const rows = await db.all(
+        "select id, created_at, gfs_bucket from backup_runs where task_id = ? and status = 'succeeded' order by created_at asc, id asc",
+        [taskId],
+      );
+      if (!rows.some(r => !r.gfs_bucket)) continue;
+      const buckets = assignGfsBuckets(rows);
+      for (const r of rows) {
+        if (r.gfs_bucket) continue; // written at creation (or a previous sweep) — never touched
+        const bucket = buckets.get(r.id);
+        if (bucket) {
+          await db.run('update backup_runs set gfs_bucket = ? where id = ? and gfs_bucket is null', [bucket, r.id]);
+          filled += 1;
+        }
+      }
+    } catch (err) {
+      /* per-task try/catch — one broken task never starves the others (T-87-04 discipline) */
+      logWarn(`gfs_bucket backfill task ${taskId}: ${err?.message || err}`);
+    }
+  }
+  if (filled) logInfo(`gfs_bucket backfill: ${filled} succeeded run row(s) filled`);
+}
 
 /* Phase 90 (SC-3, D-90-16 refined): the kept-POSITION map — per-request
    retention visibility, never a date. GFS is count-based per bucket: a run's
