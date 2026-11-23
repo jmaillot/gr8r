@@ -278,3 +278,13 @@ None - no external service configuration required.
 ---
 *Phase: 89-restore*
 *Completed: 2026-11-23*
+
+## Self-Check: PASSED
+
+- All 7 key files verified on disk; all 7 plan commits verified in git log (e73dc180 → ae6fd86b)
+- Plan verification re-run post-close-out: `node --test test/restore-overwrite.test.mjs test/restore-instance.test.mjs test/restore-routes.test.mjs` → 40/40, exit 0
+- Regression controls re-verified this session: backup-routes + backup-scheduler + restore-import 29/29 solo
+- `npm test` baseline: identical to the 89-04 deferred ledger (4 pre-existing failures + scheduler parallel-load flake), no 89-05-introduced failures; recorded in .planning/WINDOWS.md
+- BKRST-03/04 intentionally NOT marked complete in REQUIREMENTS.md — plan 06 co-declares them (shared-ID gate #2388); they flip when 89-06's SUMMARY lands
+- STATE.md: current_plan 6, metric row P05 (41min/3/9), 4 decisions, session continuity — ROADMAP.md: 89-05 checked off
+
