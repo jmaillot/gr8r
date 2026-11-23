@@ -1,16 +1,34 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-23 — Phase 90 (Polish & Verification Sweep) complete: 4/4 plans, verification 42/42 (fresh digest, 3 post-UAT fixes verified_with_evidence), UAT 7/7 live (2 findings fixed same-commit: restore-list invalidation keyed on run identity; projection detail-list scroll), secure-phase 12/12 threats closed (ASVS L1), code review 6 findings dispositioned (2 warning fixed with red→green regressions, 4 INFO open). Milestone v3.3 fully verified.*
+*Last updated: 2026-11-23 — Milestone v3.4 started (UX Polish & Backup Console Refinement). v3.3 shipped and archived 2026-11-23 (see MILESTONES.md).*
 
-## Current Milestone: v3.3 Instance Operations — Backup, Restore & Roles
+## Current Milestone: v3.4 UX Polish & Backup Console Refinement
 
-**Goal:** Déléguer l'exploitation d'instance à des rôles Backup/Restore Operator — sauvegardes programmées multi-scopes avec rotation, restauration sélective sûre — et finaliser la console Super Admin.
+**Goal:** Consolider l'UX des surfaces opérationnelles (gouvernance, backup, settings) et corriger les bugs remontés à l'usage de v3.3 — picker réutilisables, tables honnêtes, naming parlant, digest email unique.
 
 **Target features:**
-- Backup (Instance > Backup): tâches multiples (scope projet/workspace/instance, cron, rotation GFS par échelle), export logique unique (rows + fichiers, SQLite/Postgres v1), destinations local + S3 (SMB/FTP v2), historique des runs + notification d'échec + Run now + checksum
-- Restore (Instance > Restore): restauration sélective (instance/workspace/projet) depuis les backups disponibles ; import « à côté » par défaut (suffixe -restored), overwrite en option avec type-to-confirm + snapshot pré-restore
-- Rôles: table instance_roles extensible, Super Admins auto-membres, tab « Instance Roles » dans Instance > Governance ; Backup Operators = gestion complète des tâches
-- Backlog: Super Admin console role-first listing (roster + recherche nom/email pour promouvoir, cap résultats, feedback post-promotion)
+- Instance Roles (Governance): tabs par rôle (Super Admin / Backup Op / Restore Op), une ligne par user avec badges cumulés, renommage « Super Admins & Roles » → « Instance Roles », user picker sélectionnable style Edit-team (y compris dans le dialog Grant, dont la recherche est cassée)
+- Backup tasks console: refonte légère — édition pré-remplie (cron courant), rétention mensuelle/annuelle, header « Edit backup task » au-dessus du bloc, table des tâches avec Next run + Last run (statut), schedule humanisé (« Every Monday at 00:00 »), noms workspace/projet au lieu des ids, historique unifié multi-tâches avec filtres
+- Backup naming: fichiers d'archive ET libellés UI portant instance / nom de workspace / nom de projet + marqueur GFS (daily/weekly/monthly/yearly); hint « les manuels ne sont sous aucune rétention » sur Run now
+- Cross-workspace: opérateurs (Super Admin / Backup Op / Restore Op) voient tous les workspaces dans les pickers Backup/Restore uniquement
+- Settings: My Access (icône projet / vue colonnes), API Keys (purge des clés révoquées), Workspace URL sur une ligne; Teams picker sélectionnable dans Invite Member > Edit Teams
+- Notifications: investigation + fix du digest quotidien reçu 4× (même destinataire), avec test épinglé
+
+<details>
+<summary>Milestone v3.3 Instance Operations — Backup, Restore & Roles — SHIPPED (2026-11-23)</summary>
+
+**Shipped:** 6 phases (85–90), 21 plans, 12/12 requirements traced, all phases verified at close (fresh v2 digests 6/6 passed).
+
+**What the app does now (delta from v3.2):**
+- **Roles:** `instance_roles` table + `hasInstanceRole` funnel (Super-Admins auto-members, ARCHIVE_READ reserved), Instance Roles governance tab, audited grant/revoke; Backup Operators = full task CRUD, Restore Operators = browse/preview/restore only.
+- **Backup:** multi-scope tasks (project/workspace/instance), 5-field cron subset with builder presets, at-most-once catch-up, no-overlap (skipped_overlap), GFS rotation (7/4/12/5) after verified runs, run history + Run now, transition-based failure emails; manual Run-now archives (task_id NULL, no retention).
+- **S3 destination:** zero-dep SigV4 client (AWS/MinIO/B2), boot-frozen env custody, streamed uploads + post-upload checksum verify, probe-at-save, s3Enabled task gate.
+- **Restore:** preview-from-manifest, import-as-new (-restored) default, guarded overwrite (type-to-confirm + pre-restore snapshot), Super-Admin-only instance DR + security contract (threats_open 0, ASVS L1), restore authority scoped by live rights, DR revokes all sessions.
+- **Polish:** Super Admin console role-first listing + promote-search, verify-checksum + archive download tiering, rotation-deletion preview + kept-until badges, restore-list invalidation keyed on run identity, PG-parity e2e (full backup→S3→DR cycle), 18-test DST cron matrix, DEPLOY.md trust docs.
+
+**Known gaps carried forward:** webhook-events/webhook-routes test family, french-typography Phase-88 fr keys, logo junk-name quirk (export/backup.js:666 — origin of the removed "[object Promise]/" debris), scheduler overlap load-flake; all documented in deferred-items, acknowledged at close.
+
+</details>
 
 <!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 

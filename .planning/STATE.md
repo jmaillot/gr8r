@@ -1,19 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.3
-milestone_name: Instance Operations — Backup, Restore & Roles
-status: Awaiting next milestone
-stopped_at: Phase 90 complete — all phases complete
-last_updated: "2026-11-23T19:29:46.337Z"
+milestone: v3.4
+milestone_name: UX Polish & Backup Console Refinement
+status: planning
+last_updated: "2026-11-23T19:34:57.662Z"
 last_activity: 2026-11-23
-last_activity_desc: Milestone v3.3 completed and archived
-state_head: f9ed028746bae0fa79c715d853f572c80ac5abd3
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 21
-  completed_plans: 21
-current_phase: 90
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +25,10 @@ before features.
 
 ## Current Position
 
-Phase: Milestone v3.3 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-11-23 — Milestone v3.3 completed and archived
+Status: Defining requirements
+Last activity: 2026-11-23 — Milestone v3.4 started
 
 ## Milestone v3.3 Phase Map
 
