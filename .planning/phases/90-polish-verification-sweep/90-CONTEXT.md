@@ -38,7 +38,7 @@ Fermer la checklist de confiance du milestone v3.3 : console Super Admin role-fi
 - **D-90-13:** La preview est **groupée par échelle GFS** (daily/weekly/monthly/yearly) avec compte par groupe, liste détaillée dépliable (trunc + title sur les noms de fichiers — idiom existant).
 - **D-90-14:** Tâche jamais exécutée → **empty state à clé** (« aucun run à évaluer ») — pas de projection fictive.
 - **D-90-15:** La preview est **throttle opérateur** (type D-89-22) — la projection lit tous les runs de la tâche.
-- **D-90-16:** **« Kept until » calculé à la volée** par le serveur depuis la policy GFS actuelle de la tâche (run date + rétention), affiché dans l'historique des runs. Toujours exact même si la policy change — jamais stocké sur le run. — **Reversibility:** reversible
+- **D-90-16:** **« Kept until » rendu comme position de bucket** (« kept: 3/7 daily »), PAS comme une date : la rétention GFS est comptée par bucket (keep-N, assignGfsBuckets server.js:3839-3945) et la suppression dépend des runs futurs — une date littérale serait fausse à chaque nouveau run. Calculé à la volée par le serveur par requête, affiché dans l'historique des runs. Décision affinée post-research (le chercheur a établi que la sémantique date n'existe pas dans la mécanique GFS). — **Reversibility:** reversible
 
 ### Sweep e2e PG-parity + DST (SC-4)
 
