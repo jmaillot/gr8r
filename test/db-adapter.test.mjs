@@ -619,3 +619,35 @@ pgMaybe('FTS parity on pg: same scenario, same results as SQLite (SEARCH-03/04, 
   assert.equal(pkg.dependencies['web-push'], '4.0.0'); // exact approved pin — no range drift
   assert.match(pkg.dependencies.pg, /^\^8\./);
 });
+
+/* ---- Phase 92 (BKNAME-02, D-02): gfs_bucket dual-engine lockstep ------- */
+
+test('gfs_bucket column: SCHEMA + pg variant + ensureColumn + server boot all agree (dual-engine lockstep, D-02)', async () => {
+  // DDL lockstep: the fresh-schema declaration and the pg-derived variant
+  // both carry the nullable text column (no default — null = not-yet-
+  // backfilled marker).
+  assert.match(adapter.SQLITE_SCHEMA, /gfs_bucket\s+text,\s*\n?\s*created_at/);
+  assert.match(adapter.pgSchemaVariant(adapter.SQLITE_SCHEMA), /gfs_bucket\s+text/);
+  // SQLite fresh-schema path: runSchema then a no-op ensureColumn.
+  const dbPath = tmpDbPath();
+  await adapter.connectDb({ dbPath });
+  await adapter.runSchema(adapter.SQLITE_SCHEMA);
+  await adapter.ensureColumn('backup_runs', 'gfs_bucket', 'text'); // idempotent against the fresh schema
+  const db = new DatabaseSync(dbPath);
+  const col = db.prepare('pragma table_info(backup_runs)').all().find(c => c.name === 'gfs_bucket');
+  assert.ok(col, 'gfs_bucket present after runSchema');
+  assert.equal(col.type.toLowerCase(), 'text', 'nullable text, no default');
+  assert.equal(col.dflt_value, null, 'no default — null is the not-yet-backfilled marker');
+  db.close();
+  fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
+  // Server boot path: a pre-92 database gets the column via the boot
+  // ensureColumn wave (the same openDb path every suite exercises).
+  const server = await startServer({});
+  try {
+    const bootCol = withDb(server.dbPath, db => db.prepare('pragma table_info(backup_runs)').all().find(c => c.name === 'gfs_bucket'));
+    assert.ok(bootCol, 'gfs_bucket present after a server boot');
+    assert.equal(bootCol.type.toLowerCase(), 'text');
+  } finally {
+    await server.stop();
+  }
+});

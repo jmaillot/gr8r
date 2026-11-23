@@ -86,6 +86,7 @@ import { buildMspdi } from './export/mspdi.js';
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt } from './export/cron.js';
+import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
@@ -822,6 +823,13 @@ const SCHEMA = `
        migration (a comment here must never end a line with a semicolon,
        runSchema splits statements on ';-newline'). */
     missing_blob_count   integer not null default 0,
+    /* Phase 92 (BKNAME-02, D-02): the stored GFS bucket — written at run
+       creation for succeeded rows only (null = not-yet-backfilled marker,
+       the idempotent boot sweep's WHERE clause). Nullable text, NO default
+       (a comment here must never end a line with a semicolon — runSchema
+       splits statements on ';-newline'). Def byte-identical on both
+       engines (Pitfall P-B); the boot ensureColumn covers existing dbs. */
+    gfs_bucket           text,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);
@@ -1007,6 +1015,10 @@ async function initDb() {
   // Phase 90 (D-90-23, 90-03): the per-run missing-blob warning count — def
   // byte-identical to the SCHEMA declaration (Pitfall P-B), default 0.
   await adapterEnsureColumn('backup_runs', 'missing_blob_count', 'integer not null default 0');
+  // Phase 92 (BKNAME-02, D-02): the stored GFS bucket — nullable text, NO
+  // default (null = not-yet-backfilled marker, the gated boot sweep's WHERE
+  // clause). Def byte-identical to the SCHEMA declaration (Pitfall P-B).
+  await adapterEnsureColumn('backup_runs', 'gfs_bucket', 'text');
   await adapterEnsureColumn('users', 'locale', 'text');
   // Phase 14 AUTH-02 additive migration: session metadata + dormant 2FA columns.
   // Each def is byte-identical to the SCHEMA declaration (Pitfall P-B).
@@ -3598,6 +3610,27 @@ const writeBackupRunRow = async event => {
       ['succeeded', event.finishedAt, event.durationMs, event.sizeBytes, event.sha256, event.filename, event.runId],
     );
     if (event.taskId) {
+      /* Phase 92 (BKNAME-02, D-02): bucket-at-creation — query the task's
+         PRIOR succeeded runs in the rotation ordering (`created_at asc, id
+         asc`, Pitfall-1 tiebreak) and store gfsBucketFor(...) on THIS new
+         row only. Never writes historical rows — the backfill sweep is the
+         single historical writer (gated, Phase 92 Task 4). Best-effort:
+         a failed store leaves the row NULL, which the rotation's in-memory
+         fallback and the boot sweep both handle through the shared
+         function. */
+      try {
+        const row = await db.get('select id, created_at from backup_runs where id = ?', [event.runId]);
+        if (row) {
+          const prior = await db.all(
+            "select id, created_at from backup_runs where task_id = ? and status = 'succeeded' and id <> ? order by created_at asc, id asc",
+            [event.taskId, event.runId],
+          );
+          const bucket = gfsBucketFor(prior, row);
+          if (bucket) await db.run('update backup_runs set gfs_bucket = ? where id = ?', [bucket, event.runId]);
+        }
+      } catch (err) {
+        logWarn(`backup run ${event.runId}: gfs_bucket store skipped: ${err?.message || err}`);
+      }
       /* 87-03: verified success → GFS rotation for THIS task (D-10/D-13:
          the pipeline fails the run on manifest mismatch, so 'succeeded' IS
          verified success — rotation only ever follows a verified run),
@@ -3943,55 +3976,11 @@ async function handleBackupTaskOutcome(taskId, runId, outcome, errorText) {
    verified success).
    ===================================================================== */
 
-const ISO_DAY_MS = 86_400_000;
-
-/* ISO-8601 week key (UTC, nearest-Thursday algorithm) — the weekly-bucket
-   label. Pure UTC math, no tz caching (tz.js discipline). */
-function isoWeekKey(ms) {
-  const d = new Date(ms);
-  const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  target.setUTCDate(target.getUTCDate() - ((target.getUTCDay() + 6) % 7) + 3); // nearest Thursday
-  const isoYear = target.getUTCFullYear();
-  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
-  jan4.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay() + 6) % 7) + 3); // week-1 Thursday
-  const week = 1 + Math.round((target.getTime() - jan4.getTime()) / (7 * ISO_DAY_MS));
-  return `${isoYear}-W${String(week).padStart(2, '0')}`;
-}
-
-/* D-10 exactly-one-bucket assignment over the task's succeeded runs OLDEST
-   first: yearly when the run is the task's FIRST of its calendar year, else
-   monthly when first of its calendar month, else weekly when first of its
-   ISO week, else daily. A run holds exactly ONE bucket label (documented
-   choice — RESEARCH Pattern 4 "exactly-one-bucket"). Task-scoped manual
-   Run-now rows (trigger manual, task_id set) participate the same way —
-   daily-tier candidates per D-10. */
-function assignGfsBuckets(runsAsc) {
-  const seenYears = new Set();
-  const seenMonths = new Set();
-  const seenWeeks = new Set();
-  const out = new Map();
-  for (const r of runsAsc) {
-    const d = new Date(r.created_at);
-    const year = d.getUTCFullYear();
-    const month = `${year}-${d.getUTCMonth() + 1}`;
-    const week = isoWeekKey(r.created_at);
-    /* Mark ALL calendar positions seen — a yearly run is also that month's
-       and that week's first run, but it holds only the yearly label: later
-       runs must not inherit the monthly/weekly slots from it. */
-    const newYear = !seenYears.has(year);
-    const newMonth = !seenMonths.has(month);
-    const newWeek = !seenWeeks.has(week);
-    seenYears.add(year);
-    seenMonths.add(month);
-    seenWeeks.add(week);
-    let bucket = 'daily';
-    if (newYear) bucket = 'yearly';
-    else if (newMonth) bucket = 'monthly';
-    else if (newWeek) bucket = 'weekly';
-    out.set(r.id, bucket);
-  }
-  return out;
-}
+/* Phase 92 (BKNAME-02) + assignGfsBuckets relocated VERBATIM
+   into export/gfs.js — THE single pure GFS definition (D-02: one function
+   feeds naming, rotation, gfsKeptPositions and the backfill). server.js
+   imports them beside the cron module. The pinned date tests
+   (test/gfs-kept-until.test.mjs) prove the relocation behavior-neutral. */
 
 /* Phase 90 (SC-3, D-90-16 refined): the kept-POSITION map — per-request
    retention visibility, never a date. GFS is count-based per bucket: a run's
@@ -4034,7 +4023,7 @@ export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}
       const task = await db.get('select * from backup_tasks where id = ?', [taskId]);
       if (!task) continue;
       const runsAsc = await db.all(
-        "select id, created_at, filename from backup_runs where task_id = ? and status = 'succeeded' order by created_at asc, id asc",
+        "select id, created_at, filename, gfs_bucket from backup_runs where task_id = ? and status = 'succeeded' order by created_at asc, id asc",
         [taskId],
       );
       if (runsAsc.length < 2) continue;
@@ -4044,7 +4033,23 @@ export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}
         "select id from backup_runs where task_id = ? and status = 'succeeded' order by created_at desc, id desc limit 1",
         [taskId],
       );
-      const buckets = assignGfsBuckets(runsAsc);
+      /* Phase 92 (BKNAME-02): rotation READS the stored gfs_bucket — never
+         re-derives from created_at (D-02: the stored column is the truth
+         the naming/backfill wrote). A succeeded row with an unexpectedly
+         NULL bucket (pre-backfill rows, failed bucket-at-creation store)
+         derives IN MEMORY per task with the shared function — keep math
+         unchanged, and NO write lands on the row: the historical write is
+         the gated boot sweep's alone (Phase 92 Task 4). */
+      const buckets = new Map();
+      let missingBucket = false;
+      for (const r of runsAsc) {
+        if (r.gfs_bucket) buckets.set(r.id, r.gfs_bucket);
+        else missingBucket = true;
+      }
+      if (missingBucket) {
+        const derived = assignGfsBuckets(runsAsc);
+        for (const r of runsAsc) if (!buckets.has(r.id)) buckets.set(r.id, derived.get(r.id));
+      }
       const keep = { daily: task.retention_daily, weekly: task.retention_weekly, monthly: task.retention_monthly, yearly: task.retention_yearly };
       /* keep-N per bucket: count from the newest backwards; rows beyond the
          bucket's keep-N are expired candidates. */

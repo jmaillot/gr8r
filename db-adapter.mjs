@@ -478,6 +478,9 @@ export const SQLITE_SCHEMA = `
        fresh from this variant each boot; existing dbs get the additive
        ensureColumn twin). */
     missing_blob_count   integer not null default 0,
+    /* Phase 92 (BKNAME-02, D-02): stored GFS bucket — succeeded rows only,
+       null = not-yet-backfilled. Nullable text, no default. */
+    gfs_bucket           text,
     created_at   integer not null
   );
   create index if not exists backup_runs_task on backup_runs(task_id, created_at);

@@ -31,6 +31,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
+import { assignGfsBuckets, gfsBucketFor } from '../export/gfs.js'; // Phase 92: the single pure GFS definition
 
 const BACKUP_TOKEN = 'rotation-test-token';
 const userIdByEmail = (srv, email) => withDb(srv.dbPath, db => db.prepare('select id from users where email = ?').get(email).id);
@@ -431,6 +432,82 @@ test('MAILER disabled: last_notified_state still tracked, zero outbox claims', a
     await schedulerPass(server, Date.now());
     assert.equal(taskRow(server, taskId).last_notified_state, 'failed', 'state tracked honestly without SMTP');
     assert.equal(outboxRows(server).length, 0, 'enqueue gated on MAILER.enabled');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* =====================================================================
+   Phase 92 (BKNAME-02, D-02) — bucket-at-creation + stored-bucket
+   rotation. New succeeded runs store gfs_bucket at creation (the ONLY
+   writer of NEW rows); rotation reads the stored column and derives
+   IN MEMORY (never writing) when a succeeded row is still NULL.
+   ===================================================================== */
+
+test('gfsBucketFor: the single-run form agrees with the batch walk at identical created_at (Pitfall-1 tiebreak pin)', () => {
+  const T = Date.UTC(2026, 5, 3, 10, 0, 0); // same second
+  const a = { id: 'tie-a', created_at: T };
+  const b = { id: 'tie-b', created_at: T };
+  const batch = assignGfsBuckets([a, b]);
+  assert.equal(batch.get('tie-a'), 'yearly', 'first of the calendar year');
+  assert.equal(batch.get('tie-b'), 'daily', 'same-second follower is daily — the id tiebreak decides order, not the wall clock');
+  assert.equal(gfsBucketFor([], a), 'yearly', 'single-run form: first run of a task is yearly');
+  assert.equal(gfsBucketFor([a], b), 'daily', 'single-run form over [...prior, newRow] matches the batch derivation exactly');
+});
+
+test('bucket-at-creation: a real scheduled fire stores gfs_bucket on the NEW row, matching the batch derivation over the whole history', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-bac@test.local');
+    const taskId = await makeTask(server, op, 'Stored bucket');
+    /* Historical anchors: 2026 yearly primer, a November monthly, an expired
+       daily (it gets rotated by the fire — its stored bucket stays on the
+       row, rotation NEVER rewrites buckets). */
+    seedRun(server, taskId, { id: 'bac-yearly', at: Date.UTC(2026, 0, 5, 2, 30), filename: `backup-task-${taskId}-20260105-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'bac-monthly', at: Date.UTC(2026, 10, 3, 2, 0), filename: `backup-task-${taskId}-20261103-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'bac-daily', at: Date.UTC(2026, 10, 4, 10, 0), filename: `backup-task-${taskId}-20261104-100000.tar.gz` });
+    const nowMs = Date.now();
+    withDb(server.dbPath, db => db.prepare('update backup_tasks set next_run_at = ? where id = ?').run(nowMs - 60_000, taskId));
+    await schedulerPass(server, nowMs);
+
+    const rows = withDb(server.dbPath, db => db.prepare('select * from backup_runs where task_id = ? order by created_at asc, id asc').all(taskId));
+    const fresh = rows[rows.length - 1];
+    assert.equal(fresh.status, 'succeeded', 'the fired run succeeded');
+    assert.ok(fresh.gfs_bucket, 'the NEW succeeded row carries a stored gfs_bucket');
+    /* The batch walk over the full history (the same function, imported)
+       must derive exactly what was stored — Pitfall 1: same ordering,
+       same answer. */
+    const batch = assignGfsBuckets(rows);
+    assert.equal(fresh.gfs_bucket, batch.get(fresh.id), 'stored bucket === batch derivation for the new row');
+    assert.ok(['daily', 'weekly', 'monthly', 'yearly'].includes(fresh.gfs_bucket), 'the bucket is one of the four labels');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('rotation NULL-fallback: pre-backfill succeeded rows (gfs_bucket NULL) rotate identically via the in-memory derive, and NO bucket is written back', async () => {
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });
+  try {
+    const op = await makeBackupOp(server, 'op-null@test.local');
+    const taskId = await makeTask(server, op, 'Null fallback');
+    setRetention(server, taskId, { daily: 1 });
+    const base = Date.UTC(2026, 10, 2, 2, 30); // same ISO week/month/year — all daily except the yearly primer
+    seedRun(server, taskId, { id: 'null-primer', at: Date.UTC(2025, 0, 2, 2, 30), filename: `backup-task-${taskId}-20250102-023000.tar.gz` });
+    const r1 = seedRun(server, taskId, { id: 'null-r1', at: base, filename: `backup-task-${taskId}-20261102-023000.tar.gz` });
+    const r2 = seedRun(server, taskId, { id: 'null-r2', at: base + 24 * 3600 * 1000, filename: `backup-task-${taskId}-20261103-023000.tar.gz` });
+    const r3 = seedRun(server, taskId, { id: 'null-r3', at: base + 2 * 24 * 3600 * 1000, filename: `backup-task-${taskId}-20261104-023000.tar.gz` });
+    // All rows still NULL (pre-backfill seeds). Buckets: primer 2025 yearly,
+    // r1 first of 2026 → yearly, r2/r3 daily; keep daily=1 → r3 (newest
+    // daily) kept, r2 expires; the newest-verified exclusion also guards r3.
+    const report = await rotationPass(server, { taskId });
+    assert.equal(report.deleted, 1, 'the NULL-bucket fallback derives the same delete set');
+    assert.equal(runRow(server, r1).status, 'succeeded', 'r1 holds the 2026 yearly bucket — kept');
+    assert.equal(runRow(server, r2).status, 'deleted', 'the expired daily deleted');
+    assert.equal(runRow(server, r3).status, 'succeeded');
+
+    // NO historical write: the pass must leave every gfs_bucket NULL.
+    const bucketsAfter = withDb(server.dbPath, db => db.prepare('select id, gfs_bucket from backup_runs where task_id = ?').all(taskId));
+    assert.ok(bucketsAfter.every(r => r.gfs_bucket === null), 'rotation never writes gfs_bucket — the sweep is the only historical writer');
   } finally {
     await server.stop();
   }
