@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-23 — Phase 89 (Restore) complete: 6/6 plans, verification 6/6, UAT 5/5 (live DR on prod NAS: run done + re-login wall felt; security contract threats_open: 0). Fail-closed posture validated in production — two live-data inconsistencies (orphan doc.files[] entry, missing blob) correctly refused by the DR walker (D-89-10/D-89-12).*
+*Last updated: 2026-11-23 — Phase 90 (Polish & Verification Sweep) complete: 4/4 plans, verification 42/42 (fresh digest, 3 post-UAT fixes verified_with_evidence), UAT 7/7 live (2 findings fixed same-commit: restore-list invalidation keyed on run identity; projection detail-list scroll), secure-phase 12/12 threats closed (ASVS L1), code review 6 findings dispositioned (2 warning fixed with red→green regressions, 4 INFO open). Milestone v3.3 fully verified.*
 
 ## Current Milestone: v3.3 Instance Operations — Backup, Restore & Roles
 
@@ -784,6 +784,12 @@ No milestone is currently planned — scope v1.3 with `/gsd-new-milestone`.
 
 ### Validated
 
+- ✓ SACON-01 — Super Admin console role-first listing + trust-checklist sweep: promote-only
+  candidate search (name OR email, 2-char floor, cap 10 + show-more), keyed-toast no-reload
+  reconcile, verify-checksum action + instance-admin-only archive download tiering, rotation
+  dry-run projection with scrollable detail lists, kept-position GFS badges, PG-parity e2e +
+  DST cron boundaries, DEPLOY.md §9 engines/NTP sections (Phase 90; verification 42/42,
+  UAT 7/7 live, security 12/12 threats closed ASVS L1)
 - ✓ PSET-02, PSET-03, PSET-01, PSET-04, INVT-01..03, PROJ-01, PROJ-02, TEAM-01..03,
   UX-01 — Member & Project Experience (Phase 53; verification 17/17 against HEAD
   `cec43bd`, unit suite 1164 pass, phase e2e 20/20 EN+FR, i18n gate 0 dead/0 stale;

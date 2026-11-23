@@ -3,38 +3,38 @@ gsd_state_version: "1.0"
 milestone: v3.3
 milestone_name: Instance Operations — Backup, Restore & Roles
 current_phase: 90
-current_phase_name: Polish & Verification Sweep
-current_plan: 5 (01–02 complete, 03 next)
-status: executing
-stopped_at: Completed 90-04-PLAN.md
-last_updated: "2026-11-23T17:22:34.797Z"
+current_plan: Not started
+status: completed
+stopped_at: Phase 90 complete — all phases complete
+last_updated: "2026-11-23T19:12:12.037Z"
 last_activity: 2026-11-23
-last_activity_desc: Phase 89 complete, transitioned to Phase 90
-state_head: e6311fa6c793a300cab338db5b7457614418756d
+last_activity_desc: Phase 90 complete
+state_head: 25396df54ad71125bba31ae80c6b1774a54d70a0
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 21
   completed_plans: 21
+  percent: 83
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-11-21)
+See: .planning/PROJECT.md (updated 2026-11-23)
 
 **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening
 before features.
-**Current focus:** Phase 89 — restore
+**Current focus:** Milestone v3.3 complete — all phases (85–90) done; ready for `/gsd-complete-milestone`
 
 ## Current Position
 
-Phase: 90 — Polish & Verification Sweep
-Current Plan: 5 (01–02 complete, 03 next)
+Phase: 90
+Current Plan: Not started
 Total Plans in Phase: 6
-Status: Ready to execute
-Last activity: 2026-11-23 — 90-02 complete (archive download + verify-checksum, 3 tasks, 4 commits)
+Status: All phases complete
+Last activity: 2026-11-23 — Phase 90 complete
 
 ## Milestone v3.3 Phase Map
 
@@ -82,7 +82,7 @@ Research flags carried into planning (do not resolve at roadmap level):
 | 87 | 0 | - | - |
 | 88 | 3 | - | - |
 | 89 | 6 | - | - |
-| 90 | 0 | - | - |
+| 90 | 4 | - | - |
 
 *Updated after each plan completion*
 **Per-Plan Metrics:**
@@ -167,6 +167,9 @@ Cross-phase decisions that freeze in Phase 86: archive format, manifest schema +
 - [Phase 90]: D-90-18 verified with corrected US facts: the US ambiguous hour is 01:xx (02:00 EDT -> 01:00 EST) — a US 02:30 cron occurs once; earlier-of-two pinned non-vacuously via 01:30 probes
 - [Phase 90]: Full-cycle e2e rides the INSTANCE scope (Rule 3): the DR route refuses non-instance archives (restoreTargetMismatch) — the only scope completing the DR leg
 - [Phase 90]: DR staged S3 temp drops POST-commit: it must survive the D-89-30 in-tx re-hash (sha256File(archivePath)) — a post-extract drop fails that re-hash with ENOENT
+- [Phase 90]: restore-list invalidation keys on run IDENTITY (startedAt compare), not stage transition — a stage-only compare misses both small-instance shapes (run finishing inside the trigger POST; run N+1 finishing while run N was already the terminal prevStage) (90-UAT fix fb356ee9)
+- [Phase 90]: projection detail lists scroll in place (max-height+overflow-y on the expanded container) — 33+ candidates at full height pushed the page (90-UAT fix cf1ba1b5)
+- [Phase 90]: trunc+title discipline is owner-mandated on console rows — truncation without title= was fixed, not waived (90-UAT item 3, 69b6b95c)
 
 ### Pending Todos
 
@@ -188,10 +191,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-23T17:22:28.430Z
-Stopped at: Completed 90-04-PLAN.md
+Last session: 2026-11-23T19:15:00Z
+Stopped at: Phase 90 complete (UAT 7/7, verification 42/42) — milestone v3.3 ready for /gsd-complete-milestone
 Resume file: None
 
 ## Operator Next Steps
 
-- Review .planning/ROADMAP.md, then run /gsd-plan-phase 85
+- Milestone v3.3 is 100% complete — run /gsd-complete-milestone v3.3 to archive and prepare the next milestone

@@ -26,7 +26,7 @@
 - [x] **Phase 87: Scheduler, Tasks, Run History & Rotation** — backup_tasks/runs tables, builder schedule UI, reconcile tick, GFS rotation, run history, transition-based failure email (completed 2026-11-22)
 - [x] **Phase 88: S3 Destination** — hand-rolled SigV4 client (AWS/MinIO/B2), streamed uploads, post-upload checksum verify (completed 2026-11-22)
 - [x] **Phase 89: Restore** — preview-from-manifest, import-as-new (-restored) default, guarded overwrite with pre-restore snapshot, Super-Admin-only instance DR restore + security contract (completed 2026-11-23)
-- [ ] **Phase 90: Polish & Verification Sweep** — Super Admin console role-first listing, verify-checksum action, archive download tiering, PG parity e2e, DST cron tests
+- [x] **Phase 90: Polish & Verification Sweep** — Super Admin console role-first listing, verify-checksum action, archive download tiering, PG parity e2e, DST cron tests (completed 2026-11-23)
 
 ## Phase Details
 
@@ -159,7 +159,7 @@ Plans:
 4. The full backup/restore flow passes a PG-parity e2e sweep (POSTGRES_TEST_URL, REPEATABLE READ export) and DST-boundary cron tests; all new i18n keys are gated ×5 locales.
 5. DEPLOY.md documents timezone/NTP posture and the distinction between the new backup engine and the legacy `--backup` CLI.
 
-**Plans:** 4/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [x] 90-01-PLAN.md — Super Admin console: roster-first seg section + promote-search (SACON-01, SC-1)
@@ -178,7 +178,7 @@ Plans:
 | 87. Scheduler, Tasks, Run History & Rotation | 4/4 | In Progress|  |
 | 88. S3 Destination | 3/3 | Complete    | 2026-11-22 |
 | 89. Restore | 6/6 | Complete    | 2026-11-23 |
-| 90. Polish & Verification Sweep | 4/4 | In Progress|  |
+| 90. Polish & Verification Sweep | 4/4 | Complete    | 2026-11-23 |
 
 ## Phase Ordering Rationale
 
