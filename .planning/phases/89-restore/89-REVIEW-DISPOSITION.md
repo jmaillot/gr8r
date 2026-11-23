@@ -9,19 +9,19 @@ findings:
     title: "restoreInstanceUnit leaks the global restore_lock on early failure paths — instance wedged until reboot"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "DR team_members rows skip the team_id validation the overwrite path enforces — NULL crashes the whole DR tx unkeyed; dangling team refs insert silently"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "DR member_id dedupe is global across workspaces, but member_id is per-workspace scoped — valid roster rows get skipped"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "DR `delete from workspaces` silently cascade-deletes api_keys — an undisclosed destructive side effect outside the D-89-7 skip report"
   - id: WR-04
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "all three restore units buffer staged ndjson whole into memory — violates the module's own P3 posture, OOM risk on large operational tables"
   - id: IN-01
     severity: info
@@ -59,7 +59,7 @@ findings:
     severity: info
     disposition: open
     title: "engine-side pre_restore audit rows record actor_name 'unknown'"
-open: 13
+open: 9
 total: 14
 recorded: 2026-11-23T08:46:23.937Z
 ---
@@ -69,10 +69,10 @@ recorded: 2026-11-23T08:46:23.937Z
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
 | CR-01 | critical | fixed | 89-REVIEW-FIX.md |
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| WR-04 | warning | open | - |
+| WR-01 | warning | fixed | 89-REVIEW-FIX.md (hand-reconciled: fixer re-titled the finding; fix commit f86de580) |
+| WR-02 | warning | fixed | 89-REVIEW-FIX.md (hand-reconciled: fixer re-titled the finding; fix commit b567fb68) |
+| WR-03 | warning | fixed | 89-REVIEW-FIX.md (hand-reconciled: fixer re-titled the finding; fix commit 17508393) |
+| WR-04 | warning | fixed | 89-REVIEW-FIX.md (hand-reconciled: fixer re-titled the finding; fix commit 0b1b0a8a) |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
