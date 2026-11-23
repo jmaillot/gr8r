@@ -60,4 +60,18 @@ Phase → Requirement mapping is filled by the roadmap (gsd-roadmapper).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmap) | | |
+| NOTIF-01 | Phase 91 | Pending |
+| BKNAME-01 | Phase 92 | Pending |
+| BKNAME-02 | Phase 92 | Pending |
+| ROLE-01 | Phase 93 | Pending |
+| ROLE-02 | Phase 93 | Pending |
+| ROLE-03 | Phase 93 | Pending |
+| BKUI-01 | Phase 94 | Pending |
+| BKUI-02 | Phase 94 | Pending |
+| BKUI-03 | Phase 94 | Pending |
+| BKUI-04 | Phase 94 | Pending |
+| XWS-01 | Phase 95 | Pending |
+| SET-01 | Phase 95 | Pending |
+| SET-02 | Phase 95 | Pending |
+| SET-03 | Phase 95 | Pending |
+| SET-04 | Phase 95 | Pending |
