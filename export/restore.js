@@ -2121,15 +2121,24 @@ export async function restoreInstanceUnit(opts = {}) {
       keptMemberships.push({ wsId: r.workspace_id, userId: r.user_id, role: r.role, memberId, provenance: r.provenance ?? 'manual' });
     }
 
+    /* team_members gate mirrors the overwrite unit (WR fix): team_id is
+       `text not null` (db-adapter) and every row must reference a team
+       that exists in the ARCHIVE DOCS' id space — a malformed or dangling
+       row skips + reports (D-89-7) instead of crashing the whole DR tx on
+       the raw NOT NULL constraint or inserting a dangling team ref. */
+    const teamIds = new Set();
+    for (const d of parsedDocs.values()) {
+      for (const t of arr(d.teams)) if (t && typeof t.id === 'string') teamIds.add(t.id);
+    }
     const keptTeamMembers = [];
     let teamMembersSkipped = 0;
     for (const r of arr(archiveRows.team_members)) {
       if (!r || !archiveWsIds.has(r.workspace_id)) continue;
-      if (!r.user_id || !liveUserIds.has(r.user_id)) {
+      if (!r.user_id || !liveUserIds.has(r.user_id) || !r.team_id || !teamIds.has(r.team_id)) {
         teamMembersSkipped += 1;
         continue;
       }
-      keptTeamMembers.push({ wsId: r.workspace_id, teamId: r.team_id ?? null, memberId: r.member_id ?? null, userId: r.user_id });
+      keptTeamMembers.push({ wsId: r.workspace_id, teamId: r.team_id, memberId: r.member_id ?? null, userId: r.user_id });
     }
 
     const keptInvites = [];
