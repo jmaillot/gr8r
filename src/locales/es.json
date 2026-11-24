@@ -1482,6 +1482,12 @@
   "settings.apikeys.newKey": "Tu nueva clave API",
   "settings.apikeys.createdHint": "Copia esta clave ahora — solo se muestra una vez.",
   "settings.apikeys.onceHint": "Projects Studio guarda solo un hash. Si la pierdes, crea una clave nueva.",
+  "settings.apikeys.purge": "Eliminar claves revocadas",
+  "settings.apikeys.purgeConfirmBody": "¿Eliminar todas las claves revocadas? Los agentes que las usan pierden el acceso definitivamente.",
+  "settings.apikeys.purgedToast": {
+    "one": "{n} clave eliminada.",
+    "other": "{n} claves eliminadas."
+  },
   "settings.operator.youBadge": "Tú",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Revocar sesiones",

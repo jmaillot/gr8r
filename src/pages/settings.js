@@ -111,7 +111,7 @@ export function srow(t, d, ctl) {
    in-render kick (not just the A.go hook) covers a boot-time deep link to
    ?sec=my-access. No role gate — every member incl. admins. */
 async function refreshMyAccess() {
-  const res = await api.myVisibility();
+  const res = await api.myAccess();
   if (res.ok) {
     S.ui.myAccessData = res.data;
     S.ui.myAccessErr = null;
@@ -301,7 +301,7 @@ export function settingsBody(sec, title) {
       <div class="sblock" style="margin-top:0"><div class="row" style="gap:14px;margin-bottom:18px">${wsLogo({ ...d.ws, logo }, 52)}<div><div class="label" style="margin-bottom:6px">${t('settings.ws.icon')}</div><div class="swatches">${['#2F2E2A', '#5A67D8', '#3B82C4', '#23918A', '#C54B78', '#C48A1E'].map(c => `<button type="button" class="sw ${d.ws.c === c ? 'on' : ''}" style="--c:${c};width:22px;height:22px" data-a="wsColor" data-v="${c}" aria-label="${t('common.color')} ${c}"></button>`).join('')}</div>
       ${wsAdmin ? `<div class="row" style="gap:8px;margin-top:10px"><label class="btn btn-sm btn-secondary" style="cursor:pointer">${t('settings.ws.uploadLogo')}<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml" data-in="uploadLogo"></label>${logo ? `<button type="button" class="btn btn-sm btn-danger-ghost" data-a="removeLogo">${t('settings.ws.removeLogo')}</button>` : ''}</div>` : ''}</div></div>
       <div class="col" style="gap:14px;max-width:440px"><div class="field"><label class="label" for="ws-name">${t('common.wsName')}</label><input class="input" id="ws-name" value="${esc(d.ws.name)}" ${wsAdmin ? '' : 'readonly'}></div>
-      <div class="field"><label class="label" for="ws-url">${t('common.wsUrl')}</label><div class="row" style="gap:0"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? t('settings.ws.urlWarning') : t('settings.ws.urlReadonly')}</span></div>
+      <div class="field"><label class="label" for="ws-url">${t('common.wsUrl')}</label><div class="row" style="gap:0;overflow:hidden;white-space:nowrap"><span class="input" style="width:auto;background:var(--surface-2);border-right:0;border-radius:6px 0 0 6px;display:flex;align-items:center;color:var(--text-2)">${esc(api.host)}/w/</span><input class="input" id="ws-url" value="${esc(d.ws.url)}" style="border-radius:0 6px 6px 0;text-overflow:ellipsis" title="${esc(api.host)}/w/${esc(d.ws.url)}" ${wsAdmin ? '' : 'readonly'}></div><span class="hint">${wsAdmin ? t('settings.ws.urlWarning') : t('settings.ws.urlReadonly')}</span></div>
       ${wsAdmin ? `<div><button class="btn btn-primary" data-a="saveWorkspace" id="ws-save">${t('settings.ws.saveChanges')}</button></div>` : ''}</div></div></form>
       <div class="sblock">${srow(t('settings.perms.create'), '', tog('permCreate', P.permCreate === true))}</div>
       <div class="sblock">${srow(t('settings.perms.defaultPrivate'), t('settings.perms.defaultPrivateDesc'), tog('defaultPrivate', P.defaultPrivate === true))}</div>
@@ -515,21 +515,31 @@ export function settingsBody(sec, title) {
       );
     }
     case 'my-access': {
-      /* Phase 60 (TRN-01/D-11): every member's self-view — rows reuse the
-         members.js expander markup + label vocabulary verbatim (D-12/D-14).
-         The list comes ONLY from the server response — never from
+      /* Phase 60 (TRN-01/D-11) → Phase 95 (SET-01, D-07/D-08): every
+         member's self-view ACROSS workspaces — one read-only card per
+         project, grouped by workspace. The list comes ONLY from the server
+         response (api.myAccess() → S.ui.myAccessData) — never from
          visibleProjects() (T-60-05; the redacted client doc is not the
-         truth-teller here either). */
+         truth-teller here either). Cards carry NO click/action handlers —
+         read-only per D-07. */
       if (api.enabled && !S.ui.myAccessData && !S.ui.myAccessErr) refreshMyAccess();
       const data = S.ui.myAccessData;
       let body;
       if (!api.enabled) body = `<p class="hint">${t('settings.myAccess.local')}</p>`;
       else if (S.ui.myAccessErr) body = `<p class="hint">${t('settings.myAccess.error')}</p>`;
       else if (!data) body = `<p class="hint" aria-busy="true">${t('settings.myAccess.loading')}</p>`;
-      else if (!data.projects.length) body = `<p class="hint">${t('settings.myAccess.empty')}</p>`;
+      else if (!data.workspaces.length) body = `<p class="hint">${t('settings.myAccess.empty')}</p>`;
       else
-        body = data.projects
-          .map(p => `<div class="row" style="gap:8px">${pIcon(p, '', 14)}<span>${esc(p.name || p.id)}</span><span class="badge">${visReasonLabel(p)}</span></div>`)
+        body = data.workspaces
+          .map(
+            w =>
+              `<div style="margin-bottom:6px"><div class="label" style="margin-bottom:8px">${esc(w.name)}</div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:stretch">${w.projects
+                .map(
+                  p =>
+                    `<div class="row" style="gap:8px;border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:default">${pIcon(p, '', 14)}<span>${esc(p.name || p.id)}</span><span class="badge faint">${t('common.role.' + (p.role || 'member'))}</span><span class="badge">${visReasonLabel(p)}</span></div>`,
+                )
+                .join('')}</div></div>`,
+          )
           .join('');
       return H(t('settings.myAccess.lead')) + `<div class="sblock" style="margin-top:0">${body}</div>`;
     }
@@ -845,6 +855,15 @@ export function settingsBody(sec, title) {
           ? `<div class="alert ok" style="margin-bottom:14px"><span>${t('settings.apikeys.createdHint')}</span></div><div class="field" style="max-width:560px"><label class="label">${t('settings.apikeys.newKey')}</label><div class="row" style="gap:0"><input class="input" id="apikey-value" readonly value="${esc(S.ui.newKey)}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.newKey)}">${t('settings.tfa.copy')}</button></div><span class="hint">${t('settings.apikeys.onceHint')}</span></div><div style="margin-top:10px"><button class="btn btn-secondary btn-sm" data-a="apiKeyDone">${t('common.next')}</button></div>`
           : '') +
         rows.map(row).join('') +
+        (rows.some(k => k.revokedAt)
+          ? S.ui.apiKeyPurge
+            ? srow(
+                t('settings.apikeys.purge'),
+                t('settings.apikeys.purgeConfirmBody'),
+                `<button class="btn btn-danger btn-sm" data-a="apiKeyPurgeConfirm">${t('settings.apikeys.purge')}</button><button class="btn btn-secondary btn-sm" data-a="apiKeyCancel">${t('common.cancel')}</button>`,
+              )
+            : `<div class="sblock"><div class="row" style="justify-content:flex-end"><button class="btn btn-danger-ghost btn-sm" data-a="apiKeyPurgeAsk">${t('settings.apikeys.purge')}</button></div></div>`
+          : '') +
         (!rows.length && !stage && !S.ui.newKey ? `<p class="hint">${t('settings.apikeys.empty')}</p>` : '') +
         (stage === 'create'
           ? `<form data-submit="apiKeyCreate" class="col" style="gap:14px;max-width:440px;margin-top:14px">

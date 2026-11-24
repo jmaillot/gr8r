@@ -1482,6 +1482,12 @@
   "settings.apikeys.newKey": "Your new API key",
   "settings.apikeys.createdHint": "Copy this key now — it is shown only once.",
   "settings.apikeys.onceHint": "Projects Studio stores only a hash. If you lose it, create a new key.",
+  "settings.apikeys.purge": "Remove revoked keys",
+  "settings.apikeys.purgeConfirmBody": "Remove every revoked key? Agents using them lose access permanently.",
+  "settings.apikeys.purgedToast": {
+    "one": "{n} key removed.",
+    "other": "{n} keys removed."
+  },
   "settings.operator.youBadge": "You",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Revoke sessions",

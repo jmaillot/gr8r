@@ -2776,6 +2776,7 @@ A.apiKeyDone = () => {
 A.apiKeyCancel = () => {
   S.ui.apiKeyStage = null;
   S.ui.newKey = null;
+  S.ui.apiKeyPurge = null;
   render();
 };
 A.apiKeyRevokeAsk = el => {
@@ -2787,6 +2788,20 @@ A.apiKeyRevokeConfirm = el => {
   S.ui.apiKeyRevoke = null;
   api.revokeApiKey(id).then(async res => {
     if (!res.ok) toast(tErr(res));
+    await refreshApiKeys();
+  });
+};
+/* Phase 95 (SET-03, D-09/D-10): the revoked-key purge — the same 2-click
+   ask→confirm idiom as revoke, then the toast names the removed count. */
+A.apiKeyPurgeAsk = () => {
+  S.ui.apiKeyPurge = true;
+  render();
+};
+A.apiKeyPurgeConfirm = () => {
+  S.ui.apiKeyPurge = null;
+  api.purgeRevokedKeys().then(async res => {
+    if (!res.ok) toast(tErr(res));
+    else toast(t('settings.apikeys.purgedToast', { n: res.data.removed }));
     await refreshApiKeys();
   });
 };

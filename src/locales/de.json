@@ -1482,6 +1482,12 @@
   "settings.apikeys.newKey": "Ihr neuer API-Schlüssel",
   "settings.apikeys.createdHint": "Kopieren Sie diesen Schlüssel jetzt – er wird nur einmal angezeigt.",
   "settings.apikeys.onceHint": "Projects Studio speichert nur einen Hash. Wenn Sie ihn verlieren, erstellen Sie einen neuen Schlüssel.",
+  "settings.apikeys.purge": "Widerrufene Schlüssel entfernen",
+  "settings.apikeys.purgeConfirmBody": "Alle widerrufenen Schlüssel entfernen? Agents, die sie verwenden, verlieren den Zugriff endgültig.",
+  "settings.apikeys.purgedToast": {
+    "one": "{n} Schlüssel entfernt.",
+    "other": "{n} Schlüssel entfernt."
+  },
   "settings.operator.youBadge": "Sie",
   "settings.operator.ownerBadge": "Super-Admin",
   "settings.operator.revokeShort": "Sitzungen widerrufen",

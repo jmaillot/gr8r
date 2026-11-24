@@ -1482,6 +1482,12 @@
   "settings.apikeys.newKey": "Je nieuwe API-sleutel",
   "settings.apikeys.createdHint": "Kopieer deze sleutel nu — hij wordt slechts één keer getoond.",
   "settings.apikeys.onceHint": "Projects Studio bewaart alleen een hash. Als je hem verliest, maak een nieuwe sleutel aan.",
+  "settings.apikeys.purge": "Gerevokeerde sleutels verwijderen",
+  "settings.apikeys.purgeConfirmBody": "Alle gerevokeerde sleutels verwijderen? Agents die ze gebruiken verliezen de toegang definitief.",
+  "settings.apikeys.purgedToast": {
+    "one": "{n} sleutel verwijderd.",
+    "other": "{n} sleutels verwijderd."
+  },
   "settings.operator.youBadge": "Jij",
   "settings.operator.ownerBadge": "Super Admin",
   "settings.operator.revokeShort": "Sessies intrekken",

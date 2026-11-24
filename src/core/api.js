@@ -587,6 +587,19 @@ export const api = {
     if (!slug) return { ok: false, status: 0, error: t('err.noWorkspaceLoaded') };
     return call('GET', `/api/workspaces/${encodeURIComponent(slug)}/me/visibility`);
   },
+  /* Phase 95 (SET-01): the cross-workspace My Access aggregate — every
+     workspace the caller is a member of, each with its funnel-filtered
+     project list (additive icon/color/role fields). The server is the
+     truth-teller; nothing is cached here (same D-52-3 posture as
+     myVisibility). */
+  async myAccess() {
+    return call('GET', '/api/settings/my-access');
+  },
+  /* Phase 95 (SET-03, D-09/D-10): delete every REVOKED key of the caller in
+     one go — the server answers { removed } and the toast names the count. */
+  async purgeRevokedKeys() {
+    return call('POST', '/api/keys/purge-revoked');
+  },
   /* Phase 60 (DASH-01): the admin aggregate dashboard — overdue/load/upcoming/
      activity in one payload. The activityWindow preset rides the query string
      only when provided (the server whitelists it); poll refreshes abort the
