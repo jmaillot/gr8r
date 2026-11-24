@@ -470,9 +470,20 @@ export const api = {
     return call('DELETE', `/api/backup/tasks/${encodeURIComponent(id)}`, undefined, { signal });
   },
   /* History read (D-14): newest-first, capped 50 server-side; taskId=manual
-     lists the D-11 manual archives. taskNotFound only after the gate (T-86-06). */
-  async backupRuns({ taskId, signal } = {}) {
-    return call('GET', `/api/backup/runs?taskId=${encodeURIComponent(taskId)}`, undefined, { signal });
+     lists the D-11 manual archives. taskNotFound only after the gate (T-86-06).
+     Phase 94 (D-01/D-04): the params grow ADDITIVELY — the frozen Phase-92
+     ?all=1 variant (all/task/trigger/status/limit/offset) rides the same
+     method; the legacy ?taskId= query form is byte-unchanged. */
+  async backupRuns({ taskId, all, task, trigger, status, limit, offset, signal } = {}) {
+    const parts = [];
+    if (taskId) parts.push(`taskId=${encodeURIComponent(taskId)}`);
+    if (all) parts.push('all=1');
+    if (task) parts.push(`task=${encodeURIComponent(task)}`);
+    if (trigger) parts.push(`trigger=${encodeURIComponent(trigger)}`);
+    if (status) parts.push(`status=${encodeURIComponent(status)}`);
+    if (limit != null) parts.push(`limit=${encodeURIComponent(String(limit))}`);
+    if (offset != null) parts.push(`offset=${encodeURIComponent(String(offset))}`);
+    return call('GET', `/api/backup/runs${parts.length ? `?${parts.join('&')}` : ''}`, undefined, { signal });
   },
   /* 90-02 (D-90-11): the verify re-hash — 200 { ok, checkedAt } on BOTH
      outcomes (a mismatch is a RESULT, never a refusal); the refusal

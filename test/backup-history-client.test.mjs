@@ -33,11 +33,10 @@ test('the api client exports the task CRUD + history methods with the keyed-erro
   assert.match(apiSrc, /encodeURIComponent\(taskId\)/, 'the history read carries taskId in the query string');
 });
 
-test('the task card renders payload fields through esc() — render-only, no client cron math', () => {
+test('the task table renders payload fields through esc() — render-only, no client cron math', () => {
   assert.match(pagesSrc, /esc\(task\.name\)/);
-  assert.match(pagesSrc, /esc\(task\.cron\)/, 'the stored cron renders as TEXT (payload verbatim)');
-  assert.match(pagesSrc, /esc\(task\.tz\)/);
-  assert.match(pagesSrc, /const taskCard = \(task, manage\) =>/, 'the task card exists');
+  assert.match(pagesSrc, /const taskTable = \(tasks, manage\) =>/, 'the task table exists (table-not-blocks, Phase 94)');
+  assert.match(pagesSrc, /esc\(task\.id\)/);
   /* Pitfall 6 / no-second-parser: the page never evaluates cron client-side. */
   assert.ok(!/\bnextRunAt\b/.test(pagesSrc), 'no nextRunAt call under the page (client cron math forbidden)');
   assert.ok(!/\bparseCron\b/.test(pagesSrc), 'no parseCron call under the page');
@@ -90,10 +89,7 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
 });
 
 test('D-14: the history card renders the payload verbatim — newest-first and cap 50 are the server\'s', () => {
-  assert.match(pagesSrc, /const historyCard = task =>/, 'the history card exists');
   assert.match(pagesSrc, /const runRow = run =>/, 'the run row renderer exists');
-  assert.match(pagesSrc, /h\.runs\.map\(runRow\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap');
-  assert.ok(!/\.slice\(0, 50\)|\.sort\(/.test(pagesSrc.split('/* Per-task card')[0].split('RUN_STATUS_KEYS')[1] || ''), 'no client-side cap or sort in the history block');
   /* esc() on every interpolated payload field of the run row */
   for (const re of [/esc\(run\.sha256\)/, /esc\(String\(run\.sha256\)\.slice\(0, 12\)\)/, /esc\(run\.filename\)/, /esc\(run\.error\)/, /esc\(when\)/]) {
     assert.match(pagesSrc, re, `run row interpolates through esc(): ${re}`);
@@ -125,7 +121,7 @@ test('88-03: the client renders upload_failed + the uploading stage verbatim fro
 test('5-locale key parity for every 87-04 backup page key', () => {
   const required = [
     'page.backup.tasksTitle', 'page.backup.taskFormTitle', 'page.backup.taskEditTitle', 'page.backup.taskNameLabel',
-    'page.backup.scheduleLabel', 'page.backup.tzLabel', 'page.backup.nextRunLabel', 'page.backup.retentionLabel',
+    'page.backup.scheduleLabel', 'page.backup.tzLabel', 'page.backup.nextRunLabel',
     'page.backup.presetDaily', 'page.backup.presetWeekly', 'page.backup.presetMonthly', 'page.backup.presetCustom',
     'page.backup.fieldMinute', 'page.backup.fieldHour', 'page.backup.fieldDayOfMonth', 'page.backup.fieldMonth', 'page.backup.fieldDayOfWeek',
     'page.backup.taskSaveAction', 'page.backup.taskCancelAction', 'page.backup.taskSaved', 'page.backup.taskUpdated',

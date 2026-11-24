@@ -210,47 +210,87 @@ const historyCard = task => {
   </div>`;
 };
 
-/* Per-task card: the payload row verbatim (name, scope, enabled, schedule,
-   tz, retention, next_run_at) — esc() on every interpolated payload field.
-   Operator actions (toggle / delete / Run now) render only when the payload's
-   canBackup flag is true — verbatim chrome, never recomputed client-side. */
-const taskCard = (task, manage) => {
-  const scope = task.scope && typeof task.scope === 'object' ? task.scope : {};
-  const scopeLabel = scope.kind === 'project' ? t('page.backup.scopeProject') : scope.kind === 'workspace' ? t('page.backup.scopeWorkspace') : t('page.backup.scopeInstance');
-  const scopeName =
-    scope.kind === 'project'
-      ? (Array.isArray(S.data?.projects) ? S.data.projects : []).find(p => p?.id === scope.id)?.name || scope.id || ''
-      : scope.kind === 'workspace'
-        ? scope.id || ''
-        : '';
-  const nextRunMs = Number(task.next_run_at);
-  const nextRun = Number.isFinite(nextRunMs) && nextRunMs > 0 ? fmtDate(new Date(nextRunMs).toISOString()) : '—';
-  const actions = manage
-    ? `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button class="btn btn-sm" data-a="backupTaskRunNow" data-id="${esc(task.id)}">${ic('play', 13)}${t('page.backup.taskRunNow')}</button>
-        <button class="btn btn-sm" data-a="backupTaskEdit" data-id="${esc(task.id)}">${ic('pencil', 13)}${t('page.backup.taskEdit')}</button>
-        <button class="btn btn-sm" data-a="backupTaskHistory" data-id="${esc(task.id)}">${ic('history', 13)}${t('page.backup.historyAction')}</button>
-        <button class="btn btn-sm" data-a="backupTaskToggle" data-id="${esc(task.id)}">${task.enabled ? t('page.backup.taskDisable') : t('page.backup.taskEnable')}</button>
-        <button class="btn btn-sm btn-danger" data-a="backupTaskDelete" data-id="${esc(task.id)}">${ic('trash', 13)}${t('page.backup.taskDelete')}</button>
-      </div>`
-    : '';
-  /* UAT 2026-11-22: the five meta fields were one wrapped row — on narrow
-     screens they mashed together. A definition grid gives each field its own
-     label line, matching the rest of the app's panel typography. */
-  const detail = (label, value) =>
-    `<div><div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${label}</div><div class="mono" style="font-size:13px;margin-top:2px">${value}</div></div>`;
-  const wsName = scope.kind === 'workspace' ? (scope.id === api.workspace?.id ? api.workspace?.name || scope.id : scope.id) : '';
-  return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${esc(task.name)}</h2><span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span></div><div class="panel-b">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px">
-      ${detail(scopeLabel, esc(scopeName))}
-      ${detail(t('page.backup.scheduleLabel'), esc(task.cron))}
-      ${detail(t('page.backup.tzLabel'), esc(task.tz))}
-      ${detail(t('page.backup.retentionLabel'), esc(String(task.retention_daily)) + '/' + esc(String(task.retention_weekly)) + '/' + esc(String(task.retention_monthly)) + '/' + esc(String(task.retention_yearly)))}
-      ${detail(t('page.backup.nextRunLabel'), esc(nextRun))}
-    </div>
-    ${actions}
-    ${manage && S.ui.backupHistoryOpen?.has(task.id) ? historyCard(task) : ''}
-  </div></div>`;
+/* =====================================================================
+   Phase 94 (D-01, BKUI-01): the LAST-RUN BADGE — a client-side derivation
+   over the FROZEN Phase-92 ?all=1 route (no server change, no payload
+   change): at page load ONE fetch `api.backupRuns({ all: 1, limit: 50 })`
+   (limit N = 50, the server's own default cap) lands, and the latest run
+   per task_id is derived CLIENT-SIDE — the route sorts created_at DESC,
+   id DESC (server.js, verified), so the FIRST occurrence of each task_id
+   in the response is its newest run; the reduction keeps exactly that.
+   The badge has 4 states (D-01): succeeded → green; running → neutral;
+   failed (incl. upload_failed, a failed outcome) → red; succeeded with
+   checksum_ok === 0 → amber "warning" (verified but integrity-flagged).
+   After a manual "Run now" the same fetch re-issues (actions.js) so the
+   badge re-derives from fresh payload. The badge is client-only chrome —
+   no tasks-payload field was invented for it.
+   ===================================================================== */
+const lastRunBadge = task => {
+  const run = S.ui.backupLastRuns?.[task.id];
+  if (!run) return '<span class="faint">—</span>';
+  if (run.status === 'succeeded') {
+    const chk = run.checksum_ok == null ? null : Number(run.checksum_ok);
+    return chk === 0
+      ? `<span class="badge amber">${ic('triangle-alert', 12)}${esc(t('page.backup.checksumWarn'))}</span>`
+      : `<span class="badge green">${t('page.backup.statusSucceeded')}</span>`;
+  }
+  if (run.status === 'running') return `<span class="badge">${t('page.backup.statusRunning')}</span>`;
+  if (run.status === 'failed' || run.status === 'upload_failed') return `<span class="badge red">${t(RUN_STATUS_KEYS[run.status])}</span>`;
+  return `<span class="badge">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>`;
+};
+
+/* Phase 94 (D-01, BKUI-01): the humanized schedule TEXT — derived ONLY from
+   the server descriptor's fields (task.schedule, describeCron output) —
+   the raw cron expression NEVER renders in the table (BKUI-01); the raw
+   string appears only inside the D-02 custom fallback. This is text
+   formatting, never cron evaluation (T-87-11). */
+const scheduleText = task => {
+  const s = task.schedule;
+  if (!s || typeof s !== 'object') return t('page.backup.presetCustom');
+  const hh = Number.isFinite(Number(s.hour)) ? String(Number(s.hour)).padStart(2, '0') : null;
+  const mm = Number.isFinite(Number(s.minute)) ? String(Number(s.minute)).padStart(2, '0') : null;
+  const time = hh !== null && mm !== null ? `${hh}:${mm}` : null;
+  const dayName = dow => { try { return new Intl.DateTimeFormat(getLocale(), { weekday: 'long' }).format(new Date(2024, 0, 7 + Number(dow) % 7)); } catch { return dow; } };
+  if (s.preset === 'daily' && time !== null) return t('page.backup.summaryDaily', { time: time });
+  if (s.preset === 'weekly' && time !== null) return t('page.backup.summaryWeekly', { day: dayName(s.weekday), time: time });
+  if (s.preset === 'monthly' && time !== null) return t('page.backup.summaryMonthly', { dom: s.dom, time: time });
+  if (s.preset === 'yearly' && time !== null) return t('page.backup.summaryYearly', { dom: s.dom, time: time });
+  return t('page.backup.presetCustom');
+};
+
+const taskTable = (tasks, manage) => {
+  const actions = task =>
+    `<span class="row" style="gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-sm" data-a="backupTaskRunNow" data-id="${esc(task.id)}">${ic('play', 13)}${t('page.backup.taskRunNow')}</button>
+      <button class="btn btn-sm" data-a="backupTaskEdit" data-id="${esc(task.id)}">${ic('pencil', 13)}${t('page.backup.taskEdit')}</button>
+      <button class="btn btn-sm" data-a="backupTaskHistory" data-id="${esc(task.id)}">${ic('history', 13)}${t('page.backup.historyAction')}</button>
+      <button class="btn btn-sm" data-a="backupTaskToggle" data-id="${esc(task.id)}">${task.enabled ? t('page.backup.taskDisable') : t('page.backup.taskEnable')}</button>
+      <button class="btn btn-sm btn-danger" data-a="backupTaskDelete" data-id="${esc(task.id)}">${ic('trash', 13)}${t('page.backup.taskDelete')}</button>
+    </span>`;
+  const scopeCell = task => {
+    const scope = task.scope && typeof task.scope === 'object' ? task.scope : {};
+    const kind = scope.kind === 'project' ? t('page.backup.scopeProject') : scope.kind === 'workspace' ? t('page.backup.scopeWorkspace') : t('page.backup.scopeInstance');
+    const name =
+      scope.kind === 'project'
+        ? (Array.isArray(S.data?.projects) ? S.data.projects : []).find(p => p?.id === scope.id)?.name || scope.id || ''
+        : scope.kind === 'workspace'
+          ? (scope.id === api.workspace?.id ? api.workspace?.name || scope.id : scope.id || '')
+          : '';
+    return name ? `<span class="faint">${esc(kind)} · ${esc(name)}</span>` : `<span class="faint">${esc(kind)}</span>`;
+  };
+  const row = task => {
+    const nextRunMs = Number(task.next_run_at);
+    const nextRun = Number.isFinite(nextRunMs) && nextRunMs > 0 ? fmtDate(new Date(nextRunMs).toISOString()) : '—';
+    return `<tr>
+      <td style="padding-left:14px"><span class="row" style="gap:8px;align-items:center"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(task.name)}</span><span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span></span></td>
+      <td>${scopeCell(task)}</td>
+      <td>${esc(scheduleText(task))}</td>
+      <td class="faint">${esc(nextRun)}</td>
+      <td>${lastRunBadge(task)}</td>
+      <td>${manage ? actions(task) : ''}</td>
+    </tr>`;
+  };
+  return `<div class="panel" style="overflow-x:auto;margin-top:12px"><table class="perm-t" style="min-width:860px"><thead><tr><th style="padding-left:14px">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.colScope')}</th><th style="text-align:left">${t('page.backup.colSchedule')}</th><th style="text-align:left">${t('page.backup.nextRunLabel')}</th><th style="text-align:left">${t('page.backup.colLastRun')}</th><th></th></tr></thead><tbody>${tasks.map(row).join('')}</tbody></table></div>`;
 };
 
 /* Builder form (D-01): 4 presets — Daily, Weekly, Monthly — plus Custom,
@@ -625,7 +665,7 @@ export function pageBackup() {
   /* 87-04: the Phase 87 task console — the task list (payload rows verbatim)
      beside the 86-02 Run now card, with the builder form when staged open. */
   const body = tasks.length
-    ? tasks.map(task => taskCard(task, flags.canBackup)).join('')
+    ? taskTable(tasks, flags.canBackup)
     : empty('hard-drive', t('page.backup.emptyTitle'), t('page.backup.emptyBody'), '', 'sm', 3);
 
   return `<div class="page wide">

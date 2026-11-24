@@ -4743,6 +4743,7 @@ export async function refreshBackupTasks() {
   if (res.ok) {
     S.ui.backupTasks = { tasks: res.data.tasks || [], canBackup: !!res.data.canBackup, canRestore: !!res.data.canRestore };
     S.ui.backupErr = null;
+    await refreshBackupLastRuns(); // Phase 94 (D-01): the badge input rides every task refill
   } else {
     /* D-28: the central intercept owns the 401 teardown. Any other refusal
        surfaces through the page's honest fullstate — never a blank page. */
@@ -4751,6 +4752,25 @@ export async function refreshBackupTasks() {
   }
   render();
   return S.ui.backupTasks;
+}
+/* Phase 94 (D-01): the last-run badge input — ONE fetch of the frozen
+   Phase-92 ?all=1 route (limit 50, the server's default cap), latest run
+   per task_id derived client-side (server sorts created_at DESC, id DESC,
+   so the first occurrence per task_id is the newest). Staged in
+   S.ui.backupLastRuns (never the DOM); a refusal stages null → the badge
+   column renders honest dashes. */
+export async function refreshBackupLastRuns() {
+  if (!api.enabled) return;
+  const res = await api.backupRuns({ all: 1, limit: 50 });
+  if (!res.ok) {
+    if (res.status !== 401) S.ui.backupLastRuns = null;
+    return;
+  }
+  const runs = Array.isArray(res.data?.runs) ? res.data.runs : [];
+  const latest = {};
+  for (const r of runs) if (r?.task_id && !latest[r.task_id]) latest[r.task_id] = r;
+  S.ui.backupLastRuns = latest;
+  render();
 }
 A.backupRetry = () => {
   S.ui.backupErr = null; // CR-01: recovery goes through the explicit retry action, never an auto re-kick
@@ -5240,6 +5260,7 @@ A.backupTaskRunNow = async el => {
   S.ui.backupPending = true;
   backupStartPolling();
   render();
+  await refreshBackupLastRuns(); // Phase 94 (D-01): the badge re-derives after a manual trigger
 };
 /* 87-04 (D-14): per-task history card — open/close + one fetch per open.
    Newest-first and the 50 cap are the SERVER's (the client derives none of
