@@ -65,8 +65,10 @@ const runNowCard = flags => {
           ? `<div class="field"><label class="label">${t('page.backup.workspaceLabel')}</label><select class="input" data-in="backupScopeId"><option value="${esc(api.workspace.id)}" selected>${esc(api.workspace.name || api.workspace.id)}</option></select></div>`
           : `<span class="badge">—</span>`)
       : '';
-  return `<div class="panel" style="margin-top:12px"><div class="panel-b">
-    <h2 style="margin:0 0 4px">${t('page.backup.runNowTitle')}</h2>
+  /* UAT round-7: the title sits ABOVE the panel (the "Backup tasks" idiom —
+     page-level h2, not inside the panel). */
+  return `<div class="row" style="gap:8px;align-items:center;margin-top:16px"><h2 style="margin:0">${t('page.backup.runNowTitle')}</h2></div>
+    <div class="panel" style="margin-top:12px"><div class="panel-b">
     <p class="faint" style="margin:0 0 10px">${t('page.backup.runNowLead')}</p>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
       <div class="field"><label class="label">${t('page.backup.scopeLabel')}</label><select class="input" data-in="backupScopeKind">${opt('instance', 'page.backup.scopeInstance')}${opt('workspace', 'page.backup.scopeWorkspace')}${opt('project', 'page.backup.scopeProject')}</select></div>
@@ -187,21 +189,23 @@ const historyTr = run => {
         }</div>`
       : ''
   }`;
-  const scheduleCell = gfsKey ? `<span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : '<span class="faint">—</span>';
+  /* UAT round-7: Status + Schedule + actions stay on ONE line (nowrap) —
+     the Run column truncates instead, so rows stay single-height and the
+     task name starts flush left under the Task header. */
+  const scheduleCell = gfsKey ? `<span class="badge" style="white-space:nowrap"><span class="mono">${t(gfsKey)}</span></span>` : '<span class="faint">—</span>';
   const warn = run.status === 'succeeded' && Number(run.missing_blob_count) > 0;
-  const statusCell =
+  const statusCell = `<span style="white-space:nowrap">` + (
     run.status === 'failed' || run.status === 'upload_failed'
       ? `<span class="badge red">${t(run.status === 'failed' ? 'page.backup.statusFailed' : 'page.backup.statusUploadFailed')}</span>`
-      : `<span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>${
-          warn ? ` <span class="badge amber" title="${esc(t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) }))}">${t('page.backup.statusWarning')}</span>` : ''
-        }${
-          run.location === 'local' || run.location === 's3'
-            ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
-            : ''
-        }`;
+      : `<span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>` +
+        (warn ? ` <span class="badge amber" title="${esc(t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) }))}">${t('page.backup.statusWarning')}</span>` : '') +
+        (run.location === 'local' || run.location === 's3'
+          ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
+          : '')
+  ) + `</span>`;
   const actionsCell =
     run.location === 'local' || run.location === 's3'
-      ? `<span class="row" style="gap:6px;justify-content:flex-end;flex-wrap:wrap">
+      ? `<span class="row" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap">
           <button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>
           <button class="btn btn-secondary btn-sm" data-a="backupVerifyChecksum" data-id="${esc(run.id)}"${chkBusy ? ' disabled aria-busy="true"' : ''}>${chkBusy ? t('page.backup.checksumChecking') : `${ic('shield-check', 13)}${t('page.backup.verifyChecksumAction')}`}</button>
         </span>`

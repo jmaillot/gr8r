@@ -363,7 +363,7 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
 test('90-03 → 94: the unified GFS badge derives from run.gfs_bucket through the four gfs keys — zero client GFS math', () => {
   const rowBody = pagesSrc.slice(pagesSrc.indexOf('const historyTr ='), pagesSrc.indexOf('const historySblock ='));
   assert.match(rowBody, /const gfsKey = GFS_SCALE_KEYS\[run\.gfs_bucket\]/, 'the badge resolves gfs_bucket through the four gfs keys');
-  assert.match(rowBody, /const scheduleCell = gfsKey \? `<span class="badge"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : '<span class="faint">—<\/span>';/, 'the GFS badge lives in its own Schedule column cell (UAT round-5)');
+  assert.match(rowBody, /const scheduleCell = gfsKey \? `<span class="badge" style="white-space:nowrap"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : '<span class="faint">—<\/span>';/, 'the GFS badge lives in its own single-line Schedule column cell (UAT round-5/7)');
   /* {scale} vocabulary is the FOUR gfs keys — no other scale vocabulary. */
   assert.match(pagesSrc, /const GFS_SCALE_KEYS = \{ daily: 'page\.backup\.gfsDaily', weekly: 'page\.backup\.gfsWeekly', monthly: 'page\.backup\.gfsMonthly', yearly: 'page\.backup\.gfsYearly' \}/, 'the four GFS scale keys are the one scale vocabulary');
   /* Zero client GFS math (T-90-06): no retention arithmetic under src/ and
