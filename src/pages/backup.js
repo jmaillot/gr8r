@@ -544,10 +544,11 @@ const RESTORE_STAGE_KEYS = {
    D-89-14/15), esc'd filename, size, date, 12-char sha slice with the full
    digest in title (historyRow idiom). The missing-location badge renders too —
    the restore attempt on it is refused keyed err.restoreArchiveMissing. */
-/* UAT round-9 (owner ruling): the standalone archive list is retired —
-   the Restore action rides the unified history table rows. restoreRow is
-   gone with it; the preview drawer stays (opened from the table's Restore
-   button, same runId space). */
+/* UAT round-10 (owner ruling): the Restore SECTION (title + lead + history
+   toggle + standalone history card) is retired — the Restore action lives
+   entirely in the unified history table's rows. What remains: the live
+   progress panel (a restore launched from a row must stay visible) and the
+   preview drawer. */
 
 /* Preview drawer body: manifest-derived counts ONLY (the payload carries no
    archive bytes, D-89-17) — scope/tables/files/checksum render verbatim,
@@ -644,53 +645,12 @@ const restoreProgress = () => {
   return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.restore.stageLabel')}</h2><span class="badge">${esc(String(run.stage || ''))}</span></div><div class="panel-b">${detail}</div></div>`;
 };
 
-/* History row: the restore_runs payload verbatim (server order, server cap —
-   no client re-sort, no client pagination). The summary is the server's JSON
-   report string: its skipped tables render under skipReportLabel (D-89-7 —
-   report-only, never hidden); the expandable error toggle mirrors historyRow. */
-const restoreRunRow = run => {
-  const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
-  const startedMs = Number(run.started_at);
-  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(startedMs) : '—';
-  let skipped = [];
-  try {
-    const s = typeof run.summary === 'string' && run.summary ? JSON.parse(run.summary) : null;
-    skipped = Array.isArray(s?.skipped) ? s.skipped : [];
-  } catch {
-    skipped = [];
-  }
-  /* 94-02 (UAT-3): the Type badge leads the row — in the unified sblock it IS
-     the Type column; in the restore-history card it stays an honest label.
-     Label reuses the existing page.restore.title wording (no duplication). */
-  const typeBadge = `<span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span>`;
-  return `<div style="padding:8px 0;border-top:1px solid var(--border)">
-    <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
-      ${typeBadge}
-      <span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span>
-      <span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>
-      <span class="faint">${esc(when)}</span>
-    </div>
-    ${
-      skipped.length
-        ? `<div class="faint" style="margin-top:4px;font-size:12px">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
-        : ''
-    }
-    ${
-      run.error
-        ? `<div style="margin-top:4px"><a href="#" data-a="restoreRunErr" data-id="${esc(run.id)}">${t('page.restore.errorToggle')}</a>${
-            errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
-          }</div>`
-        : ''
-    }
-  </div>`;
-};
-
-/* UAT round-4: the unified sblock renders restore history as table rows under
-   the same Type/Run/Trigger/Status/Date headers. Run = final_name (verbatim,
-   esc'd — the server owns the restore-name counter, D-89-13) with the skipped
-   tables report and the expandable error kept inside the Run cell; Trigger is
-   an honest '—' (restores are always operator-triggered). The div-based
-   restoreRunRow above stays for the restore-history card. */
+/* UAT round-4/10: the unified sblock renders restore history as table rows
+   under the same Type/Run/Trigger/Schedule/Status/Date headers. Run =
+   final_name (verbatim, esc'd — the server owns the restore-name counter,
+   D-89-13) with the skipped tables report and the expandable error kept
+   inside the Run cell; Trigger is an honest '—' (restores are always
+   operator-triggered). */
 const restoreRunTr = run => {
   const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at);
@@ -704,7 +664,7 @@ const restoreRunTr = run => {
   }
   const runCell = `<span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>${
     skipped.length
-      ? `<div class="faint" style="margin-top:2px;font-size:12px">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
+      ? `<div class="faint" style="margin-top:2px;font-size:12px;max-width:320px;line-height:1.5">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
       : ''
   }${
     run.error
@@ -722,38 +682,6 @@ const restoreRunTr = run => {
     <td class="faint">${esc(when)}</td>
     <td></td>
   </tr>`;
-};
-
-const restoreHistoryCard = () => {
-  const h = S.ui.restoreHistory;
-  const body = !h
-    ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.restore.historyLoading')}</div>`
-    : h.err
-      ? `<div class="faint" style="padding:8px 0">${t('page.restore.historyUnavailable')}</div>`
-      : !h.runs.length
-        ? `<div class="faint" style="padding:8px 0">${t('page.restore.historyEmpty')}</div>`
-        : h.runs.map(restoreRunRow).join('');
-  return `<div style="margin-top:10px">
-    <div class="row" style="gap:8px;align-items:center">
-      <strong style="font-size:13px">${t('page.restore.historyTitle')}</strong>
-      <span class="faint" style="font-size:12px">${t('page.restore.historyCap')}</span>
-    </div>
-    ${body}
-  </div>`;
-};
-
-const restoreSection = () => {
-  /* UAT round-9 (owner ruling): the standalone archive LIST is retired —
-     the Restore action rides the unified history table's rows (per-run
-     Restore button when the archive is available). The section keeps the
-     lead, the live progress panel and the history card. */
-  return `<div class="row" style="gap:8px;align-items:center;margin-top:16px">
-      <h2 style="margin:0">${t('page.restore.title')}</h2>
-      <button class="btn btn-sm" data-a="restoreHistory">${ic('history', 13)}${t('page.restore.historyTitle')}</button>
-    </div>
-    <p class="faint" style="margin:4px 0 0">${t('page.restore.lead')}</p>
-    ${restoreProgress()}
-    ${S.ui.restoreHistoryOpen ? restoreHistoryCard() : ''}`;
 };
 
 export function pageBackup() {
@@ -815,7 +743,7 @@ export function pageBackup() {
     </div>
     ${body}
     ${historySblock()}
-    ${flags.canRestore ? restoreSection() : ''}
+    ${flags.canRestore ? restoreProgress() : ''}
     ${flags.canRestore ? restorePreviewDrawer(flags) : ''}
   </div>`;
 }

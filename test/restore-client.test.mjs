@@ -114,15 +114,12 @@ test('restore stages render verbatim from the payload — pending panel, stage l
 });
 
 test('restore empty/loading/history states mirror the backup card discipline', () => {
-  /* UAT round-9: the standalone list is retired — the history card + the
-     unified table carry the states; the listLoading key still serves the
-     drawer's pending body. */
-  assert.match(pagesSrc, /t\('page\.restore\.listLoading'\)/, 'the drawer pending body is keyed');
-  assert.match(pagesSrc, /t\('page\.restore\.historyEmpty'\)/, 'the zero-history faint row is keyed');
-  assert.match(pagesSrc, /t\('page\.restore\.historyCap'\)/, 'the 50-cap note is keyed (the server owns the cap)');
+  /* UAT round-9/10: the standalone list AND the history card are retired —
+     the unified table carries the rows; skipReportLabel lives in the drawer
+     + the table's Run cell. */
   assert.match(pagesSrc, /t\('page\.restore\.skipReportLabel'\)/, 'the skipped-tables report is keyed (D-89-7: report-only, never hidden)');
   assert.match(pagesSrc, /t\('page\.restore\.errorToggle'\)/, 'the expandable error toggle is keyed');
-  assert.match(pagesSrc, /runs\.map\(restoreRunRow\)\.join\(''\)/, 'restore history renders verbatim in server order — no client re-sort, no client cap');
+  assert.match(pagesSrc, /restoreRuns\.map\(restoreRunTr\)\.join\(''\)/, 'restore rows render verbatim in server order in the unified table — no client re-sort, no client cap');
   assert.ok(!/\.slice\(0, 50\)/.test(pagesSrc), 'no client-side 50 cap');
   assert.match(pagesSrc, /esc\(run\.error\)/, 'restore errors render through esc()');
   assert.match(pagesSrc, /restorePollKickAllowed\(\)/, 'the restore kick honors the WR-02 failure cooldown');
@@ -146,8 +143,8 @@ test('the tracer happy path is wired: list fill → preview fetch → import-as-
 
 test('5-locale key parity for the 89-06 restore surface', () => {
   const required = [
-    'page.restore.title', 'page.restore.lead',
-    'page.restore.listLoading', 'page.restore.restoreAction',
+    'page.restore.title',
+    'page.restore.restoreAction',
     'page.restore.locLocal', 'page.restore.locS3', 'page.restore.locMissing',
     'page.restore.previewTitle', 'page.restore.previewCorrupt',
     'page.restore.scopeLabel', 'page.restore.tablesLabel', 'page.restore.filesLabel', 'page.restore.checksumLabel',
@@ -156,8 +153,6 @@ test('5-locale key parity for the 89-06 restore surface', () => {
     'page.restore.stageFetching', 'page.restore.stageValidating', 'page.restore.stageRestoring', 'page.restore.stageVerifying',
     'page.restore.stageDone', 'page.restore.stageFailed',
     'page.restore.runDone', 'page.restore.runFailed',
-    'page.restore.historyTitle', 'page.restore.historyCap', 'page.restore.historyEmpty',
-    'page.restore.historyLoading', 'page.restore.historyUnavailable',
     'page.restore.skipReportLabel', 'page.restore.errorToggle',
   ];
   for (const key of required) assert.ok(pagesSrc.includes(key) || actionsSrc.includes(key), `the combined source uses ${key}`);
@@ -242,7 +237,7 @@ test('project archives show the workspace picker — live memberships verbatim, 
   const pick = pagesSrc.slice(pagesSrc.indexOf('restoreTargetPick'), pagesSrc.indexOf('restoreTargetPick') + 900);
   assert.ok(/esc\(w\.name\)|esc\(String\(w\.name\)\)/.test(pick), 'workspace names render through esc()');
   const rn = actionsSrc.slice(actionsSrc.indexOf('A.restoreNew ='), actionsSrc.indexOf('A.restoreNew =') + 1200);
-  assert.ok(rn.includes("'restoreNoWorkspace'"), 'a project trigger attempt without a target mirrors the keyed refusal (server still authoritative)');
+  assert.ok(rn.includes("'restoreTargetMissing'"), 'a project trigger attempt without a target refuses client-side with the keyed pick-a-target message (UAT round-10: not the membership refusal)');
 });
 
 test('restore refusals ride the CLOSED toast map — every route-level code maps 1:1 onto a ×5 key, no freeform strings', () => {
@@ -324,7 +319,7 @@ test('backstop: long-text render sites truncate with title attrs and the counter
   /* A `-restored-2` counter name renders FULLY in the stage panel — the
      done/active bodies interpolate the payload name inside a wrapping <p>,
      never a trunc span (no client name math either, D-89-13). */
-  const progress = pagesSrc.slice(pagesSrc.indexOf('const restoreProgress ='), pagesSrc.indexOf('const restoreRunRow ='));
+  const progress = pagesSrc.slice(pagesSrc.indexOf('const restoreProgress ='), pagesSrc.indexOf('const restoreRunTr ='));
   assert.match(progress, /page\.restore\.newNameLead/, 'the active body carries the final-name preview');
   assert.match(progress, /page\.restore\.runDone/, 'the done body carries the payload name');
   assert.ok(!progress.includes('trunc'), 'the stage panel never truncates the counter name — it renders fully and wraps');

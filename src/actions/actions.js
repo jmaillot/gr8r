@@ -5518,20 +5518,8 @@ export async function refreshRestoreHistory() {
 }
 
 export async function refreshOpenRestoreHistories() {
-  if (!S.ui.restoreHistoryOpen) return;
   await restoreHistoryFetch();
 }
-
-A.restoreHistory = async () => {
-  if (S.ui.restoreHistoryOpen) {
-    S.ui.restoreHistoryOpen = false;
-    render();
-    return;
-  }
-  S.ui.restoreHistoryOpen = true;
-  render();
-  await restoreHistoryFetch();
-};
 
 A.restoreRunErr = el => {
   const set = (S.ui.restoreRunErrOpen = S.ui.restoreRunErrOpen || new Set());
@@ -5586,8 +5574,12 @@ A.restorePreviewClose = () => {
 A.restoreNew = async el => {
   const runId = el.dataset.id || S.ui.restorePreview?.runId;
   if (!runId) return;
+  /* UAT round-10: the cold refusal (no target armed) is NOT the server's
+     no-membership refusal — it's a client-side "pick a target first"
+     (err.restoreTargetMissing), so the Super Admin no-membership bypass
+     never shows a misleading membership message. */
   if (S.ui.restorePreviewData?.data?.scope?.kind === 'project' && !S.ui.restoreTarget)
-    return toast(restoreToast('restoreNoWorkspace'), { kind: 'err' });
+    return toast(restoreToast('restoreTargetMissing'), { kind: 'err' });
   const res = await api.restoreRun({ runId, targetWorkspaceId: S.ui.restoreTarget || undefined });
   if (!res.ok) {
     if (res.status === 401) return;
