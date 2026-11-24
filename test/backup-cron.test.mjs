@@ -151,3 +151,40 @@ test('describeCron: custom — dow range is not singleton', () => {
 test('describeCron: honest custom fallback for a malformed expression', () => {
   assert.deepEqual(describeCron('not a cron'), { kind: 'custom', raw: 'not a cron' });
 });
+
+/* =====================================================================
+   Phase 94 (D-02) — cronToPreset: the flat preset string the editor
+   reverse-maps. Projection of the SAME parseCron output describeCron
+   consumes (same discipline, no raw-string regex): 'daily'|'weekly'|
+   'monthly'|'yearly' when the descriptor kind matches, null for custom
+   (steps, ranges, multi-values, mon-only restriction, vixie OR) and
+   malformed. dow 7 folds onto 0 (parseCron), so `0 3 * * 7` is weekly —
+   consistent with describeCron's 0=7 handling.
+   ===================================================================== */
+import { cronToPreset } from '../export/cron.js';
+
+test('cronToPreset: the four builder presets map from the matching descriptor kinds', () => {
+  assert.equal(cronToPreset('0 3 * * *'), 'daily');
+  assert.equal(cronToPreset('0 3 * * 1'), 'weekly');
+  assert.equal(cronToPreset('0 3 1 * *'), 'monthly');
+  assert.equal(cronToPreset('0 3 1 1 *'), 'yearly');
+});
+
+test('cronToPreset: steps, multi-value lists, ranges and mon-only restriction are null (custom)', () => {
+  assert.equal(cronToPreset('*/15 * * * *'), null, 'step pattern → custom');
+  assert.equal(cronToPreset('0 3 * * 0,6'), null, 'multi-dow list → custom');
+  assert.equal(cronToPreset('0 3-5 * * *'), null, 'hour range → custom');
+  assert.equal(cronToPreset('0 3 * 2 *'), null, 'mon-only restriction → custom (describeCron has no such preset)');
+});
+
+test('cronToPreset: malformed/uncleanable input is null', () => {
+  assert.equal(cronToPreset('not a cron'), null);
+  assert.equal(cronToPreset('61 * * * *'), null);
+  assert.equal(cronToPreset('* * * *'), null);
+  assert.equal(cronToPreset(42), null);
+});
+
+test('cronToPreset: dow 7 folds onto 0 — `0 3 * * 7` is weekly, consistent with describeCron', () => {
+  assert.equal(cronToPreset('0 3 * * 7'), 'weekly');
+  assert.equal(cronToPreset('0 3 * * 0'), 'weekly');
+});
