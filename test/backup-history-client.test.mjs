@@ -91,7 +91,7 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
 test('D-04 (Phase 94): the unified history sblock renders the payload verbatim — newest-first, probe pagination, historyCard retired', () => {
   assert.match(pagesSrc, /const historyRow = run =>/, 'the unified run row renderer exists');
   assert.match(pagesSrc, /const historySblock = \(\) =>/, 'the unified sblock exists');
-  assert.match(pagesSrc, /h\.runs\.map\(historyRow\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap');
+  assert.match(pagesSrc, /visibleRuns\.map\(historyRow\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap (visibleRuns = 94-03 Rotated default-exclusion)');
   /* D-04: run.label (the 5-segment server-resolved runLabel) renders VERBATIM
      through esc() — the client composes nothing. */
   assert.match(pagesSrc, /esc\(run\.label \|\| ''\)/, 'run.label renders verbatim through esc()');
@@ -453,7 +453,7 @@ test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () 
   /* The sblock body appends the restore rows AFTER the backup rows — the
      backup rows keep the pinned verbatim renderer. */
   const sblockBody = pagesSrc.slice(pagesSrc.indexOf('const historySblock ='), pagesSrc.indexOf('const lastRunBadge ='));
-  assert.match(sblockBody, /\$\{h\.runs\.map\(historyRow\)\.join\(''\)\}\$\{restoreRuns\.map\(restoreRunRow\)\.join\(''\)\}/, 'restore rows render after the backup rows in the same body');
+  assert.match(sblockBody, /\$\{visibleRuns\.map\(historyRow\)\.join\(''\)\}\$\{restoreRuns\.map\(restoreRunRow\)\.join\(''\)\}/, 'restore rows render after the backup rows in the same body');
   /* Filters apply to Backup rows ONLY — the restore rows are composed
      unconditionally (no filter gating on restoreRuns). */
   assert.match(sblockBody, /Array\.isArray\(S\.ui\.restoreHistory\?\.runs\)/, 'restore rows come from S.ui.restoreHistory');
@@ -462,6 +462,31 @@ test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () 
   assert.match(actionsSrc, /export async function refreshRestoreHistory\(\)/, 'refreshRestoreHistory is exported from actions.js');
   assert.match(pagesSrc, /!S\.ui\.restoreHistory && !S\.ui\.restoreHistoryFetching\) refreshRestoreHistory\(\)/, 'the page kicks the restore-history fetch when the payload is absent');
   assert.match(actionsSrc, /S\.ui\.restoreHistoryFetching = true/, 'the fetch carries the loop-prevention guard');
+});
+
+/* =====================================================================
+   94-03 (UAT-3b): Rotated rows are hidden from the default render —
+   "Rotated" IS status 'deleted' (page.backup.statusDeleted, the
+   rotation-deleted state). The Rotated status-filter entry maps to that
+   status so the owner reviews them explicitly; no new key — the filter
+   reuses page.backup.statusDeleted verbatim through RUN_STATUS_KEYS.
+   ===================================================================== */
+test('94-03 UAT-3b: Rotated (deleted) rows excluded from the default render; the Rotated filter entry reviews them', () => {
+  const sblockBody = pagesSrc.slice(pagesSrc.indexOf('const historySblock ='), pagesSrc.indexOf('const lastRunBadge ='));
+  /* Default render: visibleRuns drops deleted rows unless the Rotated filter is active. */
+  assert.match(
+    sblockBody,
+    /const visibleRuns = !h \|\| h\.err \? \[\] : f\.status === 'deleted' \? h\.runs : h\.runs\.filter\(r => r\.status !== 'deleted'\)/,
+    'Rotated rows are hidden by default and shown only through the Rotated filter',
+  );
+  assert.match(sblockBody, /visibleRuns\.length \|\| restoreRuns\.length/, 'the empty-state gate counts only visible rows');
+  assert.ok(!sblockBody.includes('${h.runs.map(historyRow)'), 'no unfiltered backup-row render remains');
+  /* The Rotated filter entry: 'deleted' is a first-class status-filter option,
+     labelled through page.backup.statusDeleted ("Rotated" in en). */
+  assert.match(pagesSrc, /const HISTORY_FILTER_STATUSES = \['running', 'succeeded', 'failed', 'upload_failed', 'deleted'\]/, 'the Rotated entry is in the status filter');
+  assert.match(pagesSrc, /HISTORY_FILTER_STATUSES\.map\(s => \[s, t\(RUN_STATUS_KEYS\[s\]\)\]\)/, 'the filter label resolves through RUN_STATUS_KEYS');
+  const en = JSON.parse(read('src/locales/en.json'));
+  assert.equal(en['page.backup.statusDeleted'], 'Rotated', 'the filter entry label is Rotated via the existing key');
 });
 
 /* =====================================================================

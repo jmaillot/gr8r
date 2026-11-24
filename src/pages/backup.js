@@ -220,13 +220,18 @@ const historySblock = () => {
      the task/trigger/status filters apply to Backup rows only; the Type
      column is never filtered (deferred). Fail-closed principle intact: the
      restore payload is already server-scoped, fields render verbatim. */
+  /* 94-03 (UAT-3b): "Rotated" is status 'deleted' (page.backup.statusDeleted) —
+     the rotation-deleted rows are HIDDEN from the default render (fail-closed
+     visibility) and surface only through the Rotated status-filter entry,
+     which maps to that status so the owner can review them explicitly. */
+  const visibleRuns = !h || h.err ? [] : f.status === 'deleted' ? h.runs : h.runs.filter(r => r.status !== 'deleted');
   const restoreRuns = !h || h.err ? [] : Array.isArray(S.ui.restoreHistory?.runs) ? S.ui.restoreHistory.runs : [];
   const body = !h
     ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.backup.historyLoading')}</div>`
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
-      : h.runs.length || restoreRuns.length
-        ? `${h.runs.map(historyRow).join('')}${restoreRuns.map(restoreRunRow).join('')}`
+      : visibleRuns.length || restoreRuns.length
+        ? `${visibleRuns.map(historyRow).join('')}${restoreRuns.map(restoreRunRow).join('')}`
         : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:center">
