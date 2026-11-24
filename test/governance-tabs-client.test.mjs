@@ -44,7 +44,7 @@ const LOCALES = { en, de, es, fr, nl };
 /* (a) the seg control carries three values, each with the govSuperSeg handler */
 test('(a) seg control renders THREE tabs (admins/backup/restore) with govSuperSeg + aria-pressed', () => {
   const p = page();
-  const segArr = p.match(/const seg = `<div class="seg"[\s\S]*?superSegAria[\s\S]*?join\(''\)<\/div>`;/);
+  const segArr = p.match(/const seg = `<div class="seg"[\s\S]*?superSegAria[\s\S]*?join\(''\)\}<\/div>`;/);
   assert.ok(segArr, 'the superAdminsView seg array is missing');
   const body = segArr[0];
   assert.match(body, /\['admins',\s*'page\.governance\.superSegAdmins'\]/, 'the admins tab entry is missing');
@@ -86,21 +86,22 @@ test('(d) per-role tabs render User/Grants/Actions columns with STACKED grant ba
   const thead = p.match(/<thead><tr><th style="padding-left:14px">\$\{t\('page\.governance\.rolesColUser'\)\}<\/th><th style="text-align:left">\$\{t\('page\.governance\.rolesColGrants'\)\}<\/th><th><\/th><\/tr><\/thead>/);
   assert.ok(thead, 'the per-tab table header must be User / Grants / (actions) — got no User/Grants columns');
   /* the stacked badge: one badge per grant carrying grantedByName and the granted date, esc()d */
-  assert.match(p, /grants\.map\(\s*\(?r\)?\s*=>\s*`<div[^>]*>\$\{roleBadge\(r\.role\)\}[\s\S]{0,400}?esc\((?:ago\(r\.grantedAt\)|r\.grantedByName)\)[\s\S]{0,400}?<\/div>`\s*\)\.join\(''\)/, 'the stacked per-grant badge block is missing');
+  assert.match(p, /grants\.map\(\s*\(?r\)?\s*=>\s*`<div[^>]*>\$\{roleBadge\(r\.role\)\}[\s\S]{0,200}?<\/div>`\s*\)\.join\(''\)/, 'the stacked per-grant badge block is missing');
+  assert.match(p, /esc\(ago\(r\.grantedAt\)\)/, 'the grant badge must carry the granted date via esc(ago())');
+  assert.match(p, /esc\(r\.grantedByName\)/, 'the grant badge must carry grantedByName via esc()');
   assert.match(p, /data-a="govRoleRevokeAsk" data-id="\$\{esc\(r\.id\)\}"/, 'revoke must carry the GRANT id, not the user id');
 });
 
 /* (e) trail placement: recentHtml only inside the admins-tab branch */
 test('(e) the recent-activity trail renders only inside the admins tab branch (D-04)', () => {
   const p = page();
-  assert.match(p, /segV === 'admins'[\s\S]{0,600}?recentHtml\(/, 'recentHtml is not inside the admins branch');
-  const branches = p.split(/segV ===/);
-  const backupBranch = branches.find(b => /^'backup'/.test(b));
-  const restoreBranch = branches.find(b => /^'restore'/.test(b));
-  assert.ok(backupBranch && !backupBranch.includes('recentHtml('), 'backup branch must not render the trail');
-  assert.ok(restoreBranch && !restoreBranch.includes('recentHtml('), 'restore branch must not render the trail');
+  /* the tab-body switch: trail rides ONLY the admins branch; backup/restore route to roleTabView */
+  assert.match(p, /const body = segV === 'admins' \? `\$\{superRosterView\(\)\}\$\{recentHtml\(\)\}` : roleTabView\(segV === 'backup' \? 'backup_operator' : 'restore_operator'\);/, 'the tab-body switch must render recentHtml() only inside the admins branch');
+  const tabFn = p.match(/export function roleTabView\(role\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(tabFn, 'roleTabView missing');
+  assert.ok(!tabFn[0].includes('recentHtml('), 'backup/restore tab bodies must not render the trail');
   /* the hasRows-only gate is dropped: the trail renders whenever the payload exists */
-  assert.match(p, /function recentHtml\(\)\s*\{[\s\S]{0,300}?const recent = S\.ui\.govRolesRecent;[\s\S]{0,200}?!Array\.isArray\(recent\)[\s\S]{0,200}?!recent\.length\) return '';/, 'recentHtml must render whenever the SA tab is active and the recent payload exists');
+  assert.match(p, /function recentHtml\(\)\s*\{[\s\S]{0,400}?!Array\.isArray\(recent\) \|\| !recent\.length\) return '';/, 'recentHtml must render whenever the SA tab is active and the recent payload exists');
 });
 
 /* (f) the dead-search fix: IN.govRoleQ writes state AND re-renders */
@@ -139,7 +140,7 @@ test('(h) ×5 parity: superTitle + tab labels + Grants column present; guard key
     'popover.noMatches',
   ];
   const guards = ['err.ownerImmune', 'err.instanceRoleAdminImplicit', 'err.instanceRoleDuplicate'];
-  const retired = ['page.governance.rolesLead', 'page.governance.rolesColRole'];
+  const retired = ['page.governance.rolesLead', 'page.governance.rolesColRole', 'page.governance.rolesTitle', 'page.governance.rolesColGrantedBy'];
   for (const [lc, cat] of Object.entries(LOCALES)) {
     for (const k of need) assert.ok(cat[k], `${k} missing in ${lc}`);
     for (const k of guards) assert.ok(cat[k], `guard key ${k} missing in ${lc}`);

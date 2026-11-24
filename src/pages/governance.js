@@ -133,13 +133,22 @@ export function pageGovernance() {
    ===================================================================== */
 export function superAdminsView() {
   const segV = S.ui.govSuperSeg || 'admins';
+  /* 93-01 (D-01): ONE seg control, THREE tabs — Super Admin / Backup
+     Operator / Restore Operator. The former Super Admins roster is the
+     admins tab's content; the former rolesCard dissolved into the
+     backup/restore tab bodies. */
   const seg = `<div class="seg" role="group" aria-label="${t('page.governance.superSegAria')}">${[
     ['admins', 'page.governance.superSegAdmins'],
-    ['roles', 'page.governance.rolesTitle'],
+    ['backup', 'page.governance.superSegBackup'],
+    ['restore', 'page.governance.superSegRestore'],
   ]
     .map(([v, k]) => `<button class="${segV === v ? 'on' : ''}" data-a="govSuperSeg" data-v="${v}" aria-pressed="${segV === v}">${t(k)}</button>`)
     .join('')}</div>`;
-  const body = segV === 'roles' ? rolesCard() : superRosterView();
+  /* 93-01 (D-04): the recent-activity trail lives ONLY under the SA tab
+     roster — it renders whenever the SA tab is active and the `recent`
+     payload exists (the hasRows gate is dropped). The backup/restore tabs
+     render without it. */
+  const body = segV === 'admins' ? `${superRosterView()}${recentHtml()}` : roleTabView(segV === 'backup' ? 'backup_operator' : 'restore_operator');
   /* D-90-3: the admins view carries its own lead — searching = adding, the
      roster = managing; the separation is visible in the layout. */
   const lead = segV === 'admins' ? `<p class="hint" style="margin:0 0 10px">${t('page.governance.superLead')}</p>` : '';
@@ -228,28 +237,47 @@ function superRosterView() {
    ===================================================================== */
 const roleBadge = role =>
   `<span class="badge ${role === 'backup_operator' ? 'green' : ''}">${t(role === 'backup_operator' ? 'page.backup.flagBackup' : 'page.backup.flagRestore')}</span>`;
-export function rolesCard() {
-  const rows = S.ui.govRoles;
-  if (!rows) return '';
+export function roleTabView(role) {
+  const all = S.ui.govRoles;
+  if (!all) return '';
+  const rows = all.filter(r => r.role === role);
   const dupUid = S.ui.govRoleDup;
-  /* D-08 highlight: the refused duplicate's existing row carries an amber
-     wash + the "already holds" badge until the next refresh. */
-  const row = r =>
-    `<tr${dupUid === r.userId ? ' style="background:var(--amber-soft)"' : ''}>
-    <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(r.userName)}</span>${r.userEmail ? `<span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(r.userEmail)}</span>` : ''}${dupUid === r.userId ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</span></td>
-    <td>${roleBadge(r.role)}</td>
-    <td>${r.grantedByName ? `<span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(r.grantedByName)}</span>` : '<span class="faint">—</span>'}</td>
-    <td class="faint">${esc(ago(r.grantedAt))}</td>
-    <td>${S.ui.govRoleRevoke === r.id
+  /* 93-01 (D-02): one row per USER per tab — the payload is one row per
+     (user_id, role) via the unique index, so grouping by userId never
+     dedupes a grant, only folds a multi-grant user (impossible per role
+     today, defensive) into stacked badges. */
+  const byUser = new Map();
+  for (const r of rows) {
+    if (!byUser.has(r.userId)) byUser.set(r.userId, []);
+    byUser.get(r.userId).push(r);
+  }
+  /* The stacked Grants badge — one per grant, carrying the granted date
+     (ago()) and grantedByName, every payload string through esc()
+     (T-79-10). */
+  const grantMeta = r =>
+    `${t('page.governance.rolesColGranted')} ${esc(ago(r.grantedAt))}${r.grantedByName ? ` · ${esc(r.grantedByName)}` : ''}`;
+  /* Revoke per GRANT (never per user) — each badge row carries its own
+     control riding the unchanged DELETE /api/auth/operator/instance-roles
+     handler; refusals surface verbatim via the keyed tErr toast. */
+  const revokeCtl = r =>
+    S.ui.govRoleRevoke === r.id
       ? `<span class="row" style="gap:8px;justify-content:flex-end"><span class="hint">${t('page.governance.rolesRevokeConfirm')}</span><button class="btn btn-danger btn-sm" data-a="govRoleRevokeConfirm" data-id="${esc(r.id)}">${t('page.governance.rolesRevoke')}</button><button class="btn btn-secondary btn-sm" data-a="govRoleRevokeCancel">${t('common.cancel')}</button></span>`
-      : `<span class="row" style="gap:8px;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="govRoleRevokeAsk" data-id="${esc(r.id)}">${t('page.governance.rolesRevoke')}</button></span>`}</td>
+      : `<button class="btn btn-secondary btn-sm" data-a="govRoleRevokeAsk" data-id="${esc(r.id)}">${t('page.governance.rolesRevoke')}</button>`;
+  const row = grants => {
+    const first = grants[0];
+    const dup = dupUid === first.userId;
+    return `<tr${dup ? ' style="background:var(--amber-soft)"' : ''}>
+    <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(first.userName)}</span>${first.userEmail ? `<span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(first.userEmail)}</span>` : ''}${dup ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</span></td>
+    <td>${grants.map(r => `<div style="margin:2px 0;display:flex;flex-direction:column;gap:2px">${roleBadge(r.role)}<span class="hint" style="margin:0">${grantMeta(r)}</span></div>`).join('')}</td>
+    <td><span class="row" style="gap:8px;justify-content:flex-end;align-items:flex-start;flex-direction:column">${grants.map(r => revokeCtl(r)).join('')}</span></td>
   </tr>`;
+  };
   const grantBtn = `<button class="btn btn-primary btn-sm" data-a="govRoleGrantAsk">${ic('plus', 13)}${t('page.governance.rolesGrant')}</button>`;
-  const body = rows.length
-    ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColRole')}</th><th style="text-align:left">${t('page.governance.rolesColGrantedBy')}</th><th style="text-align:left">${t('page.governance.rolesColGranted')}</th><th></th></tr></thead><tbody>${rows.map(row).join('')}</tbody></table>`
+  const body = byUser.size
+    ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColGrants')}</th><th></th></tr></thead><tbody>${[...byUser.values()].map(row).join('')}</tbody></table>`
     : /* D-34: the standard governance empty box — the Grant button front and center. */
       empty('users', t('page.governance.rolesEmptyTitle'), t('page.governance.rolesEmptyBody'), `<div class="row" style="justify-content:center;margin-top:10px">${grantBtn}</div>`, 'sm', 3);
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.rolesTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.governance.rolesLead')}</p>${rows.length ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div>${recentHtml(rows.length)}</div>`;
+  return `<div>${byUser.size ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div></div>`;
 }
 
 /* D-32: the recent-activity trail — rendered ONLY from the server-supplied
@@ -258,9 +286,12 @@ export function rolesCard() {
    (govDeadCard): 8 entries max, no pagination. A missing trail renders
    nothing — no skeleton, no fake rows (honest nulls, D-34 doctrine). */
 const roleVerb = a => t(a === 'instance_role_granted' ? 'page.governance.rolesVerbGranted' : 'page.governance.rolesVerbRevoked');
-function recentHtml(hasRows) {
+function recentHtml() {
   const recent = S.ui.govRolesRecent;
-  if (!hasRows || !Array.isArray(recent) || !recent.length) return '';
+  /* 93-01 (D-04): renders whenever the SA tab is active and the payload
+     exists — the old hasRows gate is dropped. A missing trail renders
+     nothing — no skeleton, no fake rows (honest nulls, D-34 doctrine). */
+  if (!Array.isArray(recent) || !recent.length) return '';
   return `<div style="margin-top:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesRecentTitle')}</div>${recent
     .map(
       a => `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(roleVerb(a.action))}</span><span class="trunc">${esc(a.targetName || '—')}</span><span class="faint trunc">${esc(a.actorName || '—')}</span><span class="faint">${esc(ago(a.createdAt))}</span></div></div></div>`,

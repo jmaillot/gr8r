@@ -5673,11 +5673,15 @@ A.govSeg = el => {
   S.ui.govSegV = el.dataset.v;
   render();
 };
-/* 90-01: the console's seg switch mirrors the govSeg handler — set the
-   staged stage, rerender; no refetch on switch (both views render from
-   their already-staged payloads). */
+/* 90-01/93-01: the console's seg switch mirrors the govSeg handler — set
+   the staged stage, rerender; no refetch on switch (all three views render
+   from their already-staged payloads). D-01: three values now (admins /
+   backup / restore). Per-tab state isolation: the grant-dialog/picker
+   stage resets on switch so one tab's staged state never leaks into
+   another's body. */
 A.govSuperSeg = el => {
   S.ui.govSuperSeg = el.dataset.v;
+  S.ui.govRoleMod = null;
   render();
 };
 /* 90-01 (D-90-4): the candidate slice counter — +10 per click; the query
