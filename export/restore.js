@@ -1714,7 +1714,7 @@ export async function restoreOverwriteUnit(opts = {}) {
        unit's result; every swapped dest rides trackSwap so the unit's
        outer repair net still covers an unexpected throw. */
     if (scope.kind === 'project') {
-      return await overwriteProjectFragment({
+      const projectResult = await overwriteProjectFragment({
         runId,
         scope,
         operatorId,
@@ -1731,6 +1731,8 @@ export async function restoreOverwriteUnit(opts = {}) {
         trackSwap: dest => swappedDests.push(dest),
         hooks,
       });
+      await release(); // D-89-32: the route's lock claim ends with the unit (failWith already released on refusals)
+      return projectResult;
     }
 
     const projects = arr(data.projects).filter(p => p && typeof p.id === 'string' && p.id);
