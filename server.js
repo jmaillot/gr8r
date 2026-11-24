@@ -9849,16 +9849,35 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:restoreTargetMissing');
       return fail(res, 400, 'restoreTargetMissing', 'That overwrite target is invalid');
     }
+    /* BKRST-05 (95-04): project scope carries the armed target project —
+       same regex-guard discipline as every other id. */
+    const targetProjectId = typeof body?.targetProjectId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.targetProjectId) ? body.targetProjectId : null;
     /* D-89-27: the phrase IS the target's live name — read the CURRENT row
-       and compare exactly. The client dialog is never the boundary. */
-    const targetRow = await db.get('select id, name from workspaces where id = ?', [targetId]);
+       and compare exactly. The client dialog is never the boundary. For
+       project scope the live name is the PROJECT's name read from the
+       workspace doc (the doc is fetched here for both scopes). */
+    const targetRow = await db.get('select id, name, doc from workspaces where id = ?', [targetId]);
     if (!targetRow) {
       await auditBackupTask(user, 'restore_refused:restoreTargetMissing');
       return fail(res, 404, 'restoreTargetMissing', 'That overwrite target does not exist');
     }
-    if (typeof body?.confirmName !== 'string' || body.confirmName !== targetRow.name) {
+    let confirmAgainst = targetRow.name;
+    if (targetProjectId) {
+      let liveProject = null;
+      try {
+        liveProject = (JSON.parse(targetRow.doc)?.data?.projects ?? []).find(p => p?.id === targetProjectId);
+      } catch {
+        liveProject = null;
+      }
+      if (!liveProject) {
+        await auditBackupTask(user, 'restore_refused:restoreTargetMissing');
+        return fail(res, 404, 'restoreTargetMissing', 'That target project does not exist in the target workspace');
+      }
+      confirmAgainst = liveProject.name;
+    }
+    if (typeof body?.confirmName !== 'string' || body.confirmName !== confirmAgainst) {
       await auditBackupTask(user, 'restore_refused:confirmPhraseMismatch');
-      return fail(res, 400, 'confirmPhraseMismatch', 'The typed name does not match the target workspace');
+      return fail(res, 400, 'confirmPhraseMismatch', targetProjectId ? 'The typed name does not match the target project' : 'The typed name does not match the target workspace');
     }
     const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
     if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
@@ -9871,9 +9890,23 @@ async function handleApi(req, res, url) {
     } catch {
       scope = null;
     }
-    if (!scope || scope.kind !== 'workspace') {
+    if (!scope || (scope.kind !== 'workspace' && scope.kind !== 'project')) {
       await auditBackupTask(user, 'restore_refused:restoreTargetMismatch');
-      return fail(res, 400, 'restoreTargetMismatch', 'An overwrite needs an archive whose scope matches the target workspace');
+      return fail(res, 400, 'restoreTargetMismatch', 'An overwrite needs an archive whose scope matches the target');
+    }
+    /* BKRST-05 (95-04) D-05 targeting, mirroring the import-as-new
+       precedent (:9669-9683): a project overwrite needs the operator to be
+       a CURRENT member of the target workspace — a Super Admin (the same
+       isInstanceAdmin + SUPER_ACCESS authority idiom) bypasses. The lock
+       is never touched by a refused trigger. */
+    const projectScope = scope.kind === 'project';
+    if (projectScope) {
+      const superAccess = isInstanceAdmin(user) && SUPER_ACCESS;
+      const memberOk = await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [targetId, user.id]);
+      if (!memberOk && !superAccess) {
+        await auditBackupTask(user, 'restore_refused:restoreNoWorkspace');
+        return fail(res, 400, 'restoreNoWorkspace', 'Overwriting a project needs a target workspace you are currently a member of');
+      }
     }
     const active = getRunState();
     const exportActive = !!active && ['collecting', 'archiving', 'verifying', 'uploading'].includes(active.stage);
@@ -9887,17 +9920,18 @@ async function handleApi(req, res, url) {
       return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
     }
     const restoreRunId = uid();
-    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: 'workspace', id: targetId }, trigger: 'overwrite', startedAt: now() });
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: projectScope ? scope.id : targetId }, trigger: 'overwrite', startedAt: now() });
     restoreOverwriteUnit({
       runId: restoreRunId,
       backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
-      scope: { kind: 'workspace', id: targetId },
+      scope: projectScope ? { kind: 'project', id: scope.id } : { kind: 'workspace', id: targetId },
       operator: { id: user.id, email: user.email },
       targetWorkspaceId: targetId,
+      targetProjectId: projectScope ? targetProjectId : undefined,
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`overwrite restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
-    await auditBackupTask(user, 'restore_started:overwrite', null, 'workspace');
-    logInfo(`overwrite restore run started: ${restoreRunId} (${targetId}) by ${user.email}`);
+    await auditBackupTask(user, 'restore_started:overwrite', null, projectScope ? 'project' : 'workspace');
+    logInfo(`overwrite restore run started: ${restoreRunId} (${projectScope ? `project ${targetProjectId} in ${targetId}` : targetId}) by ${user.email}`);
     return json(res, 200, { runId: restoreRunId });
   }
 

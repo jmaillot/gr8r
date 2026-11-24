@@ -777,3 +777,157 @@ test('89-05 mutual exclusion, overwrite direction: an active export refuses POST
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+/* ---------- 95-04 Task 3: project-scope overwrite acceptance ----------
+   The EXISTING route accepts project scope behind the verbatim guard
+   chain: confirmName validated server-side against the LIVE target
+   project's name read from the workspace doc (before archive
+   resolution), D-05 targeting (current membership | Super Admin
+   bypass), audit token 'project' on the project path. */
+const seedOverwriteTarget = (dbPath, { ownerId, memberId = null, targetProjectName = 'Old Project' } = {}) =>
+  withDb(dbPath, db => {
+    const doc = {
+      data: {
+        projects: [
+          { id: 'p-old', name: targetProjectName, color: '#999999' },
+          { id: 'p-keep', name: 'Keep Me', color: '#00aa00' },
+        ],
+        tasks: [
+          { id: 't-old', project: 'p-old', title: 'Old task', desc: '' },
+          { id: 't-keep', project: 'p-keep', title: 'Keep task', desc: '' },
+        ],
+        comments: [],
+        files: [],
+        teams: [],
+        projOrder: ['p-old', 'p-keep'],
+      },
+    };
+    const t = Date.now();
+    db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+      'ws-target', 'overwrite-target', 'Target WS', '#123456', JSON.stringify(doc), 4, t, t,
+    );
+    db.prepare('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)').run(
+      'ws-target', ownerId, 'owner', `m_${String(ownerId).slice(0, 8)}`, 'manual',
+    );
+    if (memberId) {
+      db.prepare('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)').run(
+        'ws-target', memberId, 'member', `m_${String(memberId).slice(0, 8)}`, 'manual',
+      );
+    }
+  });
+
+/* A live project archive of ws-a's p1 fragment + a seeded target
+   workspace ws-target armed at p-old. The op holds BACKUP_MANAGE and a
+   CURRENT membership of ws-target (D-05) unless the cell says otherwise. */
+async function bootProjectOverwriteWorld(srv, email) {
+  const op = await makeBackupOp(srv, email);
+  const opId = userIdByEmail(srv, email);
+  seedWorkspace(srv.dbPath, { ownerId: opId }); // ws-a: project p1 'Alpha', task t1
+  seedOverwriteTarget(srv.dbPath, { ownerId: userIdByEmail(srv, ADMIN.email), memberId: opId });
+  const backupRes = await op.post('/api/backup/runs', { scope: { kind: 'project', id: 'p1' } });
+  assert.equal(backupRes.status, 200, `project backup trigger: ${JSON.stringify(backupRes.data)}`);
+  await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+  const row = withDb(srv.dbPath, db => db.prepare('select id, status from backup_runs where id = ?').get(backupRes.data.runId));
+  assert.equal(row.status, 'succeeded', 'the project archive landed');
+  return { op, opId, runId: row.id };
+}
+
+test('95-04 overwrite route accepts project scope: Backup-Op member + exact live PROJECT name → 200; the run lands done; the target project is replaced verbatim with the other project untouched; audit token project', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-'));
+  const srv = await startServer({ dataDir });
+  try {
+    const w = await bootProjectOverwriteWorld(srv, 'ow-proj-op@test.local');
+
+    const res = await w.op.post('/api/backup/restore/overwrite', { runId: w.runId, targetId: 'ws-target', targetProjectId: 'p-old', confirmName: 'Old Project' });
+    assert.equal(res.status, 200, `project overwrite trigger: ${JSON.stringify(res.data)}`);
+    assert.match(res.data.runId, /^[0-9a-f-]{36}$/i, 'the run id leaves before the pipeline');
+    await pollDb(srv.dbPath, db => db.prepare("select id from restore_runs where id = ? and status = 'done'").get(res.data.runId) ?? null);
+
+    const docRow = withDb(srv.dbPath, db => db.prepare('select doc, revision, name from workspaces where id = ?').get('ws-target'));
+    const doc = JSON.parse(docRow.doc).data;
+    assert.deepEqual(doc.projects.map(p => p.id), ['p-keep', 'p1'], 'p-old replaced by the archive fragment, p-keep untouched');
+    assert.deepEqual(doc.tasks.map(t => t.id), ['t-keep', 't1'], 'ids verbatim');
+    assert.deepEqual(doc.projOrder, ['p-keep', 'p1']);
+    assert.equal(docRow.name, 'Target WS', 'the workspace identity is untouched (project scope never renames)');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, null, 'the lock released');
+    const audits = withDb(srv.dbPath, db => db.prepare("select target_name from audit_log where action = 'restore_started:overwrite' order by created_at desc limit 1").get());
+    assert.equal(audits.target_name, 'project', 'the project path audits scope token project');
+    const startScope = withDb(srv.dbPath, db => db.prepare('select scope from restore_runs where id = ?').get(res.data.runId));
+    assert.deepEqual(JSON.parse(startScope.scope), { kind: 'project', id: 'p1' }, 'the run row carries the archive project scope');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('95-04 overwrite route project scope: confirmName is validated against the LIVE PROJECT name server-side, BEFORE archive resolution — near-misses refuse keyed confirmPhraseMismatch; an unknown targetProjectId refuses 404 restoreTargetMissing', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-cname-'));
+  const srv = await startServer({ dataDir });
+  try {
+    const w = await bootProjectOverwriteWorld(srv, 'ow-proj-cname-op@test.local');
+    const before = withDb(srv.dbPath, db => db.prepare('select doc, revision from workspaces where id = ?').get('ws-target'));
+
+    /* The WORKSPACE name is NOT the phrase for a project overwrite —
+       typing it refuses (the dialog is chrome; the live doc is the
+       boundary). */
+    for (const bad of ['Target WS', 'old project', 'Old Project ']) {
+      const res = await w.op.post('/api/backup/restore/overwrite', { runId: w.runId, targetId: 'ws-target', targetProjectId: 'p-old', confirmName: bad });
+      assert.equal(res.status, 400, `name ${JSON.stringify(bad)}: ${JSON.stringify(res.data)}`);
+      assert.equal(res.data.code, 'confirmPhraseMismatch', `keyed: ${JSON.stringify(res.data)}`);
+    }
+    const audits = withDb(srv.dbPath, db => db.prepare("select count(*) as n from audit_log where action = 'restore_refused:confirmPhraseMismatch'").get());
+    assert.ok(audits.n >= 3, 'every near-miss audited');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, null, 'the lock never claimed');
+
+    const missing = await w.op.post('/api/backup/restore/overwrite', { runId: w.runId, targetId: 'ws-target', targetProjectId: 'p-nope', confirmName: 'Whatever' });
+    assert.equal(missing.status, 404, `unknown target project: ${JSON.stringify(missing.data)}`);
+    assert.equal(missing.data.code, 'restoreTargetMissing', 'keyed missing-target refusal');
+    assert.equal(withDb(srv.dbPath, db => db.prepare("select count(*) as n from restore_runs where trigger = 'overwrite'").get()).n, 0, 'no run rows from refused triggers');
+    const after = withDb(srv.dbPath, db => db.prepare('select doc, revision from workspaces where id = ?').get('ws-target'));
+    assert.equal(after.doc, before.doc, 'zero state change');
+    assert.equal(after.revision, before.revision, 'revision untouched');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('95-04 overwrite route project-scope role matrix: a Backup Operator WITHOUT membership refuses restoreNoWorkspace; a Super Admin bypasses without membership; the guard chain order is unchanged (Restore-Op still 403 backupManageRequired)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-roles-'));
+  const srv = await startServer({ dataDir });
+  try {
+    /* A Backup Operator that is NOT a member of ws-target — the D-05
+       targeting gate refuses BEFORE the lock claim. */
+    const soloId = userIdByEmail(srv, ADMIN.email);
+    seedOverwriteTarget(srv.dbPath, { ownerId: soloId }); // no member row for the op below
+    const op = await makeBackupOp(srv, 'ow-proj-solo-op@test.local');
+    seedWorkspace(srv.dbPath, { ownerId: userIdByEmail(srv, 'ow-proj-solo-op@test.local') });
+    const backupRes = await op.post('/api/backup/runs', { scope: { kind: 'project', id: 'p1' } });
+    assert.equal(backupRes.status, 200);
+    await pollCurrent(op, { until: p => p.stage === 'done' || p.stage === 'failed' });
+
+    const refused = await op.post('/api/backup/restore/overwrite', { runId: backupRes.data.runId, targetId: 'ws-target', targetProjectId: 'p-old', confirmName: 'Old Project' });
+    assert.equal(refused.status, 400, `non-member backup op: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'restoreNoWorkspace', 'the D-05 keyed refusal');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, null, 'the lock never claimed');
+
+    /* Restore Operator: fails the unchanged CAP.BACKUP_MANAGE gate — the
+       workspace-path role chain is byte-unchanged. */
+    const restoreOp = await makeRestoreOp(srv, 'ow-proj-restore-op@test.local');
+    const res403 = await restoreOp.post('/api/backup/restore/overwrite', { runId: backupRes.data.runId, targetId: 'ws-target', targetProjectId: 'p-old', confirmName: 'Old Project' });
+    assert.equal(res403.status, 403, `restore op: ${JSON.stringify(res403.data)}`);
+    assert.equal(res403.data.code, 'backupManageRequired', 'the unchanged overwrite role refusal');
+
+    /* Super Admin bypass: no membership of ws-target, still allowed. */
+    const admin = (await login(srv.base, ADMIN.email, ADMIN.password)).client;
+    const allowed = await admin.post('/api/backup/restore/overwrite', { runId: backupRes.data.runId, targetId: 'ws-target', targetProjectId: 'p-old', confirmName: 'Old Project' });
+    assert.equal(allowed.status, 200, `SA bypass: ${JSON.stringify(allowed.data)}`);
+    await pollDb(srv.dbPath, db => db.prepare("select id from restore_runs where id = ? and status = 'done'").get(allowed.data.runId) ?? null);
+    const doc = JSON.parse(withDb(srv.dbPath, db => db.prepare('select doc from workspaces where id = ?').get('ws-target')).doc).data;
+    assert.deepEqual(doc.projects.map(p => p.id), ['p-keep', 'p1'], 'the SA-triggered overwrite landed');
+    assert.equal(withDb(srv.dbPath, db => db.prepare('select claimed_by from restore_lock where id = 1').get()).claimed_by, null, 'the lock released');
+  } finally {
+    await srv.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
