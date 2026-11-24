@@ -566,8 +566,10 @@ const slugify = s =>
 
 /* Best-effort friendly label for the archive filename: workspace name from the
    row, project name from the workspace doc (the same source the 86-01 collector
-   and the server's scope-existence probe read). */
-async function scopeLabel(scope) {
+   and the server's scope-existence probe read). Exported since Phase 92 (D-05):
+   the ?all=1 runs variant resolves run-label names server-side with the same
+   source — the client derives nothing. */
+export async function scopeLabel(scope) {
   try {
     if (scope?.kind === 'workspace' && scope.id) {
       const row = await dbGet('select name from workspaces where id = ?', [scope.id]);

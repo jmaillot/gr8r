@@ -371,3 +371,129 @@ test('POST /api/backup/tasks no longer refuses backupNotConfigured — Phase 87 
     await server.stop();
   }
 });
+
+/* =====================================================================
+   Phase 92 (D-05) — the ?all=1 unified cross-task history variant.
+   Legacy byte-identity is pinned by the golden fixture test above;
+   here: cross-task rows, filter narrowing, limit/offset, fail-closed
+   per-run scope (a workspace-scope run is INVISIBLE to a caller without
+   live membership), and the 'manual' filter matching task_id NULL rows.
+   ===================================================================== */
+
+async function seedAllRuns(server) {
+  const op = await makeBackupOp(server, 'op-all@test.local');
+  const t1 = (await op.post('/api/backup/tasks', { name: 'All One', scope: { kind: 'instance' }, cron: '30 2 * * *' })).data.task.id;
+  const t2 = (await op.post('/api/backup/tasks', { name: 'All Two', scope: { kind: 'workspace', id: withDb(server.dbPath, db => db.prepare('select id from workspaces limit 1').get()).id }, cron: '30 2 * * *' })).data.task.id;
+  const seed = (id, taskId, at, extra = {}) =>
+    withDb(server.dbPath, db =>
+      db.prepare('insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at, gfs_bucket) values (?,?,?,?,?,?,?,?)').run(
+        id,
+        taskId,
+        JSON.stringify(extra.scope ?? { kind: 'instance', id: null }),
+        extra.trigger ?? 'scheduled',
+        extra.status ?? 'succeeded',
+        at,
+        at,
+        extra.gfs !== undefined ? extra.gfs : 'daily',
+      ),
+    );
+  const DAY = 24 * 3600 * 1000;
+  const base = Date.UTC(2026, 5, 1, 2);
+  seed('all-t1-a', t1, base);
+  seed('all-t1-b', t1, base + DAY, { status: 'failed' });
+  seed('all-t2-ws', t2, base + 2 * DAY, { scope: { kind: 'workspace', id: withDb(server.dbPath, db => db.prepare('select id from workspaces limit 1').get()).id } });
+  seed('all-manual-1', null, base + 3 * DAY, { trigger: 'manual', gfs: null });
+  const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  return { op, admin, t1, t2 };
+}
+
+test('?all=1 returns cross-task rows with gfs_bucket and a server-resolved label', async () => {
+  const server = await startServer({ env: { GR8R_INSTANCE_NAME: 'alltest' } });
+  try {
+    const { admin, t1 } = await seedAllRuns(server);
+    const res = await admin.get('/api/backup/runs?all=1');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.runs.length, 4, 'cross-task + manual rows, newest first');
+    assert.deepEqual(res.data.runs.map(r => r.id), ['all-manual-1', 'all-t2-ws', 'all-t1-b', 'all-t1-a']);
+    assert.ok(res.data.runs.every(r => 'gfs_bucket' in r), 'rows carry gfs_bucket');
+    const labeled = res.data.runs.find(r => r.id === 'all-t1-a');
+    assert.equal(labeled.label, 'alltest-instance-daily-2026-06-01', 'instance-scope label has no slug segment');
+    const wsRun = res.data.runs.find(r => r.id === 'all-t2-ws');
+    assert.equal(wsRun.label, 'alltest-ws-acme-daily-2026-06-03', 'server-resolved label from the WORKSPACE name (scopeLabel), not the task name');
+    assert.ok(!('scope' in labeled), 'the raw scope JSON stays internal');
+    assert.ok(res.data.runs.every(r => !('keptPosition' in r)), 'history variant carries no keptPosition (Phase 94 renders history)');
+    assert.ok(res.data.runs.some(r => r.task_id === t1));
+  } finally {
+    await server.stop();
+  }
+});
+
+test('?all=1 filters: task / task=manual / trigger / status narrow; limit+offset page', async () => {
+  const server = await startServer({ env: { GR8R_INSTANCE_NAME: 'alltest' } });
+  try {
+    const { admin, op, t2 } = await seedAllRuns(server);
+    assert.deepEqual((await admin.get('/api/backup/runs?all=1&task=manual')).data.runs.map(r => r.id), ['all-manual-1'], "task=manual matches task_id NULL rows only");
+    assert.deepEqual((await admin.get(`/api/backup/runs?all=1&task=${t2}`)).data.runs.map(r => r.id), ['all-t2-ws']);
+    assert.deepEqual((await op.get(`/api/backup/runs?all=1&task=${t2}`)).data.runs, [], 'a non-member operator’s workspace-scope task view narrows to the fail-closed empty set');
+    assert.deepEqual((await admin.get('/api/backup/runs?all=1&trigger=scheduled')).data.runs.map(r => r.id), ['all-t2-ws', 'all-t1-b', 'all-t1-a']);
+    assert.deepEqual((await admin.get('/api/backup/runs?all=1&status=failed')).data.runs.map(r => r.id), ['all-t1-b']);
+    assert.deepEqual((await admin.get('/api/backup/runs?all=1&status=running')).data.runs, [], 'unknown status narrows to empty');
+    assert.deepEqual((await admin.get('/api/backup/runs?all=1&limit=2')).data.runs.map(r => r.id), ['all-manual-1', 'all-t2-ws']);
+    assert.deepEqual((await admin.get('/api/backup/runs?all=1&limit=2&offset=2')).data.runs.map(r => r.id), ['all-t1-b', 'all-t1-a']);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('?all=1 fail-closed scope: a workspace-scope run is INVISIBLE to an operator without live membership; visible to a member and to super access', async () => {
+  const server = await startServer({ env: { GR8R_INSTANCE_NAME: 'alltest' } });
+  try {
+    const { op, t2 } = await seedAllRuns(server);
+    // A second backup operator with NO membership in the seed workspace.
+    const outsider = await makeBackupOp(server, 'op-outside@test.local');
+    const seen = await outsider.get('/api/backup/runs?all=1');
+    assert.equal(seen.status, 200);
+    assert.deepEqual(seen.data.runs.map(r => r.id).filter(id => id === 'all-t2-ws'), [], 'the workspace-scope run is dropped, not error’d');
+    assert.equal(seen.data.runs.length, 3, 'the other three rows still served');
+
+    // Grant the outsider a live membership → the row becomes visible.
+    const joined = await signup(server.base, { name: 'Joiner', email: 'joiner@test.local' });
+    void joined;
+    const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const invite = await admin.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, 'op-outside@test.local'), role: 'restore_operator' });
+    assert.equal(invite.status, 200);
+    // direct membership insert via the admin's workspace invite flow is heavyweight — use withDb
+    const wsId = withDb(server.dbPath, db => db.prepare('select id from workspaces limit 1').get()).id;
+    withDb(server.dbPath, db =>
+      db.prepare('insert into memberships (workspace_id, user_id, role, member_id) values (?,?,?,?)').run(
+        wsId, userIdByEmail(server, 'op-outside@test.local'), 'viewer', 'm-outside',
+      ),
+    );
+    const after = await outsider.get('/api/backup/runs?all=1');
+    assert.ok(after.data.runs.some(r => r.id === 'all-t2-ws'), 'live membership → the row is served');
+    void op; void t2;
+
+    // Super Admin sees everything.
+    const adminView = await admin.get('/api/backup/runs?all=1');
+    assert.equal(adminView.data.runs.length, 4, 'super access sees the workspace-scope row too');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('?all=1 gate: unauthenticated 401; non-operator 403 (same chain as the frozen route)', async () => {
+  const server = await startServer({});
+  try {
+    assert.equal((await client(server.base, 'anon').get('/api/backup/runs?all=1')).status, 401);
+    const plain = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    void plain;
+    const joined = await signup(server.base, { name: 'Plain All', email: 'plain-all@test.local' });
+    assert.equal(joined.status, 201);
+    const pl = (await login(server.base, 'plain-all@test.local', 'password-1234')).client;
+    const res = await pl.get('/api/backup/runs?all=1');
+    assert.equal(res.status, 403);
+    assert.equal(res.data.code, 'backupManageRequired');
+  } finally {
+    await server.stop();
+  }
+});

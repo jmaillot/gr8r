@@ -84,7 +84,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, setBackupGfsBucketProvider, backupsRoot, sha256AndSize } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt, describeCron } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
@@ -9315,6 +9315,90 @@ async function handleApi(req, res, url) {
     if (!user) return;
     if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
       return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can read backup history');
+    }
+    /* Phase 92 (D-05): the ?all=1 unified cross-task history variant.
+       Branched FIRST — every line of the legacy parse below is untouched
+       (byte-identity pinned by the golden fixture test; D-05 grep gate:
+       no new param is read on the legacy path). Same guard chain above;
+       per-run scope authorization stays server-side and FAIL-CLOSED: an
+       instance-scope row is covered by the operator gate, a workspace/
+       project-scope row requires a LIVE membership (or instance-admin
+       super-access, the server.js:1282 union) — a run the caller cannot
+       see is DROPPED, never error'd (T-92-01). */
+    if (pathname === '/api/backup/runs' && method === 'GET' && url.searchParams.get('all') === '1') {
+      /* filters — untrusted input on a frozen surface: unknown values
+         narrow to EMPTY (fail-closed), never widen. */
+      const clauses = [];
+      const params = [];
+      const task = url.searchParams.get('task');
+      if (task === 'manual') {
+        clauses.push('task_id is null');
+      } else if (task) {
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(task)) return json(res, 200, { runs: [] });
+        clauses.push('task_id = ?');
+        params.push(task);
+      }
+      const trigger = url.searchParams.get('trigger');
+      if (trigger) {
+        if (trigger !== 'manual' && trigger !== 'scheduled') return json(res, 200, { runs: [] });
+        clauses.push('trigger = ?');
+        params.push(trigger);
+      }
+      const status = url.searchParams.get('status');
+      if (status) {
+        if (!['running', 'succeeded', 'failed', 'upload_failed', 'deleted'].includes(status)) return json(res, 200, { runs: [] });
+        clauses.push('status = ?');
+        params.push(status);
+      }
+      const where = clauses.length ? `where ${clauses.join(' and ')}` : '';
+      const limitRaw = url.searchParams.get('limit');
+      const offsetRaw = url.searchParams.get('offset');
+      const limit = Math.min(Math.max(Number.parseInt(limitRaw ?? '50', 10) || 50, 1), 200);
+      const offset = Math.max(Number.parseInt(offsetRaw ?? '0', 10) || 0, 0);
+      const rows = await db.all(
+        `select id, task_id, scope, uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, gfs_bucket
+           from backup_runs ${where}
+          order by created_at desc, id desc limit ? offset ?`,
+        [...params, limit, offset],
+      );
+      const superAccess = isInstanceAdmin(user) && SUPER_ACCESS;
+      /* Per-run fail-closed visibility (T-92-01). */
+      const visible = async r => {
+        let scope = null;
+        try { scope = JSON.parse(r.scope); } catch { return false; }
+        if (!scope?.kind) return false;
+        if (scope.kind === 'instance') return true; // covered by the operator gate above
+        if (scope.kind === 'workspace') return superAccess || !!(await membershipOf(scope.id, user.id));
+        if (scope.kind === 'project') {
+          if (superAccess) return true;
+          for (const ws of await db.all('select id, doc from workspaces')) {
+            let doc;
+            try { doc = JSON.parse(ws.doc)?.data ?? {}; } catch { continue; }
+            if ((Array.isArray(doc.projects) ? doc.projects : []).some(p => p?.id === scope.id) && (await membershipOf(ws.id, user.id))) return true;
+          }
+          return false;
+        }
+        return false;
+      };
+      const out = [];
+      for (const r of rows) {
+        if (!(await visible(r))) continue; // dropped, never error'd
+        let scope = null;
+        try { scope = JSON.parse(r.scope); } catch { scope = null; }
+        const name = await scopeLabel(scope);
+        const { scope: _internal, ...pub } = r;
+        void _internal;
+        out.push({
+          ...pub,
+          location: r.filename
+            ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
+            : (r.uploaded === 1 ? 's3' : 'missing'),
+          /* Phase 94 renders this verbatim — the instance-scope-gfs run label,
+             resolved server-side (BKNAME-01: the client derives nothing). */
+          label: runLabel({ instance: instanceSlug(), scope: scope?.kind ?? 'instance', label: name, gfsBucket: r.gfs_bucket, createdAt: r.created_at }),
+        });
+      }
+      return json(res, 200, { runs: out });
     }
     const taskId = url.searchParams.get('taskId');
     if (!taskId) return fail(res, 400, 'taskNotFound', 'That backup task does not exist');
