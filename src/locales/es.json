@@ -2333,5 +2333,8 @@
   "toast.checksumOk": "Checksum verificado — el archivo está intacto",
   "toast.checksumFail": "La verificación del checksum FALLÓ — este archivo está dañado",
   "page.restore.restoreAction": "Restaurar",
-  "page.governance.rolesPickerIdle": "Empieza a escribir para buscar usuarios"
+  "page.governance.rolesPickerIdle": "Empieza a escribir para buscar usuarios",
+  "page.restore.targetPickLabel": "Destino de restauración",
+  "page.restore.targetPickHint": "Obligatorio — haz clic en un workspace abajo: el proyecto restaurado se creará allí.",
+  "page.restore.targetArmed": "Destino: {name} — ya puedes restaurar."
 }

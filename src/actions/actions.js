@@ -5715,7 +5715,12 @@ A.govRoleGrantAsk = async () => {
    exact bug class the owner reported at the old govRoleQ (:5604). The
    stage seeds lazily so the per-tab picker filters before any selection. */
 IN.govRoleQ = el => {
-  if (!S.ui.govRoleMod) S.ui.govRoleMod = { userId: null, role: null, q: '' };
+  /* UAT round-11 fix: the staged draft CARRIES its tab role from the input's
+     data-role — without it the first keystroke created a role-less draft,
+     roleTabView's per-tab isolation rejected it (stMod.role === role false)
+     and re-rendered an empty input (typing was impossible). */
+  if (!S.ui.govRoleMod || S.ui.govRoleMod.role == null)
+    S.ui.govRoleMod = { userId: S.ui.govRoleMod?.userId ?? null, role: el.dataset.role || S.ui.govRoleMod?.role || null, q: '' };
   S.ui.govRoleMod.q = el.value;
   render();
 };

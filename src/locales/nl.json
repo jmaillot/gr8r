@@ -2333,5 +2333,8 @@
   "toast.checksumOk": "Checksum geverifieerd — het archief is intact",
   "toast.checksumFail": "Checksumverificatie GEFAALD — dit archief is beschadigd",
   "page.restore.restoreAction": "Herstellen",
-  "page.governance.rolesPickerIdle": "Begin te typen om gebruikers te zoeken"
+  "page.governance.rolesPickerIdle": "Begin te typen om gebruikers te zoeken",
+  "page.restore.targetPickLabel": "Hersteldoel",
+  "page.restore.targetPickHint": "Verplicht — klik hieronder op een workspace: het herstelde project wordt daar aangemaakt.",
+  "page.restore.targetArmed": "Doel: {name} — je kunt nu herstellen."
 }

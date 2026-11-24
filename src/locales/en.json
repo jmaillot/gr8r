@@ -2333,5 +2333,8 @@
   "toast.checksumOk": "Checksum verified — the archive is intact",
   "toast.checksumFail": "Checksum verification FAILED — this archive is corrupted",
   "page.restore.restoreAction": "Restore",
-  "page.governance.rolesPickerIdle": "Start typing to search users"
+  "page.governance.rolesPickerIdle": "Start typing to search users",
+  "page.restore.targetPickLabel": "Restore target",
+  "page.restore.targetPickHint": "Required — click a workspace below: the restored project is created there.",
+  "page.restore.targetArmed": "Target: {name} — you can restore now."
 }

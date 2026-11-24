@@ -2333,5 +2333,8 @@
   "toast.checksumOk": "Prüfsumme verifiziert — das Archiv ist intakt",
   "toast.checksumFail": "Prüfsummenprüfung FEHLGESCHLAGEN — dieses Archiv ist beschädigt",
   "page.restore.restoreAction": "Wiederherstellen",
-  "page.governance.rolesPickerIdle": "Tippe, um Benutzer zu suchen"
+  "page.governance.rolesPickerIdle": "Tippe, um Benutzer zu suchen",
+  "page.restore.targetPickLabel": "Wiederherstellungsziel",
+  "page.restore.targetPickHint": "Erforderlich — klicke unten auf einen Workspace: das wiederhergestellte Projekt wird dort erstellt.",
+  "page.restore.targetArmed": "Ziel: {name} — du kannst jetzt wiederherstellen."
 }

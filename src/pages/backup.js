@@ -584,14 +584,18 @@ const restorePreviewBody = (d, flags) => {
      back to the memberships. Fail-closed: neither list renders a target the
      server gate would refuse — the trigger re-validates authority live. */
   const scopeTargets = Array.isArray(S.ui.backupScopes) && S.ui.backupScopes.length ? S.ui.backupScopes : memberships;
+  /* UAT round-11 (owner): the picker must EXPLAIN itself — the selected
+     target is the workspace that receives the restored project. The armed
+     selection echoes its own line so the state is unmistakable. */
+  const pickedName = scopeTargets.find(w => w.id === S.ui.restoreTarget)?.name;
   const picker =
     kind === 'project' && scopeTargets.length
-      ? `<div style="margin-top:12px"><div class="faint" style="font-size:12px;margin-bottom:6px">${t('page.restore.scopeLabel')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${scopeTargets
+      ? `<div style="margin-top:12px"><div class="label" style="margin-bottom:4px">${t('page.restore.targetPickLabel')}</div><div class="hint" style="margin:0 0 8px">${t('page.restore.targetPickHint')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${scopeTargets
           .map(
             w =>
               `<button class="btn btn-sm${S.ui.restoreTarget === w.id ? ' btn-primary' : ''}" data-a="restoreTargetPick" data-id="${esc(w.id)}" title="${esc(w.name)}"><span class="trunc" style="max-width:180px">${esc(w.name)}</span></button>`,
           )
-          .join('')}</div></div>`
+          .join('')}</div>${pickedName ? `<div class="hint" style="margin:6px 0 0">${t('page.restore.targetArmed', { name: esc(pickedName) })}</div>` : ''}</div>`
       : '';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px">
       ${previewDetail(t('page.restore.scopeLabel'), esc(String(kind ?? '')))}

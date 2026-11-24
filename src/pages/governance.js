@@ -283,7 +283,7 @@ export function roleTabView(role) {
      tab); the Grant dialog reuses the shared picker body and inherits the
      staged draft. Only renders once the operator-users payload is staged. */
   const picker = S.ui.operatorUsers
-    ? `<div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesGrantTitle')}</div>${govPickerInput('gov-role-tab-q', st, 'gov-role-tab-list')}${govPickerList(role, st, 'gov-role-tab-list')}</div>`
+    ? `<div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesGrantTitle')}</div>${govPickerInput('gov-role-tab-q', st, 'gov-role-tab-list', role)}${govPickerList(role, st, 'gov-role-tab-list')}</div>`
     : '';
   const body = byUser.size
     ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColGrants')}</th><th></th></tr></thead><tbody>${[...byUser.values()].map(row).join('')}</tbody></table>`
@@ -343,8 +343,8 @@ const govPickerList = (role, st, listId) => {
     `<div class="srow" role="option" aria-selected="${st.userId === c.u.id}" data-a="govRolePick" data-v="${esc(c.u.id)}" data-role="${role}" style="cursor:pointer;${st.userId === c.u.id ? 'outline:2px solid var(--accent)' : ''}"><div><div class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(c.u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(c.u.email || '')}</span>${c.held ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</div></div></div>`;
   return `<div class="panel" role="listbox" id="${listId}" style="max-height:220px;overflow-y:auto">${cands.length ? cands.map(opt).join('') : `<p class="hint" style="margin:6px 0 0">${qTrim ? t('popover.noMatches') : t('page.governance.rolesPickerIdle')}</p>`}</div>`;
 };
-const govPickerInput = (id, st, listId) =>
-  `<div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="${id}" data-in="govRoleQ" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" role="combobox" aria-expanded="${!!(st.q || '').trim()}" aria-controls="${listId}" aria-label="${t('page.governance.searchOp')}"></div>`;
+const govPickerInput = (id, st, listId, role) =>
+  `<div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="${id}" data-in="govRoleQ" data-role="${role}" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" role="combobox" aria-expanded="${!!(st.q || '').trim()}" aria-controls="${listId}" aria-label="${t('page.governance.searchOp')}"></div>`;
 
 export function govRoleBody() {
   const st = S.ui.govRoleMod || { userId: null, role: 'backup_operator', q: '' };
@@ -353,7 +353,7 @@ export function govRoleBody() {
   return `<div class="modal-b" style="padding-top:18px;gap:10px">
     <h2 style="margin:0;font-size:16px">${t('page.governance.rolesGrantTitle')}</h2>
     <p class="hint" style="margin:0">${t('page.governance.rolesModalHint')}</p>
-    ${govPickerInput('gov-role-q', st, 'gov-role-list')}
+    ${govPickerInput('gov-role-q', st, 'gov-role-list', role)}
     ${roleSel}
     ${govPickerList(role, st, 'gov-role-list')}
   </div>

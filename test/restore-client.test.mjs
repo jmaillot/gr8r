@@ -147,7 +147,7 @@ test('5-locale key parity for the 89-06 restore surface', () => {
     'page.restore.restoreAction',
     'page.restore.locLocal', 'page.restore.locS3', 'page.restore.locMissing',
     'page.restore.previewTitle', 'page.restore.previewCorrupt',
-    'page.restore.scopeLabel', 'page.restore.tablesLabel', 'page.restore.filesLabel', 'page.restore.checksumLabel',
+    'page.restore.scopeLabel', 'page.restore.targetPickLabel', 'page.restore.targetPickHint', 'page.restore.targetArmed', 'page.restore.tablesLabel', 'page.restore.filesLabel', 'page.restore.checksumLabel',
     'page.restore.skippedTablesNote', 'page.restore.restoreNewAction',
     'page.restore.stageLabel', 'page.restore.pending',
     'page.restore.stageFetching', 'page.restore.stageValidating', 'page.restore.stageRestoring', 'page.restore.stageVerifying',

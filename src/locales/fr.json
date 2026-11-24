@@ -2373,5 +2373,8 @@
   "toast.checksumOk": "Somme de contrôle vérifiée — l'archive est intacte",
   "toast.checksumFail": "Vérification de la somme de contrôle ÉCHOUÉE — cette archive est corrompue",
   "page.restore.restoreAction": "Restaurer",
-  "page.governance.rolesPickerIdle": "Commence à taper pour chercher des utilisateurs"
+  "page.governance.rolesPickerIdle": "Commence à taper pour chercher des utilisateurs",
+  "page.restore.targetPickLabel": "Cible de restauration",
+  "page.restore.targetPickHint": "Obligatoire — clique un workspace ci-dessous : le projet restauré y sera créé.",
+  "page.restore.targetArmed": "Cible : {name} — tu peux restaurer."
 }
