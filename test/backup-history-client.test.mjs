@@ -469,6 +469,10 @@ test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () 
   assert.match(sblockBody, /const showBackup = f\.type !== 'restore';/, 'the Type filter gates the backup rows');
   assert.match(sblockBody, /const showRestore = f\.type !== 'backup';/, 'the Type filter gates the restore rows');
   assert.match(sblockBody, /\$\{t\('page\.backup\.historyDateCol'\)\}/, 'the table renders a Date column header');
+  /* UAT round-7 (owner): the whole table flush LEFT — perm-t centers by
+     default, the hist-t variant overrides (settings.css), widths stay
+     content-driven. */
+  assert.match(sblockBody, /class="perm-t hist-t"/, 'the history table carries the flush-left hist-t variant');
   /* Filters apply to Backup rows ONLY — the restore rows are composed
      unconditionally (no filter gating on restoreRuns). */
   assert.match(sblockBody, /Array\.isArray\(S\.ui\.restoreHistory\?\.runs\)/, 'restore rows come from S.ui.restoreHistory');

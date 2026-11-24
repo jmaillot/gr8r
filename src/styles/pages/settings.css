@@ -328,6 +328,14 @@
 .perm-t td:first-child {
   text-align: left;
 }
+/* UAT round-7 (phase 94): the Run history table — every cell flush left,
+   one line per cell (the Run column truncates instead), column widths
+   content-driven (table-layout stays auto). */
+.perm-t.hist-t th,
+.perm-t.hist-t td {
+  text-align: left;
+  white-space: nowrap;
+}
 .perm-t th {
   font-weight: 500;
   color: var(--text-2);

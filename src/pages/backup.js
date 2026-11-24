@@ -264,7 +264,7 @@ const historySblock = () => {
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
       : backupRows || restoreRows
-        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th style="text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.filterTrigger')}</th><th style="text-align:left">${t('page.backup.scheduleCol')}</th><th style="text-align:left">${t('page.backup.filterStatus')}</th><th style="text-align:left">${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${backupRows}${restoreRows}</tbody></table></div>`
+        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t hist-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th>${t('page.backup.colTask')}</th><th>${t('page.backup.filterTrigger')}</th><th>${t('page.backup.scheduleCol')}</th><th>${t('page.backup.filterStatus')}</th><th>${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${backupRows}${restoreRows}</tbody></table></div>`
         : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:baseline">
