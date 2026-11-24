@@ -5448,8 +5448,12 @@ A.backupVerifyChecksum = async el => {
          through tErr's raw fallback when the map misses. */
       return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
     }
-    /* Both outcomes persisted server-side — the badge is the payload's. */
+    /* Both outcomes persisted server-side — the owner ruling (UAT round-5):
+       the result surfaces as a TOAST at click time, no durable badge. */
     await refreshOpenBackupHistories();
+    const chk = res.data ? Number(res.data.checksum_ok) : null;
+    if (chk === 1) toast(t('toast.checksumOk'));
+    else if (chk === 0) toast(t('toast.checksumFail'), { kind: 'err' });
   } finally {
     busy.delete(id);
     render();

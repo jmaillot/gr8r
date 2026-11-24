@@ -152,8 +152,7 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.historyAction', 'page.backup.historyTitle', 'page.backup.historyCap', 'page.backup.historyEmpty',
     'page.backup.historyLoading', 'page.backup.historyUnavailable', 'page.backup.errorToggle',
     'page.backup.downloadAction',
-    'page.backup.verifyChecksumAction', 'page.backup.checksumChecking', 'page.backup.checksumOk',
-    'page.backup.checksumFail', 'page.backup.checksumLastCheck',
+    'page.backup.verifyChecksumAction', 'page.backup.checksumChecking', 'page.backup.statusWarning', 'page.backup.scheduleCol',
     'page.backup.statusRunning', 'page.backup.statusSucceeded', 'page.backup.statusFailed',
     'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
     'page.backup.triggerManual', 'page.backup.triggerScheduled', 'page.backup.triggerUnknown',
@@ -318,11 +317,9 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
   assert.match(runRowBody, /chkBusy \? ' disabled aria-busy="true"'/, 'the busy CTA is disabled + aria-busy');
   assert.match(runRowBody, /chkBusy \? t\('page\.backup\.checksumChecking'\) : /, 'the busy label swaps to the keyed checking copy');
   assert.match(runRowBody, /aria-busy="true"/, 'the row carries aria-busy while checking');
-  /* The result is the DURABLE keyed badge + the server timestamp line —
-     rendered from the persisted payload (checksum_ok / checksum_checked_at). */
-  assert.match(runRowBody, /chk === 1 \?\s*` ?<span class="badge green">/, 'the match badge is keyed green');
-  assert.match(runRowBody, /chk === 0 \?\s*` ?<span class="badge red">/, 'the mismatch badge is keyed red');
-  assert.match(runRowBody, /t\('page\.backup\.checksumLastCheck', \{ time: /, 'the server timestamp renders in the keyed last-check line');
+  /* UAT round-5 (owner ruling): NO durable checksum chrome — the result
+     toasts at click time; the badge + last-check line are gone. */
+  assert.ok(!/chk === 1/.test(runRowBody) && !/checksumLastCheck/.test(runRowBody), 'no durable checksum badge or last-check line remains');
   /* The action: POST via the api method, refusals through the closed map,
      the persisted result re-renders through the 87-04 open-history refresh
      (payload-derived — the client stores no verify result) — and NO toast
@@ -331,10 +328,13 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
   assert.ok(actionHead.includes('api.backupVerifyChecksum(id)'), 'the action rides the api verify method');
   assert.ok(actionHead.includes('toast(restoreToast('), 'refusals surface through the closed map — restoreToast wrapped in toast() (the click delegation discards handler return values)');
   assert.ok(actionHead.includes('refreshOpenBackupHistories()'), 'the result re-renders through the open-history refresh');
-  /* The RESULT path (success) carries no toast — the durable keyed badge is
-     the feedback; the toast call belongs to the refusal branch only. */
+  /* UAT round-5 (owner ruling): the RESULT path toasts at click time — the
+     durable badge is gone, the toast IS the feedback (Checksum verified /
+     FAILED, keyed through toast.checksumOk / toast.checksumFail). Refusals
+     keep the restoreToast closed map. */
   const afterRefresh = actionHead.slice(actionHead.indexOf('refreshOpenBackupHistories()'));
-  assert.ok(!afterRefresh.includes('toast('), 'no toast on the success path — the durable badge is the feedback');
+  assert.match(afterRefresh, /if \(chk === 1\) toast\(t\('toast\.checksumOk'\)\)/, 'the verified result toasts at click time');
+  assert.match(afterRefresh, /else if \(chk === 0\) toast\(t\('toast\.checksumFail'\), \{ kind: 'err' \}\)/, 'the failed result toasts as an error');
   assert.match(apiSrc, /async backupVerifyChecksum\(runId/, 'api.js exports the verify method');
 });
 
@@ -358,7 +358,7 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
 test('90-03 → 94: the unified GFS badge derives from run.gfs_bucket through the four gfs keys — zero client GFS math', () => {
   const rowBody = pagesSrc.slice(pagesSrc.indexOf('const historyTr ='), pagesSrc.indexOf('const historySblock ='));
   assert.match(rowBody, /const gfsKey = GFS_SCALE_KEYS\[run\.gfs_bucket\]/, 'the badge resolves gfs_bucket through the four gfs keys');
-  assert.match(rowBody, /gfsKey \?\s*` ?<span class="badge"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : ''/, 'the badge renders only when gfs_bucket names a known scale');
+  assert.match(rowBody, /const scheduleCell = gfsKey \? `<span class="badge"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : '<span class="faint">—<\/span>';/, 'the GFS badge lives in its own Schedule column cell (UAT round-5)');
   /* {scale} vocabulary is the FOUR gfs keys — no other scale vocabulary. */
   assert.match(pagesSrc, /const GFS_SCALE_KEYS = \{ daily: 'page\.backup\.gfsDaily', weekly: 'page\.backup\.gfsWeekly', monthly: 'page\.backup\.gfsMonthly', yearly: 'page\.backup\.gfsYearly' \}/, 'the four GFS scale keys are the one scale vocabulary');
   /* Zero client GFS math (T-90-06): no retention arithmetic under src/ and
@@ -379,12 +379,17 @@ test('90-03 → 94: the unified GFS badge derives from run.gfs_bucket through th
    in-render kick refetches exactly once. The tick never calls the restore
    refresh action directly and never refetches unconditionally.
    ===================================================================== */
-test('90-03: the ⚠ missing-blob badge is payload-count chrome (count > 0 only, triangle-alert, red)', () => {
+test('90-03 → UAT round-5: the missing-blob state is a run-level WARNING (amber) on succeeded runs — never durable red chrome', () => {
   const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyTr ='), pagesSrc.indexOf('const historySblock ='));
   assert.match(
     runRowBody,
-    /Number\(run\.missing_blob_count\) > 0 \? `<div style="margin-top:2px"><span class="badge red">\$\{ic\('triangle-alert', 12\)\}\$\{t\('page\.backup\.missingBlobWarn', \{ n: Number\(run\.missing_blob_count\) \}\)\}<\/span><\/div>` : ''/,
-    'the badge renders only on count > 0, red badge class + triangle-alert glyph + the missingBlobWarn interpolation verbatim',
+    /const warn = run\.status === 'succeeded' && Number\(run\.missing_blob_count\) > 0;/,
+    'the warning state derives from the payload count on succeeded runs only',
+  );
+  assert.match(
+    runRowBody,
+    /warn \? ` <span class="badge amber" title="\$\{esc\(t\('page\.backup\.missingBlobWarn', \{ n: Number\(run\.missing_blob_count\) \}\)\)\}">\$\{t\('page\.backup\.statusWarning'\)\}<\/span>` : ''/,
+    'the amber Warning badge carries the missingBlobWarn detail in its tooltip',
   );
 });
 

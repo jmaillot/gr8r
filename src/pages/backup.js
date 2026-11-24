@@ -163,20 +163,22 @@ const historyTr = run => {
   const startedMs = Number(run.started_at) || Number(run.created_at);
   const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
   const chkBusy = !!S.ui.backupChecksumBusy?.has(run.id);
-  const chk = run.checksum_ok == null ? null : Number(run.checksum_ok);
   /* The GFS badge: the payload's gfs_bucket resolves through the four gfs
      keys — no client GFS math, ever (D-90-12/16 doctrine carries over). */
   const gfsKey = GFS_SCALE_KEYS[run.gfs_bucket];
   /* UAT round-4: the unified sblock renders as a REAL TABLE — one <tr> per
-     run under the Type/Run/Trigger/Status/Date headers. The Type badge reuses
-     the nav.route.backup wording; the Run cell carries the 5-segment label
-     (verbatim, esc'd) plus the filename, missing-blob warning, checksum
-     result and the expandable error — the detail never disappears, it moves
-     inside the Run cell. */
-  const runCell = `<span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(run.label || '')}">${esc(run.label || '')}</span>${
+     run under the Type/Run/Trigger/Schedule/Status/Date headers. */
+  /* UAT round-5: the Run cell shows the SHORT label — the 12-hex instance id
+     is stripped for display only (identical on every row of a single
+     instance); the full server label stays in the tooltip, the stored field
+     is never rewritten (D-04: the payload renders, the display abbreviates).
+     Status = run-level states only: Succeeded green / Warning amber when the
+     run carries missing blobs (the archive exists but blobs are gone) /
+     Error red for failed + upload_failed / Running neutral. The checksum
+     result is NOT durable chrome — it toasts on click only (UAT round-5). */
+  const shortLabel = String(run.label || '').replace(/^[0-9a-f]{12}-/, '');
+  const runCell = `<span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(run.label || '')}">${esc(shortLabel)}</span>${
     run.filename ? `<div class="mono faint" style="font-size:12px">${esc(run.filename)}</div>` : ''
-  }${
-    Number(run.missing_blob_count) > 0 ? `<div style="margin-top:2px"><span class="badge red">${ic('triangle-alert', 12)}${t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) })}</span></div>` : ''
   }${
     run.sha256 ? `<div class="mono faint" style="font-size:12px" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</div>` : ''
   }${
@@ -186,17 +188,18 @@ const historyTr = run => {
         }</div>`
       : ''
   }`;
-  const statusCell = `<span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>${
-    gfsKey ? ` <span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : ''
-  }${
-    run.location === 'local' || run.location === 's3'
-      ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
-      : ''
-  }${
-    chk === 1 ? ` <span class="badge green">${t('page.backup.checksumOk')}</span>` : chk === 0 ? ` <span class="badge red">${t('page.backup.checksumFail')}</span>` : ''
-  }${
-    run.checksum_checked_at ? `<div class="faint" style="font-size:12px;margin-top:2px">${t('page.backup.checksumLastCheck', { time: esc(fmtDate(run.checksum_checked_at)) })}</div>` : ''
-  }`;
+  const scheduleCell = gfsKey ? `<span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : '<span class="faint">—</span>';
+  const warn = run.status === 'succeeded' && Number(run.missing_blob_count) > 0;
+  const statusCell =
+    run.status === 'failed' || run.status === 'upload_failed'
+      ? `<span class="badge red">${t(run.status === 'failed' ? 'page.backup.statusFailed' : 'page.backup.statusUploadFailed')}</span>`
+      : `<span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>${
+          warn ? ` <span class="badge amber" title="${esc(t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) }))}">${t('page.backup.statusWarning')}</span>` : ''
+        }${
+          run.location === 'local' || run.location === 's3'
+            ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
+            : ''
+        }`;
   const actionsCell =
     run.location === 'local' || run.location === 's3'
       ? `<span class="row" style="gap:6px;justify-content:flex-end;flex-wrap:wrap">
@@ -208,6 +211,7 @@ const historyTr = run => {
     <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('nav.route.backup'))}</span></td>
     <td>${runCell}</td>
     <td class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</td>
+    <td>${scheduleCell}</td>
     <td>${statusCell}</td>
     <td class="faint">${esc(when)}</td>
     <td>${actionsCell}</td>
@@ -257,10 +261,10 @@ const historySblock = () => {
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
       : backupRows || restoreRows
-        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th style="text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.filterTrigger')}</th><th style="text-align:left">${t('page.backup.filterStatus')}</th><th style="text-align:left">${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${backupRows}${restoreRows}</tbody></table></div>`
+        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th style="text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.filterTrigger')}</th><th style="text-align:left">${t('page.backup.scheduleCol')}</th><th style="text-align:left">${t('page.backup.filterStatus')}</th><th style="text-align:left">${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${backupRows}${restoreRows}</tbody></table></div>`
         : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
-    <div class="row" style="gap:8px;align-items:center">
+    <div class="row" style="gap:8px;align-items:baseline">
       <h2 style="margin:0">${t('page.backup.historyTitle')}</h2>
       <span class="faint" style="font-size:12px">${t('page.backup.historyCap')}</span>
     </div>
@@ -714,6 +718,7 @@ const restoreRunTr = run => {
     <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>
     <td>${runCell}</td>
     <td class="faint">—</td>
+    <td><span class="faint">—</span></td>
     <td><span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span></td>
     <td class="faint">${esc(when)}</td>
     <td></td>
