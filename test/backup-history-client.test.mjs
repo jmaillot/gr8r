@@ -404,3 +404,32 @@ test('90-03: backupPollTick invalidates the shared restore list on the backup ac
      when the shared state is null. */
   assert.match(pagesSrc, /!S\.ui\.restoreList\) refreshRestoreBackups\(\)/, 'the in-render kick refetches the restore list exactly once when null');
 });
+
+/* =====================================================================
+   94-02 (UAT-1/UAT-2, SC-1): table chrome + Next-run time.
+   - the taskTable's outer .panel is NOT wrapped in a second panel at the
+     render site (panel-in-panel regression pinned out)
+   - uniform text-align:left on th/td, padding-left:14px on the FIRST
+     column only, vertical-align:middle on rows
+   - the Next-run cell renders date AND time via formatTime (the user's
+     clock preference) with the '—' null fallback intact
+   ===================================================================== */
+test('94-02 UAT-1: the render site no longer wraps taskTable in a second panel; alignment is uniform', () => {
+  assert.ok(!/<div class="panel"[^>]*>\$\{body\}<\/div>/.test(pagesSrc), 'no panel wrapper around ${body} at the render site — taskTable self-panels (UAT-1)');
+  assert.match(pagesSrc, /\$\{body\}\s*\n\s*\$\{historySblock\(\)\}/, 'the table renders bare between the header row and the history sblock');
+  /* Alignment: every td carries text-align:left + vertical-align:middle;
+     padding-left:14px appears ONLY on the first column's td/th. */
+  const tableBody = pagesSrc.slice(pagesSrc.indexOf('const taskTable ='), pagesSrc.indexOf('/* Builder form'));
+  assert.ok(!/<td>/.test(tableBody), 'every task td carries explicit left alignment — no bare <td> left in taskTable');
+  assert.match(tableBody, /<td style="padding-left:14px;text-align:left">/, 'the first column keeps its 14px inset');
+  const firstColCount = (tableBody.match(/padding-left:14px/g) || []).length;
+  assert.ok(firstColCount === 2, `padding-left:14px on the first th/td ONLY (found ${firstColCount})`);
+  assert.match(tableBody, /<tr style="vertical-align:middle">/, 'rows carry vertical-align:middle');
+});
+
+test('94-02 UAT-2: the Next-run cell renders date AND time via formatTime (clock preference honoured)', () => {
+  assert.match(pagesSrc, /import \{ t, getLocale, formatTime \} from '\.\.\/core\/i18n\.js';/, 'formatTime is imported in backup.js');
+  const tableBody = pagesSrc.slice(pagesSrc.indexOf('const taskTable ='), pagesSrc.indexOf('/* Builder form'));
+  assert.match(tableBody, /formatTime\(nextRunIso\)/, 'the next-run cell renders the time beside the date');
+  assert.match(tableBody, /nextRunIso \? `\$\{fmtDate\(nextRunIso\)\} \$\{formatTime\(nextRunIso\)\}` : '—'/, "the '—' null fallback is unchanged");
+});

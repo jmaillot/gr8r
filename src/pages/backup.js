@@ -31,7 +31,7 @@
 import { ic } from '../core/icons.js';
 import { api } from '../core/api.js';
 import { S } from '../core/store.js';
-import { t, getLocale } from '../core/i18n.js';
+import { t, getLocale, formatTime } from '../core/i18n.js';
 import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
@@ -302,17 +302,21 @@ const taskTable = (tasks, manage) => {
   };
   const row = task => {
     const nextRunMs = Number(task.next_run_at);
-    const nextRun = Number.isFinite(nextRunMs) && nextRunMs > 0 ? fmtDate(new Date(nextRunMs).toISOString()) : '—';
-    return `<tr>
-      <td style="padding-left:14px"><span class="row" style="gap:8px;align-items:center"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(task.name)}</span><span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span></span></td>
-      <td>${scopeCell(task)}</td>
-      <td>${esc(scheduleText(task))}</td>
-      <td class="faint">${esc(nextRun)}</td>
-      <td>${lastRunBadge(task)}</td>
-      <td>${manage ? actions(task) : ''}</td>
+    /* 94-02 (UAT-2): the Next-run cell renders date AND time — formatTime
+       honours the user's 12h/24h clock preference (i18n.js). '—' fallback
+       unchanged when next_run_at is null/invalid. */
+    const nextRunIso = Number.isFinite(nextRunMs) && nextRunMs > 0 ? new Date(nextRunMs).toISOString() : null;
+    const nextRun = nextRunIso ? `${fmtDate(nextRunIso)} ${formatTime(nextRunIso)}` : '—';
+    return `<tr style="vertical-align:middle">
+      <td style="padding-left:14px;text-align:left"><span class="row" style="gap:8px;align-items:center"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(task.name)}</span><span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span></span></td>
+      <td style="text-align:left">${scopeCell(task)}</td>
+      <td style="text-align:left">${esc(scheduleText(task))}</td>
+      <td class="faint" style="text-align:left">${esc(nextRun)}</td>
+      <td style="text-align:left">${lastRunBadge(task)}</td>
+      <td style="text-align:left">${manage ? actions(task) : ''}</td>
     </tr>`;
   };
-  return `<div class="panel" style="overflow-x:auto;margin-top:12px"><table class="perm-t" style="min-width:860px"><thead><tr><th style="padding-left:14px">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.colScope')}</th><th style="text-align:left">${t('page.backup.colSchedule')}</th><th style="text-align:left">${t('page.backup.nextRunLabel')}</th><th style="text-align:left">${t('page.backup.colLastRun')}</th><th></th></tr></thead><tbody>${tasks.map(row).join('')}</tbody></table></div>`;
+  return `<div class="panel" style="overflow-x:auto;margin-top:12px"><table class="perm-t" style="min-width:860px"><thead><tr><th style="padding-left:14px;text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.colScope')}</th><th style="text-align:left">${t('page.backup.colSchedule')}</th><th style="text-align:left">${t('page.backup.nextRunLabel')}</th><th style="text-align:left">${t('page.backup.colLastRun')}</th><th></th></tr></thead><tbody>${tasks.map(row).join('')}</tbody></table></div>`;
 };
 
 /* Builder form (D-01): 4 presets — Daily, Weekly, Monthly — plus Custom,
@@ -714,7 +718,7 @@ export function pageBackup() {
       <h2 style="margin:0">${t('page.backup.tasksTitle')}</h2>
       ${flags.canBackup && !S.ui.backupTaskForm ? `<button class="btn btn-primary" data-a="backupTaskNew">${ic('plus', 14)}${t('page.backup.taskNewAction')}</button>` : ''}
     </div>
-    <div class="panel" style="margin-top:12px">${body}</div>
+    ${body}
     ${historySblock()}
     ${flags.canRestore ? restoreSection() : ''}
     ${flags.canRestore ? restorePreviewDrawer(flags) : ''}
