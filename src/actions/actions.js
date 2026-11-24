@@ -5289,44 +5289,82 @@ A.backupTaskRunNow = async el => {
   render();
   await refreshBackupLastRuns(); // Phase 94 (D-01): the badge re-derives after a manual trigger
 };
-/* 87-04 (D-14): per-task history card — open/close + one fetch per open.
-   Newest-first and the 50 cap are the SERVER's (the client derives none of
-   it); the fetch result is staged verbatim in S.ui.backupHistory[taskId]. */
-A.backupTaskHistory = async el => {
-  const id = el.dataset.id;
-  if (!id) return;
-  const open = (S.ui.backupHistoryOpen = S.ui.backupHistoryOpen || new Set());
-  const store = (S.ui.backupHistory = S.ui.backupHistory || {});
-  if (open.has(id)) {
-    open.delete(id);
+/* =====================================================================
+   Phase 94 (D-04): the UNIFIED run history — the per-task history card's
+   handlers are retired; one staged filter (S.ui.backupHistoryFilter,
+   never the DOM) + one staged result (S.ui.backupHistoryAll) drive the
+   single sblock below the task table. Pagination probes limit+1 (the
+   payload carries NO total count): a short page grays out "next".
+   Names-not-ids: the task select shows task NAMES, requests the id; the
+   synthetic `manual` entry maps to the server's task_id IS NULL filter.
+   ===================================================================== */
+const BACKUP_HISTORY_FILTER_DEFAULTS = () => ({ task: '', trigger: '', status: '', limit: 50, offset: 0 });
+const backupHistoryFilter = () => S.ui.backupHistoryFilter || (S.ui.backupHistoryFilter = BACKUP_HISTORY_FILTER_DEFAULTS());
+const backupHistoryStage = (f, patch) => {
+  Object.assign(f, patch);
+  f.offset = 0;
+  render();
+  refreshBackupHistory();
+};
+IN.backupHistoryTask = el => backupHistoryStage(backupHistoryFilter(), { task: el.value });
+IN.backupHistoryTrigger = el => backupHistoryStage(backupHistoryFilter(), { trigger: el.value });
+IN.backupHistoryStatus = el => backupHistoryStage(backupHistoryFilter(), { status: el.value });
+export async function refreshBackupHistory() {
+  if (!api.enabled) return;
+  const f = backupHistoryFilter();
+  S.ui.backupHistoryFetching = true;
+  S.ui.backupHistoryAll = { runs: [], loading: true };
+  render();
+  /* limit+1 probe: hasMore derives from the extra row; the rendered page is
+     the first `limit` rows (server order verbatim — created_at desc). */
+  const res = await api.backupRuns({
+    all: 1,
+    task: f.task || undefined,
+    trigger: f.trigger || undefined,
+    status: f.status || undefined,
+    limit: Number(f.limit) + 1,
+    offset: Number(f.offset) || 0,
+  });
+  S.ui.backupHistoryFetching = false;
+  if (res.status === 401) return; // D-28: the central intercept owns the teardown
+  if (!res.ok) {
+    /* D-14: the history read is refused with backupManageRequired for
+       non-operators — the sblock degrades to the "unavailable" line, never
+       an error storm. */
+    S.ui.backupHistoryAll = { runs: [], err: res.data?.code || res.error || 'historyUnavailable' };
     render();
     return;
   }
-  open.add(id);
+  const runs = Array.isArray(res.data?.runs) ? res.data.runs : [];
+  S.ui.backupHistoryAll = { runs: runs.slice(0, f.limit), hasMore: runs.length > f.limit };
   render();
-  await backupHistoryFetch(id);
+}
+A.backupHistoryPage = async el => {
+  const f = backupHistoryFilter();
+  const dir = Number(el.dataset.dir) || 1;
+  const offset = Math.max(0, (Number(f.offset) || 0) + dir * Number(f.limit));
+  if (offset === Number(f.offset)) return;
+  f.offset = offset;
+  await refreshBackupHistory();
 };
-const backupHistoryFetch = async id => {
-  const res = await api.backupRuns({ taskId: id });
-  const store = (S.ui.backupHistory = S.ui.backupHistory || {});
-  if (!res.ok) {
-    if (res.status === 401) return; // D-28: the central intercept owns the teardown
-    /* D-14: the history read is refused with backupManageRequired for
-       non-operators — the card degrades to the "unavailable" line, never
-       an error storm. taskNotFound after the gate renders the same way. */
-    store[id] = { err: res.data?.code || res.error || 'historyUnavailable' };
-  } else {
-    store[id] = { runs: Array.isArray(res.data?.runs) ? res.data.runs : [] };
-  }
+/* 87-04 → 94 (D-04): the History button FILTERS the unified sblock on the
+   task and scrolls to it — the per-task card is gone (its data lives in
+   the sblock filtered on that task). */
+A.backupTaskHistory = async el => {
+  const id = el.dataset.id;
+  if (!id) return;
+  S.ui.backupHistoryFilter = { ...BACKUP_HISTORY_FILTER_DEFAULTS(), task: id };
+  S.ui.backupHistoryAll = null; // force the sblock fetch with the new filter
   render();
+  document.getElementById('backupHistorySblock')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await refreshBackupHistory();
 };
-/* Piggyback refresh (87-04): while a run is active, backupPollTick's 1 s
-   cadence also refreshes every OPEN history card so a finishing run's row
-   lands without a manual toggle. Reads-only over the same keyed endpoint. */
+/* Piggyback refresh (87-04 → 94): while a run is active, backupPollTick's
+   1 s cadence also refreshes the unified sblock when it has loaded data —
+   a finishing run's row lands without a manual toggle. */
 export async function refreshOpenBackupHistories() {
-  const open = S.ui.backupHistoryOpen;
-  if (!open || !open.size) return;
-  for (const id of open) await backupHistoryFetch(id);
+  if (!S.ui.backupHistoryAll || S.ui.backupHistoryAll.err || S.ui.backupHistoryAll.loading) return;
+  await refreshBackupHistory();
 }
 A.backupRunErr = el => {
   const set = (S.ui.backupRunErrOpen = S.ui.backupRunErrOpen || new Set());

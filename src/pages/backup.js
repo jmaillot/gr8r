@@ -36,7 +36,7 @@ import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
 import { tzPreselect } from '../lib/timezones.js';
-import { refreshBackupTasks, refreshRestoreBackups, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
+import { refreshBackupTasks, refreshRestoreBackups, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
@@ -139,42 +139,43 @@ const RUN_TRIGGER_KEYS = { manual: 'page.backup.triggerManual', scheduled: 'page
    client GFS math, ever (D-90-12/16: no date arithmetic, no bucket
    assignment, no counting under src/). */
 const GFS_SCALE_KEYS = { daily: 'page.backup.gfsDaily', weekly: 'page.backup.gfsWeekly', monthly: 'page.backup.gfsMonthly', yearly: 'page.backup.gfsYearly' };
-const durText = ms => (Number.isFinite(ms) && ms >= 0 ? `${(ms / 1000).toFixed(1)} s` : '—');
 
-const runRow = run => {
+/* =====================================================================
+   Phase 94 (D-04, BKUI-04): the UNIFIED run history — one sblock below
+   the task table over the FROZEN Phase-92 ?all=1 route (fail-closed
+   per-row visibility server-side; the client adds no params, invents no
+   fields). Three staged selects (task — names as labels, ids as values,
+   plus a synthetic `manual` entry the server maps to task_id IS NULL;
+   trigger manual|scheduled; status — ONLY the served enum running/
+   succeeded/failed/upload_failed/deleted: interrupted/skipped_overlap
+   are NOT accepted by the filter and would narrow to empty, so they are
+   omitted from the SELECT while staying first-class labels in
+   RUN_STATUS_KEYS). Pagination is naive limit/offset — the payload has
+   NO total count, so "next" probes limit+1 and grays out on a short
+   page (documented heuristic). Rows render run.label (the 5-segment
+   runLabel, resolved server-side) VERBATIM through esc(); the GFS badge
+   derives from run.gfs_bucket through the four gfs keys (assumption A3:
+   keptPosition is not on ?all=1 rows — the label embeds the GFS segment).
+   ===================================================================== */
+const HISTORY_FILTER_STATUSES = ['running', 'succeeded', 'failed', 'upload_failed', 'deleted'];
+const historyRow = run => {
   const errOpen = S.ui.backupRunErrOpen?.has(run.id);
-  const startedMs = Number(run.started_at);
+  const startedMs = Number(run.started_at) || Number(run.created_at);
   const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
-  /* 90-02 (D-90-9): the location badge reuses the restore location keys
-     (payload verbatim, neutral badge, accent for s3) and the download CTA is
-     payload-flag chrome — it renders ONLY when the server-derived location
-     says the bytes exist (local | s3); a missing run renders ZERO download
-     CTAs, never a disabled/dead button. The client never derives location
-     itself (D-23 doctrine).
-     90-02 (D-90-11): the verify CTA shares that condition and the result is
-     the DURABLE keyed badge + server timestamp — the only client state is
-     the in-flight flag (S.ui.backupChecksumBusy), never a fabricated result
-     during an S3 stream-back: the badge re-renders payload-derived after the
-     refresh (checksum_ok / checksum_checked_at ride the history payload),
-     and NO toast sits on the result path. */
   const chkBusy = !!S.ui.backupChecksumBusy?.has(run.id);
   const chk = run.checksum_ok == null ? null : Number(run.checksum_ok);
-  /* 90-03 (D-90-16 refined): the kept-position badge is payload-flag chrome —
-     it renders ONLY when the payload carries keptPosition (succeeded runs of
-     a rotation task; manual task_id-null runs and non-succeeded runs carry
-     none, D-11). The three fields render verbatim; {scale} resolves through
-     the four gfs keys — the client computes nothing. */
-  const kept = run.keptPosition && GFS_SCALE_KEYS[run.keptPosition.scale] ? run.keptPosition : null;
+  /* The GFS badge: the payload's gfs_bucket resolves through the four gfs
+     keys — no client GFS math, ever (D-90-12/16 doctrine carries over). */
+  const gfsKey = GFS_SCALE_KEYS[run.gfs_bucket];
   return `<div style="padding:8px 0;border-top:1px solid var(--border)"${chkBusy ? ' aria-busy="true"' : ''}>
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
+      ${gfsKey ? `<span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : ''}
       <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
-      ${Number(run.missing_blob_count) > 0 ? `<span class="badge red">${ic('triangle-alert', 12)}${t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) })}</span>` : ''}
-      ${kept ? `<span class="badge"><span class="mono">${t('page.backup.keptPosition', { position: kept.position, keep: kept.keep, scale: t(GFS_SCALE_KEYS[kept.scale]) })}</span></span>` : ''}
+      <span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(run.label || '')}">${esc(run.label || '')}</span>
       <span class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</span>
       <span class="faint">${esc(when)}</span>
-      <span class="faint">${t('page.backup.durLabel')}: ${esc(durText(Number(run.duration_ms)))}</span>
-      <span class="faint">${t('page.backup.sizeLabel')}: ${esc(fsize(Number(run.size_bytes) || 0))}</span>
+      ${Number(run.missing_blob_count) > 0 ? `<span class="badge red">${ic('triangle-alert', 12)}${t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) })}</span>` : ''}
       ${run.sha256 ? `<span class="mono faint" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</span>` : ''}
       ${run.filename ? `<span class="mono faint">${esc(run.filename)}</span>` : ''}
       ${run.location === 'local' || run.location === 's3' ? `<button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>` : ''}
@@ -192,21 +193,42 @@ const runRow = run => {
   </div>`;
 };
 
-const historyCard = task => {
-  const h = S.ui.backupHistory?.[task.id];
+const historySblock = () => {
+  const f = S.ui.backupHistoryFilter || { task: '', trigger: '', status: '', limit: 50, offset: 0 };
+  const h = S.ui.backupHistoryAll;
+  const tasks = Array.isArray(S.ui.backupTasks?.tasks) ? S.ui.backupTasks.tasks : [];
+  const sel = (hook, cur, options) =>
+    `<select class="input" data-in="${hook}">${options
+      .map(([v, label]) => `<option value="${esc(String(v))}"${cur === String(v) ? ' selected' : ''}>${label}</option>`)
+      .join('')}</select>`;
+  const taskSel = sel(
+    'backupHistoryTask',
+    f.task,
+    [['', t('page.backup.filterAll')], ['manual', t('page.backup.historyManualEntry')], ...tasks.map(x => [x.id, esc(x.name || x.id)])],
+  );
+  const triggerSel = sel('backupHistoryTrigger', f.trigger, [['', t('page.backup.filterAll')], ['manual', t('page.backup.triggerManual')], ['scheduled', t('page.backup.triggerScheduled')]]);
+  const statusSel = sel('backupHistoryStatus', f.status, [['', t('page.backup.filterAll')], ...HISTORY_FILTER_STATUSES.map(s => [s, t(RUN_STATUS_KEYS[s])])]);
   const body = !h
-    ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyLoading')}</div>`
+    ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.backup.historyLoading')}</div>`
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
       : !h.runs.length
         ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`
-        : h.runs.map(runRow).join('');
-  return `<div style="margin-top:10px">
+        : h.runs.map(historyRow).join('');
+  return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:center">
-      <strong style="font-size:13px">${t('page.backup.historyTitle')}</strong>
+      <h2 style="margin:0">${t('page.backup.historyTitle')}</h2>
       <span class="faint" style="font-size:12px">${t('page.backup.historyCap')}</span>
     </div>
-    ${body}
+    <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
+      <div class="field"><label class="label">${t('page.backup.colTask')}</label>${taskSel}</div>
+      <div class="field"><label class="label">${t('page.backup.filterTrigger')}</label>${triggerSel}</div>
+      <div class="field"><label class="label">${t('page.backup.filterStatus')}</label>${statusSel}</div>
+      <button class="btn btn-sm" data-a="backupHistoryPage" data-dir="-1"${Number(f.offset) <= 0 ? ' disabled' : ''}>${t('page.backup.historyPrev')}</button>
+      <button class="btn btn-sm" data-a="backupHistoryPage" data-dir="1"${h && h.runs.length && h.hasMore ? '' : ' disabled'}>${t('page.backup.historyNext')}</button>
+    </div>
+    ${f.task === 'manual' ? `<div class="hint" style="margin-top:6px">${t('page.backup.historyManualHint')}</div>` : ''}
+    <div style="margin-top:8px">${body}</div>
   </div>`;
 };
 
@@ -458,7 +480,7 @@ const RESTORE_STAGE_KEYS = {
 
 /* List row: payload fields verbatim — location badge (local/S3/missing,
    D-89-14/15), esc'd filename, size, date, 12-char sha slice with the full
-   digest in title (runRow idiom). The missing-location badge renders too —
+   digest in title (historyRow idiom). The missing-location badge renders too —
    the restore attempt on it is refused keyed err.restoreArchiveMissing. */
 const restoreRow = r => {
   const startedMs = Number(r.startedAt);
@@ -568,7 +590,7 @@ const restoreProgress = () => {
 /* History row: the restore_runs payload verbatim (server order, server cap —
    no client re-sort, no client pagination). The summary is the server's JSON
    report string: its skipped tables render under skipReportLabel (D-89-7 —
-   report-only, never hidden); the expandable error toggle mirrors runRow. */
+   report-only, never hidden); the expandable error toggle mirrors historyRow. */
 const restoreRunRow = run => {
   const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at);
@@ -660,6 +682,12 @@ export function pageBackup() {
   /* 89-06: the restore list fill — one loop, payload-flag gated (D-22:
      the section and its fetches exist only for RESTORE_USE holders). */
   if (flags.canRestore && !S.ui.restoreList) refreshRestoreBackups();
+  /* Phase 94 (D-04): the unified history sblock's lazy fetch — the in-render
+     kick covers first open (same governance fill-loop pattern); the fetch
+     itself stages S.ui.backupHistoryAll so this kick fires exactly once. */
+  if (flags.canBackup || flags.canRestore) {
+    if (!S.ui.backupHistoryAll && !S.ui.backupHistoryFetching) refreshBackupHistory();
+  }
   /* D-07: pick up a run that is already active (page re-entry mid-run) — one
      payload-driven tick; the interval itself lives in actions.js and runs only
      while the payload reports an active stage. WR-02: the kick honors the
@@ -687,6 +715,7 @@ export function pageBackup() {
       ${flags.canBackup && !S.ui.backupTaskForm ? `<button class="btn btn-primary" data-a="backupTaskNew">${ic('plus', 14)}${t('page.backup.taskNewAction')}</button>` : ''}
     </div>
     <div class="panel" style="margin-top:12px">${body}</div>
+    ${historySblock()}
     ${flags.canRestore ? restoreSection() : ''}
     ${flags.canRestore ? restorePreviewDrawer(flags) : ''}
   </div>`;

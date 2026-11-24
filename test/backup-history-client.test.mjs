@@ -88,19 +88,39 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
   assert.ok(toggleBody.slice(0, 700).includes('refreshBackupTasks'), 'toggle refills via refreshBackupTasks (server owns next_run_at)');
 });
 
-test('D-14: the history card renders the payload verbatim — newest-first and cap 50 are the server\'s', () => {
-  assert.match(pagesSrc, /const runRow = run =>/, 'the run row renderer exists');
+test('D-04 (Phase 94): the unified history sblock renders the payload verbatim — newest-first, probe pagination, historyCard retired', () => {
+  assert.match(pagesSrc, /const historyRow = run =>/, 'the unified run row renderer exists');
+  assert.match(pagesSrc, /const historySblock = \(\) =>/, 'the unified sblock exists');
+  assert.match(pagesSrc, /h\.runs\.map\(historyRow\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap');
+  /* D-04: run.label (the 5-segment server-resolved runLabel) renders VERBATIM
+     through esc() — the client composes nothing. */
+  assert.match(pagesSrc, /esc\(run\.label \|\| ''\)/, 'run.label renders verbatim through esc()');
+  assert.match(pagesSrc, /GFS_SCALE_KEYS\[run\.gfs_bucket\]/, 'the GFS badge derives from gfs_bucket through the four gfs keys (A3)');
   /* esc() on every interpolated payload field of the run row */
   for (const re of [/esc\(run\.sha256\)/, /esc\(String\(run\.sha256\)\.slice\(0, 12\)\)/, /esc\(run\.filename\)/, /esc\(run\.error\)/, /esc\(when\)/]) {
     assert.match(pagesSrc, re, `run row interpolates through esc(): ${re}`);
   }
-  /* D-06: skipped_overlap and interrupted are first-class labeled states. */
+  /* D-06: skipped_overlap and interrupted stay first-class LABELS… */
   assert.match(pagesSrc, /skipped_overlap: 'page\.backup\.statusSkippedOverlap'/);
   assert.match(pagesSrc, /interrupted: 'page\.backup\.statusInterrupted'/);
-  assert.match(actionsSrc, /A\.backupTaskHistory =/, 'the history toggle handler exists');
-  assert.match(actionsSrc, /S\.ui\.backupHistory\[id\]|store\[id\] = \{ runs:/, 'the fetch result stages verbatim per task');
+  /* …but the STATUS FILTER enumerates ONLY the served enum (they are not
+     accepted by the ?all=1 filter — RESEARCH pitfall 3). */
+  assert.match(pagesSrc, /const HISTORY_FILTER_STATUSES = \['running', 'succeeded', 'failed', 'upload_failed', 'deleted'\]/);
+  assert.match(pagesSrc, /'backupHistoryStatus'/, 'the status filter select exists');
+  assert.ok(!pagesSrc.slice(pagesSrc.indexOf('const HISTORY_FILTER_STATUSES')).includes("'interrupted',"), 'interrupted is NOT a filter option');
+  assert.ok(!pagesSrc.slice(pagesSrc.indexOf('const HISTORY_FILTER_STATUSES')).includes("'skipped_overlap',"), 'skipped_overlap is NOT a filter option');
+  /* The per-task card is retired — no historyCard, no per-task open state. */
+  assert.ok(!pagesSrc.includes('historyCard'), 'historyCard is retired');
+  assert.ok(!pagesSrc.includes('backupHistoryOpen'), 'the per-task open state is retired');
+  assert.ok(!actionsSrc.includes('backupHistoryOpen'), 'the per-task open state is retired (actions)');
+  assert.match(actionsSrc, /A\.backupTaskHistory =/, 'the History action exists');
+  assert.match(actionsSrc, /S\.ui\.backupHistoryFilter/, 'the filter stages in S.ui.backupHistoryFilter (never the DOM)');
+  assert.match(actionsSrc, /S\.ui\.backupHistoryAll/, 'the fetch result stages in S.ui.backupHistoryAll');
   assert.match(actionsSrc, /refreshOpenBackupHistories\(\);/, 'backupPollTick piggybacks the open-history refresh');
   assert.match(actionsSrc, /A\.backupRunErr =/, 'the expandable error toggle exists');
+  /* Pagination: limit+1 probe, never a total count. */
+  assert.match(actionsSrc, /Number\(f\.limit\) \+ 1/, 'next probes limit+1');
+  assert.match(actionsSrc, /hasMore: runs\.length > f\.limit/, 'a short page grays out next');
 });
 
 test('88-03: the client renders upload_failed + the uploading stage verbatim from the payload (render-only)', () => {
@@ -134,7 +154,6 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.downloadAction',
     'page.backup.verifyChecksumAction', 'page.backup.checksumChecking', 'page.backup.checksumOk',
     'page.backup.checksumFail', 'page.backup.checksumLastCheck',
-    'page.backup.durLabel', 'page.backup.sizeLabel',
     'page.backup.statusRunning', 'page.backup.statusSucceeded', 'page.backup.statusFailed',
     'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
     'page.backup.triggerManual', 'page.backup.triggerScheduled', 'page.backup.triggerUnknown',
@@ -227,7 +246,7 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
   /* The CTA shares the download's payload-flag condition: the bytes exist
      (local | s3) — a missing run renders NO verify CTA either. */
   assert.match(pagesSrc, /data-a="backupVerifyChecksum"/, 'the verify CTA exists');
-  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const runRow ='), pagesSrc.indexOf('const historyCard ='));
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyRow ='), pagesSrc.indexOf('const historySblock ='));
   /* In-flight: the label swaps to the keyed checking copy, the button
      disables and the row flags aria-busy — never a fabricated result during
      an S3 stream-back (D-90-11). */
@@ -262,21 +281,26 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
    — the position comes from gfsKeptPositions per request, and {scale}
    resolves only through the four gfs label keys).
    ===================================================================== */
-test('90-03: the kept-position badge renders ONLY when the payload carries keptPosition — scale resolves through the four gfs keys', () => {
-  /* The badge anchor: payload-flag conditional inside runRow — no
-     keptPosition in the payload ⇒ no badge (D-89-21 chrome discipline). */
-  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const runRow ='), pagesSrc.indexOf('const historyCard ='));
-  assert.match(runRowBody, /kept \? `<span class="badge"><span class="mono">\$\{t\('page\.backup\.keptPosition'/, 'the badge renders only when the payload carries keptPosition (payload-flag chrome)');
-  /* The three figures ride the payload verbatim — the interpolation names
-     the payload fields, never a client-derived value. */
-  assert.match(runRowBody, /position: kept\.position, keep: kept\.keep, scale: t\(GFS_SCALE_KEYS\[kept\.scale\]\)/, 'the {position}/{keep}/{scale} inputs are the payload fields, verbatim');
-  /* {scale} resolves through the FOUR gfs keys — no other scale vocabulary. */
+/* =====================================================================
+   Phase 90 (90-03 task 1, SC-3) — REWRITTEN for Phase 94 (D-04): the
+   per-task history card is retired, and ?all=1 rows carry NO keptPosition
+   (assumption A3 — the run label embeds the GFS segment instead). The
+   unified row derives its GFS badge from run.gfs_bucket through the four
+   gfs keys; the client still holds ZERO GFS math (no date arithmetic, no
+   bucket assignment, no counting, no client-side keptPosition
+   composition under src/).
+   ===================================================================== */
+test('90-03 → 94: the unified GFS badge derives from run.gfs_bucket through the four gfs keys — zero client GFS math', () => {
+  const rowBody = pagesSrc.slice(pagesSrc.indexOf('const historyRow ='), pagesSrc.indexOf('const historySblock ='));
+  assert.match(rowBody, /const gfsKey = GFS_SCALE_KEYS\[run\.gfs_bucket\]/, 'the badge resolves gfs_bucket through the four gfs keys');
+  assert.match(rowBody, /gfsKey \? `<span class="badge"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : ''/, 'the badge renders only when gfs_bucket names a known scale');
+  /* {scale} vocabulary is the FOUR gfs keys — no other scale vocabulary. */
   assert.match(pagesSrc, /const GFS_SCALE_KEYS = \{ daily: 'page\.backup\.gfsDaily', weekly: 'page\.backup\.gfsWeekly', monthly: 'page\.backup\.gfsMonthly', yearly: 'page\.backup\.gfsYearly' \}/, 'the four GFS scale keys are the one scale vocabulary');
-  /* Zero client GFS math (T-90-06): no retention arithmetic under src/ —
-     no date math on the kept position, no bucket assignment, no counting
-     walk. The badge guards on the payload fields, not on derived values. */
-  assert.ok(!/keptPosition[^;]*(\+|\*|Math\.|getUTC|getTime|toISOString)/.test(pagesSrc), 'no retention arithmetic on keptPosition anywhere in the page');
-  assert.ok(!/retention_daily|retention_weekly|retention_monthly|retention_yearly/.test(runRowBody), 'the run/history renderer never reads retention counts — the client computes nothing');
+  /* Zero client GFS math (T-90-06): no retention arithmetic under src/ and
+     NO client-side keptPosition composition (the unified payload carries
+     none — A3). */
+  assert.ok(!/\.keptPosition|kept ? \?/.test(pagesSrc), 'no keptPosition handling under src/ — the unified rows carry none');
+  assert.ok(!/retention_daily|retention_weekly|retention_monthly|retention_yearly/.test(rowBody), 'the run/history renderer never reads retention counts — the client computes nothing');
 });
 
 /* =====================================================================
@@ -291,7 +315,7 @@ test('90-03: the kept-position badge renders ONLY when the payload carries keptP
    refresh action directly and never refetches unconditionally.
    ===================================================================== */
 test('90-03: the ⚠ missing-blob badge is payload-count chrome (count > 0 only, triangle-alert, red)', () => {
-  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const runRow ='), pagesSrc.indexOf('const historyCard ='));
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyRow ='), pagesSrc.indexOf('const historySblock ='));
   assert.match(
     runRowBody,
     /Number\(run\.missing_blob_count\) > 0 \? `<span class="badge red">\$\{ic\('triangle-alert', 12\)\}\$\{t\('page\.backup\.missingBlobWarn', \{ n: Number\(run\.missing_blob_count\) \}\)\}<\/span>` : ''/,
