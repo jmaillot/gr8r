@@ -8938,7 +8938,8 @@ async function handleApi(req, res, url) {
        read from the workspace doc — no visibility filtering here (the drawer
        picker needs names to arm a target; the overwrite route re-validates
        everything against the live doc, fail-closed). Gate + direct query
-       unchanged (do NOT route through membershipsOf). */
+       unchanged (do NOT route through workspacesForUser or any membership
+       helper). */
     const workspaces = (await db.all('select id, name, slug, doc from workspaces where archived = 0 order by name, id')).map(w => {
       let doc;
       try { doc = JSON.parse(w.doc)?.data ?? {}; } catch { doc = {}; }

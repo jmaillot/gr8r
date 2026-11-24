@@ -61,7 +61,9 @@ test('the /api/backup/scopes handler keeps its separate-query guard comment and 
   const handler = s.slice(start, end);
   assert.match(handler, /do NOT\s+route through workspacesForUser/, 'the D-06 guard comment must stand');
   assert.ok(!handler.includes('membershipsOf'), 'the scopes handler must keep its direct workspaces query (no membershipsOf routing)');
-  assert.match(handler, /select id, name, slug from workspaces where archived = 0 order by name, id/);
+  /* 95-05: the query grew `doc` ADDITIVELY (projects read per workspace);
+     still the same direct workspaces query — no membershipsOf routing. */
+  assert.match(handler, /select id, name, slug, doc from workspaces where archived = 0 order by name, id/);
 });
 
 test('the Run-now workspace picker renders from S.ui.backupScopes (D-11) with the loaded-workspace fallback only', () => {

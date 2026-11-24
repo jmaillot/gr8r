@@ -186,7 +186,9 @@ test('the overwrite flow uses the exact-name confirmModal idiom — payload-name
   assert.match(pagesSrc, /kind === 'workspace'/, 'the overwrite CTA renders for workspace archives only');
   assert.match(pagesSrc, /flags\?\.canBackup/, 'the overwrite CTA gates on the payload flag');
   assert.match(pagesSrc, /btn-danger" data-a="restoreOverwrite"/, 'the overwrite CTA is destructive-styled, never accent');
-  const h = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('A.restoreOverwrite =') + 1800);
+  /* 95-05: the project branch lengthens the action — widen the window to
+     cover BOTH branches (project path first, workspace path after). */
+  const h = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('A.restoreOverwrite =') + 4600);
   assert.ok(h.includes('confirmDlg('), 'the overwrite flow opens the existing confirm idiom');
   assert.ok(h.includes('typeName: target.name'), 'typeName is the target\'s EXACT current name from the payload (D-89-27)');
   assert.ok(h.includes('danger: true'), 'the overwrite confirm is danger-styled');
@@ -361,6 +363,66 @@ test('backstop: consequence copy wraps inside the modal body — no nowrap or ov
   const modal = modalsSrc.slice(modalsSrc.indexOf('function confirmModal'), modalsSrc.indexOf('function confirmModal') + 1600);
   assert.match(modal, /\$\{m\.body\}/, 'the confirm body renders verbatim inside .modal-b');
   assert.ok(!/white-space:\s*nowrap/.test(modal), 'the shared confirm modal introduces no nowrap');
+});
+
+/* =====================================================================
+   95-05 (BKRST-05, D-02/D-03) — project-level target picker + Overwrite
+   CTA + confirm phrase for project archives.
+   ===================================================================== */
+test('95-05: the drawer renders the project chip row from the scopes payload and arms the project target', () => {
+  assert.match(pagesSrc, /data-a="restoreProjectPick"/, 'the second picker level is a keyed action');
+  assert.match(pagesSrc, /page\.restore\.projectPickLabel/, 'the project picker label is keyed');
+  assert.match(pagesSrc, /page\.restore\.projectPickHint/, 'the project picker hint is keyed');
+  /* Payload-driven: the chips read S.ui.backupScopes[].projects (via
+     scopeTargets), NOT the memberships fallback — no api.workspace option
+     markup in the picker. */
+  assert.match(pagesSrc, /scopeTargets\.find\(w => w\.id === S\.ui\.restoreTarget\)\?\.projects/, 'the chips read the scopes payload projects of the chosen workspace');
+  const pickSlice = pagesSrc.slice(pagesSrc.indexOf('data-a="restoreProjectPick"') - 600, pagesSrc.indexOf('data-a="restoreProjectPick"') + 300);
+  assert.ok(pickSlice.includes('S.ui.restoreTargetProject === p.id'), 'picking arms S.ui.restoreTargetProject');
+  assert.ok(pickSlice.includes('esc(p.name)'), 'project names render through esc()');
+  const ppDecl = pagesSrc.slice(pagesSrc.indexOf('const pickedWsProjects'), pagesSrc.indexOf('${projectPicker}'));
+  assert.ok(ppDecl.includes('scopeTargets') && !ppDecl.includes('api.workspaces'), 'the project picker rides the scopes payload only — no memberships reference');
+  /* Workspace switch invalidates the armed project (D-02 reset). */
+  const pick = actionsSrc.slice(actionsSrc.indexOf('A.restoreTargetPick ='), actionsSrc.indexOf('A.restoreProjectPick ='));
+  assert.ok(pick.includes('S.ui.restoreTargetProject = null'), 'switching the workspace target resets the armed project');
+});
+
+test('95-05: both CTAs for project archives; Overwrite is armed only when a target project is picked', () => {
+  assert.match(pagesSrc, /kind === 'project' && flags\?\.canBackup && S\.ui\.restoreTarget && S\.ui\.restoreTargetProject/, 'the project Overwrite CTA gates on the payload flag + BOTH armed ids');
+  assert.match(pagesSrc, /page\.restore\.overwriteCta/, 'the project Overwrite CTA copy is keyed');
+  assert.match(pagesSrc, /btn-danger" data-a="restoreOverwrite" data-id="\$\{esc\(d\.runId\)\}">\$\{ic\('pencil', 14\)\}\$\{t\('page\.restore\.overwriteCta'\)\}/, 'the project Overwrite CTA is destructive-styled');
+  /* Restore-as-new stays beside it (D-02 owner ruling). */
+  assert.match(pagesSrc, /kind === 'workspace' \|\| kind === 'project'/, 'Restore-as-new renders for both scopes — both CTAs, never Overwrite-only');
+});
+
+test('95-05: the project overwrite wraps the POST in confirmDlg with the CURRENT target project name', () => {
+  const proj = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('const scopeId = S.ui.restorePreviewData?.data?.scope?.id;'));
+  assert.ok(proj.includes("scope?.kind === 'project'"), 'the action branches on the project scope');
+  assert.ok(proj.includes('confirmDlg('), 'the project overwrite opens the confirm idiom');
+  assert.ok(proj.includes('typeName: targetProject.name'), 'typeName is the target project CURRENT name from the scopes payload (chrome — the server re-validates vs the live doc)');
+  assert.ok(proj.includes('danger: true'), 'the confirm is danger-styled');
+  assert.ok(proj.includes('page.restore.overwriteConfirmTitle'), 'the confirm title is keyed');
+  /* (D-03) collision refusal rides the existing closed-map vocabulary. */
+  assert.ok(proj.includes('restoreToast('), 'refusals surface via restoreToast (restoreNameCollision included)');
+});
+
+test('95-05: the overwrite payload carries targetId + targetProjectId + confirmName; success resets the armed project', () => {
+  const proj = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('const scopeId = S.ui.restorePreviewData?.data?.scope?.id;'));
+  assert.ok(proj.includes('api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name })'), 'the POST mirrors the 95-04 route contract');
+  assert.ok(proj.includes('S.ui.restoreTargetProject = null'), 'the accepted overwrite resets the armed project');
+  assert.ok(proj.includes("'restoreTargetMissing'"), 'a trigger attempt without a target refuses client-side with the keyed message');
+});
+
+test('95-05: 5-locale parity for the project picker + overwrite keys', () => {
+  const required = ['page.restore.projectPickLabel', 'page.restore.projectPickHint', 'page.restore.overwriteCta', 'page.restore.overwriteConfirmTitle'];
+  const sets = new Set();
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    sets.add(Object.keys(cat).filter(k => k.startsWith('page.restore.')).sort().join('|'));
+    for (const key of required) assert.ok(Object.hasOwn(cat, key), `${loc} is missing ${key}`);
+  }
+  assert.equal(sets.size, 1, 'page.restore.* key sets stay identical across the five locales');
+  assert.ok(pagesSrc.includes('page.restore.overwriteCta') && actionsSrc.includes('page.restore.overwriteConfirmTitle'), 'the new keys are consumed by the source, not just declared');
 });
 
 test('consideration-matrix tally — all 18 explicit rows are pinned by at least one cell', () => {
