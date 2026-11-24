@@ -463,3 +463,27 @@ test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () 
   assert.match(pagesSrc, /!S\.ui\.restoreHistory && !S\.ui\.restoreHistoryFetching\) refreshRestoreHistory\(\)/, 'the page kicks the restore-history fetch when the payload is absent');
   assert.match(actionsSrc, /S\.ui\.restoreHistoryFetching = true/, 'the fetch carries the loop-prevention guard');
 });
+
+/* =====================================================================
+   94-02 (UAT-4): the fresh-task default is 22:00 and the builder shows
+   Hour BEFORE Minute. actions.js cannot be imported in node (bundler
+   aliases), so the DEFAULTS + cronFromForm snippets are extracted and
+   evaluated — they are self-contained (form.fields reads only).
+   ===================================================================== */
+test('94-02 UAT-4: cronFromForm on fresh defaults (preset daily) === "0 22 * * *"; Hour renders before Minute', () => {
+  const defaultsMatch = actionsSrc.match(/const BACKUP_TASK_FIELD_DEFAULTS = \{[^}]*\};/);
+  assert.ok(defaultsMatch, 'BACKUP_TASK_FIELD_DEFAULTS found');
+  assert.match(defaultsMatch[0], /minute: '0'/);
+  assert.match(defaultsMatch[0], /hour: '22'/, 'the fresh default hour is 22 (UAT 2026-11-24 owner preference)');
+  const formDefaultsMatch = actionsSrc.match(/const backupTaskFormDefaults = \(\) => \(\{[\s\S]*?\n\}\);/);
+  assert.ok(formDefaultsMatch, 'backupTaskFormDefaults found');
+  const cronMatch = actionsSrc.match(/const cronFromForm = form => \{[\s\S]*?\n\};/);
+  assert.ok(cronMatch, 'cronFromForm found');
+  const sandbox = new Function(`${defaultsMatch[0]}\n${formDefaultsMatch[0]}\n${cronMatch[0]}\nreturn cronFromForm(backupTaskFormDefaults());`);
+  assert.equal(sandbox(), '0 22 * * *', 'the daily preset serializes minute+hour only → 0 22 * * * on fresh defaults');
+  /* Builder order: the Hour select renders BEFORE the Minute select. */
+  const hIdx = pagesSrc.indexOf("fieldSel(form, 'hour'");
+  const mIdx = pagesSrc.indexOf("fieldSel(form, 'minute'");
+  assert.ok(hIdx !== -1 && mIdx !== -1, 'both builder selects exist');
+  assert.ok(hIdx < mIdx, 'Hour select comes before Minute select in taskFormCard');
+});

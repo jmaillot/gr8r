@@ -339,7 +339,8 @@ const taskTable = (tasks, manage) => {
    serializes a well-formed string; minute/hour offer `*` too (UAT 2026-11-22:
    the server cron grammar accepts star in every field — the dropdowns now
    expose it so every-minute/every-hour schedules are buildable; their
-   DEFAULTS stay concrete 0/3 so an accidental all-star save is a deliberate
+   DEFAULTS stay concrete 0/22 (94-02 UAT-4: the owner's 22:00 preference)
+    so an accidental all-star save is a deliberate
    act, not a slip). */
 const fieldSel = (form, name, labelKey, min, max, star, disabled) => {
   const cur = String(form.fields[name] ?? (star ? '*' : min));
@@ -445,8 +446,8 @@ const taskFormCard = () => {
           ? `<div class="field"><label class="label">${t('page.backup.scheduleLabel')}</label><input class="input mono" value="${esc(form.customCron || '')}" readonly aria-readonly="true" style="max-width:220px"></div>`
           : `<div class="field"><label class="label">${t('page.backup.scheduleLabel')}</label><select class="input" data-in="backupTaskPreset"${form.editing && form.cronLocked ? ' disabled' : ''}>${presetOpt('daily', 'page.backup.presetDaily')}${presetOpt('weekly', 'page.backup.presetWeekly')}${presetOpt('monthly', 'page.backup.presetMonthly')}${presetOpt('custom', 'page.backup.presetCustom')}</select></div>`
       }
-      <div class="field"><label class="label">${t('page.backup.fieldMinute')}</label>${fieldSel(form, 'minute', 'page.backup.fieldMinute', 0, 59, true, form.cronLocked)}</div>
       <div class="field"><label class="label">${t('page.backup.fieldHour')}</label>${fieldSel(form, 'hour', 'page.backup.fieldHour', 0, 23, true, form.cronLocked)}</div>
+      <div class="field"><label class="label">${t('page.backup.fieldMinute')}</label>${fieldSel(form, 'minute', 'page.backup.fieldMinute', 0, 59, true, form.cronLocked)}</div>
       ${show.dom && !form.cronLocked ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfMonth')}</label>${fieldSel(form, 'dom', 'page.backup.fieldDayOfMonth', 1, 31, true)}</div>` : ''}
       ${show.mon && !form.cronLocked ? `<div class="field"><label class="label">${t('page.backup.fieldMonth')}</label>${fieldSel(form, 'mon', 'page.backup.fieldMonth', 1, 12, true)}</div>` : ''}
       ${show.dow && !form.cronLocked ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfWeek')}</label>${fieldSel(form, 'dow', 'page.backup.fieldDayOfWeek', 0, 6, true)}</div>` : ''}

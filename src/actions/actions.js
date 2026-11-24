@@ -5046,7 +5046,9 @@ IN.backupScopeId = el => {
    invalidRetention / backupManageRequired) surfaces as a keyed toast
    through call()'s central handling.
    ===================================================================== */
-const BACKUP_TASK_FIELD_DEFAULTS = { minute: '0', hour: '3', dom: '1', mon: '*', dow: '1' };
+/* 94-02 (UAT-4): fresh-task defaults moved to 22:00 — UAT 2026-11-24 owner
+   preference (03:00 read ambiguously in the Minute/Hour display order). */
+const BACKUP_TASK_FIELD_DEFAULTS = { minute: '0', hour: '22', dom: '1', mon: '*', dow: '1' };
 const backupTaskFormDefaults = () => ({
   editing: null, // null = create; a task id = partial edit
   name: '',
