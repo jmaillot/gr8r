@@ -2332,5 +2332,6 @@
   "page.backup.scheduleCol": "Schema",
   "toast.checksumOk": "Checksum geverifieerd — het archief is intact",
   "toast.checksumFail": "Checksumverificatie GEFAALD — dit archief is beschadigd",
-  "page.restore.restoreAction": "Herstellen"
+  "page.restore.restoreAction": "Herstellen",
+  "page.governance.rolesPickerIdle": "Begin te typen om gebruikers te zoeken"
 }

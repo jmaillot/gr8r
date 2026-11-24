@@ -2332,5 +2332,6 @@
   "page.backup.scheduleCol": "Zeitplan",
   "toast.checksumOk": "Prüfsumme verifiziert — das Archiv ist intakt",
   "toast.checksumFail": "Prüfsummenprüfung FEHLGESCHLAGEN — dieses Archiv ist beschädigt",
-  "page.restore.restoreAction": "Wiederherstellen"
+  "page.restore.restoreAction": "Wiederherstellen",
+  "page.governance.rolesPickerIdle": "Tippe, um Benutzer zu suchen"
 }

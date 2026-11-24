@@ -2372,5 +2372,6 @@
   "page.backup.scheduleCol": "Planifiée",
   "toast.checksumOk": "Somme de contrôle vérifiée — l'archive est intacte",
   "toast.checksumFail": "Vérification de la somme de contrôle ÉCHOUÉE — cette archive est corrompue",
-  "page.restore.restoreAction": "Restaurer"
+  "page.restore.restoreAction": "Restaurer",
+  "page.governance.rolesPickerIdle": "Commence à taper pour chercher des utilisateurs"
 }

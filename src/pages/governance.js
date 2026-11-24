@@ -333,13 +333,18 @@ const govCandidates = (role, qRaw) => {
     .map(u => ({ u, held: held.has(u.id) }));
 };
 const govPickerList = (role, st, listId) => {
-  const cands = govCandidates(role, st.q);
+  /* UAT round-10 (owner ruling, same as the Super Admins tab): the picker
+     lists NOTHING by default — the panel stays idle until the operator
+     types. Empty query → an idle hint; typed query → the filtered
+     candidates (or the honest noMatches message). */
+  const qTrim = (st.q || '').trim();
+  const cands = qTrim ? govCandidates(role, st.q) : [];
   const opt = c =>
     `<div class="srow" role="option" aria-selected="${st.userId === c.u.id}" data-a="govRolePick" data-v="${esc(c.u.id)}" data-role="${role}" style="cursor:pointer;${st.userId === c.u.id ? 'outline:2px solid var(--accent)' : ''}"><div><div class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(c.u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(c.u.email || '')}</span>${c.held ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</div></div></div>`;
-  return `<div class="panel" role="listbox" id="${listId}" style="max-height:220px;overflow-y:auto">${cands.length ? cands.map(opt).join('') : `<p class="hint" style="margin:6px 0 0">${t('popover.noMatches')}</p>`}</div>`;
+  return `<div class="panel" role="listbox" id="${listId}" style="max-height:220px;overflow-y:auto">${cands.length ? cands.map(opt).join('') : `<p class="hint" style="margin:6px 0 0">${qTrim ? t('popover.noMatches') : t('page.governance.rolesPickerIdle')}</p>`}</div>`;
 };
 const govPickerInput = (id, st, listId) =>
-  `<div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="${id}" data-in="govRoleQ" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" role="combobox" aria-expanded="true" aria-controls="${listId}" aria-label="${t('page.governance.searchOp')}"></div>`;
+  `<div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="${id}" data-in="govRoleQ" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" role="combobox" aria-expanded="${!!(st.q || '').trim()}" aria-controls="${listId}" aria-label="${t('page.governance.searchOp')}"></div>`;
 
 export function govRoleBody() {
   const st = S.ui.govRoleMod || { userId: null, role: 'backup_operator', q: '' };

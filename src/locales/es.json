@@ -2332,5 +2332,6 @@
   "page.backup.scheduleCol": "Programación",
   "toast.checksumOk": "Checksum verificado — el archivo está intacto",
   "toast.checksumFail": "La verificación del checksum FALLÓ — este archivo está dañado",
-  "page.restore.restoreAction": "Restaurar"
+  "page.restore.restoreAction": "Restaurar",
+  "page.governance.rolesPickerIdle": "Empieza a escribir para buscar usuarios"
 }

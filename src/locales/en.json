@@ -2332,5 +2332,6 @@
   "page.backup.scheduleCol": "Schedule",
   "toast.checksumOk": "Checksum verified — the archive is intact",
   "toast.checksumFail": "Checksum verification FAILED — this archive is corrupted",
-  "page.restore.restoreAction": "Restore"
+  "page.restore.restoreAction": "Restore",
+  "page.governance.rolesPickerIdle": "Start typing to search users"
 }
