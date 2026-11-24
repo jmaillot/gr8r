@@ -9,7 +9,7 @@
 
 - [x] **Phase 91: Digest Dedup — One Digest Per User Per Day** - Root-cause and fix the 4× daily digest duplication with per-user outbox coalescing and a pinned regression test
 - [x] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
-- [ ] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
+- [x] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
 - [ ] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
 - [ ] **Phase 95: Settings Polish + Cross-Workspace Pickers** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers
 
@@ -54,7 +54,7 @@ Plans:
 **UI hint**: yes
 **Plans**: 1 plan
 Plans:
-- [ ] 93-01-PLAN.md — Wave-0 static pins + 3-tab seg/roster-as-SA-tab/rolesCard dissolution (D-01,D-04) → per-tab User/Grants/Actions columns (D-02) → selectable pickers + dialog search render() fix (D-03) → full gates; i18n ×5 in every emitting commit
+- [x] 93-01-PLAN.md — Wave-0 static pins + 3-tab seg/roster-as-SA-tab/rolesCard dissolution (D-01,D-04) → per-tab User/Grants/Actions columns (D-02) → selectable pickers + dialog search render() fix (D-03) → full gates; i18n ×5 in every emitting commit
 
 ### Phase 94: Backup Console UX
 **Goal**: The backup task console reads as an honest table — humanized schedules, real Next/Last run columns, all four GFS retention scales editable, and a unified cross-task run history with filters that leaks nothing.
