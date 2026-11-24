@@ -8934,7 +8934,21 @@ async function handleApi(req, res, url) {
     if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE)) && !(isInstanceAdmin(user) && SUPER_ACCESS)) {
       return fail(res, 403, 'backupRoleRequired', 'You need a backup role to see that');
     }
-    const workspaces = (await db.all('select id, name, slug from workspaces where archived = 0 order by name, id')).map(w => ({ id: w.id, name: w.name, slug: w.slug }));
+    /* 95-05 (BKRST-05): each entry gains an ADDITIVE `projects: [{id,name}]`
+       read from the workspace doc — no visibility filtering here (the drawer
+       picker needs names to arm a target; the overwrite route re-validates
+       everything against the live doc, fail-closed). Gate + direct query
+       unchanged (do NOT route through membershipsOf). */
+    const workspaces = (await db.all('select id, name, slug, doc from workspaces where archived = 0 order by name, id')).map(w => {
+      let doc;
+      try { doc = JSON.parse(w.doc)?.data ?? {}; } catch { doc = {}; }
+      return {
+        id: w.id,
+        name: w.name,
+        slug: w.slug,
+        projects: (Array.isArray(doc.projects) ? doc.projects : []).map(p => ({ id: p?.id, name: p?.name || p?.id })),
+      };
+    });
     return json(res, 200, { workspaces });
   }
 

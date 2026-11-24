@@ -41,7 +41,7 @@ test('GET /api/backup/scopes: 401 unauthenticated; 403 fail-closed for a roleles
 });
 
 for (const role of ['backup_operator', 'restore_operator']) {
-  test(`GET /api/backup/scopes: ${role} gets 200 with the exact minimal payload { workspaces: [{id,name,slug}] }`, async () => {
+  test(`GET /api/backup/scopes: ${role} gets 200 with the exact minimal payload { workspaces: [{id,name,slug,projects}] }`, async () => {
     const server = await startServer({});
     try {
       const op = await grantRole(server, `op-scopes-${role}@test.local`, role);
@@ -53,14 +53,42 @@ for (const role of ['backup_operator', 'restore_operator']) {
       assert.ok(Array.isArray(res.data.workspaces), 'workspaces array');
       assert.equal(res.data.workspaces.length, 1, 'the archived workspace is excluded');
       const entry = res.data.workspaces[0];
-      assert.deepEqual(Object.keys(entry).sort(), ['id', 'name', 'slug'], 'STRICT shape: only id/name/slug keys');
-      assert.deepEqual(entry, { id: ws.id, name: ws.name, slug: ws.slug });
+      // 95-05: STRICT shape grows additively — only id/name/slug/projects keys
+      assert.deepEqual(Object.keys(entry).sort(), ['id', 'name', 'projects', 'slug'], 'STRICT shape: only id/name/slug/projects keys');
+      assert.ok(Array.isArray(entry.projects), 'projects array present');
       assert.deepEqual(Object.keys(res.data).sort(), ['workspaces'], 'no role echo, no extras');
     } finally {
       await server.stop();
     }
   });
 }
+
+test('GET /api/backup/scopes: projects entries carry exactly {id, name} from the live doc', async () => {
+  const server = await startServer({});
+  try {
+    const op = await grantRole(server, `op-scopes-proj@test.local`, 'backup_operator');
+    const ws = withDb(server.dbPath, db => db.prepare('select id from workspaces limit 1').get());
+    withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify({ data: { projects: [{ id: 'p1', name: 'Alpha', extra: 'drop-me' }, { id: 'p2' }] } }), ws.id));
+    const res = await op.get('/api/backup/scopes');
+    assert.equal(res.status, 200);
+    const entry = res.data.workspaces.find(w => w.id === ws.id);
+    assert.deepEqual(entry.projects, [{ id: 'p1', name: 'Alpha' }, { id: 'p2', name: 'p2' }], 'live doc projects, name falls back to id, extra keys dropped');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('GET /api/backup/scopes: a workspace with zero projects carries projects: []', async () => {
+  const server = await startServer({});
+  try {
+    const op = await grantRole(server, `op-scopes-empty@test.local`, 'backup_operator');
+    const res = await op.get('/api/backup/scopes');
+    assert.equal(res.status, 200);
+    for (const w of res.data.workspaces) assert.deepEqual(w.projects, [], 'empty projects array, never undefined');
+  } finally {
+    await server.stop();
+  }
+});
 
 test('GET /api/backup/scopes: Super Admin passes the gate too', async () => {
   const server = await startServer({});
@@ -69,7 +97,7 @@ test('GET /api/backup/scopes: Super Admin passes the gate too', async () => {
     const res = await admin.get('/api/backup/scopes');
     assert.equal(res.status, 200, JSON.stringify(res.data));
     assert.ok(Array.isArray(res.data.workspaces) && res.data.workspaces.length >= 1);
-    assert.deepEqual(Object.keys(res.data.workspaces[0]).sort(), ['id', 'name', 'slug']);
+    assert.deepEqual(Object.keys(res.data.workspaces[0]).sort(), ['id', 'name', 'projects', 'slug']);
   } finally {
     await server.stop();
   }
