@@ -5590,7 +5590,10 @@ export async function refreshInstanceRoles() {
 }
 A.govRoleGrantAsk = async () => {
   if (!S.ui.operatorUsers) await refreshOperatorUsers(); // D-07: the picker's pool
-  S.ui.govRoleMod = { userId: null, role: 'backup_operator', q: '' };
+  /* 93-01 (D-03): inherit the tab-picker's staged draft (role/user) if one
+     is staged — the dialog opens pre-filtered to that role. */
+  const prev = S.ui.govRoleMod;
+  S.ui.govRoleMod = { userId: prev?.userId || null, role: prev?.role || 'backup_operator', q: '' };
   import('../pages/governance.js')
     .then(m => {
       openModal({ type: 'custom', cls: 'sm', render: () => m.govRoleBody() });
@@ -5601,14 +5604,25 @@ A.govRoleGrantAsk = async () => {
       toast(t('err.serverUnreachable'), { kind: 'err' });
     });
 };
+/* 93-01 (dead-search fix, Pitfall 1): the handler writes the staged q AND
+   calls render() — the candidate list re-filters on every keystroke, the
+   exact bug class the owner reported at the old govRoleQ (:5604). The
+   stage seeds lazily so the per-tab picker filters before any selection. */
 IN.govRoleQ = el => {
-  if (S.ui.govRoleMod) S.ui.govRoleMod.q = el.value;
+  if (!S.ui.govRoleMod) S.ui.govRoleMod = { userId: null, role: null, q: '' };
+  S.ui.govRoleMod.q = el.value;
+  render();
 };
 IN.govRoleSel = el => {
   if (S.ui.govRoleMod) S.ui.govRoleMod.role = el.value;
+  render();
 };
 A.govRolePick = el => {
-  if (S.ui.govRoleMod) S.ui.govRoleMod.userId = el.dataset.id;
+  /* 93-01 (D-03, mteamToggle idiom): single-select toggle on data-v; the
+     option's data-role pins the staged role (tab pickers pre-pin it). */
+  if (!S.ui.govRoleMod) S.ui.govRoleMod = { userId: null, role: 'backup_operator', q: '' };
+  if (el.dataset.role) S.ui.govRoleMod.role = el.dataset.role;
+  S.ui.govRoleMod.userId = S.ui.govRoleMod.userId === el.dataset.v ? null : el.dataset.v;
   render();
 };
 A.govRoleGrantCancel = () => {

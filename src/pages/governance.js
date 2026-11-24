@@ -15,7 +15,7 @@
    never a blank page, never a client-side guess (D-11: the server is
    the control, the nav gate is cosmetic). All payload strings render
    through esc() — text nodes only, no raw interpolation (T-79-10). */
-import { esc, ago } from '../core/utils.js';
+import { esc, ago, foldForSearch } from '../core/utils.js';
 import { ic } from '../core/icons.js';
 import { S } from '../core/store.js';
 import { api } from '../core/api.js';
@@ -242,6 +242,11 @@ export function roleTabView(role) {
   if (!all) return '';
   const rows = all.filter(r => r.role === role);
   const dupUid = S.ui.govRoleDup;
+  /* Per-tab staged draft: only the stage whose role matches this tab
+     drives this picker (per-tab state isolation — the seg switch nulls
+     the stage entirely). */
+  const stMod = S.ui.govRoleMod;
+  const st = stMod && stMod.role === role ? stMod : { userId: null, q: '' };
   /* 93-01 (D-02): one row per USER per tab — the payload is one row per
      (user_id, role) via the unique index, so grouping by userId never
      dedupes a grant, only folds a multi-grant user (impossible per role
@@ -273,11 +278,18 @@ export function roleTabView(role) {
   </tr>`;
   };
   const grantBtn = `<button class="btn btn-primary btn-sm" data-a="govRoleGrantAsk">${ic('plus', 13)}${t('page.governance.rolesGrant')}</button>`;
+  /* 93-01 (D-03): the lean tab picker — table + selectable picker + Grant
+     button. Selection stages into S.ui.govRoleMod (role pinned to this
+     tab); the Grant dialog reuses the shared picker body and inherits the
+     staged draft. Only renders once the operator-users payload is staged. */
+  const picker = S.ui.operatorUsers
+    ? `<div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesGrantTitle')}</div>${govPickerInput('gov-role-tab-q', st, 'gov-role-tab-list')}${govPickerList(role, st, 'gov-role-tab-list')}</div>`
+    : '';
   const body = byUser.size
     ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColGrants')}</th><th></th></tr></thead><tbody>${[...byUser.values()].map(row).join('')}</tbody></table>`
     : /* D-34: the standard governance empty box — the Grant button front and center. */
       empty('users', t('page.governance.rolesEmptyTitle'), t('page.governance.rolesEmptyBody'), `<div class="row" style="justify-content:center;margin-top:10px">${grantBtn}</div>`, 'sm', 3);
-  return `<div>${byUser.size ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div></div>`;
+  return `<div>${picker}${byUser.size ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div></div>`;
 }
 
 /* D-32: the recent-activity trail — rendered ONLY from the server-supplied
@@ -300,29 +312,45 @@ function recentHtml() {
 }
 
 /* =====================================================================
-   85-02 GRANT MODAL (D-30, Phase 84 picker pattern) — rendered through
-   the generic custom host; staged state lives in S.ui.govRoleMod
-   ({userId, role, q}), never the DOM. The candidate pool is the operator
-   user list (D-07) minus Super Admins — the server refuses those grants
-   (D-05), so the picker never offers a target that must fail.
+   85-02/93-01 SELECTABLE USER PICKER (D-03, D-30, team-pick contract) —
+   the shared candidate body used by BOTH the per-role tab pickers and the
+   Grant dialog. State lives in S.ui.govRoleMod ({userId, role, q}), never
+   the DOM. The pool is the operator user list (D-07) minus Super Admins —
+   the server refuses those grants (instanceRoleAdminImplicit), so the
+   picker never offers a target that must fail. Filtering rides
+   foldForSearch (diacritic-insensitive) over name + email; zero matches
+   render the honest popover.noMatches message; there is NO user-creation
+   path. Options carry the aria combobox contract (role="option" +
+   aria-selected) and toggle via A.govRolePick (mteamToggle idiom) —
+   single-select, draft-in-S.ui.
    ===================================================================== */
+const govCandidates = (role, qRaw) => {
+  const needle = foldForSearch(qRaw || '').text;
+  const held = new Set((S.ui.govRoles || []).filter(r => r.role === role).map(r => r.userId));
+  return (S.ui.operatorUsers || [])
+    .filter(u => !u.is_instance_admin)
+    .filter(u => !needle || foldForSearch(`${u.name || ''} ${u.email || ''}`).text.includes(needle))
+    .map(u => ({ u, held: held.has(u.id) }));
+};
+const govPickerList = (role, st, listId) => {
+  const cands = govCandidates(role, st.q);
+  const opt = c =>
+    `<div class="srow" role="option" aria-selected="${st.userId === c.u.id}" data-a="govRolePick" data-v="${esc(c.u.id)}" data-role="${role}" style="cursor:pointer;${st.userId === c.u.id ? 'outline:2px solid var(--accent)' : ''}"><div><div class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(c.u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(c.u.email || '')}</span>${c.held ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</div></div></div>`;
+  return `<div class="panel" role="listbox" id="${listId}" style="max-height:220px;overflow-y:auto">${cands.length ? cands.map(opt).join('') : `<p class="hint" style="margin:6px 0 0">${t('popover.noMatches')}</p>`}</div>`;
+};
+const govPickerInput = (id, st, listId) =>
+  `<div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="${id}" data-in="govRoleQ" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" role="combobox" aria-expanded="true" aria-controls="${listId}" aria-label="${t('page.governance.searchOp')}"></div>`;
+
 export function govRoleBody() {
   const st = S.ui.govRoleMod || { userId: null, role: 'backup_operator', q: '' };
-  const q = (st.q || '').trim().toLowerCase();
-  const users = (S.ui.operatorUsers || []).filter(u => !u.is_instance_admin && (!q || (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q)));
-  const held = new Set((S.ui.govRoles || []).filter(r => r.role === st.role).map(r => r.userId));
-  const pick = u =>
-    `<div class="srow" data-a="govRolePick" data-id="${esc(u.id)}" style="${st.userId === u.id ? 'outline:2px solid var(--accent)' : ''}"><div><div class="row" style="gap:8px">${esc(u.name || '')}<span class="faint trunc">${esc(u.email || '')}</span>${held.has(u.id) ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</div></div></div>`;
-  const list = users.length
-    ? users.map(pick).join('')
-    : `<p class="hint" style="margin:6px 0 0">${t('popover.noMatches')}</p>`;
-  const roleSel = `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><label class="label" style="margin:0" for="gov-role-sel">${t('page.governance.rolesPickRole')}</label><select class="input" id="gov-role-sel" data-in="govRoleSel">${['backup_operator', 'restore_operator'].map(r => `<option value="${r}" ${st.role === r ? 'selected' : ''}>${t(r === 'backup_operator' ? 'page.backup.flagBackup' : 'page.backup.flagRestore')}</option>`).join('')}</select></div>`;
+  const role = st.role || 'backup_operator';
+  const roleSel = `<div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><label class="label" style="margin:0" for="gov-role-sel">${t('page.governance.rolesPickRole')}</label><select class="input" id="gov-role-sel" data-in="govRoleSel">${['backup_operator', 'restore_operator'].map(r => `<option value="${r}" ${role === r ? 'selected' : ''}>${t(r === 'backup_operator' ? 'page.backup.flagBackup' : 'page.backup.flagRestore')}</option>`).join('')}</select></div>`;
   return `<div class="modal-b" style="padding-top:18px;gap:10px">
     <h2 style="margin:0;font-size:16px">${t('page.governance.rolesGrantTitle')}</h2>
     <p class="hint" style="margin:0">${t('page.governance.rolesModalHint')}</p>
-    <div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-role-q" data-in="govRoleQ" placeholder="${t('page.governance.searchOp')}" value="${esc(st.q || '')}" aria-label="${t('page.governance.searchOp')}"></div>
+    ${govPickerInput('gov-role-q', st, 'gov-role-list')}
     ${roleSel}
-    <div style="max-height:220px;overflow-y:auto">${list}</div>
+    ${govPickerList(role, st, 'gov-role-list')}
   </div>
   <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="govRoleGrantCancel">${t('common.cancel')}</button><button class="btn btn-primary" data-a="govRoleGrantConfirm" ${st.userId ? '' : 'disabled'}>${t('page.governance.rolesGrant')}</button></div>`;
 }

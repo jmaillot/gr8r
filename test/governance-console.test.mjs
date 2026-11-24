@@ -57,7 +57,7 @@ test('the seg control mirrors the govSeg idiom: role=group, aria-pressed, defaul
   assert.match(v, /class="seg" role="group" aria-label="\$\{t\('page\.governance\.superSegAria'\)\}"/, 'the seg group is missing its role/aria shape');
   assert.match(v, /data-a="govSuperSeg" data-v="\$\{v\}" aria-pressed="\$\{segV === v\}"/, 'the seg buttons lost the aria-pressed two-state contract');
   assert.match(v, /S\.ui\.govSuperSeg \|\| 'admins'/, 'the seg default is not admins — roster-first is non-negotiable (D-90-2)');
-  assert.match(v, /segV === 'roles' \? rolesCard\(\) : superRosterView\(\)/, 'the roles view is not relocated verbatim inside the switched section');
+  assert.match(v, /segV === 'admins' \? `\$\{superRosterView\(\)\}\$\{recentHtml\(\)\}` : roleTabView\(segV === 'backup' \? 'backup_operator' : 'restore_operator'\)/, 'the 93-01 three-tab switch is missing (roster/trail under admins, role tabs for backup/restore)');
   // there is NO tab component: no role="tab" anywhere on the page
   assert.doesNotMatch(page(), /role="tab"/, 'a tab component leaked into the console (research Pitfall 7)');
   // the handler mirrors the govSeg idiom: set the staged stage, rerender

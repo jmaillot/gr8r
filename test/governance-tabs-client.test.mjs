@@ -107,7 +107,7 @@ test('(e) the recent-activity trail renders only inside the admins tab branch (D
 /* (f) the dead-search fix: IN.govRoleQ writes state AND re-renders */
 test('(f) IN.govRoleQ writes govRoleMod.q AND calls render() — the dead-search fix', () => {
   const a = actions();
-  const handler = a.match(/IN\.govRoleQ = el => \{[\s\S]*?\};/);
+  const handler = a.match(/IN\.govRoleQ = el => \{[\s\S]*?\n\};/);
   assert.ok(handler, 'IN.govRoleQ handler missing');
   assert.match(handler[0], /S\.ui\.govRoleMod\.q = el\.value/, 'the handler must write the staged q');
   assert.match(handler[0], /render\(\);/, 'the handler must re-render (the dead-search root cause)');
