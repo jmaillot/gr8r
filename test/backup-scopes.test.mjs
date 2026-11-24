@@ -24,12 +24,52 @@ async function grantRole(server, email, role) {
 
 const makeBackupOp = (server, email) => grantRole(server, email, 'backup_operator');
 
-test('scaffold: GET /api/backup/scopes is not mounted yet (404 — flips to real assertions when the route lands)', async () => {
+test('GET /api/backup/scopes: 401 unauthenticated; 403 fail-closed for a roleless user', async () => {
   const server = await startServer({});
   try {
-    const op = await makeBackupOp(server, 'op-scopes@test.local');
-    const res = await op.get('/api/backup/scopes');
-    assert.equal(res.status, 404, `expected 404 pre-implementation, got ${res.status}: ${JSON.stringify(res.data)}`);
+    const anon = await fetch(`${server.base}/api/backup/scopes`);
+    assert.equal(anon.status, 401, `unauthenticated → 401, got ${anon.status}`);
+    const joined = await signup(server.base, { name: 'Plain', email: 'plain-scopes@test.local' });
+    assert.equal(joined.status, 201);
+    const plain = (await login(server.base, 'plain-scopes@test.local', 'password-1234')).client;
+    const res = await plain.get('/api/backup/scopes');
+    assert.equal(res.status, 403, `roleless → 403, got ${res.status}: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'backupRoleRequired');
+  } finally {
+    await server.stop();
+  }
+});
+
+for (const role of ['backup_operator', 'restore_operator']) {
+  test(`GET /api/backup/scopes: ${role} gets 200 with the exact minimal payload { workspaces: [{id,name,slug}] }`, async () => {
+    const server = await startServer({});
+    try {
+      const op = await grantRole(server, `op-scopes-${role}@test.local`, role);
+      const ws = withDb(server.dbPath, db => db.prepare('select id, name, slug from workspaces limit 1').get());
+      // an archived workspace must be excluded
+      withDb(server.dbPath, db => db.prepare('insert into workspaces (id, slug, name, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,1)').run('ws-arch', 'arch', 'Archived', '{}', 1, Date.now(), Date.now()));
+      const res = await op.get('/api/backup/scopes');
+      assert.equal(res.status, 200, `${role}: ${JSON.stringify(res.data)}`);
+      assert.ok(Array.isArray(res.data.workspaces), 'workspaces array');
+      assert.equal(res.data.workspaces.length, 1, 'the archived workspace is excluded');
+      const entry = res.data.workspaces[0];
+      assert.deepEqual(Object.keys(entry).sort(), ['id', 'name', 'slug'], 'STRICT shape: only id/name/slug keys');
+      assert.deepEqual(entry, { id: ws.id, name: ws.name, slug: ws.slug });
+      assert.deepEqual(Object.keys(res.data).sort(), ['workspaces'], 'no role echo, no extras');
+    } finally {
+      await server.stop();
+    }
+  });
+}
+
+test('GET /api/backup/scopes: Super Admin passes the gate too', async () => {
+  const server = await startServer({});
+  try {
+    const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const res = await admin.get('/api/backup/scopes');
+    assert.equal(res.status, 200, JSON.stringify(res.data));
+    assert.ok(Array.isArray(res.data.workspaces) && res.data.workspaces.length >= 1);
+    assert.deepEqual(Object.keys(res.data.workspaces[0]).sort(), ['id', 'name', 'slug']);
   } finally {
     await server.stop();
   }

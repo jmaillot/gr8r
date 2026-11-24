@@ -8839,6 +8839,23 @@ async function handleApi(req, res, url) {
     try { scope = JSON.parse(row.scope); } catch { scope = {}; }
     return { ...row, scope, schedule: describeCron(row.cron) };
   };
+  /* Phase 92 (D-06): the operator-gated scope picker — the minimal
+     `{ workspaces: [{ id, name, slug }] }` payload the task-create form
+     needs. SEPARATE direct query (archived workspaces excluded) — do NOT
+     route through workspacesForUser (its byte-unchanged mandate and
+     member-vs-operator semantics differ). No nested projects, no role
+     echo (deferred). Gate: either backup role, or Super Admin. */
+  if (pathname === '/api/backup/scopes' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE)) && !(await hasInstanceRole(user.id, CAP.RESTORE_USE)) && !(isInstanceAdmin(user) && SUPER_ACCESS)) {
+      return fail(res, 403, 'backupRoleRequired', 'You need a backup role to see that');
+    }
+    const workspaces = (await db.all('select id, name, slug from workspaces where archived = 0 order by name, id')).map(w => ({ id: w.id, name: w.name, slug: w.slug }));
+    return json(res, 200, { workspaces });
+  }
+
   if (pathname === '/api/backup/tasks' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const user = await requireUser(req, res);
