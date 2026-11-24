@@ -244,7 +244,7 @@ test86('the Run now card renders the scope picker from payload-driven lists with
   assert.ok(card, 'runNowCard not found');
   assert.match(card[0], /esc\(p\.id\)/, 'the project option id is not esc()d');
   assert.match(card[0], /esc\(p\.name \|\| p\.id\)/, 'the project option name is not esc()d');
-  assert.match(card[0], /esc\(api\.workspace\.name \|\| api\.workspace\.id\)/, 'the workspace option is not esc()d');
+  assert.match(card[0], /esc\(w\.name \|\| w\.id\)/, 'the workspace option is not esc()d (XWS-01: options ride the scopes payload)');
 });
 
 test86('the stage markup renders verbatim from the polled payload — no client-side stage derivation (85 D-23)', () => {
