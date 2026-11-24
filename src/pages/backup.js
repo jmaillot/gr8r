@@ -36,7 +36,7 @@ import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
 import { tzPreselect } from '../lib/timezones.js';
-import { refreshBackupTasks, refreshRestoreHistory, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
+import { refreshBackupTasks, refreshBackupScopes, refreshRestoreHistory, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
@@ -48,8 +48,9 @@ const fullErr = () =>
   `<div class="fullstate"><div class="box"><div class="empty-state err" style="padding:0"><div class="glyph">${ic('cloud-alert', 20)}</div></div><h1>${t('page.somethingWrong')}</h1><p>${t('page.loadFailedBody')}</p><div class="row"><button class="btn btn-primary" data-a="backupRetry">${ic('refresh-cw', 14)}${t('page.tryAgain')}</button></div></div></div>`;
 
 /* D-09 Run now card: scope picker over payload-driven data only — the
-   project list is the current doc's projects, the workspace the loaded
-   api.workspace. Selection lives in S.ui.backupScope (staged state, never
+   project list is the current doc's projects, the workspace options the
+   phase-92 scopes payload (XWS-01/D-11: S.ui.backupScopes, loaded workspace
+   fallback). Selection lives in S.ui.backupScope (staged state, never
    the DOM); the server re-validates everything and is the sole authority. */
 const runNowCard = flags => {
   const scope = S.ui.backupScope || { kind: 'instance', id: null };
@@ -59,10 +60,21 @@ const runNowCard = flags => {
     scope.kind === 'project'
       ? `<div class="field"><label class="label">${t('page.backup.projectLabel')}</label><select class="input" data-in="backupScopeId"><option value="">—</option>${projects.map(p => `<option value="${esc(p.id)}"${p.id === scope.id ? ' selected' : ''}>${esc(p.name || p.id)}</option>`).join('')}</select></div>`
       : '';
-  const workspaceBadge =
+  /* XWS-01 (D-11): the workspace options ride the phase-92 scopes payload
+     (S.ui.backupScopes — the operator-gated /api/backup/scopes response,
+     the same input the restore target picker uses) so Backup/Restore Ops
+     and Super Admins see every active workspace. Fail-closed fallback:
+     empty/absent payload → the loaded workspace only, NEVER memberships
+     (cross-workspace visibility is pickers-only; server re-validates). */
+  const runNowScopes = Array.isArray(S.ui.backupScopes) && S.ui.backupScopes.length
+    ? S.ui.backupScopes
+    : api.workspace?.id
+      ? [{ id: api.workspace.id, name: api.workspace.name || api.workspace.id }]
+      : [];
+  const workspaceSel =
     scope.kind === 'workspace'
-      ? (api.workspace?.id
-          ? `<div class="field"><label class="label">${t('page.backup.workspaceLabel')}</label><select class="input" data-in="backupScopeId"><option value="${esc(api.workspace.id)}" selected>${esc(api.workspace.name || api.workspace.id)}</option></select></div>`
+      ? (runNowScopes.length
+          ? `<div class="field"><label class="label">${t('page.backup.workspaceLabel')}</label><select class="input" data-in="backupScopeId">${runNowScopes.map(w => `<option value="${esc(w.id)}"${w.id === scope.id ? ' selected' : ''}>${esc(w.name || w.id)}</option>`).join('')}</select></div>`
           : `<span class="badge">—</span>`)
       : '';
   /* UAT round-7: the title sits ABOVE the panel (the "Backup tasks" idiom —
@@ -72,7 +84,7 @@ const runNowCard = flags => {
     <p class="faint" style="margin:0 0 10px">${t('page.backup.runNowLead')}</p>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
       <div class="field"><label class="label">${t('page.backup.scopeLabel')}</label><select class="input" data-in="backupScopeKind">${opt('instance', 'page.backup.scopeInstance')}${opt('workspace', 'page.backup.scopeWorkspace')}${opt('project', 'page.backup.scopeProject')}</select></div>
-      ${workspaceBadge}${projectSel}
+      ${workspaceSel}${projectSel}
       <button class="btn btn-primary" data-a="backupRunNow">${ic('hard-drive', 14)}${t('page.backup.runAction')}</button>
     </div>
   </div></div>`;
@@ -698,7 +710,10 @@ export function pageBackup() {
   const loading = !S.ui.backupTasks;
   /* In-render kick covers a boot-time deep link (governance.js:76 TRN-01
      precedent). */
-  if (loading && !S.ui.backupErr) refreshBackupTasks();
+  if (loading && !S.ui.backupErr) {
+    refreshBackupTasks();
+    refreshBackupScopes(); // XWS-01 (D-11): the Run-now workspace picker's scopes input
+  }
   if (loading)
     return `<div class="page wide"><div class="ph"><div><h1>${t('nav.route.backup')}</h1><p>${t('page.backup.subtitle')}</p></div></div><div class="panel" style="margin-top:16px"><div class="panel-b faint" aria-busy="true">${t('page.governance.loading')}</div></div></div>`;
 

@@ -4778,6 +4778,21 @@ A.backupRetry = () => {
   refreshBackupTasks();
 };
 
+/* XWS-01 (D-11): the Run-now workspace picker's input — ONE fetch of the
+   phase-92 operator-gated /api/backup/scopes payload, kicked with the page's
+   first load (same in-render kick idiom as refreshBackupTasks). Staged in
+   S.ui.backupScopes; a refusal stages null → the picker falls back to the
+   loaded workspace only, never memberships (pickers-only doctrine). The
+   restore preview reuses the same state (UAT round-8); the guard makes this
+   a once-per-session fill (undefined = never fetched, null = refused). */
+export async function refreshBackupScopes() {
+  if (!api.enabled) return;
+  if (S.ui.backupScopes !== undefined) return;
+  const res = await api.backupScopes();
+  S.ui.backupScopes = res.ok && Array.isArray(res.data?.workspaces) ? res.data.workspaces : null;
+  render();
+}
+
 /* =====================================================================
    86-02 BACKUP RUN (D-07/D-09/D-10/D-18) — the Run now card's client
    half. Render-only from the GET /api/backup/runs/current payload (85
@@ -5009,7 +5024,17 @@ A.backupRunNow = async () => {
 /* Staged scope selection (Pitfall: never read the DOM back) — the picker
    stages into S.ui.backupScope; the server re-validates kind + id (D-17). */
 IN.backupScopeKind = el => {
-  S.ui.backupScope = { kind: el.value, id: null };
+  /* D-11: switching to workspace arms the fallback id up front (scopes[0]
+     or the loaded workspace) so the rendered select's visible selection and
+     the trigger wire (A.backupRunNow's `scope.id || api.workspace?.id`)
+     can never disagree — IN.backupScopeId keeps ownership after that. */
+  S.ui.backupScope = {
+    kind: el.value,
+    id:
+      el.value === 'workspace'
+        ? (Array.isArray(S.ui.backupScopes) && S.ui.backupScopes.length ? S.ui.backupScopes[0].id : api.workspace?.id) || null
+        : null,
+  };
   render();
 };
 IN.backupScopeId = el => {
