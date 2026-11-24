@@ -538,6 +538,80 @@ test('95-04 FTS sync inside the tx: dead tasks leave task_fts and the archive ta
   assert.ok(ids.includes('t1'), 'the archive task is searchable');
 });
 
+/* ---------- 95-04 Task 4: refusal matrix + integration sweep ---------- */
+
+test('95-04 D-06: the backup_runs history of the replaced project survives the overwrite and still references the old scope id', async () => {
+  await projectWorld();
+  /* Plant the replaced project's backup history (as runs at backup time
+     would have left it — scope JSON carrying p-old). */
+  await db.run(
+    'insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, sha256, filename, created_at) values (?,?,?,?,?,?,?,?,?,?)',
+    ['bk-old-1', null, JSON.stringify({ kind: 'project', id: 'p-old' }), 'manual', 'succeeded', T, T + 1000, 'a'.repeat(64), 'old-archive.tar.gz', T],
+  );
+
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, true, `project overwrite failed: ${result.error}`);
+
+  const row = await db.get('select id, scope, status from backup_runs where id = ?', ['bk-old-1']);
+  assert.ok(row, 'the replaced project backup_runs row SURVIVES the overwrite (D-06)');
+  assert.deepEqual(JSON.parse(row.scope), { kind: 'project', id: 'p-old' }, 'the row still references the old scope id');
+  assert.equal(row.status, 'succeeded', 'history rows are never rewritten by a restore');
+});
+
+test('95-04 totality: a fragment task referencing an unknown parentId refuses keyed restoreRemapIncomplete before any mutation', async () => {
+  await projectWorld();
+  /* Plant a dangling parentId into the SOURCE doc's p1 fragment, then
+     re-export the project archive (the archive now carries the unknown
+     reference). */
+  const srcRow = await db.get('select doc from workspaces where id = ?', ['ws-src']);
+  const src = JSON.parse(srcRow.doc);
+  src.data.tasks[0].parentId = 't-ghost';
+  await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(src), 'ws-src']);
+  sourceRun = await backup.runExport({ kind: 'project', id: 'p1' });
+  assert.equal(sourceRun.ok, true);
+
+  const beforeDoc = (await targetRow()).doc;
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'restoreRemapIncomplete', `keyed: ${result.code ?? result.error}`);
+  assert.match(result.error, /task\.parentId/, 'the unresolved-loop discipline names the dangling reference');
+  assert.equal((await targetRow()).doc, beforeDoc, 'zero DB writes');
+  assert.equal(fs.existsSync(path.join(FILES_DIR, 'f-old')), true, 'zero blob mutations');
+});
+
+test('95-04 snapshot honesty (P7): the pre_restore run produced for a project overwrite is a WORKSPACE-scope archive of the TARGET workspace', async () => {
+  await projectWorld();
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, true, `project overwrite failed: ${result.error}`);
+
+  const snapPath = path.join(BACKUPS_DIR, result.snapshotFilename);
+  assert.ok(fs.existsSync(snapPath), 'the snapshot archive exists');
+  /* Extract the snapshot to a throwaway dir and read its manifest —
+     readArchiveEntries streams (entries carry metadata, not payloads). */
+  const snapDir = path.join(restore.restoreStagingDir(), 'snap-probe-95-04');
+  const sidecar = fs.readFileSync(`${snapPath}.sha256`, 'utf8').split(/\s+/)[0];
+  const snapVerified = await restore.streamVerifyArchive(snapPath, sidecar);
+  await restore.extractArchive(snapPath, snapDir, snapVerified.manifest, { tolerateSkips: true });
+  const manifest = JSON.parse(fs.readFileSync(path.join(snapDir, 'manifest.json'), 'utf8'));
+  fs.rmSync(snapDir, { recursive: true, force: true });
+  assert.deepEqual(manifest.scope, { kind: 'workspace', id: 'ws-target' }, 'kind workspace over the TARGET workspace — P7 unchanged');
+});
+
+test('95-04 i18n ×5: err.restoreNameCollision is present in all five locales (mirrors the i18n-scan dead-key gate)', async () => {
+  const locales = ['en', 'fr', 'nl', 'de', 'es'];
+  for (const loc of locales) {
+    const catalogue = JSON.parse(fs.readFileSync(new URL(`../src/locales/${loc}.json`, import.meta.url), 'utf8'));
+    assert.ok(
+      typeof catalogue['err.restoreNameCollision'] === 'string' && catalogue['err.restoreNameCollision'].length > 0,
+      `${loc}.json carries err.restoreNameCollision`,
+    );
+    assert.ok(
+      typeof catalogue['err.restoreTargetMissing'] === 'string' && catalogue['err.restoreTargetMissing'].length > 0,
+      `${loc}.json carries err.restoreTargetMissing`,
+    );
+  }
+});
+
 /* =====================================================================
    Route-level cells (Phase 89, plan 89-05, Task 3 — POST
    /api/backup/restore/overwrite). Per-case startServer + ONE persistent
@@ -757,6 +831,41 @@ test('89-05 overwrite route outbox gate: a done overwrite claims one restore_ale
       assert.equal(ctx.outcome, 'done');
       assert.equal(ctx.runId, res.data.runId);
     }
+  } finally {
+    ro.close();
+    await srv.stop();
+    fs.rmSync(path.dirname(srv.dbPath), { recursive: true, force: true });
+  }
+});
+
+test('95-04 D-04 global lock unchanged on the project path: a claimed restore_lock refuses a project overwrite 409 backupRestoreInProgress + audited (no per-scope locking — owner ruling 2026-11-24)', async () => {
+  const srv = await startServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-lock-')) });
+  const ro = openReader(srv);
+  try {
+    const op = await makeBackupOpRoute(srv, ro, 'ow-proj-lock-op@test.local');
+    const ownerId = ro.get('select id from users where email = ?', ADMIN.email).id;
+    const doc = JSON.stringify({ data: { projects: [{ id: 'p-live', name: 'P Live', color: '#111111' }], tasks: [], comments: [], files: [], teams: [], projOrder: ['p-live'], logo: null, members: [], activity: [], notifs: [], events: [], savedViews: [], recentSearches: [] } });
+    ro.run('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)', ...['ws-lock', 'lock-ws', 'Lock WS', '#123456', doc, 1, T, T, 0]);
+    ro.run('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)', ...['ws-lock', ownerId, 'owner', `m_${ownerId.slice(0, 8)}`, 'manual']);
+    const opId = ro.get('select id from users where email = ?', 'ow-proj-lock-op@test.local').id;
+    ro.run('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)', ...['ws-lock', opId, 'member', `m_${opId.slice(0, 8)}`, 'manual']);
+    const backupRes = await op.post('/api/backup/runs', { scope: { kind: 'project', id: 'p-live' } });
+    assert.equal(backupRes.status, 200);
+    for (let i = 0; i < 200; i++) {
+      const cur = await op.get('/api/backup/runs/current');
+      if (cur.data.stage === 'done' || cur.data.stage === 'failed') break;
+      await new Promise(r => setTimeout(r, 50));
+    }
+
+    /* The D-04 plant: a restore claimed by ANOTHER operator. */
+    ro.run('update restore_lock set claimed_by = ?, claimed_at = ? where id = 1', ...['someone-else', Date.now()]);
+    const refused = await op.post('/api/backup/restore/overwrite', { runId: backupRes.data.runId, targetId: 'ws-lock', targetProjectId: 'p-live', confirmName: 'P Live' });
+    assert.equal(refused.status, 409, `lock-held project overwrite: ${JSON.stringify(refused.data)}`);
+    assert.equal(refused.data.code, 'backupRestoreInProgress', 'the SAME keyed refusal the workspace path rides — no per-scope bypass');
+    const audits = ro.get("select count(*) as n from audit_log where action = 'restore_refused:restoreInProgress'").n;
+    assert.ok(audits >= 1, 'the refusal is audited');
+    assert.equal(ro.get('select claimed_by from restore_lock where id = 1').claimed_by, 'someone-else', 'the foreign claim is untouched');
+    assert.equal(ro.get("select count(*) as n from restore_runs where trigger = 'overwrite'").n, 0, 'no run row from a lock-refused trigger');
   } finally {
     ro.close();
     await srv.stop();
