@@ -2187,6 +2187,7 @@
   "page.backup.colScope": "Bereik",
   "page.backup.colSchedule": "Planning",
   "page.backup.colLastRun": "Laatste uitvoering",
+  "page.backup.historyColType": "Type",
   "page.backup.checksumWarn": "Controlesomwaarschuwing",
   "page.backup.summaryCustom": "Aangepaste planning: {cron}",
   "page.backup.retentionLabel": "Bewaartermijn",

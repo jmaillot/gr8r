@@ -2187,6 +2187,7 @@
   "page.backup.colScope": "Bereich",
   "page.backup.colSchedule": "Zeitplan",
   "page.backup.colLastRun": "Letzte Ausführung",
+  "page.backup.historyColType": "Typ",
   "page.backup.checksumWarn": "Prüfsummenwarnung",
   "page.backup.summaryCustom": "Benutzerdefinierter Zeitplan: {cron}",
   "page.backup.retentionLabel": "Aufbewahrung",

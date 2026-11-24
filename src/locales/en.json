@@ -2187,6 +2187,7 @@
   "page.backup.colScope": "Scope",
   "page.backup.colSchedule": "Schedule",
   "page.backup.colLastRun": "Last run",
+  "page.backup.historyColType": "Type",
   "page.backup.checksumWarn": "Checksum warning",
   "page.backup.summaryCustom": "Custom schedule: {cron}",
   "page.backup.retentionLabel": "Retention",

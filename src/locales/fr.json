@@ -2227,6 +2227,7 @@
   "page.backup.colScope": "Portée",
   "page.backup.colSchedule": "Planification",
   "page.backup.colLastRun": "Dernière exécution",
+  "page.backup.historyColType": "Type",
   "page.backup.checksumWarn": "Alerte somme de contrôle",
   "page.backup.summaryCustom": "Planification personnalisée : {cron}",
   "page.backup.retentionLabel": "Conservation",

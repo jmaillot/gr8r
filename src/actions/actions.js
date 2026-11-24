@@ -5504,7 +5504,12 @@ A.backupDeletionsToggle = el => {
    and the 50 cap are the SERVER's (the client derives none of it); the
    fetch result stages verbatim in S.ui.restoreHistory. */
 const restoreHistoryFetch = async () => {
+  /* 94-02 (UAT-3): fetching guard — the page fill loop kicks this when
+     S.ui.restoreHistory is absent; the flag prevents a render→fetch→render
+     loop (same discipline as backupHistoryFetching). */
+  S.ui.restoreHistoryFetching = true;
   const res = await api.restoreRuns();
+  S.ui.restoreHistoryFetching = false;
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
     S.ui.restoreHistory = { runs: [], err: true };
@@ -5513,6 +5518,14 @@ const restoreHistoryFetch = async () => {
   }
   render();
 };
+
+/* 94-02 (UAT-3): the unified history sblock merges the restore rows — the
+   page's fill loop calls this when the payload is absent. Additive export:
+   no route change, no payload recompute (fail-closed render-verbatim). */
+export async function refreshRestoreHistory() {
+  if (!api.enabled) return;
+  await restoreHistoryFetch();
+}
 
 export async function refreshOpenRestoreHistories() {
   if (!S.ui.restoreHistoryOpen) return;

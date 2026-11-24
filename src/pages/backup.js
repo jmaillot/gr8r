@@ -36,7 +36,7 @@ import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
 import { tzPreselect } from '../lib/timezones.js';
-import { refreshBackupTasks, refreshRestoreBackups, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
+import { refreshBackupTasks, refreshRestoreBackups, refreshRestoreHistory, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
@@ -167,8 +167,14 @@ const historyRow = run => {
   /* The GFS badge: the payload's gfs_bucket resolves through the four gfs
      keys — no client GFS math, ever (D-90-12/16 doctrine carries over). */
   const gfsKey = GFS_SCALE_KEYS[run.gfs_bucket];
+  /* 94-02 (UAT-3): the Type column — Backup rows lead with the type badge
+     (label reuses the existing nav.route.backup wording); historyColType is
+     the column label (title attr). The task/trigger/status filters apply
+     ONLY to backup rows — the type is never filtered (deferred). */
+  const typeBadge = `<span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('nav.route.backup'))}</span>`;
   return `<div style="padding:8px 0;border-top:1px solid var(--border)"${chkBusy ? ' aria-busy="true"' : ''}>
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
+      ${typeBadge}
       <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
       ${gfsKey ? `<span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : ''}
       <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
@@ -208,13 +214,20 @@ const historySblock = () => {
   );
   const triggerSel = sel('backupHistoryTrigger', f.trigger, [['', t('page.backup.filterAll')], ['manual', t('page.backup.triggerManual')], ['scheduled', t('page.backup.triggerScheduled')]]);
   const statusSel = sel('backupHistoryStatus', f.status, [['', t('page.backup.filterAll')], ...HISTORY_FILTER_STATUSES.map(s => [s, t(RUN_STATUS_KEYS[s])])]);
+  /* 94-02 (UAT-3): the unified sblock MERGES the restore history rows —
+     client-only composition of two already-fetched payloads (S.ui.restoreHistory,
+     kicked additively by the page fill loop). Restore rows render ALWAYS —
+     the task/trigger/status filters apply to Backup rows only; the Type
+     column is never filtered (deferred). Fail-closed principle intact: the
+     restore payload is already server-scoped, fields render verbatim. */
+  const restoreRuns = !h || h.err ? [] : Array.isArray(S.ui.restoreHistory?.runs) ? S.ui.restoreHistory.runs : [];
   const body = !h
     ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.backup.historyLoading')}</div>`
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
-      : !h.runs.length
-        ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`
-        : h.runs.map(historyRow).join('');
+      : h.runs.length || restoreRuns.length
+        ? `${h.runs.map(historyRow).join('')}${restoreRuns.map(restoreRunRow).join('')}`
+        : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:center">
       <h2 style="margin:0">${t('page.backup.historyTitle')}</h2>
@@ -606,8 +619,13 @@ const restoreRunRow = run => {
   } catch {
     skipped = [];
   }
+  /* 94-02 (UAT-3): the Type badge leads the row — in the unified sblock it IS
+     the Type column; in the restore-history card it stays an honest label.
+     Label reuses the existing page.restore.title wording (no duplication). */
+  const typeBadge = `<span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span>`;
   return `<div style="padding:8px 0;border-top:1px solid var(--border)">
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
+      ${typeBadge}
       <span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span>
       <span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>
       <span class="faint">${esc(when)}</span>
@@ -686,6 +704,10 @@ export function pageBackup() {
   /* 89-06: the restore list fill — one loop, payload-flag gated (D-22:
      the section and its fetches exist only for RESTORE_USE holders). */
   if (flags.canRestore && !S.ui.restoreList) refreshRestoreBackups();
+  /* 94-02 (UAT-3): the unified sblock merges the restore rows — one additive
+     fill-loop kick fetches S.ui.restoreHistory when absent (no route change,
+     no recompute; the payload is server-scoped). */
+  if (flags.canRestore && !S.ui.restoreHistory && !S.ui.restoreHistoryFetching) refreshRestoreHistory();
   /* Phase 94 (D-04): the unified history sblock's lazy fetch — the in-render
      kick covers first open (same governance fill-loop pattern); the fetch
      itself stages S.ui.backupHistoryAll so this kick fires exactly once. */

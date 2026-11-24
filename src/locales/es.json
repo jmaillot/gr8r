@@ -2187,6 +2187,7 @@
   "page.backup.colScope": "Ámbito",
   "page.backup.colSchedule": "Programación",
   "page.backup.colLastRun": "Última ejecución",
+  "page.backup.historyColType": "Tipo",
   "page.backup.checksumWarn": "Alerta de suma de verificación",
   "page.backup.summaryCustom": "Programación personalizada: {cron}",
   "page.backup.retentionLabel": "Retención",

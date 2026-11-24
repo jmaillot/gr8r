@@ -160,7 +160,7 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.summaryYearly', 'page.backup.colTask', 'page.backup.colScope', 'page.backup.colSchedule',
     'page.backup.colLastRun', 'page.backup.checksumWarn', 'page.backup.retentionLabel', 'page.backup.customScheduleHint',
     'page.backup.filterAll', 'page.backup.filterTrigger', 'page.backup.filterStatus', 'page.backup.historyManualEntry',
-    'page.backup.historyManualHint', 'page.backup.historyPrev', 'page.backup.historyNext',
+    'page.backup.historyManualHint', 'page.backup.historyPrev', 'page.backup.historyNext', 'page.backup.historyColType',
   ];
   for (const key of required) assert.ok(pagesSrc.includes(key) || actionsSrc.includes(key), `the combined source uses ${key}`);
   for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
@@ -432,4 +432,34 @@ test('94-02 UAT-2: the Next-run cell renders date AND time via formatTime (clock
   const tableBody = pagesSrc.slice(pagesSrc.indexOf('const taskTable ='), pagesSrc.indexOf('/* Builder form'));
   assert.match(tableBody, /formatTime\(nextRunIso\)/, 'the next-run cell renders the time beside the date');
   assert.match(tableBody, /nextRunIso \? `\$\{fmtDate\(nextRunIso\)\} \$\{formatTime\(nextRunIso\)\}` : '—'/, "the '—' null fallback is unchanged");
+});
+
+/* =====================================================================
+   94-02 (UAT-3): merged history — restore rows join the unified sblock
+   under a leading Type column. Client-only composition of the two
+   already-fetched payloads; task/trigger/status filters apply to Backup
+   rows ONLY; restore fields render verbatim through esc().
+   ===================================================================== */
+test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () => {
+  /* The Type column label key exists ×5 and is USED (no dead key — i18n-scan). */
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    assert.ok(Object.hasOwn(cat, 'page.backup.historyColType'), `${loc} has page.backup.historyColType`);
+  }
+  assert.match(pagesSrc, /esc\(t\('page\.backup\.historyColType'\)\)/, 'historyColType is used as the Type column label');
+  /* Row labels REUSE existing keys — no duplication. */
+  assert.match(pagesSrc, /esc\(t\('nav\.route\.backup'\)\)/, 'Backup rows reuse nav.route.backup');
+  assert.match(pagesSrc, /esc\(t\('page\.restore\.title'\)\)/, 'Restore rows reuse page.restore.title');
+  /* The sblock body appends the restore rows AFTER the backup rows — the
+     backup rows keep the pinned verbatim renderer. */
+  const sblockBody = pagesSrc.slice(pagesSrc.indexOf('const historySblock ='), pagesSrc.indexOf('const lastRunBadge ='));
+  assert.match(sblockBody, /\$\{h\.runs\.map\(historyRow\)\.join\(''\)\}\$\{restoreRuns\.map\(restoreRunRow\)\.join\(''\)\}/, 'restore rows render after the backup rows in the same body');
+  /* Filters apply to Backup rows ONLY — the restore rows are composed
+     unconditionally (no filter gating on restoreRuns). */
+  assert.match(sblockBody, /Array\.isArray\(S\.ui\.restoreHistory\?\.runs\)/, 'restore rows come from S.ui.restoreHistory');
+  assert.ok(!/restoreHistoryFilter[\s\S]{0,80}restoreRuns/.test(sblockBody), 'no filter gating between the backup filter and the restore rows');
+  /* Additive fill-loop kick — no route change, no payload recompute. */
+  assert.match(actionsSrc, /export async function refreshRestoreHistory\(\)/, 'refreshRestoreHistory is exported from actions.js');
+  assert.match(pagesSrc, /!S\.ui\.restoreHistory && !S\.ui\.restoreHistoryFetching\) refreshRestoreHistory\(\)/, 'the page kicks the restore-history fetch when the payload is absent');
+  assert.match(actionsSrc, /S\.ui\.restoreHistoryFetching = true/, 'the fetch carries the loop-prevention guard');
 });
