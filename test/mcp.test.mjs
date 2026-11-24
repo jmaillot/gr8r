@@ -1265,3 +1265,49 @@ test('parity: hidden-task cells — get_task/list_tasks hide what the project pr
   assert.equal(proj.isError, true, 'get_project on a hidden project answers not found');
   assert.equal(proj.data, 'Project not found: p_hidden');
 });
+
+/* ---- 95-02: the revoked-key purge (SET-03, D-09/D-10) ---- */
+
+const purgeAudits = () => withDb(server.dbPath, db => db.prepare("select count(*) as n from audit_log where action = 'api_key_purged'").get().n);
+
+test('POST /api/keys/purge-revoked removes only revoked rows and writes one value-free audit event', async () => {
+  const mk = async label => (await createKey({ label, scope: 'read', workspaceId: wsId, days: 30 })).data;
+  await mk('Purge Keep A');
+  await mk('Purge Keep B');
+  const gone1 = await mk('Purge Gone 1');
+  const gone2 = await mk('Purge Gone 2');
+  assert.equal((await owner.client.del(`/api/keys/${gone1.id}`)).status, 200);
+  assert.equal((await owner.client.del(`/api/keys/${gone2.id}`)).status, 200);
+  const revokedBefore = withDb(server.dbPath, db => db.prepare('select count(*) as n from api_keys where user_id = ? and revoked_at is not null').get(owner.data.user.id).n);
+  assert.ok(revokedBefore >= 2, 'the two fresh revocations are in place (earlier tests may have revoked more)');
+  const before = purgeAudits();
+  const res = await owner.client.post('/api/keys/purge-revoked');
+  assert.equal(res.status, 200);
+  assert.deepEqual(Object.keys(res.data), ['removed']);
+  assert.equal(res.data.removed, revokedBefore, 'every revoked row of the caller goes — and ONLY revoked rows');
+  const rows = withDb(server.dbPath, db => db.prepare('select * from api_keys where label like ?').all('Purge%'));
+  assert.deepEqual(rows.map(r => r.label).sort(), ['Purge Keep A', 'Purge Keep B'], 'the active keys survive the purge');
+  assert.ok(rows.every(r => !r.revoked_at), 'the surviving rows are all active');
+  const audit = withDb(server.dbPath, db => db.prepare("select * from audit_log where action = 'api_key_purged' order by rowid desc limit 1").get());
+  assert.equal(purgeAudits(), before + 1, 'exactly ONE audit event per purge');
+  assert.equal(audit.target_name, String(revokedBefore), 'the audit row carries the removed count');
+  const wire = JSON.stringify(audit);
+  for (const secret of ['Purge Gone', 'psk_live', gone1.prefix, gone2.prefix, gone1.key?.slice(0, 10) || 'psk_liv']) {
+    assert.ok(!wire.includes(secret), `no "${secret}" anywhere in the audit row (D-10)`);
+  }
+});
+
+test('purge with no revoked keys answers removed 0 and still audits; the 6th call inside the window is throttled', async () => {
+  /* Calls 2..5 (test A above was call 1) succeed with removed 0 — each still
+     writes exactly one audit event; call 6 trips tooMany (5/15min, T-95-05). */
+  for (let i = 0; i < 4; i++) {
+    const res = await owner.client.post('/api/keys/purge-revoked');
+    assert.equal(res.status, 200);
+    assert.equal(res.data.removed, 0);
+  }
+  assert.equal(purgeAudits(), 5, 'each successful purge appends exactly one audit event');
+  const res6 = await owner.client.post('/api/keys/purge-revoked');
+  assert.equal(res6.status, 429);
+  assert.equal(res6.data.code, 'tooManyAttempts');
+  assert.equal(purgeAudits(), 5, 'the throttled call writes no audit event');
+});

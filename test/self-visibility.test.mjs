@@ -14,10 +14,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { login, startServer } from './helpers/server.mjs';
+import { login, startServer, withDb } from './helpers/server.mjs';
 import {
   createVisibilityFixtureDb,
   VIS_ACTORS,
+  VIS_CREATED_AT,
   VIS_PASSWORD,
   VIS_USER_IDS,
   VIS_WS,
@@ -61,6 +62,40 @@ before(async () => {
     assert.equal(session.status, 200, `${mid} signs in`);
     S[mid] = session.client;
   }
+  /* ---- 95-02: the my-access aggregate's second workspace ----
+     ws_alpha: m_plain + m_team are members; one public project (rides its
+     icon/color through additively) and one private project readable by
+     nobody here. For m_team BOTH alpha projects are funnel-rejected, so
+     m_team's aggregate must hide the alpha group entirely (D-07). Seeded
+     directly (same raw-SQL fixture idiom as helpers/visibility-fixture.mjs)
+     — m_plain's membership carries no scope columns (null), m_team's ditto. */
+  const uidFor = email => withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get(email)?.id);
+  const alphaDoc = {
+    data: {
+      plan: 'Team',
+      ws: { name: 'Alpha', url: 'alpha', c: '#5A67D8', brand: true },
+      me: null,
+      members: [
+        { id: 'm_admin', name: 'Andy Admin', role: 'admin' },
+        { id: 'm_plain', name: 'Pat Plain', role: 'member' },
+        { id: 'm_team', name: 'Tessa Team', role: 'member' },
+      ],
+      teams: [],
+      projects: [
+        { id: 'p_alpha_open', key: 'OPEN', name: 'Alpha Open', private: true, members: ['m_plain'], lead: 'm_plain', teams: [], status: 'active', icon: 'rocket', color: '#C54B78' },
+        { id: 'p_alpha_priv', key: 'PRIV', name: 'Alpha Priv', private: true, members: ['m_admin'], lead: 'm_admin', teams: [], status: 'active' },
+      ],
+    },
+  };
+  withDb(server.dbPath, db => {
+    db.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+      'ws_alpha', 'alpha', 'Alpha', '#5A67D8', JSON.stringify(alphaDoc), 1, VIS_CREATED_AT + 1000, VIS_CREATED_AT + 1000,
+    );
+    const ins = db.prepare('insert into memberships (workspace_id, user_id, role, member_id, scope) values (?,?,?,?,?)');
+    ins.run('ws_alpha', uidFor(EMAILS.m_admin), 'admin', 'm_admin', null);
+    ins.run('ws_alpha', uidFor(EMAILS.m_plain), 'member', 'm_plain', null);
+    ins.run('ws_alpha', uidFor(EMAILS.m_team), 'member', 'm_team', null);
+  });
 });
 
 after(async () => {
@@ -167,5 +202,61 @@ test('gate: the doc-only profile (no memberships row) is 404 — unreachable act
 test('gate: unauthenticated request is refused by the session gate', async () => {
   const anon = (await login(server.base, 'nobody@visfix.local', VIS_PASSWORD)).client;
   const res = await self(anon);
+  assert.equal(res.status, 401);
+});
+
+/* ---- 3. 95-02: the cross-workspace my-access aggregate (SET-01/SET-02) ---- */
+
+const myAccess = cl => cl.get('/api/settings/my-access');
+
+test('my-access: a member of 2 workspaces whose second workspace holds no readable projects sees exactly ONE group (D-07: empty workspaces hidden)', async () => {
+  /* m_team belongs to visfix AND ws_alpha, but every alpha project is
+     funnel-rejected for them (both are private and name neither m_team nor
+     a live team of theirs) — the alpha group must be absent, not empty. */
+  const res = await myAccess(S.m_team);
+  assert.equal(res.status, 200);
+  assert.deepEqual(Object.keys(res.data), ['workspaces'], 'the aggregate exposes workspaces and nothing else');
+  assert.deepEqual(res.data.workspaces.map(w => w.id), ['ws_visfix'], 'only the workspace with readable projects is listed');
+  assert.deepEqual(Object.keys(res.data.workspaces[0]).sort(), ['id', 'name', 'projects', 'slug'], 'group carries id/name/slug/projects only');
+  for (const p of res.data.workspaces[0].projects) {
+    assert.ok(!['p_alpha_open', 'p_alpha_priv'].includes(p.id), 'no alpha project leaks into the visfix group');
+  }
+});
+
+test('my-access: groups carry the additive icon/color/role fields and the funnel still hides unreadable projects (T-95-03/T-95-06)', async () => {
+  const res = await myAccess(S.m_plain);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.data.workspaces.map(w => w.id).sort(), ['ws_alpha', 'ws_visfix'], 'both member workspaces with readable projects appear');
+  const alpha = res.data.workspaces.find(w => w.id === 'ws_alpha');
+  assert.deepEqual(alpha.projects.map(p => p.id), ['p_alpha_open'], 'the private alpha project is funnel-hidden');
+  const open = alpha.projects[0];
+  assert.equal(open.name, 'Alpha Open');
+  assert.equal(open.reason, 'lead', 'the lead grant class names itself (normalizeProjects guarantees lead ∈ members)');
+  assert.equal(open.icon, 'rocket', 'the project icon rides through additively');
+  assert.equal(open.color, '#C54B78', 'the project color rides through additively (raw — the client normalizes)');
+  assert.equal(open.role, 'member', 'the caller\'s own membership role feeds the D-08 badge');
+  /* Entry shape: base funnel keys + the additive trio, nothing else. */
+  assert.deepEqual(Object.keys(open).sort(), ['color', 'icon', 'id', 'name', 'reason', 'role']);
+});
+
+test('my-access: the private alpha project keeps NO icon/color/role echo when it is hidden', async () => {
+  const res = await myAccess(S.m_admin);
+  const alpha = res.data.workspaces.find(w => w.id === 'ws_alpha');
+  assert.ok(alpha, 'm_admin (alpha admin, doc member m_admin) reads the private alpha project');
+  assert.deepEqual(alpha.projects.map(p => p.id), ['p_alpha_priv'], 'admins do NOT bypass the private-project access list (D-49 posture)');
+  const priv = alpha.projects[0];
+  assert.equal(priv.reason, 'lead', 'the lead grant class names itself (normalizeProjects guarantees lead ∈ members)');
+  assert.deepEqual(Object.keys(priv).sort(), ['color', 'icon', 'id', 'name', 'reason', 'role'].filter(k => k !== 'icon' && k !== 'color'), 'a project without icon/color stays exactly {id,name,reason,role}');
+});
+
+test('my-access: a signed-in user with zero memberships answers 200 with an empty list', async () => {
+  const res = await myAccess(S.m_doconly);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.data, { workspaces: [] }, 'no memberships is an empty aggregate, never an error');
+});
+
+test('my-access: unauthenticated request is refused by the session gate', async () => {
+  const anon = (await login(server.base, 'nobody@visfix.local', VIS_PASSWORD)).client;
+  const res = await myAccess(anon);
   assert.equal(res.status, 401);
 });
