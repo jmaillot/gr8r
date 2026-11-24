@@ -664,7 +664,7 @@ const restoreRunTr = run => {
   }
   const runCell = `<span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>${
     skipped.length
-      ? `<div class="faint" style="margin-top:2px;font-size:12px;max-width:320px;line-height:1.5">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
+      ? `<div class="faint" style="margin-top:2px;font-size:12px;max-width:420px;white-space:normal;line-height:1.5">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
       : ''
   }${
     run.error
