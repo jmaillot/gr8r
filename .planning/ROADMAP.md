@@ -94,9 +94,16 @@ Plans:
 **UI hint**: yes
 **Plans**: 4 plans
 Plans:
+**Wave 1**
 - [ ] 95-01-PLAN.md — Wave-0 gates: membershipsOf grep-gate + Run-now picker on scopes payload (XWS-01, D-11) + Edit-Teams mteamToggle contract (SET-04, D-12) + settings client-slice harness
-- [ ] 95-02-PLAN.md — (wave 3, after 95-04: shares server.js + locales) Settings polish: my-access aggregate endpoint + card grid (SET-01, D-07/D-08), revoked-key purge route + 2-click button (SET-02, D-09/D-10), single-line Workspace URL (SET-03, D-13); i18n ×5 every emitting commit
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 95-04-PLAN.md — (wave 2) BKRST-05 engine: restoreOverwriteUnit project branch (D-01 deletion set, ids verbatim, self-exclusion collision scan), route project acceptance + live-doc confirmName; D-04 lock checkpoint; ×5 refusals
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 95-02-PLAN.md — (wave 3, after 95-04: shares server.js + locales) Settings polish: my-access aggregate endpoint + card grid (SET-01, D-07/D-08), revoked-key purge route + 2-click button (SET-02, D-09/D-10), single-line Workspace URL (SET-03, D-13); i18n ×5 every emitting commit
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 95-05-PLAN.md — (wave 4, after 95-02: shares server.js + locales) BKRST-05 drawer: scopes payload projects extension + strict-pin update (XWS-01), project target picker + Overwrite CTA + confirm phrase (D-02); i18n ×5; phase gate
 
 ## Progress
