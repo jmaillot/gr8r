@@ -157,6 +157,10 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.statusRunning', 'page.backup.statusSucceeded', 'page.backup.statusFailed',
     'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
     'page.backup.triggerManual', 'page.backup.triggerScheduled', 'page.backup.triggerUnknown',
+    'page.backup.summaryYearly', 'page.backup.colTask', 'page.backup.colScope', 'page.backup.colSchedule',
+    'page.backup.colLastRun', 'page.backup.checksumWarn', 'page.backup.retentionLabel', 'page.backup.customScheduleHint',
+    'page.backup.filterAll', 'page.backup.filterTrigger', 'page.backup.filterStatus', 'page.backup.historyManualEntry',
+    'page.backup.historyManualHint', 'page.backup.historyPrev', 'page.backup.historyNext',
   ];
   for (const key of required) assert.ok(pagesSrc.includes(key) || actionsSrc.includes(key), `the combined source uses ${key}`);
   for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
@@ -171,7 +175,68 @@ test('5-locale key parity for every 87-04 backup page key', () => {
 });
 
 /* =====================================================================
-   Phase 88 post-merge gate fix: probe-at-save client wiring (SC-1,
+   Phase 94 (Task 5a, BKUI-01..04): the full console pin block —
+   table-not-blocks, humanized schedule only, 4-state badge, the D-02
+   prefill keeping the cronDirty guard, the 4 retention scales, and the
+   src/-negative guards (no cron logic at all under src/).
+   ===================================================================== */
+test('Phase 94 BKUI-01: real table, humanized schedule only, 4-state last-run badge', () => {
+  const tableBody = pagesSrc.slice(pagesSrc.indexOf('const taskTable ='), pagesSrc.indexOf('/* Builder form'));
+  assert.ok(tableBody.includes('<table class="perm-t"'), 'a real table renders (table-not-blocks)');
+  assert.ok(!tableBody.includes('task.cron'), 'the raw cron NEVER renders in the table (BKUI-01)');
+  assert.match(tableBody, /scheduleText\(task\)/, 'the schedule cell is the humanized descriptor text');
+  assert.match(tableBody, /lastRunBadge\(task\)/, 'the Last-run column renders the badge');
+  assert.match(pagesSrc, /const lastRunBadge = task =>/, 'the badge derivation exists');
+  const badge = pagesSrc.slice(pagesSrc.indexOf('const lastRunBadge ='), pagesSrc.indexOf('/* Phase 94 (D-01, BKUI-01): the humanized'));
+  assert.match(badge, /run\.status === 'succeeded'/, 'state 1: succeeded');
+  assert.match(badge, /run\.status === 'running'/, 'state 2: running (neutral)');
+  assert.match(badge, /run\.status === 'failed' \|\| run\.status === 'upload_failed'/, 'state 3: failed (red)');
+  assert.match(badge, /Number\(run\.checksum_ok\) === 0|chk === 0/, 'state 4: succeeded + checksum_ok 0 → amber warning');
+  assert.match(badge, /checksumWarn/, 'the warning badge is keyed');
+  /* The badge input: ONE page-load fetch of the frozen route, latest per
+     task_id derived client-side (created_at desc server sort). */
+  assert.match(actionsSrc, /api\.backupRuns\(\{ all: 1, limit: 50 \}\)/, 'the badge fetch rides the frozen ?all=1 route');
+  assert.match(actionsSrc, /for \(const r of runs\) if \(r\?\.task_id && !latest\[r\.task_id\]\) latest\[r\.task_id\] = r;/, 'latest-run-per-task derived client-side from the created_at-desc order');
+});
+
+test('Phase 94 BKUI-02/03: prefill reads task.schedule.preset with the cronDirty guard intact; 4 retention scales staged + sent', () => {
+  const edit = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskEdit ='), actionsSrc.indexOf('A.backupTaskCancel ='));
+  /* D-02: the prefill maps the SERVER preset (the client never evaluates cron). */
+  assert.match(edit, /sp\.preset === 'daily' \|\| sp\.preset === 'weekly' \|\| sp\.preset === 'monthly' \|\| sp\.preset === 'yearly'/, 'the prefill reverse-maps task.schedule.preset');
+  assert.match(edit, /cronLocked: !matched/, 'a null preset locks the builder to the readonly custom fallback');
+  /* CRITICAL: the prefill NEVER sets cronDirty — a name-only edit cannot
+     rewrite the cron (RESEARCH pitfall 1). */
+  assert.ok(!/cronDirty: true/.test(edit), 'prefill does not set cronDirty=true');
+  assert.match(edit, /cronDirty: false/, 'the untouched-schedule guard stays false');
+  /* D-02: the raw expression renders ONLY in the readonly custom fallback. */
+  const cronEscs = [...pagesSrc.matchAll(/esc\((form\.customCron|task\.cron)/g)].map(m => m[1]);
+  assert.ok(cronEscs.length >= 1, 'the custom fallback renders the raw expression');
+  assert.ok(cronEscs.every(v => v === 'form.customCron'), 'esc(task.cron) appears NOWHERE — only the staged customCron fallback');
+  assert.match(pagesSrc, /customScheduleHint/, 'the honest custom hint is rendered');
+  /* Header above the form block (D-02). */
+  assert.match(pagesSrc, /form\.editing \? 'page\.backup\.taskEditTitle' : 'page\.backup\.taskFormTitle'/, 'the Edit header sits above the form');
+  /* D-03: four retention scales — defaults, preload, save body, inputs, gfs labels. */
+  assert.match(actionsSrc, /retention: \{ daily: 7, weekly: 4, monthly: 12, yearly: 5 \}/, 'form defaults carry all four scales');
+  assert.match(actionsSrc, /retention_monthly \?\? 12/, 'edit preloads monthly');
+  assert.match(actionsSrc, /retention_yearly \?\? 5/, 'edit preloads yearly');
+  assert.match(actionsSrc, /body\.retention = \{ daily: form\.retention\.daily, weekly: form\.retention\.weekly, monthly: form\.retention\.monthly, yearly: form\.retention\.yearly \}/, 'all four ALWAYS sent on save');
+  for (const f of ['daily', 'weekly', 'monthly', 'yearly']) assert.match(pagesSrc, new RegExp(`data-f="${f}"`), `the ${f} retention input is wired`);
+  for (const k of ['gfsDaily', 'gfsWeekly', 'gfsMonthly', 'gfsYearly']) assert.ok(pagesSrc.includes(`page.backup.${k}`), `the ${f2name(k)} label uses the existing gfs key`);
+  function f2name(k) { return k.replace('gfs', 'gfs '); }
+});
+
+test('Phase 94 negatives: NO cron logic of any kind under src/ (T-87-11 extended)', () => {
+  const code = s => s.replace(/\/\*[\s\S]*?\*\//g, ''); // doctrine comments may NAME the server functions; the CODE must not use them
+  for (const src of [pagesSrc, actionsSrc, apiSrc]) {
+    assert.ok(!/\bparseCron\b/.test(code(src)), 'no parseCron under src/');
+    assert.ok(!/\bnextRunAt\b/.test(code(src)), 'no nextRunAt under src/');
+    assert.ok(!/\bcronToPreset\b/.test(code(src)), 'no cronToPreset under src/ — the reverse-map is server-side (D-02)');
+  }
+  assert.ok(!/data-in="backupTaskCron"/.test(pagesSrc), 'no free-text cron input (T-87-11)');
+});
+
+/* =====================================================================
+    Phase 88 post-merge gate fix: probe-at-save client wiring (SC-1,
    D-88-12/15/17). The S3 toggle is RENDER-ONLY (config flag ground
    truth), stages into S.ui.backupTaskForm, rides the save body, and a
    response carrying s3Probe toasts the keyed outcome.

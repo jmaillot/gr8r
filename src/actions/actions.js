@@ -4824,6 +4824,18 @@ export async function backupPollTick() {
      (no refetch loop, exactly-once per finished run). */
   const backupPrevStage = S.ui.backupRun?.stage || null;
   const backupPrevRunId = S.ui.backupRun?.startedAt || null;
+  /* Phase 94 (Rule 2 — restore operators): the runs/current read is a
+     BACKUP_MANAGE surface (server.js 9295) — a Restore Operator (canBackup
+     false) must SKIP this half instead of fetching a guaranteed 403 that
+     stamped backupErr and flipped the whole page into the 403 fullstate.
+     The restore-only operator's tick rides on for the restore half below
+     (the ONE timer, D-89-1, is unchanged). Unknown payload (pre-fill
+     trigger path — only reachable for operators) keeps polling. */
+  const canBackup = S.ui.backupTasks?.canBackup !== false;
+  if (!canBackup) {
+    S.ui.backupRun = null;
+    S.ui.backupPending = false;
+  } else {
   const res = await api.backupRunCurrent({ signal });
   if (my !== backupPollSeq) return null;
   if (res.ok) {
@@ -4843,6 +4855,7 @@ export async function backupPollTick() {
     S.ui.backupPending = false;
     if (res.status === 403 || res.status === 404) S.ui.backupErr = { status: res.status };
     S.ui.backupPollFailedAt = Date.now();
+  }
   }
   /* 89-06 (D-89-1): the SAME tick also fetches the restore current payload —
      ONE timer serves both surfaces, never a second interval. A backup-only

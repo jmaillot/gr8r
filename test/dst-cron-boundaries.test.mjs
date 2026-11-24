@@ -143,3 +143,53 @@ for (const c of DIGEST_CONTROL) {
     assert.equal(lp.hour, 8, `at local 08:00 on ${c.day} (D-90-18 second half)`);
   });
 }
+
+/* =====================================================================
+   Phase 94 (SC-3): STRUCTURAL label/scheduler agreement across the DST
+   boundaries — the humanized schedule labels the UI shows are derived
+   from describeCron/cronToPreset, which parse the IDENTICAL expression
+   the next-run scheduler consumes (parseCron output ONLY, one source).
+   A preset classified daily/weekly/monthly/yearly therefore has exactly
+   one matching fire per period across any DST boundary; a custom/null
+   preset never enters the preset dropdown path. No new server behavior —
+   this pins that label and scheduler never diverge on parse input.
+   ===================================================================== */
+import { parseCron, describeCron, cronToPreset } from '../export/cron.js';
+
+test('SC-3: the label source and the scheduler source are the SAME parse — descriptor singletons are cron-set members', () => {
+  for (const expr of ['30 2 * * *', '0 8 * * *', '30 1 * * *', '0 3 * * 1', '0 3 1 * *', '0 3 1 1 *']) {
+    const p = parseCron(expr);
+    const d = describeCron(expr);
+    assert.equal(cronToPreset(expr), d.kind, `cronToPreset is the describeCron kind projection for ${expr}`);
+    assert.ok(p.hour.has(d.hour) && p.minute.has(d.minute), `the descriptor ${d.hour}:${d.minute} singleton is a member of the scheduler's own parse for ${expr}`);
+    if (d.kind === 'weekly') assert.ok(p.dow.has(d.weekday), `the weekly descriptor's weekday rides the same parse (${expr})`);
+    if (d.kind === 'monthly' || d.kind === 'yearly') assert.ok(p.dom.has(d.dom), `the dom singleton rides the same parse (${expr})`);
+    if (d.kind === 'yearly') assert.ok(p.mon.has(d.mon), `the mon singleton rides the same parse (${expr})`);
+  }
+});
+
+test('SC-3: a daily-classified cron has exactly ONE matching hour/minute — one fire per period across BOTH DST transition kinds', () => {
+  for (const expr of ['30 2 * * *', '0 8 * * *', '30 1 * * *']) {
+    assert.equal(cronToPreset(expr), 'daily', `${expr} is a daily preset`);
+    const p = parseCron(expr);
+    assert.equal(p.hour.size, 1, 'singleton hour');
+    assert.equal(p.minute.size, 1, 'singleton minute');
+    /* The scheduler consumes the same parse across the spring-forward and
+       fall-back fixtures: the boundary behavior (skip / earlier-of-two) is
+       pinned by the matrix above — here we pin that the preset classifier
+       does NOT change its answer for the exact expressions the scheduler
+       resolves across those boundaries. */
+    for (const c of [...SPRING_FORWARD, ...FALL_BACK]) {
+      const d = describeCron(expr);
+      assert.equal(d.kind, 'daily', `kind stable across ${c.zone} ${c.day}`);
+      assert.ok(p.hour.has(d.hour) && p.minute.has(d.minute), 'descriptor singletons stay members of the scheduler parse');
+    }
+  }
+});
+
+test('SC-3: custom/null presets never enter the preset dropdown path — structural refusal for steps, ranges, multi-values, mon-only', () => {
+  for (const expr of ['*/15 2 * * *', '30 2-4 * * *', '0 3 * * 0,6', '0 3 * 2 *', 'not a cron', '* * * *']) {
+    assert.equal(cronToPreset(expr), null, `${expr} is NOT a preset — the editor locks to the D-02 readonly custom fallback`);
+    assert.equal(describeCron(expr).kind, 'custom', `${expr} classifies custom`);
+  }
+});
