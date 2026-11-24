@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v3.4
 milestone_name: UX Polish & Backup Console Refinement
 status: active
-stopped_at: Phase 94 complete (verified 2026-11-24, 11 UAT rounds absorbed; next Phase 95)
-last_updated: "2026-11-24T16:45:00.000Z"
-state_head: 79e142dd
+stopped_at: Phase 95 context gathered
+last_updated: "2026-11-24T17:13:19.533Z"
+state_head: 7c81b6cf786cdca7b072507f6dc08cb1a2664baa
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 6
   percent: 80
 ---
 
@@ -81,8 +81,8 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-11-24 (phase 94 verify + UAT rounds 3–11)
-**Stopped at:** Phase 94 verified complete — 94-VERIFICATION.md written, ROADMAP/STATE updated
-**Resume file:** None
+**Last session:** 2026-11-24T17:13:19.487Z
+**Stopped at:** Phase 95 context gathered
+**Resume file:** .planning/phases/95-settings-polish-cross-workspace-pickers-project-overwrite-re/95-CONTEXT.md
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
