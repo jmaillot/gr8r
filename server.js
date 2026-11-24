@@ -85,7 +85,7 @@ import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
-import { parseCron, nextRunAt, describeCron } from './export/cron.js';
+import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
@@ -8837,7 +8837,11 @@ async function handleApi(req, res, url) {
   const backupTaskShape = row => {
     let scope;
     try { scope = JSON.parse(row.scope); } catch { scope = {}; }
-    return { ...row, scope, schedule: describeCron(row.cron) };
+    /* Phase 94 (D-02): the descriptor grows `preset` — the flat reverse-map
+       (cronToPreset, same parseCron discipline) the editor uses to pre-select
+       the builder dropdowns; null → the readonly custom fallback. Additive
+       only: every Phase-92 descriptor key is unchanged. */
+    return { ...row, scope, schedule: { ...describeCron(row.cron), preset: cronToPreset(row.cron) } };
   };
   /* Phase 92 (D-06): the operator-gated scope picker — the minimal
      `{ workspaces: [{ id, name, slug }] }` payload the task-create form

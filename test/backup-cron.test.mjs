@@ -126,12 +126,12 @@ test('describeCron: weekly — dow-only restricted with singleton dow', () => {
   assert.deepEqual(describeCron('0 0 * * 1'), { kind: 'weekly', weekday: 1, hour: 0, minute: 0, raw: '0 0 * * 1' });
 });
 
-test('describeCron: monthly — dom-only restricted (singleton dom), dow unrestricted', () => {
-  assert.deepEqual(describeCron('0 4 1 * *'), { kind: 'monthly', hour: 4, minute: 0, raw: '0 4 1 * *' });
+test('describeCron: monthly — dom-only restricted (singleton dom), dow unrestricted (Phase 94: singleton dom rides the descriptor)', () => {
+  assert.deepEqual(describeCron('0 4 1 * *'), { kind: 'monthly', dom: 1, hour: 4, minute: 0, raw: '0 4 1 * *' });
 });
 
-test('describeCron: yearly — singleton dom AND singleton mon', () => {
-  assert.deepEqual(describeCron('0 5 1 1 *'), { kind: 'yearly', hour: 5, minute: 0, raw: '0 5 1 1 *' });
+test('describeCron: yearly — singleton dom AND singleton mon (Phase 94: dom/mon ride the descriptor)', () => {
+  assert.deepEqual(describeCron('0 5 1 1 *'), { kind: 'yearly', dom: 1, mon: 1, hour: 5, minute: 0, raw: '0 5 1 1 *' });
 });
 
 test('describeCron: custom — multi-value minute set, weekday/hour/minute ABSENT', () => {

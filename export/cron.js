@@ -98,6 +98,10 @@ export function parseCron(expr) {
     dow,
     domRestricted: dom.size !== 31,
     dowRestricted: dow.size !== 7,
+    /* Phase 94 (Rule 1 fix): restriction flags for describeCron's kind
+       classification — a mon-restricted expression ("every day of February")
+       is NOT a daily/weekly preset. Set-size based like its siblings. */
+    monRestricted: mon.size !== 12,
   };
 }
 
@@ -111,7 +115,11 @@ export function parseCron(expr) {
    non-singleton set, mon-only restriction, vixie dom+dow OR — is `custom`,
    carrying ONLY `raw` (an honest fallback; a malformed expression whose
    parseCron is null lands here too). Always includes `raw`. NO server-side
-   translated strings — the client localizes via t() keys (Phase 94). */
+   translated strings — the client localizes via t() keys (Phase 94).
+   Phase 94 (D-02) additive descriptor growth: monthly/yearly also carry
+   their singleton `dom` (+ `mon` for yearly) so the editor's dropdowns
+   pre-select without ever re-parsing the raw string client-side. Existing
+   descriptor keys are unchanged — the growth is additive only. */
 export function describeCron(expr) {
   const p = parseCron(expr);
   if (!p) return { kind: 'custom', raw: String(expr) };
@@ -119,20 +127,36 @@ export function describeCron(expr) {
   const hour = singleton(p.hour);
   const minute = singleton(p.minute);
   const weekday = singleton(p.dow);
+  const dom = singleton(p.dom);
+  const mon = singleton(p.mon);
   const timeSingleton = hour !== null && minute !== null;
-  if (!p.domRestricted && !p.dowRestricted && timeSingleton) {
+  if (!p.domRestricted && !p.dowRestricted && !p.monRestricted && timeSingleton) {
     return { kind: 'daily', hour, minute, raw: expr };
   }
-  if (!p.domRestricted && p.dowRestricted && weekday !== null && timeSingleton) {
+  if (!p.domRestricted && !p.monRestricted && p.dowRestricted && weekday !== null && timeSingleton) {
     return { kind: 'weekly', weekday, hour, minute, raw: expr };
   }
   if (p.domRestricted && p.dom.size === 1 && p.mon.size === 1 && timeSingleton) {
-    return { kind: 'yearly', hour, minute, raw: expr };
+    return { kind: 'yearly', dom, mon, hour, minute, raw: expr };
   }
   if (p.domRestricted && p.dom.size === 1 && timeSingleton) {
-    return { kind: 'monthly', hour, minute, raw: expr };
+    return { kind: 'monthly', dom, hour, minute, raw: expr };
   }
   return { kind: 'custom', raw: expr };
+}
+
+/* Phase 94 (D-02): the flat preset string the backup-task editor
+   reverse-maps — derived from the SAME parseCron output describeCron
+   consumes (its kind projection; never a raw-string regex hack). Returns
+   'daily'|'weekly'|'monthly'|'yearly' when the descriptor kind matches a
+   builder preset, null for custom (steps, ranges, multi-values, mon-only
+   restriction, vixie dom+dow OR) and malformed — the client renders the
+   D-02 readonly custom fallback for null. Server-side ONLY: importing
+   this from anything under src/ fails the prohibition test (T-87-11 —
+   the client never evaluates cron). */
+export function cronToPreset(expr) {
+  const d = describeCron(expr);
+  return d.kind === 'daily' || d.kind === 'weekly' || d.kind === 'monthly' || d.kind === 'yearly' ? d.kind : null;
 }
 
 /* Inline label→zone funnel — byte-equivalent to tz.js resolveTz, duplicated
