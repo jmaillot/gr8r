@@ -38,11 +38,12 @@ created: "2026-11-24"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (planner fills) | | | BKUI-01 | — | real table; humanized schedule from `task.schedule`; next_run_at cell; 4-state badge incl. checksum warning | static | `node --test test/backup-history-client.test.mjs` | ✅ extend | ⬜ pending |
-| (planner fills) | | | BKUI-02 | — | cronToPreset unit cases; Edit pre-fills preset/fields keeping `cronDirty=false` guard; header above form | unit + static | `node --test test/backup-cron.test.mjs` | ✅ extend | ⬜ pending |
-| (planner fills) | | | BKUI-03 | — | 4 retention inputs staged in S.ui.backupTaskForm.retention, sent on save; gfs keys ×5 as labels | static + parity ×5 | `node --test test/backup-history-client.test.mjs` | ✅ extend | ⬜ pending |
-| (planner fills) | | | BKUI-04 | — | unified sblock with 3 selects + limit/offset; label rendered verbatim; manual hint; fail-closed (server-side); Restore-Op e2e pin | static + route + e2e | `node --test test/backup-scopes.test.mjs` + Playwright spec | ✅ / ❌ W0 | ⬜ pending |
-| (planner fills) | | | i18n ×5 | — | ~13–18 new keys ×5 parity; i18n-scan gate green (add+use same commit) | catalogue-pin + build | `npm run build` + parity asserts | pattern exists | ⬜ pending |
+| 94-T0 | 94-PLAN | 1 | BKUI-02 / BKUI-04 (Wave 0) | — | RED cronToPreset unit cases; e2e scaffold w/ account+Restore-Op grant | unit RED + scaffold | `node --test test/backup-cron.test.mjs` (RED) | ✅ extend / ❌ W0 | ⬜ pending |
+| 94-T1 | 94-PLAN | 1 | BKUI-02 | — | cronToPreset in export/cron.js (GREEN) + additive schedule.preset (+dom/mon) on backupTaskShape; no routes touched | unit | `node --test test/backup-cron.test.mjs` | ✅ extend | ⬜ pending |
+| 94-T2 | 94-PLAN | 1 | BKUI-01 | — | real table; humanized schedule from `task.schedule`; next_run_at cell; 4-state badge incl. checksum warning | static | `node --test test/backup-history-client.test.mjs && npm run build` | ✅ extend | ⬜ pending |
+| 94-T3 | 94-PLAN | 1 | BKUI-02 / BKUI-03 | — | Edit pre-fills preset/fields keeping `cronDirty=false` guard; header above form; 4 retention inputs staged+sent; gfs keys ×5 as labels | unit + static + parity ×5 | `node --test test/backup-history-client.test.mjs test/backup-cron.test.mjs && npm run build` | ✅ extend | ⬜ pending |
+| 94-T4 | 94-PLAN | 1 | BKUI-04 | — | unified sblock with 3 selects (status enum excludes interrupted/skipped_overlap) + limit/offset probing; label rendered verbatim; manual hint; historyCard retired; route unchanged | static | `node --test test/backup-history-client.test.mjs && npm run build` | ✅ extend | ⬜ pending |
+| 94-T5 | 94-PLAN | 1 | BKUI-04 | — | unified history fail-closed per-row + Restore-Op e2e pin (names-not-ids); static negatives extended (no cron logic under src/) | static + route + e2e | `node --test test/backup-scopes.test.mjs test/backup-history-client.test.mjs && npm run build`; `npm run e2e` | ✅ / ❌ W0 | ⬜ pending |
 
 ---
 
