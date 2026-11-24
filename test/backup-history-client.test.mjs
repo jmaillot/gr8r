@@ -430,8 +430,8 @@ test('94-02 UAT-1: the render site no longer wraps taskTable in a second panel; 
 test('94-02 UAT-2: the Next-run cell renders date AND time via formatTime (clock preference honoured)', () => {
   assert.match(pagesSrc, /import \{ t, getLocale, formatTime \} from '\.\.\/core\/i18n\.js';/, 'formatTime is imported in backup.js');
   const tableBody = pagesSrc.slice(pagesSrc.indexOf('const taskTable ='), pagesSrc.indexOf('/* Builder form'));
-  assert.match(tableBody, /formatTime\(nextRunIso\)/, 'the next-run cell renders the time beside the date');
-  assert.match(tableBody, /nextRunIso \? `\$\{fmtDate\(nextRunIso\)\} \$\{formatTime\(nextRunIso\)\}` : '—'/, "the '—' null fallback is unchanged");
+  assert.match(tableBody, /formatTime\(nextRunTs\)/, 'the next-run renders the time from the raw ms timestamp');
+  assert.ok(!/toISOString\(\)/.test(tableBody), 'the next-run cell never routes through toISOString — parseDate only understands YYYY-MM-DD, so full ISO datetimes format to empty strings (UAT round-3 bug)');
 });
 
 /* =====================================================================
@@ -514,28 +514,28 @@ test('94-02 UAT-4: cronFromForm on fresh defaults (preset daily) === "0 22 * * *
 });
 
 /* =====================================================================
-   94-03 (UAT-4b): builder alignment polish. The uppercase RETENTION label
-   is vertically centered against the row (align-self:center, 94-1
-   commit 3ea78f70) — the pin guards it against a flex-end regression;
-   the four GFS scale labels render through the SAME .field
-   label-over-input structure as every other builder row, so they stay
-   visually aligned with their input boxes. Preset/field rows keep
-   align-items:flex-end. Pure CSS/layout — no keys.
+   94-03 (UAT-4b) + UAT round-3: builder alignment polish. The uppercase
+   RETENTION label bottom-aligns with a 7px pad so its center lands on the
+   input boxes' vertical middle (measured live: row center sat 12px above
+   the box centers); the four GFS scale labels center HORIZONTALLY within
+   their 90px boxes (text-align:center, owner's choice round 3). Preset /
+   field rows keep align-items:flex-end. Pure CSS/layout — no keys.
    ===================================================================== */
-test('94-03 UAT-4b: retention label vertically centered; GFS labels aligned with their input boxes', () => {
+test('94-03 UAT-4b: retention label at box middle; GFS labels horizontally centered', () => {
   const formCard = pagesSrc.slice(pagesSrc.indexOf('const taskFormCard ='));
-  /* The uppercase retention label keeps its center alignment in the flex-end row. */
+  /* The uppercase retention label bottom-aligns with a 7px pad in the flex-end row. */
   assert.match(
     formCard,
-    /text-transform:uppercase;letter-spacing:\.04em;align-self:center/,
-    'the retention uppercase label stays vertically centered (align-self:center)',
+    /text-transform:uppercase;letter-spacing:\.04em;align-self:flex-end;padding-bottom:7px/,
+    'the retention uppercase label sits at the input-boxes vertical middle (flex-end + 7px pad, UAT round-3 measurement)',
   );
   /* The retention row keeps flex-end so the GFS inputs bottom-align with the row. */
   const retentionRow = formCard.slice(formCard.indexOf('page.backup.retentionLabel') - 400, formCard.indexOf('api.s3Enabled'));
   assert.match(retentionRow, /align-items:flex-end/, 'the retention row keeps align-items:flex-end');
-  /* Each GFS scale label rides the .field structure: label above its input, same as the other rows. */
+  /* Each GFS scale label rides the .field structure: label above its input, horizontally centered (UAT round-3). */
   for (const k of ['gfsDaily', 'gfsWeekly', 'gfsMonthly', 'gfsYearly']) {
-    const re = new RegExp(`<div class="field"><label class="label">\\$\{t\\('page\\.backup\\.${k}'\\)\\}</label><input class="input" type="number"`);
-    assert.match(formCard, re, `the ${k} label sits above its input box in the shared .field structure`);
+    const re = new RegExp(`<div class="field"><label class="label" style="text-align:center">\\$\{t\\('page\\.backup\\.${k}'\\)\\}</label><input class="input" type="number"`);
+    assert.match(formCard, re, `the ${k} label sits above its box, horizontally centered`);
   }
+  assert.match(retentionRow, /label class="label" style="text-align:center"/, 'GFS scale labels center horizontally within their boxes');
 });

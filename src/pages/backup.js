@@ -320,11 +320,15 @@ const taskTable = (tasks, manage) => {
   };
   const row = task => {
     const nextRunMs = Number(task.next_run_at);
-    /* 94-02 (UAT-2): the Next-run cell renders date AND time — formatTime
+    /* 94-02 (UAT-2) + UAT round-3 fix: the Next-run cell renders date AND
+       time from the raw ms TIMESTAMP — never via an ISO datetime string:
+       the app's date parser (i18n parseDate) only understands YYYY-MM-DD
+       strings, so a full ISO datetime silently formatted to ''. toDate()
+       accepts ms numbers natively (fmtDate + formatTime). formatTime
        honours the user's 12h/24h clock preference (i18n.js). '—' fallback
        unchanged when next_run_at is null/invalid. */
-    const nextRunIso = Number.isFinite(nextRunMs) && nextRunMs > 0 ? new Date(nextRunMs).toISOString() : null;
-    const nextRun = nextRunIso ? `${fmtDate(nextRunIso)} ${formatTime(nextRunIso)}` : '—';
+    const nextRunTs = Number.isFinite(nextRunMs) && nextRunMs > 0 ? nextRunMs : null;
+    const nextRun = nextRunTs ? `${fmtDate(nextRunTs)} ${formatTime(nextRunTs)}` : '—';
     return `<tr style="vertical-align:middle">
       <td style="padding-left:14px;text-align:left"><span class="row" style="gap:8px;align-items:center"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(task.name)}</span><span class="badge ${task.enabled ? 'green' : ''}">${t(task.enabled ? 'page.backup.taskEnabled' : 'page.backup.taskDisabled')}</span></span></td>
       <td style="text-align:left">${scopeCell(task)}</td>
@@ -462,11 +466,11 @@ const taskFormCard = () => {
       <div class="field" style="min-width:260px;max-width:340px"><label class="label">${t('page.backup.tzLabel')}</label>${tzCombobox(form.tz)}</div>
     </div>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
-      <div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;align-self:center">${t('page.backup.retentionLabel')}</div>
-      <div class="field"><label class="label">${t('page.backup.gfsDaily')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.daily))}" data-in="backupTaskRetention" data-f="daily"></div>
-      <div class="field"><label class="label">${t('page.backup.gfsWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
-      <div class="field"><label class="label">${t('page.backup.gfsMonthly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.monthly))}" data-in="backupTaskRetention" data-f="monthly"></div>
-      <div class="field"><label class="label">${t('page.backup.gfsYearly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.yearly))}" data-in="backupTaskRetention" data-f="yearly"></div>
+      <div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;align-self:flex-end;padding-bottom:7px">${t('page.backup.retentionLabel')}</div>
+      <div class="field"><label class="label" style="text-align:center">${t('page.backup.gfsDaily')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.daily))}" data-in="backupTaskRetention" data-f="daily"></div>
+      <div class="field"><label class="label" style="text-align:center">${t('page.backup.gfsWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
+      <div class="field"><label class="label" style="text-align:center">${t('page.backup.gfsMonthly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.monthly))}" data-in="backupTaskRetention" data-f="monthly"></div>
+      <div class="field"><label class="label" style="text-align:center">${t('page.backup.gfsYearly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.yearly))}" data-in="backupTaskRetention" data-f="yearly"></div>
     </div>
     ${api.s3Enabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskS3"${form.s3Enabled ? ' checked' : ''}><span>${esc(t('page.backup.s3Toggle'))}</span></label></div>` : ''}
     ${deletionsPanel()}
