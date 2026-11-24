@@ -3,15 +3,15 @@ gsd_state_version: "1.0"
 milestone: v3.4
 milestone_name: UX Polish & Backup Console Refinement
 status: active
-stopped_at: Completed 95-01-PLAN.md
-last_updated: "2026-11-24T18:21:23.255Z"
-state_head: ce28f91314fa250c88be569d946973e67e8a916b
+stopped_at: Completed 95-04-PLAN.md
+last_updated: "2026-11-24T19:43:14.959Z"
+state_head: 29bf68878a4569401bc884fda69b3d080cb751d1
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 10
-  completed_plans: 7
-  percent: 70
+  completed_plans: 8
+  percent: 80
 current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore
 ---
 
@@ -25,9 +25,9 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Current Position
 
-- **Phase:** 95 in progress — plan 01 complete ✓ (2026-11-24, commits a714221c..ce28f913: XWS-01 grep gate, D-11 Run-now scopes picker, D-12 mteamToggle unification, settings harness)
-- **Plan:** 95-02 next (settings polish — extends test/settings-client.test.mjs)
-- **Status:** Phases 91–94 done — Phase 95 (Settings + Pickers + BKRST-05) in progress, plan 1/4 complete
+- **Phase:** 95 in progress — plans 01 + 04 complete ✓ (2026-11-24; 04 = BKRST-05 engine half, commits 904c840e..29bf6887: overwriteProjectFragment, D-01 deletion set, self-excluding collision scan, route project-scope acceptance, D-04 lock unchanged)
+- **Plan:** 95-02 next (settings polish — extends test/settings-client.test.mjs; 95-03 also pending)
+- **Status:** Phases 91–94 done — Phase 95 (Settings + Pickers + BKRST-05) in progress, plans 2/4 complete
 - **Progress:** ████░ 4/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
@@ -43,6 +43,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 |------|----------|-------|-------|
 | Phase 94 P1 | 3.5h | 6 tasks | 16 files |
 | Phase 95 P01 | 30m | 3 tasks | 7 files |
+| Phase 95 P04 | 2h | 4 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 - [Phase 94]: cronToPreset = describeCron.kind projection (null=custom); monRestricted fix; badge = client latest-per-task over frozen ?all=1 limit-50; prefill keeps cronDirty=false; 4-scale retention with gfs labels; unified sblock filter enum = served statuses only; poll /runs/current gated on canBackup
 - 2026-11-24 (phase 94 UAT): Super Admin restore bypass (isInstanceAdmin + SUPER_ACCESS in lieu of membership; picker via backupScopeWorkspaces scopes payload); standalone archive list + Restore section retired — Restore rides the unified history table rows; checksum = toast at click (no durable badge); run-level Warning = missing blobs on succeeded; project-overwrite restore deferred to Phase 95 BKRST-05 (engine extension, 86-D-01 workspace-only containment stands)
 - [Phase 95]: 95-01: Run-now picker rides S.ui.backupScopes with loaded-workspace fallback (never memberships); refreshBackupScopes once-per-session fill; A.invTeamToggle retired into surface-aware A.mteamToggle; membershipsOf byte gate + settings harness in place
+- [Phase 95]: 95-04: project-overwrite restore (BKRST-05 engine half) — fragment splice ids-verbatim, D-01 deletion set, self-excluding collision scan, D-04 lock unchanged (owner 2026-11-24); route confirmName vs live doc project name; D-05 via membership|SA targeting gate (CAP chain verbatim — see SUMMARY deviation)
 
 ### Blockers
 
@@ -84,8 +86,8 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Session Continuity
 
-**Last session:** 2026-11-24T18:21:23.206Z
-**Stopped at:** Completed 95-01-PLAN.md
+**Last session:** 2026-11-24T19:43:14.907Z
+**Stopped at:** Completed 95-04-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
