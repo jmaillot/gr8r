@@ -11,7 +11,7 @@ progress:
   completed_phases: 4
   total_plans: 10
   completed_plans: 10
-  percent: 80
+  percent: 100
 current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore
 ---
 
@@ -26,7 +26,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 ## Current Position
 
 - **Phase:** 95 complete ✓ — plans 01 + 04 + 02 + 05 done (2026-11-24; 05 = BKRST-05 client half, commits c8a09b66..26d17ac2: scopes payload additive projects:[{id,name}], drawer project picker + Overwrite CTA (D-02), confirm-phrase vs CURRENT project name, payload contract targetId/targetProjectId/confirmName)
-- **Plan:** Phase 95 complete — ready for verification
+- **Plan:** Milestone v3.4 complete — all 5 phases (91–95) verified
 - **Status:** Phases 91–95 done — milestone v3.4 phases complete, Phase 95 4/4 plans complete
 - **Progress:** ████░ 4/5 phases (v3.4)
 
