@@ -5432,9 +5432,12 @@ A.backupVerifyChecksum = async el => {
       return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
     }
     /* Both outcomes persisted server-side — the owner ruling (UAT round-5):
-       the result surfaces as a TOAST at click time, no durable badge. */
+       the result surfaces as a TOAST at click time, no durable badge.
+       (UAT round-11: the endpoint's payload is { ok, checkedAt } — the
+       boolean maps 1→verified, 0→failed; the old checksum_ok read was
+       always undefined, so no toast ever fired.) */
     await refreshOpenBackupHistories();
-    const chk = res.data ? Number(res.data.checksum_ok) : null;
+    const chk = res.data && res.data.ok == null ? null : res.data ? Number(res.data.ok) : null;
     if (chk === 1) toast(t('toast.checksumOk'));
     else if (chk === 0) toast(t('toast.checksumFail'), { kind: 'err' });
   } finally {
