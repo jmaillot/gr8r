@@ -92,10 +92,10 @@ Plans:
   6. BKRST-05 (owner ruling 2026-11-24): a PROJECT archive restores either as NEW (current) or as OVERWRITE of an existing project — the overwrite extends the 89-05 guarded unit (pre-restore snapshot, confirm-phrase against the target project's CURRENT name, scope-kind match, ids verbatim) to project containment: target project's rows replaced inside a single tx, workspace_id remapped to the target workspace, name/slug collision handling keyed, favorites/comments/activity referencing the replaced project kept honest. The drawer offers both CTAs for project archives; every refusal keyed ×5.
 
 **UI hint**: yes
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 Plans:
 **Wave 1**
-- [ ] 95-01-PLAN.md — Wave-0 gates: membershipsOf grep-gate + Run-now picker on scopes payload (XWS-01, D-11) + Edit-Teams mteamToggle contract (SET-04, D-12) + settings client-slice harness
+- [x] 95-01-PLAN.md — Wave-0 gates: membershipsOf grep-gate + Run-now picker on scopes payload (XWS-01, D-11) + Edit-Teams mteamToggle contract (SET-04, D-12) + settings client-slice harness
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 95-04-PLAN.md — (wave 2) BKRST-05 engine: restoreOverwriteUnit project branch (D-01 deletion set, ids verbatim, self-exclusion collision scan), route project acceptance + live-doc confirmName; D-04 lock checkpoint; ×5 refusals
@@ -114,4 +114,4 @@ Plans:
 | 92. Server Payload Contracts | 0/? | Not started | - |
 | 93. Governance UX — Instance Roles | 0/? | Not started | - |
 | 94. Backup Console UX | 1/1 | Complete | 2026-11-24 |
-| 95. Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore | 0/? | Not started | - |
+| 95. Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore | 1/4 | In Progress|  |

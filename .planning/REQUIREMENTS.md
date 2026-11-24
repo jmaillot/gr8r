@@ -26,14 +26,14 @@
 
 ### Cross-workspace visibility
 
-- [ ] **XWS-01**: Super Admin, Backup Operator and Restore Operator see all workspaces in the Backup & Restore scope pickers only; `workspacesForUser` and app navigation are byte-unchanged
+- [x] **XWS-01**: Super Admin, Backup Operator and Restore Operator see all workspaces in the Backup & Restore scope pickers only; `workspacesForUser` and app navigation are byte-unchanged
 
 ### Settings
 
 - [ ] **SET-01**: My Access shows the project icon (not the tick icon), or a column layout for a better overview
 - [ ] **SET-02**: API Keys offers a clear button removing revoked keys only (audit trail preserved)
 - [ ] **SET-03**: The Settings > General > Workspace URL displays on a single line
-- [ ] **SET-04**: The Invite Member > Edit Teams team picker is selectable like the Teams > Edit team picker
+- [x] **SET-04**: The Invite Member > Edit Teams team picker is selectable like the Teams > Edit team picker
 
 ### Notifications
 
@@ -70,8 +70,8 @@ Phase → Requirement mapping is filled by the roadmap (gsd-roadmapper).
 | BKUI-02 | Phase 94 | Pending |
 | BKUI-03 | Phase 94 | Pending |
 | BKUI-04 | Phase 94 | Pending |
-| XWS-01 | Phase 95 | Pending |
+| XWS-01 | Phase 95 | Complete |
 | SET-01 | Phase 95 | Pending |
 | SET-02 | Phase 95 | Pending |
 | SET-03 | Phase 95 | Pending |
-| SET-04 | Phase 95 | Pending |
+| SET-04 | Phase 95 | Complete |

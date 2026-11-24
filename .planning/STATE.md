@@ -3,15 +3,15 @@ gsd_state_version: "1.0"
 milestone: v3.4
 milestone_name: UX Polish & Backup Console Refinement
 status: active
-stopped_at: Phase 95 context gathered
-last_updated: "2026-11-24T17:50:02.761Z"
-state_head: e7ee2b7576964a6d6693359cf93b99e37bf46c38
+stopped_at: Completed 95-01-PLAN.md
+last_updated: "2026-11-24T18:21:23.255Z"
+state_head: ce28f91314fa250c88be569d946973e67e8a916b
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 10
-  completed_plans: 6
-  percent: 20
+  completed_plans: 7
+  percent: 70
 current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore
 ---
 
@@ -25,9 +25,9 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Current Position
 
-- **Phase:** 94 complete ✓ (verified 2026-11-24, 5/5 SCs + 11 UAT rounds absorbed; commits d3a621c5..79e142dd) — next: Phase 95 (Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore)
-- **Plan:** phase 95 not yet planned — run `/gsd-discuss-phase 95` then `/gsd-plan-phase 95`
-- **Status:** Phases 91–94 done — Phase 95 (Settings + Pickers + BKRST-05) remains
+- **Phase:** 95 in progress — plan 01 complete ✓ (2026-11-24, commits a714221c..ce28f913: XWS-01 grep gate, D-11 Run-now scopes picker, D-12 mteamToggle unification, settings harness)
+- **Plan:** 95-02 next (settings polish — extends test/settings-client.test.mjs)
+- **Status:** Phases 91–94 done — Phase 95 (Settings + Pickers + BKRST-05) in progress, plan 1/4 complete
 - **Progress:** ████░ 4/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
@@ -42,6 +42,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 94 P1 | 3.5h | 6 tasks | 16 files |
+| Phase 95 P01 | 30m | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 - 2026-11-23: v3.4 roadmap created — 5 phases numbered 91–95 continuing v3.3 numbering; sequential phase IDs
 - [Phase 94]: cronToPreset = describeCron.kind projection (null=custom); monRestricted fix; badge = client latest-per-task over frozen ?all=1 limit-50; prefill keeps cronDirty=false; 4-scale retention with gfs labels; unified sblock filter enum = served statuses only; poll /runs/current gated on canBackup
 - 2026-11-24 (phase 94 UAT): Super Admin restore bypass (isInstanceAdmin + SUPER_ACCESS in lieu of membership; picker via backupScopeWorkspaces scopes payload); standalone archive list + Restore section retired — Restore rides the unified history table rows; checksum = toast at click (no durable badge); run-level Warning = missing blobs on succeeded; project-overwrite restore deferred to Phase 95 BKRST-05 (engine extension, 86-D-01 workspace-only containment stands)
+- [Phase 95]: 95-01: Run-now picker rides S.ui.backupScopes with loaded-workspace fallback (never memberships); refreshBackupScopes once-per-session fill; A.invTeamToggle retired into surface-aware A.mteamToggle; membershipsOf byte gate + settings harness in place
 
 ### Blockers
 
@@ -82,8 +84,8 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Session Continuity
 
-**Last session:** 2026-11-24T17:13:19.487Z
-**Stopped at:** Phase 95 context gathered
-**Resume file:** .planning/phases/95-settings-polish-cross-workspace-pickers-project-overwrite-re/95-CONTEXT.md
+**Last session:** 2026-11-24T18:21:23.206Z
+**Stopped at:** Completed 95-01-PLAN.md
+**Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
