@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v3.4
 milestone_name: UX Polish & Backup Console Refinement
 status: active
-stopped_at: Completed 95-02-PLAN.md
-last_updated: "2026-11-24T20:28:33.845Z"
-state_head: 6d0d37116d34e2d39ac30554393365a6ba19df0d
+stopped_at: Completed 95-05-PLAN.md
+last_updated: "2026-11-24T20:47:08.518Z"
+state_head: 26d17ac2c6f40e9874a3b962fe81f18554231264
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 80
 current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore
 ---
@@ -25,9 +25,9 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Current Position
 
-- **Phase:** 95 in progress — plans 01 + 04 + 02 complete ✓ (2026-11-24; 02 = settings polish, commits 11f7d370..6d0d3711: GET /api/settings/my-access aggregate, POST /api/keys/purge-revoked, D-07 card grid, D-13 URL, `/me/visibility` byte-untouched)
-- **Plan:** 95-03 next (last pending plan of Phase 95)
-- **Status:** Phases 91–94 done — Phase 95 (Settings + Pickers + BKRST-05) in progress, plans 3/4 complete
+- **Phase:** 95 complete ✓ — plans 01 + 04 + 02 + 05 done (2026-11-24; 05 = BKRST-05 client half, commits c8a09b66..26d17ac2: scopes payload additive projects:[{id,name}], drawer project picker + Overwrite CTA (D-02), confirm-phrase vs CURRENT project name, payload contract targetId/targetProjectId/confirmName)
+- **Plan:** Phase 95 complete — ready for verification
+- **Status:** Phases 91–95 done — milestone v3.4 phases complete, Phase 95 4/4 plans complete
 - **Progress:** ████░ 4/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
@@ -45,6 +45,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 | Phase 95 P01 | 30m | 3 tasks | 7 files |
 | Phase 95 P04 | 2h | 4 tasks | 11 files |
 | Phase 95 P02 | 50m | 3 tasks | 16 files |
+| Phase 95 P05 | 55m | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,8 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 - [Phase 95]: 95-01: Run-now picker rides S.ui.backupScopes with loaded-workspace fallback (never memberships); refreshBackupScopes once-per-session fill; A.invTeamToggle retired into surface-aware A.mteamToggle; membershipsOf byte gate + settings harness in place
 - [Phase 95]: 95-04: project-overwrite restore (BKRST-05 engine half) — fragment splice ids-verbatim, D-01 deletion set, self-excluding collision scan, D-04 lock unchanged (owner 2026-11-24); route confirmName vs live doc project name; D-05 via membership|SA targeting gate (CAP chain verbatim — see SUMMARY deviation)
 - [Phase 95]: 95-02: my-access aggregate (GET /api/settings/my-access) copies the /me/visibility funnel verbatim per workspace with additive icon/color/role; role badge reuses common.role.*; purge POST /api/keys/purge-revoked writes a count-only audit event (no key values); locale keys land in the emitting-markup commit (live dead-key gate)
+- [Phase 95]: 95-05: scopes projects are unfiltered (picker needs names; server re-validates at overwrite); client confirmDlg is chrome only
+- [Phase 95]: 95-05: overwrite POST key is targetId (route contract), not the plan's targetWorkspaceId
 
 ### Blockers
 
@@ -88,8 +91,8 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Session Continuity
 
-**Last session:** 2026-11-24T20:28:33.796Z
-**Stopped at:** Completed 95-02-PLAN.md
+**Last session:** 2026-11-24T20:47:08.466Z
+**Stopped at:** Completed 95-05-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
