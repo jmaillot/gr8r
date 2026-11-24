@@ -367,6 +367,178 @@ test('89-05 scope-kind mismatch refuses keyed restoreTargetMismatch (engine-side
 });
 
 /* =====================================================================
+   Phase 95 plan 95-04 — project-scope overwrite (BKRST-05 engine half).
+   A project archive replaces its target project inside the target
+   workspace doc: fragment splice with ids VERBATIM (no remap), the D-01
+   deletion set, the self-excluding collision scan, one tx, FTS synced.
+   ===================================================================== */
+
+function richTargetDoc() {
+  return {
+    data: {
+      projects: [
+        { id: 'p-old', name: 'Old Project', color: '#999999' },
+        { id: 'p-keep', name: 'Keep Me', color: '#00aa00' },
+      ],
+      tasks: [
+        { id: 't-old', project: 'p-old', title: 'Old task', desc: '' },
+        { id: 't-old2', parentId: 't-old', project: 'p-old', title: 'Old subtask', desc: '' },
+        { id: 't-keep', project: 'p-keep', title: 'Keep task', desc: '' },
+      ],
+      comments: [
+        { id: 'c-old', taskId: 't-old', body: 'dead comment' },
+        { id: 'c-keep', taskId: 't-keep', body: 'keep comment' },
+      ],
+      files: [
+        { id: 'f-old', project: 'p-old', name: 'old.txt', ext: 'txt' },
+        { id: 'f-old2', project: null, task: 't-old2', name: 'attached.txt', ext: 'txt' },
+        { id: 'f-keep', project: 'p-keep', name: 'keep.txt', ext: 'txt' },
+      ],
+      teams: [{ id: 'team-keep', name: 'Keepers' }],
+      projOrder: ['p-old', 'p-keep'],
+      logo: 'lg-old',
+      members: [],
+      activity: [
+        { id: 'a1', verb: 'created', task: 't-old', project: 'p-old', at: T },
+        { id: 'a2', verb: 'created', task: 't-keep', project: 'p-keep', at: T },
+      ],
+      notifs: [
+        { id: 'n1', to: OP.id, type: 'mention', task: 't-old2', project: 'p-old', snippet: 'x', at: T },
+        { id: 'n2', to: OP.id, type: 'mention', task: 't-keep', project: 'p-keep', snippet: 'y', at: T },
+      ],
+      events: [
+        { id: 'e1', event: 'task.deleted', taskId: 't-old', at: T },
+        { id: 'e2', event: 'project.completed', projectId: 'p-old', at: T },
+        { id: 'e3', event: 'task.completed', taskId: 't-keep', at: T },
+      ],
+      savedViews: [],
+      recentSearches: [],
+    },
+  };
+}
+
+/* Project-overwrite world: the RICH target doc (p-old armed for
+   replacement + p-keep untouched witness) and a PROJECT-scope archive
+   of ws-src's p1 fragment. */
+async function projectWorld() {
+  await resetWorld();
+  await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(richTargetDoc()), 'ws-target']);
+  fs.writeFileSync(path.join(FILES_DIR, 'f-old2'), 'target old sub blob\n');
+  fs.writeFileSync(path.join(FILES_DIR, 'f-keep'), 'target keep blob\n');
+  sourceRun = await backup.runExport({ kind: 'project', id: 'p1' });
+  assert.equal(sourceRun.ok, true, `source project export failed: ${sourceRun.error}`);
+}
+
+function projectOverwriteUnit(overrides = {}) {
+  return overwriteUnit({ scope: { kind: 'project', id: 'p1' }, targetProjectId: 'p-old', ...overrides });
+}
+
+test('95-04 project overwrite happy path: the archive fragment replaces the target project verbatim inside the target doc; other projects untouched; revision+1; identity preserved', async () => {
+  await projectWorld();
+  const before = await targetRow();
+
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, true, `project overwrite failed: ${result.error}`);
+
+  const after = await targetRow();
+  assert.equal(after.id, before.id);
+  assert.equal(after.slug, before.slug, 'slug unchanged');
+  assert.equal(after.name, before.name, 'workspace identity name unchanged (project scope never renames the workspace)');
+  assert.equal(after.revision, before.revision + 1, 'revision bumped');
+
+  const doc = JSON.parse(after.doc).data;
+  /* ids VERBATIM from the archive — no remap. */
+  assert.deepEqual(doc.projects.map(p => p.id), ['p-keep', 'p1'], 'kept project survives, archive project appended');
+  assert.deepEqual(doc.tasks.map(t => t.id), ['t-keep', 't1'], 'kept tasks survive, archive task appended verbatim');
+  assert.deepEqual(doc.comments.map(c => c.id), ['c-keep', 'c1']);
+  assert.deepEqual(doc.files.map(f => f.id), ['f-keep', 'f1']);
+  assert.deepEqual(doc.projOrder, ['p-keep', 'p1']);
+  assert.deepEqual(doc.projects.find(p => p.id === 'p1'), { id: 'p1', name: 'New Project', color: '#33aa55' }, 'the archive project row is verbatim');
+  assert.deepEqual(doc.teams.map(t => t.id), ['team-keep'], 'the target teams collection is untouched (project scope splices no teams)');
+  assert.equal(doc.logo, 'lg-old', 'the workspace logo reference is untouched');
+  assert.equal(fs.existsSync(path.join(LOGOS_DIR, 'lg-old')), true, 'the workspace logo blob is untouched');
+
+  /* Blob swaps: the target project's blobs removed, the archive's swapped in, the other project's blob kept. */
+  assert.equal(fs.existsSync(path.join(FILES_DIR, 'f-old')), false, 'dead project blob unlinked');
+  assert.equal(fs.existsSync(path.join(FILES_DIR, 'f-old2')), false, 'dead-task blob unlinked (D-01 task closure)');
+  assert.equal(fs.existsSync(path.join(FILES_DIR, 'f-keep')), true, 'other project blob kept');
+  assert.equal(fs.readFileSync(path.join(FILES_DIR, 'f1'), 'utf8'), 'source new blob\n', 'archive blob swapped in');
+});
+
+test('95-04 D-01 deletion set: project entry, task-id closure (subtasks), comments of dead tasks, files by project or dead task, projOrder ref, activity/events/notifs references are gone from nextDoc', async () => {
+  await projectWorld();
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, true, `project overwrite failed: ${result.error}`);
+
+  const doc = JSON.parse((await targetRow()).doc).data;
+  assert.ok(!doc.projects.some(p => p.id === 'p-old'), 'project entry gone');
+  assert.ok(!doc.tasks.some(t => t.id === 't-old' || t.id === 't-old2'), 'task closure gone (subtask included)');
+  assert.ok(!doc.comments.some(c => c.id === 'c-old'), 'comment of a dead task gone');
+  assert.ok(!doc.files.some(f => f.id === 'f-old' || f.id === 'f-old2'), 'files by project or dead task gone');
+  assert.ok(!doc.projOrder.includes('p-old'), 'projOrder ref gone');
+  assert.deepEqual(doc.activity.map(a => a.id), ['a2'], 'activity references to the project/dead tasks gone');
+  assert.deepEqual(doc.notifs.map(n => n.id), ['n2'], 'notif references to the project/dead tasks gone');
+  assert.deepEqual(doc.events.map(e => e.id), ['e3'], 'event references to the project/dead tasks gone');
+});
+
+test('95-04 same-named overwrite SUCCEEDS — the collision scan excludes the armed target project id (Pitfall 1 self-exclusion)', async () => {
+  await projectWorld();
+  const rich = richTargetDoc();
+  rich.data.projects[0].name = 'New Project'; // the target project carries the ARCHIVE's name
+  await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(rich), 'ws-target']);
+
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, true, `same-named overwrite refused: ${result.error}`);
+  const doc = JSON.parse((await targetRow()).doc).data;
+  assert.deepEqual(doc.projects.map(p => p.id), ['p-keep', 'p1'], 'the overwrite landed');
+});
+
+test('95-04 true collision refuses keyed restoreNameCollision naming the conflicting project — before the tx, after the snapshot', async () => {
+  await projectWorld();
+  const rich = richTargetDoc();
+  rich.data.projects.push({ id: 'p-conf', name: 'New Project', color: '#aa3333' }); // a DIFFERENT live project with the archive's name
+  rich.data.projOrder.push('p-conf');
+  await db.run('update workspaces set doc = ? where id = ?', [JSON.stringify(rich), 'ws-target']);
+  const beforeDoc = (await targetRow()).doc;
+
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'restoreNameCollision', `keyed: ${result.code ?? result.error}`);
+  assert.match(result.error, /New Project/, 'the refusal names the conflicting project');
+  assert.equal((await targetRow()).doc, beforeDoc, 'zero DB writes');
+  assert.equal(fs.existsSync(path.join(FILES_DIR, 'f-old')), true, 'zero blob mutations');
+  assert.equal(backupsCount(), 3, 'the pre_restore snapshot still came first (2 fixtures + snapshot)');
+});
+
+test('95-04 missing target: an unknown targetProjectId refuses keyed restoreTargetMissing with zero mutations', async () => {
+  await projectWorld();
+  const beforeDoc = (await targetRow()).doc;
+  const result = await projectOverwriteUnit({ targetProjectId: 'p-nope' });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'restoreTargetMissing', `keyed: ${result.code ?? result.error}`);
+  assert.equal((await targetRow()).doc, beforeDoc, 'zero DB writes');
+
+  const noId = await projectOverwriteUnit({ targetProjectId: undefined });
+  assert.equal(noId.ok, false);
+  assert.equal(noId.code, 'restoreTargetMissing', 'a project scope without a targetProjectId refuses keyed');
+});
+
+test('95-04 FTS sync inside the tx: dead tasks leave task_fts and the archive tasks are searchable at commit', async () => {
+  await projectWorld();
+  /* Plant stale FTS rows for the doomed tasks (as a prior sync would have). */
+  await db.run("insert into task_fts (ws_id, task_id, project_id, title, body) values ('ws-target','t-old','p-old','old task','x')");
+  await db.run("insert into task_fts (ws_id, task_id, project_id, title, body) values ('ws-target','t-old2','p-old','old subtask','y')");
+
+  const result = await projectOverwriteUnit();
+  assert.equal(result.ok, true, `project overwrite failed: ${result.error}`);
+
+  const rows = await db.all('select task_id from task_fts where ws_id = ?', ['ws-target']);
+  const ids = rows.map(r => r.task_id).sort();
+  assert.ok(!ids.includes('t-old') && !ids.includes('t-old2'), `dead tasks removed from FTS: ${ids}`);
+  assert.ok(ids.includes('t1'), 'the archive task is searchable');
+});
+
+/* =====================================================================
    Route-level cells (Phase 89, plan 89-05, Task 3 — POST
    /api/backup/restore/overwrite). Per-case startServer + ONE persistent
    DatabaseSync reader per test (an open/close-cycle reader checkpoints

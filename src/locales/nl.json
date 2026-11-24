@@ -2336,5 +2336,6 @@
   "page.governance.rolesPickerIdle": "Begin te typen om gebruikers te zoeken",
   "page.restore.targetPickLabel": "Hersteldoel",
   "page.restore.targetPickHint": "Verplicht — klik hieronder op een workspace: het herstelde project wordt daar aangemaakt.",
-  "page.restore.targetArmed": "Doel: {name} — je kunt nu herstellen."
+  "page.restore.targetArmed": "Doel: {name} — je kunt nu herstellen.",
+  "err.restoreNameCollision": "Er bestaat al een project met deze naam in de doel-workspace"
 }

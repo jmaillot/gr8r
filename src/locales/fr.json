@@ -2376,5 +2376,6 @@
   "page.governance.rolesPickerIdle": "Commence à taper pour chercher des utilisateurs",
   "page.restore.targetPickLabel": "Cible de restauration",
   "page.restore.targetPickHint": "Obligatoire — clique un workspace ci-dessous : le projet restauré y sera créé.",
-  "page.restore.targetArmed": "Cible : {name} — tu peux restaurer."
+  "page.restore.targetArmed": "Cible : {name} — tu peux restaurer.",
+  "err.restoreNameCollision": "Un projet portant ce nom existe déjà dans le workspace cible"
 }

@@ -4978,6 +4978,7 @@ const RESTORE_REFUSAL_TOASTS = {
   confirmPhraseMismatch: 'err.confirmPhraseMismatch',
   restoreTargetMismatch: 'err.restoreTargetMismatch',
   restoreTargetMissing: 'err.restoreTargetMissing',
+  restoreNameCollision: 'err.restoreNameCollision',
   restoreManifestCorrupt: 'page.restore.previewCorrupt',
 };
 const restoreToast = (code, raw) =>

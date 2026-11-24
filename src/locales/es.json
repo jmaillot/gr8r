@@ -2336,5 +2336,6 @@
   "page.governance.rolesPickerIdle": "Empieza a escribir para buscar usuarios",
   "page.restore.targetPickLabel": "Destino de restauración",
   "page.restore.targetPickHint": "Obligatorio — haz clic en un workspace abajo: el proyecto restaurado se creará allí.",
-  "page.restore.targetArmed": "Destino: {name} — ya puedes restaurar."
+  "page.restore.targetArmed": "Destino: {name} — ya puedes restaurar.",
+  "err.restoreNameCollision": "Ya existe un proyecto con este nombre en el workspace de destino"
 }

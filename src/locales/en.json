@@ -2336,5 +2336,6 @@
   "page.governance.rolesPickerIdle": "Start typing to search users",
   "page.restore.targetPickLabel": "Restore target",
   "page.restore.targetPickHint": "Required — click a workspace below: the restored project is created there.",
-  "page.restore.targetArmed": "Target: {name} — you can restore now."
+  "page.restore.targetArmed": "Target: {name} — you can restore now.",
+  "err.restoreNameCollision": "A project with this name already exists in the target workspace"
 }

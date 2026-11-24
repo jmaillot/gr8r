@@ -2336,5 +2336,6 @@
   "page.governance.rolesPickerIdle": "Tippe, um Benutzer zu suchen",
   "page.restore.targetPickLabel": "Wiederherstellungsziel",
   "page.restore.targetPickHint": "Erforderlich — klicke unten auf einen Workspace: das wiederhergestellte Projekt wird dort erstellt.",
-  "page.restore.targetArmed": "Ziel: {name} — du kannst jetzt wiederherstellen."
+  "page.restore.targetArmed": "Ziel: {name} — du kannst jetzt wiederherstellen.",
+  "err.restoreNameCollision": "Ein Projekt mit diesem Namen existiert bereits im Ziel-Workspace"
 }

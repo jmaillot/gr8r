@@ -1350,6 +1350,237 @@ async function repairFromSnapshot(snapshotPath, snapshotSha256, swappedDests, di
   }
 }
 
+/* ---- BKRST-05 (95-04): the project-overwrite branch of
+   restoreOverwriteUnit ----
+
+   Runs INSIDE the unit (after snapshot-first P7, archive verify,
+   extraction and totality pre-checks): a project-scope archive's
+   fragment replaces its armed target project inside the TARGET
+   workspace's doc — ids VERBATIM (no planRemap), the D-01 deletion set
+   (project entry, task-id closure incl. subtasks, comments of dead
+   tasks, files by project or dead task, projOrder ref, activity/
+   events/notifs references), one tx, syncTaskFts inside with the tx
+   scope, pre-commit verification. The roster/invites/membership blocks
+   are skipped entirely (import-as-new doctrine). Returns the unit's
+   result shape; every early exit is keyed via the shared failWith. ---- */
+async function overwriteProjectFragment(env) {
+  const { runId, scope, operatorId, targetWorkspaceId, targetProjectId, snapshot, backupRun, archivePath, data, manifest, dirs, stagingDir, failWith, trackSwap, hooks } = env;
+  const pid = scope.id;
+
+  /* BKRST-05 (95-04): a project overwrite needs its armed target —
+     refuse keyed before any resolution. */
+  if (!targetProjectId) {
+    return failWith(keyed('restoreTargetMissing', 'restore: a project overwrite requires a target project id'));
+  }
+
+  /* The archive fragment — the import-as-new project filter (planRemap
+     project branch), ids VERBATIM. */
+  const project = arr(data.projects).find(p => p?.id === pid);
+  const tasks = arr(data.tasks).filter(t => t && typeof t.id === 'string' && t.project === pid);
+  const taskIds = new Set(tasks.map(t => t.id));
+  const comments = arr(data.comments).filter(c => c && typeof c.id === 'string' && taskIds.has(c.taskId));
+  const files = arr(data.files).filter(f => f && typeof f.id === 'string' && f.project === pid);
+  const projIds = new Set([pid]);
+
+  /* Totality pre-check over the fragment (D-89-10 discipline): every
+     reference must resolve within the fragment itself. */
+  const unresolved = [];
+  for (const t of tasks) {
+    if (t.parentId && !taskIds.has(t.parentId)) unresolved.push({ what: 'task.parentId', ref: String(t.parentId) });
+  }
+  for (const c of comments) if (c.taskId && !taskIds.has(c.taskId)) unresolved.push({ what: 'comment.taskId', ref: String(c.taskId) });
+  for (const f of files) {
+    if (f.task && !taskIds.has(f.task)) unresolved.push({ what: 'file.task', ref: String(f.task) });
+  }
+  if (unresolved.length) {
+    return failWith(keyed('restoreRemapIncomplete', `restore: ${unresolved.length} unresolved reference(s) in the project fragment — ids are never dropped silently (D-89-10): ${unresolved.slice(0, 3).map(u => `${u.what}=${JSON.stringify(u.ref)}`).join(', ')}`, { reason: 'unresolvedRefs', refs: unresolved.slice(0, 10) }));
+  }
+
+  /* Target resolution: the live workspace row, then the armed project
+     inside its doc. Missing either → keyed restoreTargetMissing. */
+  const targetRow = await dbGet('select id, slug, name, doc, revision from workspaces where id = ?', [targetWorkspaceId]);
+  if (!targetRow) {
+    return failWith(keyed('restoreTargetMissing', 'restore: target workspace no longer exists'));
+  }
+  const storedDoc = docData(targetRow);
+  const stored = storedDoc ?? {}; // docData returns the data object itself
+  const liveProjects = arr(stored.projects).filter(p => p && typeof p.id === 'string' && p.id);
+  const liveTasks = arr(stored.tasks).filter(t => t && typeof t.id === 'string' && t.id);
+  const live = liveProjects.find(p => p.id === targetProjectId);
+  if (!live) {
+    return failWith(keyed('restoreTargetMissing', `restore: target project ${targetProjectId} was not found in workspace ${targetWorkspaceId}`));
+  }
+
+  /* Collision scan (before the tx, after the snapshot): the archive
+     fragment's name vs the target workspace's OTHER projects — the armed
+     target project id is EXCLUDED (a same-named overwrite must succeed,
+     research Pitfall 1). */
+  const archiveName = String(project?.name ?? '').trim().toLowerCase();
+  const conflicting = liveProjects.filter(p => p.id !== targetProjectId && String(p.name ?? '').trim().toLowerCase() === archiveName);
+  if (conflicting.length) {
+    return failWith(keyed('restoreNameCollision', `restore: a project named "${project.name}" already exists in the target workspace (conflicting: ${conflicting.map(p => p.name).join(', ')})`, { names: conflicting.map(p => p.name) }));
+  }
+
+  /* The D-01 deletion set over the live doc: task-id closure seeded by
+     the project's tasks, grown through parentId chains (subtasks live on
+     other parent ids may chain transitively). */
+  const deadTasks = new Set();
+  for (const t of liveTasks) if (t.project === targetProjectId) deadTasks.add(t.id);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const t of liveTasks) {
+      if (t.parentId && deadTasks.has(t.parentId) && !deadTasks.has(t.id)) {
+        deadTasks.add(t.id);
+        grew = true;
+      }
+    }
+  }
+  const keptProjects = liveProjects.filter(p => p.id !== targetProjectId);
+  const keptTasks = liveTasks.filter(t => !deadTasks.has(t.id));
+  const keptComments = arr(stored.comments).filter(c => c && typeof c.id === 'string' && !deadTasks.has(c.taskId));
+  const keptFiles = arr(stored.files).filter(f => f && typeof f.id === 'string' && f.project !== targetProjectId && !deadTasks.has(f.task));
+  const keptProjOrder = arr(stored.projOrder).filter(id => id !== targetProjectId);
+  const deadRef = ref => ref === targetProjectId || (typeof ref === 'string' && deadTasks.has(ref));
+  const keptActivity = arr(stored.activity).filter(a => !(a && typeof a === 'object' && (deadRef(a.project) || deadRef(a.task))));
+  const keptNotifs = arr(stored.notifs).filter(n => !(n && typeof n.to === 'string' && (deadRef(n.project) || deadRef(n.task))));
+  const keptEvents = arr(stored.events).filter(e => !(e && typeof e === 'object' && (deadRef(e.project) || deadRef(e.projectId) || deadRef(e.task) || deadRef(e.taskId))));
+
+  /* The next document — the kept arrays plus the archive fragment,
+     ids VERBATIM, every other stored collection untouched. */
+  const nextData = {
+    ...stored,
+    projects: [...keptProjects, { ...project }],
+    tasks: [...keptTasks, ...tasks.map(t => ({ ...t }))],
+    comments: [...keptComments, ...comments.map(c => ({ ...c }))],
+    files: [...keptFiles, ...files.map(f => ({ ...f }))],
+    projOrder: [...keptProjOrder, pid],
+    activity: keptActivity,
+    events: keptEvents,
+    notifs: keptNotifs,
+  };
+  const nextDoc = { data: nextData };
+
+  /* Blob plan: oldIds = the D-01 file deletion set of the TARGET;
+     removals = oldIds − newIds; same staged swap + repair net. */
+  await emitRestoreEvent({ kind: 'update', runId, stage: 'restoring' });
+  const dataDir = path.dirname(dirs.filesDir);
+  const swapDir = path.join(dataDir, `restore-swap-${runId}`);
+  const sweepSwap = () => { try { fs.rmSync(swapDir, { recursive: true, force: true }); } catch { /* best-effort */ } };
+  fs.mkdirSync(path.join(swapDir, 'files'), { recursive: true });
+  fs.mkdirSync(path.join(swapDir, 'logos'), { recursive: true });
+
+  const stagedFiles = (manifest.files ?? []).filter(f => !isFlaggedRow(f));
+  const newIds = new Set(stagedFiles.map(f => String(f.id)));
+  const oldIds = new Set(arr(stored.files).filter(f => f && typeof f.id === 'string' && (f.project === targetProjectId || deadTasks.has(f.task))).map(f => f.id));
+  const removedIds = [...oldIds].filter(id => !newIds.has(id));
+  const blobPlan = stagedFiles.map(row => ({
+    src: path.join(stagingDir, row.path),
+    stage: path.join(swapDir, 'files', String(row.id)),
+    dest: path.join(row.logo ? dirs.logosDir : dirs.filesDir, String(row.id)),
+  }));
+  try {
+    for (const b of blobPlan) fs.copyFileSync(b.src, b.stage); // staging → DATA_DIR temp: copy, never rename
+  } catch (err) {
+    sweepSwap();
+    return failWith(keyed('restoreBlobFailed', `restore: blob staging failed: ${err.message}`));
+  }
+
+  fs.mkdirSync(dirs.filesDir, { recursive: true });
+  fs.mkdirSync(dirs.logosDir, { recursive: true });
+  const swapped = [];
+  try {
+    for (const b of blobPlan) {
+      fs.copyFileSync(b.stage, b.dest);
+      swapped.push(b.dest);
+      trackSwap(b.dest);
+    }
+  } catch (err) {
+    try {
+      await repairFromSnapshot(path.join(backupsRoot(), snapshot.filename), snapshot.sha256, swapped, dirs);
+    } catch (repairErr) {
+      logRestoreWarn(`overwrite ${runId}: snapshot repair after swap failure ALSO failed: ${repairErr?.message ?? repairErr}`);
+    }
+    sweepSwap();
+    return failWith(keyed('restoreBlobFailed', `restore: blob swap failed: ${err.message}`));
+  }
+
+  /* ONE transaction: doc splice (revision+1, identity untouched), FTS
+     diff sync inside with the tx scope, pre-commit verification. */
+  try {
+    await dbTx(async txScope => {
+      const t = Date.now();
+      await txScope.run(
+        'update workspaces set doc = ?, revision = revision + 1, updated_at = ? where id = ?',
+        [JSON.stringify(nextDoc), t, targetWorkspaceId],
+      );
+      if (typeof hooks?.midTx === 'function') await hooks.midTx(); // test-only injection point
+      await syncTaskFts(txScope, targetWorkspaceId, { data: stored }, nextDoc);
+      await emitRestoreEvent({ kind: 'update', runId, stage: 'verifying' });
+
+      /* D-89-30 verification, pre-commit: fragment totality over the
+         FINAL doc, project count unchanged, blob presence, archive
+         digest re-confirmed. */
+      const reDoc = JSON.parse(JSON.stringify(nextDoc));
+      const reProjIds = new Set(reDoc.data.projects.map(p => p.id));
+      const reTaskIds = new Set(reDoc.data.tasks.map(t => t.id));
+      for (const tt of reDoc.data.tasks) {
+        if (tt.project && !reProjIds.has(tt.project)) throw keyed('restoreVerificationFailed', `restore: verification lost task.project ${tt.project}`);
+        if (tt.parentId && !reTaskIds.has(tt.parentId)) throw keyed('restoreVerificationFailed', `restore: verification lost task.parentId ${tt.parentId}`);
+      }
+      for (const c of reDoc.data.comments) {
+        if (c.taskId && !reTaskIds.has(c.taskId)) throw keyed('restoreVerificationFailed', `restore: verification lost comment.taskId ${c.taskId}`);
+      }
+      for (const f of reDoc.data.files) {
+        if (f.project && !reProjIds.has(f.project)) throw keyed('restoreVerificationFailed', `restore: verification lost file.project ${f.project}`);
+        if (f.task && !reTaskIds.has(f.task)) throw keyed('restoreVerificationFailed', `restore: verification lost file.task ${f.task}`);
+      }
+      if (reDoc.data.projects.length !== liveProjects.length) {
+        throw keyed('restoreVerificationFailed', 'restore: workspace project count changed (replacement, never merge)');
+      }
+      for (const b of blobPlan) {
+        if (!fs.existsSync(b.dest)) throw keyed('restoreVerificationFailed', `restore: swapped blob missing at ${path.basename(b.dest)}`);
+      }
+      if ((await sha256File(archivePath)) !== backupRun.sha256) {
+        throw keyed('restoreVerificationFailed', 'restore: whole-archive digest changed under the run');
+      }
+    });
+  } catch (err) {
+    try {
+      await repairFromSnapshot(path.join(backupsRoot(), snapshot.filename), snapshot.sha256, swapped, dirs);
+    } catch (repairErr) {
+      logRestoreWarn(`overwrite ${runId}: snapshot repair after tx failure ALSO failed: ${repairErr?.message ?? repairErr}`);
+    }
+    sweepSwap();
+    return failWith(err);
+  }
+
+  /* POST-commit: compensating unlink of removed blobs (ENOENT-tolerant). */
+  for (const id of removedIds) {
+    try { fs.unlinkSync(path.join(dirs.filesDir, id)); } catch { /* ENOENT-tolerant */ }
+    try { fs.unlinkSync(path.join(dirs.logosDir, id)); } catch { /* ENOENT-tolerant */ }
+  }
+  sweepSwap(); // the swap dir is spent
+
+  const summary = {
+    skipped: [],
+    project: { replaced: targetProjectId, name: project?.name ?? null, tasks: tasks.length, comments: comments.length, files: files.length, deadTasks: deadTasks.size },
+    files: { swapped: blobPlan.length, removed: removedIds.length },
+  };
+  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName: targetRow.name, finishedAt: Date.now() });
+  return {
+    ok: true,
+    runId,
+    workspaceId: targetWorkspaceId,
+    projectId: targetProjectId,
+    finalName: targetRow.name,
+    slug: targetRow.slug,
+    summary,
+    snapshotRunId: snapshot.runId,
+    snapshotFilename: snapshot.filename,
+  };
+}
+
 export async function restoreOverwriteUnit(opts = {}) {
   const runId = (typeof opts.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(opts.runId) ? opts.runId : crypto.randomUUID()).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64);
   const backupRun = opts.backupRun && typeof opts.backupRun === 'object' ? opts.backupRun : {};
@@ -1375,6 +1606,10 @@ export async function restoreOverwriteUnit(opts = {}) {
   if (!operatorId || !targetWorkspaceId) {
     return failWith(keyed('restoreTargetMissing', 'restore: overwrite requires a target workspace and an operator identity'));
   }
+  /* BKRST-05 (95-04): the project branch resolves its target inside the
+     target workspace's doc — the targetProjectId requirement is enforced
+     INSIDE the project branch (after the manifest scope-kind re-check, so
+     a kind mismatch still refuses restoreTargetMismatch first). */
 
   /* fetching: local archive resolution (the route's start row already sits
      at stage 'fetching'; the unit refuses keyed when the archive is gone). */
@@ -1419,8 +1654,8 @@ export async function restoreOverwriteUnit(opts = {}) {
   /* Engine-side scope-kind re-check — AFTER the snapshot (the net is
      unconditional; the route re-checks too, the engine never trusts its
      caller). */
-  if (!scope || scope.kind !== 'workspace') {
-    return failWith(keyed('restoreTargetMismatch', 'restore: overwrite requires a workspace scope archive'));
+  if (!scope || (scope.kind !== 'workspace' && scope.kind !== 'project')) {
+    return failWith(keyed('restoreTargetMismatch', 'restore: overwrite requires a workspace or project scope archive'));
   }
 
   try {
@@ -1437,7 +1672,7 @@ export async function restoreOverwriteUnit(opts = {}) {
     /* Engine-side scope-kind re-check (the route re-checks too — the
        engine never trusts its caller; runs after the snapshot: the net is
        unconditional). */
-    if (manifest?.scope?.kind !== 'workspace' || manifest?.scope?.id !== scope.id) {
+    if (manifest?.scope?.kind !== scope.kind || manifest?.scope?.id !== scope.id) {
       return failWith(keyed('restoreTargetMismatch', `restore: archive scope (${manifest?.scope?.kind ?? 'unknown'}) does not match the overwrite scope (${scope.kind})`));
     }
 
@@ -1462,11 +1697,41 @@ export async function restoreOverwriteUnit(opts = {}) {
        tables; the rest is counted, never buffered. */
     const { archiveRows, archiveCounts } = await readStagedTables(manifest, stagingDir);
 
-    const srcRow = (archiveRows.workspaces ?? []).find(r => r?.id === scope.id);
+    const srcRow = scope.kind === 'workspace'
+      ? (archiveRows.workspaces ?? []).find(r => r?.id === scope.id)
+      : (archiveRows.workspaces ?? []).find(r => arr(docData(r).projects).some(p => p?.id === scope.id));
     if (!srcRow) {
-      return failWith(keyed('restoreRemapIncomplete', `restore: workspace ${scope.id} is missing from the archive tables`, { reason: 'workspaceMissing' }));
+      return failWith(keyed('restoreRemapIncomplete', scope.kind === 'project'
+        ? `restore: project ${scope.id} was not found in the archive tables`
+        : `restore: workspace ${scope.id} is missing from the archive tables`, { reason: scope.kind === 'project' ? 'projectMissing' : 'workspaceMissing' }));
     }
     const data = docData(srcRow);
+
+    /* BKRST-05 (95-04) project branch: the fragment replaces its target
+       project inside the target doc — same snapshot (kind 'workspace' over
+       the TARGET workspace, P7 unchanged), same staged blob swap + repair
+       net, same lock funnel, ONE tx, FTS inside. The helper returns the
+       unit's result; every swapped dest rides trackSwap so the unit's
+       outer repair net still covers an unexpected throw. */
+    if (scope.kind === 'project') {
+      return await overwriteProjectFragment({
+        runId,
+        scope,
+        operatorId,
+        targetWorkspaceId,
+        targetProjectId: typeof opts.targetProjectId === 'string' && opts.targetProjectId ? opts.targetProjectId : null,
+        snapshot,
+        backupRun,
+        archivePath,
+        data,
+        manifest,
+        dirs,
+        stagingDir,
+        failWith,
+        trackSwap: dest => swappedDests.push(dest),
+        hooks,
+      });
+    }
 
     const projects = arr(data.projects).filter(p => p && typeof p.id === 'string' && p.id);
     const tasks = arr(data.tasks).filter(t => t && typeof t.id === 'string' && t.id);
