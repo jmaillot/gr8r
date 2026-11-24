@@ -512,3 +512,30 @@ test('94-02 UAT-4: cronFromForm on fresh defaults (preset daily) === "0 22 * * *
   assert.ok(hIdx !== -1 && mIdx !== -1, 'both builder selects exist');
   assert.ok(hIdx < mIdx, 'Hour select comes before Minute select in taskFormCard');
 });
+
+/* =====================================================================
+   94-03 (UAT-4b): builder alignment polish. The uppercase RETENTION label
+   is vertically centered against the row (align-self:center, 94-1
+   commit 3ea78f70) — the pin guards it against a flex-end regression;
+   the four GFS scale labels render through the SAME .field
+   label-over-input structure as every other builder row, so they stay
+   visually aligned with their input boxes. Preset/field rows keep
+   align-items:flex-end. Pure CSS/layout — no keys.
+   ===================================================================== */
+test('94-03 UAT-4b: retention label vertically centered; GFS labels aligned with their input boxes', () => {
+  const formCard = pagesSrc.slice(pagesSrc.indexOf('const taskFormCard ='));
+  /* The uppercase retention label keeps its center alignment in the flex-end row. */
+  assert.match(
+    formCard,
+    /text-transform:uppercase;letter-spacing:\.04em;align-self:center/,
+    'the retention uppercase label stays vertically centered (align-self:center)',
+  );
+  /* The retention row keeps flex-end so the GFS inputs bottom-align with the row. */
+  const retentionRow = formCard.slice(formCard.indexOf('page.backup.retentionLabel') - 400, formCard.indexOf('api.s3Enabled'));
+  assert.match(retentionRow, /align-items:flex-end/, 'the retention row keeps align-items:flex-end');
+  /* Each GFS scale label rides the .field structure: label above its input, same as the other rows. */
+  for (const k of ['gfsDaily', 'gfsWeekly', 'gfsMonthly', 'gfsYearly']) {
+    const re = new RegExp(`<div class="field"><label class="label">\\$\{t\\('page\\.backup\\.${k}'\\)\\}</label><input class="input" type="number"`);
+    assert.match(formCard, re, `the ${k} label sits above its input box in the shared .field structure`);
+  }
+});
