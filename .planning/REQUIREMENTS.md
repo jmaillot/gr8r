@@ -30,9 +30,9 @@
 
 ### Settings
 
-- [ ] **SET-01**: My Access shows the project icon (not the tick icon), or a column layout for a better overview
-- [ ] **SET-02**: API Keys offers a clear button removing revoked keys only (audit trail preserved)
-- [ ] **SET-03**: The Settings > General > Workspace URL displays on a single line
+- [x] **SET-01**: My Access shows the project icon (not the tick icon), or a column layout for a better overview
+- [x] **SET-02**: API Keys offers a clear button removing revoked keys only (audit trail preserved)
+- [x] **SET-03**: The Settings > General > Workspace URL displays on a single line
 - [x] **SET-04**: The Invite Member > Edit Teams team picker is selectable like the Teams > Edit team picker
 
 ### Notifications
@@ -71,7 +71,7 @@ Phase → Requirement mapping is filled by the roadmap (gsd-roadmapper).
 | BKUI-03 | Phase 94 | Pending |
 | BKUI-04 | Phase 94 | Pending |
 | XWS-01 | Phase 95 | Complete |
-| SET-01 | Phase 95 | Pending |
-| SET-02 | Phase 95 | Pending |
-| SET-03 | Phase 95 | Pending |
+| SET-01 | Phase 95 | Complete |
+| SET-02 | Phase 95 | Complete |
+| SET-03 | Phase 95 | Complete |
 | SET-04 | Phase 95 | Complete |

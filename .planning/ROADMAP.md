@@ -92,7 +92,7 @@ Plans:
   6. BKRST-05 (owner ruling 2026-11-24): a PROJECT archive restores either as NEW (current) or as OVERWRITE of an existing project — the overwrite extends the 89-05 guarded unit (pre-restore snapshot, confirm-phrase against the target project's CURRENT name, scope-kind match, ids verbatim) to project containment: target project's rows replaced inside a single tx, workspace_id remapped to the target workspace, name/slug collision handling keyed, favorites/comments/activity referencing the replaced project kept honest. The drawer offers both CTAs for project archives; every refusal keyed ×5.
 
 **UI hint**: yes
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 Plans:
 **Wave 1**
 - [x] 95-01-PLAN.md — Wave-0 gates: membershipsOf grep-gate + Run-now picker on scopes payload (XWS-01, D-11) + Edit-Teams mteamToggle contract (SET-04, D-12) + settings client-slice harness
@@ -101,7 +101,7 @@ Plans:
 - [x] 95-04-PLAN.md — (wave 2) BKRST-05 engine: restoreOverwriteUnit project branch (D-01 deletion set, ids verbatim, self-exclusion collision scan), route project acceptance + live-doc confirmName; D-04 lock checkpoint; ×5 refusals
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 95-02-PLAN.md — (wave 3, after 95-04: shares server.js + locales) Settings polish: my-access aggregate endpoint + card grid (SET-01, D-07/D-08), revoked-key purge route + 2-click button (SET-02, D-09/D-10), single-line Workspace URL (SET-03, D-13); i18n ×5 every emitting commit
+- [x] 95-02-PLAN.md — (wave 3, after 95-04: shares server.js + locales) Settings polish: my-access aggregate endpoint + card grid (SET-01, D-07/D-08), revoked-key purge route + 2-click button (SET-02, D-09/D-10), single-line Workspace URL (SET-03, D-13); i18n ×5 every emitting commit
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 95-05-PLAN.md — (wave 4, after 95-02: shares server.js + locales) BKRST-05 drawer: scopes payload projects extension + strict-pin update (XWS-01), project target picker + Overwrite CTA + confirm phrase (D-02); i18n ×5; phase gate
@@ -114,4 +114,4 @@ Plans:
 | 92. Server Payload Contracts | 0/? | Not started | - |
 | 93. Governance UX — Instance Roles | 0/? | Not started | - |
 | 94. Backup Console UX | 1/1 | Complete | 2026-11-24 |
-| 95. Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore | 2/4 | In Progress|  |
+| 95. Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore | 3/4 | In Progress|  |
