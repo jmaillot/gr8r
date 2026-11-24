@@ -93,11 +93,16 @@ test('D-04 (Phase 94): the unified history sblock renders the payload verbatim �
   assert.match(pagesSrc, /const historySblock = \(\) =>/, 'the unified sblock exists');
   assert.match(pagesSrc, /visibleRuns\.map\(historyTr\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap (visibleRuns = 94-03 Rotated default-exclusion)');
   /* D-04: run.label (the 5-segment server-resolved runLabel) renders VERBATIM
-     through esc() — the client composes nothing. */
-  assert.match(pagesSrc, /esc\(run\.label \|\| ''\)/, 'run.label renders verbatim through esc()');
+     through esc() — the payload field renders; the DISPLAY abbreviates (UAT
+     round-5: the 12-hex instance prefix is stripped for display, the full
+     label rides the tooltip). */
+  assert.match(pagesSrc, /title="\$\{esc\(runTip\)\}"/, 'the full label (+ filename) rides the tooltip through esc()');
+  assert.match(pagesSrc, /esc\(shortLabel\)/, 'the abbreviated label renders through esc()');
+  assert.match(pagesSrc, /const shortLabel = String\(run\.label \|\| ''\)\.replace\(\/\^\[0-9a-f\]\{12\}-\/, ''\)/, 'the display abbreviation strips only the 12-hex instance prefix');
   assert.match(pagesSrc, /GFS_SCALE_KEYS\[run\.gfs_bucket\]/, 'the GFS badge derives from gfs_bucket through the four gfs keys (A3)');
-  /* esc() on every interpolated payload field of the run row */
-  for (const re of [/esc\(run\.sha256\)/, /esc\(String\(run\.sha256\)\.slice\(0, 12\)\)/, /esc\(run\.filename\)/, /esc\(run\.error\)/, /esc\(when\)/]) {
+  /* esc() on every interpolated payload field of the run row (UAT round-6:
+     filename + sha travel in the tooltip, not stacked divs) */
+  for (const re of [/esc\(runTip\)/, /esc\(run\.error\)/, /esc\(when\)/]) {
     assert.match(pagesSrc, re, `run row interpolates through esc(): ${re}`);
   }
   /* D-06: skipped_overlap and interrupted stay first-class LABELS… */

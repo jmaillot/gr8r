@@ -161,7 +161,7 @@ const HISTORY_FILTER_STATUSES = ['running', 'succeeded', 'failed', 'upload_faile
 const historyTr = run => {
   const errOpen = S.ui.backupRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at) || Number(run.created_at);
-  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(startedMs) : '—';
   const chkBusy = !!S.ui.backupChecksumBusy?.has(run.id);
   /* The GFS badge: the payload's gfs_bucket resolves through the four gfs
      keys — no client GFS math, ever (D-90-12/16 doctrine carries over). */
@@ -177,11 +177,10 @@ const historyTr = run => {
      Error red for failed + upload_failed / Running neutral. The checksum
      result is NOT durable chrome — it toasts on click only (UAT round-5). */
   const shortLabel = String(run.label || '').replace(/^[0-9a-f]{12}-/, '');
-  const runCell = `<span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(run.label || '')}">${esc(shortLabel)}</span>${
-    run.filename ? `<div class="mono faint" style="font-size:12px">${esc(run.filename)}</div>` : ''
-  }${
-    run.sha256 ? `<div class="mono faint" style="font-size:12px" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</div>` : ''
-  }${
+  /* UAT round-6: the Run cell shows ONE line — the short label. The filename
+     and sha travel in the tooltip (hover), not as stacked divs. */
+  const runTip = [run.label, run.filename].filter(Boolean).map(String).join('\n');
+  const runCell = `<span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(runTip)}">${esc(shortLabel)}</span>${
     run.error
       ? `<div style="margin-top:4px"><a href="#" data-a="backupRunErr" data-id="${esc(run.id)}">${t('page.backup.errorToggle')}</a>${
           errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
@@ -542,7 +541,7 @@ const RESTORE_STAGE_KEYS = {
    the restore attempt on it is refused keyed err.restoreArchiveMissing. */
 const restoreRow = r => {
   const startedMs = Number(r.startedAt);
-  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(startedMs) : '—';
   return `<div style="padding:8px 0;border-top:1px solid var(--border)">
     <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
       <span class="badge${r.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[r.location] || 'page.restore.locMissing')}</span>
@@ -652,7 +651,7 @@ const restoreProgress = () => {
 const restoreRunRow = run => {
   const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at);
-  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(startedMs) : '—';
   let skipped = [];
   try {
     const s = typeof run.summary === 'string' && run.summary ? JSON.parse(run.summary) : null;
@@ -695,7 +694,7 @@ const restoreRunRow = run => {
 const restoreRunTr = run => {
   const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at);
-  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(startedMs) : '—';
   let skipped = [];
   try {
     const s = typeof run.summary === 'string' && run.summary ? JSON.parse(run.summary) : null;
