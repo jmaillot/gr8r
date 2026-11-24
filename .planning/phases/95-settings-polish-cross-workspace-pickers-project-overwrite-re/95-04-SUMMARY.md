@@ -22,10 +22,10 @@ decisions:
 actuals:
   tokens: 76000
   tasks: 4
-  commits: 4
+  commits: 5
 plan_head_before: 69cbd673562e1a532784acb8e42a070c026a9aed
-plan_head_after: 29bf6887
-commits: 4
+plan_head_after: 96aa2c40
+commits: 5
 status: complete
 ---
 
@@ -54,6 +54,7 @@ status: complete
 | 2. Engine — restoreOverwriteUnit project branch (red→green) | auto/tdd | d4d5a9db |
 | 3. Route — project-scope acceptance + live-doc confirmName | auto | 67980586 |
 | 4. Refusal matrix + integration sweep | auto | 29bf6887 |
+| Lock-release funnel fix for the project branch (Rule 3) | fix | 96aa2c40 |
 
 ## Deviations from Plan
 
@@ -75,6 +76,13 @@ status: complete
 - **Issue:** `err.restoreNameCollision` is keyed by the ENGINE (export/restore.js), not emitted by server.js — the reverse-parity test failed for the new catalogue code.
 - **Fix:** `restoreNameCollision` added to CLIENT_ONLY_ERR_CODES with the engine-keyed provenance comment.
 - **Commit:** 29bf6887
+
+**[Rule 3 — Blocking fix] Lock-release funnel for the project branch**
+- **Found during:** Task 3 verification
+- **Issue:** The project dispatch (`return await overwriteProjectFragment(...)`) bypassed the unit's success-path `await release()` — a done project overwrite left the route's restore_lock claim held.
+- **Fix:** dispatch captures the helper result, calls `await release()`, then returns; refusal exits already release via `failWith`. Pinned by the route acceptance cell's lock-release assertion.
+- **Files modified:** export/restore.js
+- **Commit:** 96aa2c40
 
 **[Judgment call] Role-matrix tests live in restore-routes.test.mjs, not restore-security.test.mjs**
 - restore-security.test.mjs is an engine-level reader-hardening suite with no route harness; the matrix cells ride restore-routes.test.mjs's server fixtures. Documented here; acceptance (matrix passes) unchanged.
@@ -99,4 +107,4 @@ None new — T-95-07 (elevation) mitigated by the verbatim chain + server-side l
 
 - export/restore.js / server.js / 5 locales / actions.js — FOUND, committed (d4d5a9db, 67980586)
 - test/restore-overwrite.test.mjs (23 tests) / test/restore-routes.test.mjs / test/error-codes.test.mjs — FOUND, green
-- Commits 904c840e / d4d5a9db / 67980586 / 29bf6887 — FOUND in `git log` (4 commits from plan_head_before 69cbd673 → 29bf6887)
+- Commits 904c840e / d4d5a9db / 67980586 / 29bf6887 / 96aa2c40 — FOUND in `git log` (5 commits from plan_head_before 69cbd673 → 96aa2c40)
