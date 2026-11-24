@@ -2,16 +2,16 @@
 gsd_state_version: "1.0"
 milestone: v3.4
 milestone_name: UX Polish & Backup Console Refinement
-status: unknown
-stopped_at: Completed 94-1 (phase branch phase-94-backup-console-ux, not merged)
-last_updated: "2026-11-24T08:13:00.257Z"
-state_head: 81494b06f32f2ccdd143fb71549894ca5903e477
+status: active
+stopped_at: Phase 94 complete (verified 2026-11-24, 11 UAT rounds absorbed; next Phase 95)
+last_updated: "2026-11-24T16:45:00.000Z"
+state_head: 79e142dd
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 4
   total_plans: 4
   completed_plans: 4
-  percent: 20
+  percent: 80
 ---
 
 # Projects Studio — State
@@ -24,10 +24,10 @@ progress:
 
 ## Current Position
 
-- **Phase:** 93 complete ✓ (verified 2026-11-24, 4/4 SCs; commits 8fe65b52..9d65c9a4) — next: Phase 94 (Backup Console UX)
-- **Plan:** phase 94 not yet planned — run `/gsd-discuss-phase 94` then `/gsd-plan-phase 94`
-- **Status:** Phases 91–93 done — Phase 94 (Backup Console UX) and 95 (Settings + Pickers) remain
-- **Progress:** ███░░ 3/5 phases (v3.4)
+- **Phase:** 94 complete ✓ (verified 2026-11-24, 5/5 SCs + 11 UAT rounds absorbed; commits d3a621c5..79e142dd) — next: Phase 95 (Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore)
+- **Plan:** phase 95 not yet planned — run `/gsd-discuss-phase 95` then `/gsd-plan-phase 95`
+- **Status:** Phases 91–94 done — Phase 95 (Settings + Pickers + BKRST-05) remains
+- **Progress:** ████░ 4/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
 
@@ -73,6 +73,7 @@ progress:
 
 - 2026-11-23: v3.4 roadmap created — 5 phases numbered 91–95 continuing v3.3 numbering; sequential phase IDs
 - [Phase 94]: cronToPreset = describeCron.kind projection (null=custom); monRestricted fix; badge = client latest-per-task over frozen ?all=1 limit-50; prefill keeps cronDirty=false; 4-scale retention with gfs labels; unified sblock filter enum = served statuses only; poll /runs/current gated on canBackup
+- 2026-11-24 (phase 94 UAT): Super Admin restore bypass (isInstanceAdmin + SUPER_ACCESS in lieu of membership; picker via backupScopeWorkspaces scopes payload); standalone archive list + Restore section retired — Restore rides the unified history table rows; checksum = toast at click (no durable badge); run-level Warning = missing blobs on succeeded; project-overwrite restore deferred to Phase 95 BKRST-05 (engine extension, 86-D-01 workspace-only containment stands)
 
 ### Blockers
 
@@ -80,8 +81,8 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-11-24T08:12:47.267Z
-**Stopped at:** Completed 94-1 (phase branch phase-94-backup-console-ux, not merged)
+**Last session:** 2026-11-24 (phase 94 verify + UAT rounds 3–11)
+**Stopped at:** Phase 94 verified complete — 94-VERIFICATION.md written, ROADMAP/STATE updated
 **Resume file:** None
-- **Last action:** roadmap created (ROADMAP.md, STATE.md, REQUIREMENTS.md traceability updated)
-- **Next:** `/gsd-discuss-phase 91` or `/gsd-plan-phase 91`
+- **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
+- **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)

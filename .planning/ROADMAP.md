@@ -10,7 +10,7 @@
 - [x] **Phase 91: Digest Dedup — One Digest Per User Per Day** - Root-cause and fix the 4× daily digest duplication with per-user outbox coalescing and a pinned regression test
 - [x] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
 - [x] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
-- [ ] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
+- [x] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
 - [ ] **Phase 95: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers, project-archive overwrite restore (BKRST-05)
 
 ## Phase Details
@@ -101,5 +101,5 @@ Plans:
 | 91. Digest Dedup | 0/? | Not started | - |
 | 92. Server Payload Contracts | 0/? | Not started | - |
 | 93. Governance UX — Instance Roles | 0/? | Not started | - |
-| 94. Backup Console UX | 1/1 | In Progress|  |
+| 94. Backup Console UX | 1/1 | Complete | 2026-11-24 |
 | 95. Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore | 0/? | Not started | - |
