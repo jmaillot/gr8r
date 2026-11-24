@@ -5041,10 +5041,11 @@ const backupTaskFormDefaults = () => ({
   scopeId: null,
   preset: 'daily',
   fields: { ...BACKUP_TASK_FIELD_DEFAULTS },
-  /* UAT r3 2026-11-22: retention is now form-staged (server buckets
-     daily/weekly/monthly/yearly; the builder exposes daily+weekly and always
-     sends both — monthly/yearly stay server defaults unless edited before). */
-  retention: { daily: 7, weekly: 4 },
+   /* UAT r3 2026-11-22: retention is form-staged — the builder exposes ALL
+      FOUR GFS scales (Phase 94, D-03: day/week/month/year, gfs-keyed labels)
+      and always sends them with the save — the displayed value IS the intent.
+      Defaults are the server DDL defaults (server.js backup_tasks). */
+  retention: { daily: 7, weekly: 4, monthly: 12, yearly: 5 },
   tz: '', // '' → the server's resolveTz(null) default (Europe/Paris, D-02)
   tzDirty: false,
   cronDirty: false, // edit mode: an untouched schedule is NOT re-sent (server keeps the stored cron)
@@ -5118,23 +5119,48 @@ A.backupTaskEdit = el => {
   if (!task) return;
   S.ui.backupDeletions = null; // 90-03: the ephemeral projection never outlives the form that produced it
   let scope = task.scope || { kind: 'instance', id: null };
+  /* Phase 94 (D-02): reverse-map the stored schedule from the SERVER
+     descriptor (task.schedule.preset — cronToPreset ran server-side; the
+     client never evaluates cron, T-87-11). A matching preset pre-selects the
+     dropdowns from the descriptor's singleton fields (hour/minute/weekday,
+     the additive dom/mon singletons); a null preset (steps, ranges,
+     multi-values, malformed) locks the builder to the readonly custom
+     fallback showing the raw expression with an honest hint. CRITICAL: the
+     pre-fill does NOT set cronDirty=true — an untouched schedule is not
+     re-sent, so a name/tz-only edit cannot silently rewrite the cron
+     (RESEARCH pitfall 1; the :cronDirty guard below is untouched). */
+  const sp = task.schedule && typeof task.schedule === 'object' ? task.schedule : {};
+  const matched = sp.preset === 'daily' || sp.preset === 'weekly' || sp.preset === 'monthly' || sp.preset === 'yearly';
   S.ui.backupTaskForm = {
     ...backupTaskFormDefaults(),
     editing: task.id,
     name: task.name || '',
     scopeKind: scope.kind || 'instance',
     scopeId: scope.id || null,
-    /* Edit mode: preset starts on Custom with an untouched schedule — the
-       stored cron is re-sent ONLY if the operator touches a dropdown
-       (cronDirty), so a name/tz-only edit cannot silently rewrite the
-       schedule (D-04: the stored string is the source of truth). */
-    preset: 'custom',
-    fields: { ...BACKUP_TASK_FIELD_DEFAULTS },
+    preset: matched ? sp.preset : 'custom',
+    fields: matched
+      ? {
+          minute: String(sp.minute ?? '0'),
+          hour: String(sp.hour ?? '3'),
+          dom: sp.preset === 'monthly' || sp.preset === 'yearly' ? String(sp.dom ?? '1') : '1',
+          mon: sp.preset === 'yearly' ? String(sp.mon ?? '*') : '*',
+          dow: sp.preset === 'weekly' ? String(sp.weekday ?? '1') : '1',
+        }
+      : { ...BACKUP_TASK_FIELD_DEFAULTS },
+    /* D-02: a non-matching schedule locks the builder — the preset select and
+       the per-field dropdowns render disabled and the raw expression shows
+       readonly with the customScheduleHint (the ONLY place the raw cron
+       renders, payload verbatim through esc()). */
+    cronLocked: !matched,
+    customCron: matched ? null : String(task.cron || ''),
     /* UAT r3: edit mode preloads the task's current retention so the inputs
-       show the stored values (round-trip: displayed value = stored value). */
+       show the stored values (round-trip: displayed value = stored value).
+       Phase 94 (D-03): all FOUR scales preload now. */
     retention: {
       daily: Number(task.retention_daily ?? 7),
       weekly: Number(task.retention_weekly ?? 4),
+      monthly: Number(task.retention_monthly ?? 12),
+      yearly: Number(task.retention_yearly ?? 5),
     },
     tz: task.tz || '',
     tzDirty: false,
@@ -5178,8 +5204,9 @@ A.backupTaskSave = async () => {
      tz can never diverge. */
   body.tz = form.tz || tzPreselect(form.tz);
   /* UAT r3: retention always rides the write — the displayed inputs are the
-     intent (server re-validates small non-negative ints, keyed invalidRetention). */
-  body.retention = { daily: form.retention.daily, weekly: form.retention.weekly };
+     intent (server re-validates small non-negative ints, keyed invalidRetention).
+     Phase 94 (D-03): all FOUR scales always ride the write. */
+  body.retention = { daily: form.retention.daily, weekly: form.retention.weekly, monthly: form.retention.monthly, yearly: form.retention.yearly };
   /* SC-1 (D-88-12/15): the S3 flag rides the write whenever the server says
      the destination exists — absent flag would keep a stored value, so the
      displayed checkbox state is ALWAYS serialized (on AND off). The server

@@ -302,12 +302,12 @@ const taskTable = (tasks, manage) => {
    expose it so every-minute/every-hour schedules are buildable; their
    DEFAULTS stay concrete 0/3 so an accidental all-star save is a deliberate
    act, not a slip). */
-const fieldSel = (form, name, labelKey, min, max, star) => {
+const fieldSel = (form, name, labelKey, min, max, star, disabled) => {
   const cur = String(form.fields[name] ?? (star ? '*' : min));
   const opts = [];
   if (star) opts.push(`<option value="*"${cur === '*' ? ' selected' : ''}>*</option>`);
   for (let v = min; v <= max; v++) opts.push(`<option value="${v}"${cur === String(v) ? ' selected' : ''}>${String(v).padStart(2, '0')}</option>`);
-  return `<select class="input" data-in="backupTaskField" data-f="${name}" aria-label="${t(labelKey)}">${opts.join('')}</select>`;
+  return `<select class="input" data-in="backupTaskField" data-f="${name}" aria-label="${t(labelKey)}"${disabled ? ' disabled' : ''}>${opts.join('')}</select>`;
 };
 
 /* UAT r3 2026-11-22: retention is now form-staged — two numeric inputs
@@ -401,19 +401,27 @@ const taskFormCard = () => {
       ${scopeIdSel}
     </div>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
-      <div class="field"><label class="label">${t('page.backup.scheduleLabel')}</label><select class="input" data-in="backupTaskPreset">${presetOpt('daily', 'page.backup.presetDaily')}${presetOpt('weekly', 'page.backup.presetWeekly')}${presetOpt('monthly', 'page.backup.presetMonthly')}${presetOpt('custom', 'page.backup.presetCustom')}</select></div>
-      <div class="field"><label class="label">${t('page.backup.fieldMinute')}</label>${fieldSel(form, 'minute', 'page.backup.fieldMinute', 0, 59, true)}</div>
-      <div class="field"><label class="label">${t('page.backup.fieldHour')}</label>${fieldSel(form, 'hour', 'page.backup.fieldHour', 0, 23, true)}</div>
-      ${show.dom ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfMonth')}</label>${fieldSel(form, 'dom', 'page.backup.fieldDayOfMonth', 1, 31, true)}</div>` : ''}
-      ${show.mon ? `<div class="field"><label class="label">${t('page.backup.fieldMonth')}</label>${fieldSel(form, 'mon', 'page.backup.fieldMonth', 1, 12, true)}</div>` : ''}
-      ${show.dow ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfWeek')}</label>${fieldSel(form, 'dow', 'page.backup.fieldDayOfWeek', 0, 6, true)}</div>` : ''}
+      ${
+        form.cronLocked
+          ? `<div class="field"><label class="label">${t('page.backup.scheduleLabel')}</label><input class="input mono" value="${esc(form.customCron || '')}" readonly aria-readonly="true" style="max-width:220px"></div>`
+          : `<div class="field"><label class="label">${t('page.backup.scheduleLabel')}</label><select class="input" data-in="backupTaskPreset"${form.editing && form.cronLocked ? ' disabled' : ''}>${presetOpt('daily', 'page.backup.presetDaily')}${presetOpt('weekly', 'page.backup.presetWeekly')}${presetOpt('monthly', 'page.backup.presetMonthly')}${presetOpt('custom', 'page.backup.presetCustom')}</select></div>`
+      }
+      <div class="field"><label class="label">${t('page.backup.fieldMinute')}</label>${fieldSel(form, 'minute', 'page.backup.fieldMinute', 0, 59, true, form.cronLocked)}</div>
+      <div class="field"><label class="label">${t('page.backup.fieldHour')}</label>${fieldSel(form, 'hour', 'page.backup.fieldHour', 0, 23, true, form.cronLocked)}</div>
+      ${show.dom && !form.cronLocked ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfMonth')}</label>${fieldSel(form, 'dom', 'page.backup.fieldDayOfMonth', 1, 31, true)}</div>` : ''}
+      ${show.mon && !form.cronLocked ? `<div class="field"><label class="label">${t('page.backup.fieldMonth')}</label>${fieldSel(form, 'mon', 'page.backup.fieldMonth', 1, 12, true)}</div>` : ''}
+      ${show.dow && !form.cronLocked ? `<div class="field"><label class="label">${t('page.backup.fieldDayOfWeek')}</label>${fieldSel(form, 'dow', 'page.backup.fieldDayOfWeek', 0, 6, true)}</div>` : ''}
     </div>
+    ${form.cronLocked ? `<div class="hint" style="margin-top:6px">${t('page.backup.customScheduleHint')}</div>` : ''}
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
       <div class="field" style="min-width:260px;max-width:340px"><label class="label">${t('page.backup.tzLabel')}</label>${tzCombobox(form.tz)}</div>
     </div>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
-      <div class="field"><label class="label">${t('page.backup.retentionDaily')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.daily))}" data-in="backupTaskRetention" data-f="daily"></div>
-      <div class="field"><label class="label">${t('page.backup.retentionWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:110px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
+      <div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;align-self:center">${t('page.backup.retentionLabel')}</div>
+      <div class="field"><label class="label">${t('page.backup.gfsDaily')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.daily))}" data-in="backupTaskRetention" data-f="daily"></div>
+      <div class="field"><label class="label">${t('page.backup.gfsWeekly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.weekly))}" data-in="backupTaskRetention" data-f="weekly"></div>
+      <div class="field"><label class="label">${t('page.backup.gfsMonthly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.monthly))}" data-in="backupTaskRetention" data-f="monthly"></div>
+      <div class="field"><label class="label">${t('page.backup.gfsYearly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.yearly))}" data-in="backupTaskRetention" data-f="yearly"></div>
     </div>
     ${api.s3Enabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskS3"${form.s3Enabled ? ' checked' : ''}><span>${esc(t('page.backup.s3Toggle'))}</span></label></div>` : ''}
     ${deletionsPanel()}
