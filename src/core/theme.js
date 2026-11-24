@@ -1,11 +1,15 @@
 /* ---------- theme ---------- */
 import { setDateFormat } from './utils.js';
+import { setTimeFmt } from './i18n.js';
 import { S } from './store.js';
 
 export function applyPrefs() {
   const r = document.documentElement,
     p = S.prefs;
   setDateFormat(p.dateFmt);
+  /* 94-03 (UAT-2b): the stored 12h/24h clock choice now travels — unset reads
+     as 'auto' (the sentinel), behavior unchanged for untouched documents. */
+  setTimeFmt(p.timeFmt);
   if (p.theme === 'system') r.removeAttribute('data-theme');
   else r.setAttribute('data-theme', p.theme);
   if (p.accent === 'indigo') r.removeAttribute('data-accent');

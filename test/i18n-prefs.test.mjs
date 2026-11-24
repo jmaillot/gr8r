@@ -20,7 +20,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
-import { formatDate, formatTime, isAutoDateFmt, registerCatalogue, setLocale } from '../src/core/i18n.js';
+import { formatDate, formatTime, isAutoDateFmt, registerCatalogue, setLocale, setTimeFmt } from '../src/core/i18n.js';
 import { prefValue } from '../src/core/prefs.js';
 
 const ROOT = path.join(import.meta.dirname, '..');
@@ -193,6 +193,48 @@ test('the time-format selector offers auto, 12 and 24, and an unset preference s
   const source = fs.readFileSync(SETTINGS_SOURCE, 'utf8');
   assert.deepEqual(optionValues(source, 'timeFmt'), ['auto', '12', '24']);
   assert.match(source, /P\.timeFmt \|\| 'auto'/);
+});
+
+/* ---------- 94-03 (UAT-2b): the stored clock choice travels ---------- */
+
+test('a stored 24 honours the clock everywhere: formatTime renders 24h without an explicit cycle', () => {
+  /* applyPrefs seeds the module default from the stored preference (theme.js). */
+  setTimeFmt('24');
+  try {
+    assert.equal(formatTime(SAMPLE_TIME), '14:30');
+    /* An explicit cycle always wins over the module default — the settings
+       previews pass their own cycle and must not shift. */
+    assert.equal(formatTime(SAMPLE_TIME, { cycle: '12' }), '2:30 PM');
+  } finally {
+    setTimeFmt('auto');
+  }
+});
+
+test('the auto sentinel and an unset preference are unchanged: the locale clock rules', async () => {
+  setTimeFmt('auto');
+  try {
+    assert.equal(formatTime(SAMPLE_TIME), '2:30 PM');
+    /* applyPrefs calls setTimeFmt(p.timeFmt) with an undefined value — the
+       sentinel survives the unset read ('auto' || fallback semantics). */
+    setTimeFmt(undefined);
+    assert.equal(formatTime(SAMPLE_TIME), '2:30 PM');
+    await inFrench(async () => {
+      setTimeFmt(undefined);
+      assert.equal(formatTime(SAMPLE_TIME), '14:30');
+    });
+  } finally {
+    setTimeFmt('auto');
+  }
+});
+
+test('applyPrefs seeds the clock from the stored preference, beside the date pattern', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'src', 'core', 'theme.js'), 'utf8');
+  assert.match(source, /setTimeFmt\(p\.timeFmt\)/, 'applyPrefs calls setTimeFmt beside setDateFormat');
+  assert.match(source, /setTimeFmt\(p\.timeFmt\);\s*\n?\s*if \(p\.theme/, 'the clock seed sits with the other preference reads');
+  /* The default stays out of DEFAULT_PREFS: unset is handled at READ time. */
+  const store = fs.readFileSync(STORE_SOURCE, 'utf8');
+  const block = /export const DEFAULT_PREFS = \{([\s\S]*?)\n\};/.exec(store);
+  assert.ok(block && !/timeFmt:/.test(block[1]), 'DEFAULT_PREFS still carries no timeFmt');
 });
 
 test('the English text of the two explicit time options is unchanged', () => {

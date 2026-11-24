@@ -538,12 +538,23 @@ export function fmtEstimate(est) {
   return `${m[1]} ${t(ESTIMATE_UNITS[m[2]])}`;
 }
 
+/* 94-03 (UAT-2b): the clock-cycle preference default — the Settings selector
+   (auto/12/24) writes timeFmt, and this module-level default is what an
+   options.cycle-less formatTime() call resolves through. 'auto' is the
+   sentinel (D-04): unset → the locale's own clock, exactly the pre-94-03
+   behavior. applyPrefs (core/theme.js) seeds it from the stored preference on
+   every render — mirroring the dateFormat house pattern. */
+let timeFmtDefault = 'auto';
+export function setTimeFmt(cycle) {
+  timeFmtDefault = cycle || 'auto';
+}
+
 /* The clock. 'auto' follows the locale: a 12-hour clock in English, a
    24-hour clock in French. */
 export function formatTime(value, options = {}) {
   const d = toDate(value);
   if (!d) return '';
-  const cycle = options.cycle || 'auto';
+  const cycle = options.cycle || timeFmtDefault;
   if (cycle === '12') return dateTimeFor(locale, { hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
   if (cycle === '24') return dateTimeFor(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
   return dateTimeFor(locale, { timeStyle: 'short' }).format(d);
