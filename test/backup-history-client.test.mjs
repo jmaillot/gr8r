@@ -295,7 +295,7 @@ test('90-02: the download CTA renders ONLY for payload location local|s3 — the
      never a disabled/dead button (D-90-9). */
   assert.match(
     pagesSrc,
-    /run\.location === 'local' \|\| run\.location === 's3'\s*\?\s*`<span class="row"[^>]*>\s*<button class="btn btn-secondary btn-sm" data-a="backupDownload"/,
+    /run\.location === 'local' \|\| run\.location === 's3'\s*\?\s*`<span class="row"[^>]*>\s*<button class="btn btn-secondary btn-sm" data-a="restorePreview"/,
     'the download CTA renders only for local|s3 from the payload flag (actions cell, UAT round-4 table)',
   );
   /* The badge reuses the restore location vocabulary (locLocal/locS3/
@@ -398,7 +398,7 @@ test('90-03 → UAT round-5: the missing-blob state is a run-level WARNING (ambe
   );
 });
 
-test('90-03: backupPollTick invalidates the shared restore list on the backup active→terminal stage transition (D-90-22)', () => {
+test('90-03 → UAT round-9: the backup active→terminal stage transition invalidates nothing — the restore list is retired', () => {
   /* Region-scoped to the tick function body — assertions must not leak to
      the restore tick half or the polling helpers. */
   const tick = pagesSrc === '' ? '' : actionsSrc.slice(
@@ -407,12 +407,13 @@ test('90-03: backupPollTick invalidates the shared restore list on the backup ac
   );
   assert.match(tick, /const backupPrevStage = S\.ui\.backupRun\?\.stage \|\| null/, 'the previous stage is captured BEFORE the payload write');
   assert.match(tick, /const backupPrevRunId = S\.ui\.backupRun\?\.startedAt \|\| null/, 'the run identity is captured BEFORE the payload write (UAT-90: identity change, not stage change, is the invalidation signal)');
-  assert.match(tick, /BACKUP_ACTIVE_STAGES\.includes\(backupPrevStage\) \|\| backupFinishedArrived\) && !backupActive\) S\.ui\.restoreList = null/, 'the active→terminal transition nulls the shared restore-list state');
   assert.match(tick, /const backupFinishedArrived = !backupActive && !!backupNowRunId && backupNowRunId !== backupPrevRunId/, 'a DIFFERENT finished run landing (trigger-POST-terminal first poll, terminal→terminal run N+1) is the same invalidation event; a settled run repeating its identity never re-invalidates');
-  assert.ok(!tick.includes('refreshRestoreBackups'), 'the tick NEVER calls the restore refresh action directly (Pitfall 8 — invalidate here, refetch at the render boundary)');
-  /* The render boundary: the page's in-render kick refetches exactly once
-     when the shared state is null. */
-  assert.match(pagesSrc, /!S\.ui\.restoreList\) refreshRestoreBackups\(\)/, 'the in-render kick refetches the restore list exactly once when null');
+  /* UAT round-9: the standalone archive list is retired — refreshRestoreBackups
+     and the shared S.ui.restoreList state are gone; the tick no longer
+     invalidates anything. */
+  assert.ok(!/S\.ui\.restoreList\s*=|S\.ui\.restoreList\)/.test(tick), 'the retired shared restore-list state is gone from the tick');
+  assert.ok(!tick.includes('refreshRestoreBackups'), 'the tick NEVER calls the restore refresh action directly (Pitfall 8)');
+  assert.ok(!pagesSrc.includes('refreshRestoreBackups'), 'the page no longer kicks the retired list fill');
 });
 
 /* =====================================================================

@@ -2255,14 +2255,10 @@
   "page.backup.missingBlobWarn": "{n} ontbrekende blob(s) — noodherstel zal dit archief weigeren",
   "page.restore.title": "Herstel",
   "page.restore.lead": "Haal gegevens terug uit een gr8r-back-uparchief. Herstellingen draaien op de achtergrond — importeren als nieuw is de standaard.",
-  "page.restore.listEmptyTitle": "Nog geen back-ups",
-  "page.restore.listEmptyBody": "Gecontroleerde back-uptaken verschijnen hier. Start nu een back-up of wacht op een geplande taak.",
   "page.restore.listLoading": "Back-ups laden…",
-  "page.restore.listUnavailable": "De back-upgeschiedenis is nu niet beschikbaar.",
   "page.restore.locLocal": "Lokaal",
   "page.restore.locS3": "S3",
   "page.restore.locMissing": "Niet beschikbaar",
-  "page.restore.previewAction": "Back-up bekijken",
   "page.restore.previewTitle": "Back-upvoorbeeld",
   "page.restore.previewCorrupt": "Het manifest van dit archief kon niet gelezen worden. Het kan niet bekeken of hersteld worden.",
   "page.restore.scopeLabel": "Bereik",
@@ -2341,5 +2337,6 @@
   "page.backup.statusWarning": "Waarschuwing",
   "page.backup.scheduleCol": "Schema",
   "toast.checksumOk": "Checksum geverifieerd — het archief is intact",
-  "toast.checksumFail": "Checksumverificatie GEFAALD — dit archief is beschadigd"
+  "toast.checksumFail": "Checksumverificatie GEFAALD — dit archief is beschadigd",
+  "page.restore.restoreAction": "Herstellen"
 }

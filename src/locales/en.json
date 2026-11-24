@@ -2255,14 +2255,10 @@
   "page.backup.missingBlobWarn": "{n} missing blob(s) — disaster restore will refuse this archive",
   "page.restore.title": "Restore",
   "page.restore.lead": "Bring data back from a gr8r backup archive. Restores run in the background — import as new is the default.",
-  "page.restore.listEmptyTitle": "No backups yet",
-  "page.restore.listEmptyBody": "Verified backup runs appear here. Run a backup now or wait for a scheduled task.",
   "page.restore.listLoading": "Loading backups…",
-  "page.restore.listUnavailable": "Backup history is unavailable right now.",
   "page.restore.locLocal": "Local",
   "page.restore.locS3": "S3",
   "page.restore.locMissing": "Unavailable",
-  "page.restore.previewAction": "Preview backup",
   "page.restore.previewTitle": "Backup preview",
   "page.restore.previewCorrupt": "This archive's manifest could not be read. It cannot be previewed or restored.",
   "page.restore.scopeLabel": "Scope",
@@ -2341,5 +2337,6 @@
   "page.backup.statusWarning": "Warning",
   "page.backup.scheduleCol": "Schedule",
   "toast.checksumOk": "Checksum verified — the archive is intact",
-  "toast.checksumFail": "Checksum verification FAILED — this archive is corrupted"
+  "toast.checksumFail": "Checksum verification FAILED — this archive is corrupted",
+  "page.restore.restoreAction": "Restore"
 }

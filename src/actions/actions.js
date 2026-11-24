@@ -4885,14 +4885,14 @@ export async function backupPollTick() {
      trigger-POST-terminal first poll, terminal→terminal run N+1), the
      just-finished archive changes what the restore list should show, so
      invalidate the shared state by nulling it. The page's in-render kick
-     (backup.js — the `!S.ui.restoreList` guard) then refetches EXACTLY ONCE
+     (backup.js — the former `!S.ui.restoreList` guard) then refetches EXACTLY ONCE
      — the tick NEVER invokes the restore refresh action itself and never
      refetches unconditionally inside the 1s tick (Pitfall 8: invalidate
      here, refetch at the render boundary). A settled terminal run polling
      with the SAME identity never re-invalidates. */
   const backupNowRunId = S.ui.backupRun?.startedAt || null;
   const backupFinishedArrived = !backupActive && !!backupNowRunId && backupNowRunId !== backupPrevRunId;
-  if ((BACKUP_ACTIVE_STAGES.includes(backupPrevStage) || backupFinishedArrived) && !backupActive) S.ui.restoreList = null;
+
   if ((backupActive || restoreActive) && !backupPollTimer) backupStartPolling();
   if (!backupActive && !restoreActive) backupStopPolling();
   render();
@@ -4958,26 +4958,9 @@ const RESTORE_REFUSAL_TOASTS = {
 const restoreToast = (code, raw) =>
   RESTORE_REFUSAL_TOASTS[code] ? t(RESTORE_REFUSAL_TOASTS[code]) : tErr(code, null, raw || t('err.serverUnreachable'));
 
-let restoreFillSeq = 0;
-let restoreInflight = null;
-export async function refreshRestoreBackups() {
-  if (!api.enabled) return null;
-  const my = ++restoreFillSeq;
-  restoreInflight?.abort();
-  restoreInflight = new AbortController();
-  const res = await api.restoreBackups({ signal: restoreInflight.signal });
-  if (my !== restoreFillSeq) return null;
-  if (res.ok) {
-    S.ui.restoreList = { runs: Array.isArray(res.data?.runs) ? res.data.runs : [], err: false };
-  } else {
-    /* D-28: the central intercept owns the 401 teardown; any other refusal
-       degrades the section to its keyed unavailable row — never a blank. */
-    if (res.status !== 401) S.ui.restoreList = { runs: [], err: true };
-    return null;
-  }
-  render();
-  return S.ui.restoreList;
-}
+/* UAT round-9 (owner ruling): the standalone archive list is retired — the
+   Restore action rides the unified history table rows; refreshRestoreBackups
+   (the list fill loop) is gone with it. */
 
 /* WR-02 restore half: cooldown between render-kicked ticks after a
    restore-poll failure — the page's render-kick honors it, so a
@@ -5567,6 +5550,14 @@ A.restorePreview = async el => {
   S.ui.restorePreview = { runId };
   S.ui.restorePreviewData = null;
   render();
+  /* UAT round-8: a Super Admin without live memberships still needs a
+     target — the phase-92 scopes endpoint lists every active workspace
+     (same authority idiom as the trigger gate). Non-admins keep the
+     membership list. */
+  if (api.user?.isInstanceAdmin) {
+    const scopes = await api.backupScopes();
+    if (scopes.ok) S.ui.backupScopes = Array.isArray(scopes.data?.workspaces) ? scopes.data.workspaces : null;
+  }
   const res = await api.restorePreview(runId);
   if (!res.ok) {
     S.ui.restorePreview = null;
@@ -5581,6 +5572,7 @@ A.restorePreview = async el => {
 A.restorePreviewClose = () => {
   S.ui.restorePreview = null;
   S.ui.restorePreviewData = null;
+  S.ui.backupScopes = null;
   render();
 };
 

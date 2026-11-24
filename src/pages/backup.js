@@ -36,7 +36,7 @@ import { esc, fmtDate } from '../core/utils.js';
 import { empty, fsize } from '../ui/helpers.js';
 import { tzCombobox } from './settings.js';
 import { tzPreselect } from '../lib/timezones.js';
-import { refreshBackupTasks, refreshRestoreBackups, refreshRestoreHistory, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
+import { refreshBackupTasks, refreshRestoreHistory, refreshBackupHistory, backupPollTick, backupPollKickAllowed, restorePollKickAllowed } from '../actions/actions.js';
 
 /* Verbatim governance.js fullstate shapes: 403 → lock glyph + err.code403 +
    route name + keyed ROLE body + home way out; other fetch errors →
@@ -206,6 +206,7 @@ const historyTr = run => {
   const actionsCell =
     run.location === 'local' || run.location === 's3'
       ? `<span class="row" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap">
+          <button class="btn btn-secondary btn-sm" data-a="restorePreview" data-id="${esc(run.id)}">${ic('archive', 13)}${t('page.restore.restoreAction')}</button>
           <button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>
           <button class="btn btn-secondary btn-sm" data-a="backupVerifyChecksum" data-id="${esc(run.id)}"${chkBusy ? ' disabled aria-busy="true"' : ''}>${chkBusy ? t('page.backup.checksumChecking') : `${ic('shield-check', 13)}${t('page.backup.verifyChecksumAction')}`}</button>
         </span>`
@@ -543,20 +544,10 @@ const RESTORE_STAGE_KEYS = {
    D-89-14/15), esc'd filename, size, date, 12-char sha slice with the full
    digest in title (historyRow idiom). The missing-location badge renders too —
    the restore attempt on it is refused keyed err.restoreArchiveMissing. */
-const restoreRow = r => {
-  const startedMs = Number(r.startedAt);
-  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(startedMs) : '—';
-  return `<div style="padding:8px 0;border-top:1px solid var(--border)">
-    <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
-      <span class="badge${r.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[r.location] || 'page.restore.locMissing')}</span>
-      <span class="faint mono trunc" style="display:inline-block;max-width:280px" title="${esc(r.filename || '')}">${esc(r.filename || '')}</span>
-      <span class="faint">${esc(fsize(Number(r.sizeBytes) || 0))}</span>
-      <span class="faint">${esc(when)}</span>
-      ${r.sha256 ? `<span class="mono faint" title="${esc(r.sha256)}">${esc(String(r.sha256).slice(0, 12))}</span>` : ''}
-      <button class="btn btn-sm" data-a="restorePreview" data-id="${esc(r.runId)}">${ic('archive', 13)}${t('page.restore.previewAction')}</button>
-    </div>
-  </div>`;
-};
+/* UAT round-9 (owner ruling): the standalone archive list is retired —
+   the Restore action rides the unified history table rows. restoreRow is
+   gone with it; the preview drawer stays (opened from the table's Restore
+   button, same runId space). */
 
 /* Preview drawer body: manifest-derived counts ONLY (the payload carries no
    archive bytes, D-89-17) — scope/tables/files/checksum render verbatim,
@@ -587,9 +578,14 @@ const restorePreviewBody = (d, flags) => {
   /* D-89-23 workspace picker (project archives): live memberships verbatim,
      esc'd names, chosen target armed for the trigger — zero memberships
      render NO picker (the empty-dropdown shape is never rendered). */
+  /* UAT round-8: the target list prefers the phase-92 scopes payload (every
+     active workspace — the Super Admin without membership case), falling
+     back to the memberships. Fail-closed: neither list renders a target the
+     server gate would refuse — the trigger re-validates authority live. */
+  const scopeTargets = Array.isArray(S.ui.backupScopes) && S.ui.backupScopes.length ? S.ui.backupScopes : memberships;
   const picker =
-    kind === 'project' && memberships.length
-      ? `<div style="margin-top:12px"><div class="faint" style="font-size:12px;margin-bottom:6px">${t('page.restore.scopeLabel')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${memberships
+    kind === 'project' && scopeTargets.length
+      ? `<div style="margin-top:12px"><div class="faint" style="font-size:12px;margin-bottom:6px">${t('page.restore.scopeLabel')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${scopeTargets
           .map(
             w =>
               `<button class="btn btn-sm${S.ui.restoreTarget === w.id ? ' btn-primary' : ''}" data-a="restoreTargetPick" data-id="${esc(w.id)}" title="${esc(w.name)}"><span class="trunc" style="max-width:180px">${esc(w.name)}</span></button>`,
@@ -747,21 +743,16 @@ const restoreHistoryCard = () => {
 };
 
 const restoreSection = () => {
-  const list = S.ui.restoreList;
-  const listBody = !list
-    ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.restore.listLoading')}</div>`
-    : list.err
-      ? `<div class="faint" style="padding:8px 0">${t('page.restore.listUnavailable')}</div>`
-      : !list.runs.length
-        ? empty('archive', t('page.restore.listEmptyTitle'), t('page.restore.listEmptyBody'), '', 'sm', 3)
-        : list.runs.map(restoreRow).join('');
+  /* UAT round-9 (owner ruling): the standalone archive LIST is retired —
+     the Restore action rides the unified history table's rows (per-run
+     Restore button when the archive is available). The section keeps the
+     lead, the live progress panel and the history card. */
   return `<div class="row" style="gap:8px;align-items:center;margin-top:16px">
       <h2 style="margin:0">${t('page.restore.title')}</h2>
       <button class="btn btn-sm" data-a="restoreHistory">${ic('history', 13)}${t('page.restore.historyTitle')}</button>
     </div>
     <p class="faint" style="margin:4px 0 0">${t('page.restore.lead')}</p>
     ${restoreProgress()}
-    <div class="panel" style="margin-top:12px">${listBody}</div>
     ${S.ui.restoreHistoryOpen ? restoreHistoryCard() : ''}`;
 };
 
@@ -786,7 +777,6 @@ export function pageBackup() {
   const tasks = Array.isArray(flags.tasks) ? flags.tasks : [];
   /* 89-06: the restore list fill — one loop, payload-flag gated (D-22:
      the section and its fetches exist only for RESTORE_USE holders). */
-  if (flags.canRestore && !S.ui.restoreList) refreshRestoreBackups();
   /* 94-02 (UAT-3): the unified sblock merges the restore rows — one additive
      fill-loop kick fetches S.ui.restoreHistory when absent (no route change,
      no recompute; the payload is server-scoped). */

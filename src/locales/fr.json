@@ -2295,14 +2295,10 @@
   "page.backup.missingBlobWarn": "{n} blob(s) manquant(s) — la restauration de secours refusera cette archive",
   "page.restore.title": "Restauration",
   "page.restore.lead": "Rétablissez les données depuis une archive de sauvegarde gr8r. Les restaurations s’exécutent en arrière-plan — l’import comme nouveau reste le choix par défaut.",
-  "page.restore.listEmptyTitle": "Aucune sauvegarde pour l’instant",
-  "page.restore.listEmptyBody": "Les sauvegardes vérifiées apparaissent ici. Lancez une sauvegarde maintenant ou attendez une tâche planifiée.",
   "page.restore.listLoading": "Chargement des sauvegardes…",
-  "page.restore.listUnavailable": "L’historique des sauvegardes est indisponible pour le moment.",
   "page.restore.locLocal": "Locale",
   "page.restore.locS3": "S3",
   "page.restore.locMissing": "Indisponible",
-  "page.restore.previewAction": "Aperçu de la sauvegarde",
   "page.restore.previewTitle": "Aperçu de la sauvegarde",
   "page.restore.previewCorrupt": "Le manifeste de cette archive n’a pas pu être lu. Elle ne peut être ni prévisualisée ni restaurée.",
   "page.restore.scopeLabel": "Portée",
@@ -2381,5 +2377,6 @@
   "page.backup.statusWarning": "Attention",
   "page.backup.scheduleCol": "Planifiée",
   "toast.checksumOk": "Somme de contrôle vérifiée — l'archive est intacte",
-  "toast.checksumFail": "Vérification de la somme de contrôle ÉCHOUÉE — cette archive est corrompue"
+  "toast.checksumFail": "Vérification de la somme de contrôle ÉCHOUÉE — cette archive est corrompue",
+  "page.restore.restoreAction": "Restaurer"
 }

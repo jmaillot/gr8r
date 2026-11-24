@@ -9665,13 +9665,18 @@ async function handleApi(req, res, url) {
     }
     /* D-89-23: targeting validates LIVE membership at trigger time, BEFORE
        the lock claim — zero live memberships → keyed restoreNoWorkspace,
-       the lock row is never touched by a refused trigger. */
+       the lock row is never touched by a refused trigger.
+       UAT round-8 (owner ruling): a Super Admin (isInstanceAdmin +
+       SUPER_ACCESS — the same authority idiom as the /api/backup/scopes
+       gate) restores a project WITHOUT live membership; the archive still
+       confers nothing (the role is the authority, not the archive). */
     const targetWorkspaceId = typeof body?.targetWorkspaceId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.targetWorkspaceId) ? body.targetWorkspaceId : null;
+    const superAccess = isInstanceAdmin(user) && SUPER_ACCESS;
     if (scope.kind === 'project') {
       const memberOk = targetWorkspaceId
         ? await db.get('select 1 from memberships where workspace_id = ? and user_id = ?', [targetWorkspaceId, user.id])
         : null;
-      if (!memberOk) {
+      if (!memberOk && !superAccess) {
         await auditBackupTask(user, 'restore_refused:restoreNoWorkspace');
         return fail(res, 400, 'restoreNoWorkspace', 'Restoring a project needs a workspace you are currently a member of');
       }

@@ -552,6 +552,12 @@ export const api = {
   async restoreInstance(body, { signal } = {}) {
     return call('POST', '/api/backup/restore/instance', body, { signal });
   },
+  /* Phase 92 scopes family (UAT round-8, phase 94): every active workspace
+     for the restore-target picker — a Super Admin without live membership
+     still picks a target (the server gate accepts the same authority). */
+  async backupScopes({ signal } = {}) {
+    return call('GET', '/api/backup/scopes', undefined, { signal });
+  },
   /* 85-02 (D-16/D-29/D-30): the Instance Roles tab's route family — one
      listing GET (rows + recent activity), the audited grant POST and the
      revoke DELETE. Operator-only server-side; every refusal surfaces as a

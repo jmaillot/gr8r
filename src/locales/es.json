@@ -2255,14 +2255,10 @@
   "page.backup.missingBlobWarn": "{n} blob(s) ausente(s) — la restauración de desastre rechazará este archivo",
   "page.restore.title": "Restauración",
   "page.restore.lead": "Recupera datos de un archivo de copia de seguridad de gr8r. Las restauraciones se ejecutan en segundo plano — la importación como nuevo es lo predeterminado.",
-  "page.restore.listEmptyTitle": "Aún no hay copias de seguridad",
-  "page.restore.listEmptyBody": "Las ejecuciones de copia de seguridad verificadas aparecen aquí. Ejecuta una copia ahora o espera a una tarea programada.",
   "page.restore.listLoading": "Cargando copias de seguridad…",
-  "page.restore.listUnavailable": "El historial de copias de seguridad no está disponible ahora mismo.",
   "page.restore.locLocal": "Local",
   "page.restore.locS3": "S3",
   "page.restore.locMissing": "No disponible",
-  "page.restore.previewAction": "Previsualizar copia",
   "page.restore.previewTitle": "Vista previa de la copia de seguridad",
   "page.restore.previewCorrupt": "No se pudo leer el manifiesto de este archivo. No se puede previsualizar ni restaurar.",
   "page.restore.scopeLabel": "Alcance",
@@ -2341,5 +2337,6 @@
   "page.backup.statusWarning": "Advertencia",
   "page.backup.scheduleCol": "Programación",
   "toast.checksumOk": "Checksum verificado — el archivo está intacto",
-  "toast.checksumFail": "La verificación del checksum FALLÓ — este archivo está dañado"
+  "toast.checksumFail": "La verificación del checksum FALLÓ — este archivo está dañado",
+  "page.restore.restoreAction": "Restaurar"
 }

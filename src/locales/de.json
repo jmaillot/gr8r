@@ -2255,14 +2255,10 @@
   "page.backup.missingBlobWarn": "{n} fehlende(r) Blob(s) — die Notfall-Wiederherstellung wird dieses Archiv verweigern",
   "page.restore.title": "Wiederherstellung",
   "page.restore.lead": "Daten aus einem gr8r-Backup-Archiv zurückholen. Wiederherstellungen laufen im Hintergrund — der Import als neu ist der Standard.",
-  "page.restore.listEmptyTitle": "Noch keine Backups",
-  "page.restore.listEmptyBody": "Verifizierte Backup-Läufe erscheinen hier. Starten Sie jetzt ein Backup oder warten Sie auf eine geplante Aufgabe.",
   "page.restore.listLoading": "Backups werden geladen…",
-  "page.restore.listUnavailable": "Der Backup-Verlauf ist derzeit nicht verfügbar.",
   "page.restore.locLocal": "Lokal",
   "page.restore.locS3": "S3",
   "page.restore.locMissing": "Nicht verfügbar",
-  "page.restore.previewAction": "Backup-Vorschau",
   "page.restore.previewTitle": "Backup-Vorschau",
   "page.restore.previewCorrupt": "Das Manifest dieses Archivs konnte nicht gelesen werden. Es kann weder angezeigt noch wiederhergestellt werden.",
   "page.restore.scopeLabel": "Geltungsbereich",
@@ -2341,5 +2337,6 @@
   "page.backup.statusWarning": "Warnung",
   "page.backup.scheduleCol": "Zeitplan",
   "toast.checksumOk": "Prüfsumme verifiziert — das Archiv ist intakt",
-  "toast.checksumFail": "Prüfsummenprüfung FEHLGESCHLAGEN — dieses Archiv ist beschädigt"
+  "toast.checksumFail": "Prüfsummenprüfung FEHLGESCHLAGEN — dieses Archiv ist beschädigt",
+  "page.restore.restoreAction": "Wiederherstellen"
 }

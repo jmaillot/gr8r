@@ -50,7 +50,9 @@ test('the restore section renders payload fields through esc() — render-only, 
   for (const loc of ['local', 's3', 'missing']) {
     assert.match(pagesSrc, new RegExp(`${loc}: 'page\\.restore\\.`), `the ${loc} location is keyed`);
   }
-  assert.match(pagesSrc, /const restoreRow = /, 'the list row renderer exists');
+  /* UAT round-9 (owner ruling): the standalone list is retired — the Restore
+     action rides the unified history table rows; no restoreRow renderer. */
+  assert.ok(!pagesSrc.includes('const restoreRow = '), 'the retired list renderer is gone');
   assert.match(pagesSrc, /esc\(r\.filename\b/, 'the archive filename renders as TEXT (payload verbatim)');
   assert.match(pagesSrc, /'page\.restore\.locMissing'/, 'the missing-location badge is keyed (D-89-15 — the restore is refused keyed)');
   /* D-89-13 render-verbatim: the client NEVER derives the final restore name
@@ -112,9 +114,10 @@ test('restore stages render verbatim from the payload — pending panel, stage l
 });
 
 test('restore empty/loading/history states mirror the backup card discipline', () => {
-  assert.match(pagesSrc, /t\('page\.restore\.listEmptyTitle'\)/, 'the zero-runs empty state is keyed');
-  assert.match(pagesSrc, /t\('page\.restore\.listLoading'\)/, 'the list loading row is keyed');
-  assert.match(pagesSrc, /t\('page\.restore\.listUnavailable'\)/, 'the list unavailable row is keyed');
+  /* UAT round-9: the standalone list is retired — the history card + the
+     unified table carry the states; the listLoading key still serves the
+     drawer's pending body. */
+  assert.match(pagesSrc, /t\('page\.restore\.listLoading'\)/, 'the drawer pending body is keyed');
   assert.match(pagesSrc, /t\('page\.restore\.historyEmpty'\)/, 'the zero-history faint row is keyed');
   assert.match(pagesSrc, /t\('page\.restore\.historyCap'\)/, 'the 50-cap note is keyed (the server owns the cap)');
   assert.match(pagesSrc, /t\('page\.restore\.skipReportLabel'\)/, 'the skipped-tables report is keyed (D-89-7: report-only, never hidden)');
@@ -129,8 +132,9 @@ test('restore empty/loading/history states mirror the backup card discipline', (
 });
 
 test('the tracer happy path is wired: list fill → preview fetch → import-as-new → shared poll', () => {
-  assert.match(actionsSrc, /export async function refreshRestoreBackups/, 'the restore list fill loop exists');
-  assert.match(pagesSrc, /refreshRestoreBackups\(\)/, 'the page fills the restore list');
+  /* UAT round-9: the standalone list fill is retired — the preview opens
+     from the unified history table's per-run Restore button. */
+  assert.ok(!actionsSrc.includes('export async function refreshRestoreBackups'), 'the retired list fill loop is gone');
   assert.match(actionsSrc, /A\.restorePreview =/, 'the preview action exists');
   assert.match(actionsSrc, /api\.restorePreview\(/, 'the preview action fetches the manifest');
   assert.match(actionsSrc, /A\.restoreNew =/, 'the import-as-new action exists');
@@ -143,9 +147,9 @@ test('the tracer happy path is wired: list fill → preview fetch → import-as-
 test('5-locale key parity for the 89-06 restore surface', () => {
   const required = [
     'page.restore.title', 'page.restore.lead',
-    'page.restore.listEmptyTitle', 'page.restore.listEmptyBody', 'page.restore.listLoading', 'page.restore.listUnavailable',
+    'page.restore.listLoading', 'page.restore.restoreAction',
     'page.restore.locLocal', 'page.restore.locS3', 'page.restore.locMissing',
-    'page.restore.previewAction', 'page.restore.previewTitle', 'page.restore.previewCorrupt',
+    'page.restore.previewTitle', 'page.restore.previewCorrupt',
     'page.restore.scopeLabel', 'page.restore.tablesLabel', 'page.restore.filesLabel', 'page.restore.checksumLabel',
     'page.restore.skippedTablesNote', 'page.restore.restoreNewAction',
     'page.restore.stageLabel', 'page.restore.pending',
@@ -230,7 +234,11 @@ test('project archives show the workspace picker — live memberships verbatim, 
   assert.match(pagesSrc, /page\.restore\.newNameLead/, 'the server-derived final-name preview is wired (D-89-13 render-verbatim from the poll payload)');
   assert.match(pagesSrc, /data-a="restoreTargetPick"/, 'the picker is a keyed action');
   assert.match(pagesSrc, /api\.workspaces/, 'the picker options come from the api client (live memberships payload — never fabricated)');
-  assert.match(pagesSrc, /memberships\.length/, 'zero memberships render NO picker — the empty-dropdown DOM shape is never rendered (D-89-23)');
+  assert.match(pagesSrc, /Array\.isArray\(api\.workspaces\)/, 'the memberships fallback stays payload-guarded (no fabrication)');
+  /* UAT round-8 (owner ruling): a Super Admin restores without live
+     membership — the picker prefers the phase-92 scopes payload (every
+     active workspace), the trigger re-validates authority server-side. */
+  assert.match(pagesSrc, /scopeTargets\.length/, 'the picker renders from the scopes payload (Super Admin no-membership case)');
   const pick = pagesSrc.slice(pagesSrc.indexOf('restoreTargetPick'), pagesSrc.indexOf('restoreTargetPick') + 900);
   assert.ok(/esc\(w\.name\)|esc\(String\(w\.name\)\)/.test(pick), 'workspace names render through esc()');
   const rn = actionsSrc.slice(actionsSrc.indexOf('A.restoreNew ='), actionsSrc.indexOf('A.restoreNew =') + 1200);
@@ -306,10 +314,13 @@ test('backstop: long-text render sites truncate with title attrs and the counter
   /* The list row's filename and the history row's final name truncate via
      the .trunc idiom (display:inline-block + max-width, backup.js:90) with
      the FULL value in the title attr. */
-  assert.match(pagesSrc, /<span class="faint mono trunc" style="display:inline-block;max-width:\d+px" title="\$\{esc\(r\.filename \|\| ''\)\}">/, 'the archive filename truncates with the full value in title');
+  /* UAT round-9: the list filename trunc span is retired — the filename
+     rides the history run cell's tooltip (runTip, esc'd). */
+  assert.match(pagesSrc, /const runTip = \[run\.label, run\.filename\]/, 'the archive filename rides the history tooltip');
   assert.match(pagesSrc, /<span class="faint trunc" style="display:inline-block;max-width:\d+px" title="\$\{esc\(String\(run\.final_name \|\| ''\)\)\}">/, 'the history final name truncates with the full value in title');
-  /* The sha256 12-char slice + full-in-title idiom (backup.js:148). */
-  assert.match(pagesSrc, /title="\$\{esc\(r\.sha256\)\}">\$\{esc\(String\(r\.sha256\)\.slice\(0, 12\)\)\}/, 'the checksum renders the 12-char slice with the full digest in title');
+  /* The sha256 12-char slice idiom (backup.js history tooltip round-6) —
+     the list sha trunc span is retired with the list. */
+  assert.match(pagesSrc, /const runTip = \[run\.label, run\.filename\]/, 'the archive filename rides the history tooltip');
   /* A `-restored-2` counter name renders FULLY in the stage panel — the
      done/active bodies interpolate the payload name inside a wrapping <p>,
      never a trunc span (no client name math either, D-89-13). */
