@@ -1,6 +1,12 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-23 — Milestone v3.4 started (UX Polish & Backup Console Refinement). v3.3 shipped and archived 2026-11-23 (see MILESTONES.md).*
+*Last updated: 2026-11-24 — Milestone v3.4 UX Polish & Backup Console Refinement SHIPPED and archived (see MILESTONES.md). Next milestone not yet defined.*
+
+## Milestone v3.4 UX Polish & Backup Console Refinement — SHIPPED (2026-11-24)
+
+**Phases 91–95, 10 plans.** One digest email per user/day (4× duplicate fixed, pinned regression); server payload contracts (GFS naming + gfs_bucket dual-engine, describeCron, unified runs `?all=1`, `/api/backup/scopes`); Instance Roles governance UX (role tabs, stacked grants, selectable pickers); honest Backup console (real task table, humanized schedules, 4 GFS retention scales, unified filtered run history); Settings polish (My Access card grid, revoked-key purge with append-only audit, one-line Workspace URL, Edit-Teams picker parity); BKRST-05 project-overwrite restore (doc-splice engine, pre-restore snapshot, typed collision refusal, global restore lock unchanged — owner-confirmed D-04).
+
+---
 
 ## Current Milestone: v3.4 UX Polish & Backup Console Refinement
 

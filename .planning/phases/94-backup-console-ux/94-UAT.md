@@ -1,3 +1,9 @@
+---
+phase: 94-backup-console-ux
+status: complete
+completed: 2026-11-24
+---
+
 # Phase 94 — UAT Report
 
 **Date:** 2026-11-24 · **Method:** conversational UAT with the owner (live instance)

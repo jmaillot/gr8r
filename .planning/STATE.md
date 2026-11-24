@@ -27,7 +27,7 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 - **Phase:** 95 complete ✓ — plans 01 + 04 + 02 + 05 done (2026-11-24; 05 = BKRST-05 client half, commits c8a09b66..26d17ac2: scopes payload additive projects:[{id,name}], drawer project picker + Overwrite CTA (D-02), confirm-phrase vs CURRENT project name, payload contract targetId/targetProjectId/confirmName)
 - **Plan:** Milestone v3.4 complete — all 5 phases (91–95) verified
-- **Status:** Phases 91–95 done — milestone v3.4 phases complete, Phase 95 4/4 plans complete
+- **Status:** Milestone v3.4 SHIPPED 2026-11-24 (archived; override_closeout documented in MILESTONES.md)
 - **Progress:** ████░ 4/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).

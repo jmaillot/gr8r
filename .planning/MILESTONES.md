@@ -1,5 +1,19 @@
 # Milestones
 
+## v3.4 UX Polish & Backup Console Refinement (Shipped: 2026-11-24)
+
+**Phases completed:** 5 phases (91–95), 10 plans, ~40 tasks · 53 files, +5092/−806 LOC · 48 scoped commits
+
+**Key accomplishments:**
+- Digest dedup (NOTIF-01): root-caused the 4× duplicate to per-workspace transport rows; one per-user outbox row per user/day inside the same tx, workspace-grouped sections, user-locale rendering, global unsubscribe, restart/MAILER-off paths proven never to double-send — red regression test pinned first.
+- Server payload contracts (BKNAME-01/02): GFS naming with server-resolved workspace/project names (never raw ids), one pure GFS function shared with rotation stored in an additive `gfs_bucket` column (SQLite+Postgres lockstep), `describeCron` structured descriptors, unified runs `?all=1`, operator-gated `/api/backup/scopes` — `workspacesForUser` byte-unchanged.
+- Instance Roles governance UX (ROLE-01/02/03): role-tabbed roster with stacked grant entries, selectable user pickers (Teams Edit-team contract) with working Grant-dialog search, zero new mutation endpoints, audit funnel untouched.
+- Backup console UX (BKUI-01..04): real task table with humanized schedules and honest Next/Last run columns, pre-filled editor seeded from the server descriptor, all four GFS retention scales, unified cross-task run history with fail-closed per-run authorization — 11 owner UAT rounds absorbed.
+- Settings polish + cross-workspace pickers (XWS-01, SET-01..04): My Access card grid grouped by workspace, revoked-key purge with append-only audit, one-line Workspace URL, Edit-Teams picker parity — membershipsOf byte-gate pinned by test.
+- BKRST-05 project-overwrite restore (owner request): `restoreOverwriteUnit` project branch — doc-splice ids-verbatim, D-01 deletion set with transitive task closure, self-excluding collision scan (typed refusal ×5), pre-restore snapshot DR, one tx, global restore lock unchanged (owner-confirmed one-way ruling D-04); drawer offers Restore-as-new AND Overwrite with confirm-phrase vs current name.
+
+**Closeout note:** override_closeout — 91–93 verifications "stale" (covered-source digests predate phase-95 shared-file changes), covered by the phase-95 regression gate (2492 tests, 2 documented pre-existing failures) + owner UAT on Prod; 94 verification frontmatter added at close (PASS 5/5 pre-existing); 95 verified passed 20/20 + 4/4 owner UAT. 1 audit-open item acknowledged (94-UAT status artifact, 0 pending scenarios). Known verification overrides: 1 newly acknowledged (94-UAT), 32 carried forward.
+
 ## v3.3 Instance Operations — Backup, Restore & Roles (Shipped: 2026-11-23)
 
 **Phases completed:** 6 phases, 21 plans, 18 tasks
