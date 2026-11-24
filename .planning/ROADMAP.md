@@ -8,7 +8,7 @@
 ## Phases
 
 - [x] **Phase 91: Digest Dedup — One Digest Per User Per Day** - Root-cause and fix the 4× daily digest duplication with per-user outbox coalescing and a pinned regression test
-- [ ] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
+- [x] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
 - [ ] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
 - [ ] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
 - [ ] **Phase 95: Settings Polish + Cross-Workspace Pickers** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers
@@ -38,7 +38,9 @@ Plans:
   3. `describeCron` (server-side, in export/cron.js) produces a structured descriptor from `parseCron` output only; the client stays cron-eval-free and localizes labels via `t()` (×5 locales same commit); honest raw-expression fallback outside the 5-field subset.
   4. A unified runs route variant (e.g. `?all=1` + filter params) serves all-task run history leaving the frozen per-task GET and `/api/backup/runs/current` untouched.
   5. An operator-gated `backupScopeWorkspaces` endpoint lists all workspaces for Backup/Restore pickers without touching `workspacesForUser` (byte-unchanged).
-**Plans**: TBD
+**Plans**: 1 plan (complete — verified 2026-11-24, 7/7)
+Plans:
+- [x] 92-PLAN.md — GFS module extraction + gfs_bucket (dual-engine, backfill approved), archive naming, describeCron, ?all=1 unified runs, /api/backup/scopes
 
 ### Phase 93: Governance UX — Instance Roles
 **Goal**: Operators manage instance roles through a role-tabbed "Instance Roles" view where one row per user shows cumulative grants and the Grant dialog picker actually works.

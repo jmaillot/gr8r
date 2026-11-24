@@ -24,10 +24,10 @@ progress:
 
 ## Current Position
 
-- **Phase:** 91 complete ✓ (verified 2026-11-23, 9/9 must-haves; commits afdd6450..725145e1) — next: Phase 92
-- **Plan:** phase 92 not yet planned — run `/gsd-plan-phase 92`
-- **Status:** Phase 91 done — Phase 92 (Server Payload Contracts) ready
-- **Progress:** █░░░░ 1/5 phases (v3.4)
+- **Phase:** 92 complete ✓ (verified 2026-11-24, 7/7 must-haves; D-02 backfill owner-approved; commits e8fd8f69..80d8346a) — next: Phases 93/94 (depend on 92's contracts, now served)
+- **Plan:** phase 93 not yet planned — run `/gsd-plan-phase 93` (or 94)
+- **Status:** Phases 91+92 done — UI phases 93–95 unlocked
+- **Progress:** ██░░░ 2/5 phases (v3.4)
 
 **Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
 
