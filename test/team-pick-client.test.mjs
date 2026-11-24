@@ -107,3 +107,22 @@ test('aria combobox/listbox/option contract with .hl highlight, and esc() on eve
   assert.ok(!/\$\{tm\.name\}/.test(p), 'a raw tm.name interpolation survives — every team name must ride esc()');
   assert.ok(!/\$\{m\.name\}/.test(p), 'a raw member-name interpolation survives — every name must ride esc()');
 });
+
+/* (8) SET-04 / D-12 (plan 95-01 task 2): ONE chip-toggle contract — the
+   invite chips ride data-a="mteamToggle" under data-surface="invite" and
+   A.invTeamToggle is retired. */
+test('the invite chips carry data-a="mteamToggle" under data-surface="invite" (D-12 unified contract)', () => {
+  const m = modals();
+  assert.match(m, /<form class="modal-b" data-submit="submitInvite" data-surface="invite">/, 'the invite form lost its surface marker');
+  const inviteChips = m.slice(m.indexOf('data-submit="submitInvite" data-surface="invite"'), m.indexOf('data-surface="invite">ic'));
+  assert.ok(inviteChips.includes('data-a="mteamToggle"'), 'the invite chips no longer use the mteamToggle contract');
+  assert.ok(!inviteChips.includes('invTeamToggle'), 'a stale invTeamToggle chip survives in the invite markup');
+  /* Member modal chips unchanged (the default branch of the toggle). */
+  assert.match(m, /data-a="mteamToggle" data-v="\$\{id\}"/);
+});
+
+test('A.mteamToggle is surface-aware (invite → S.ui.inviteTeams, member → S.ui.memberTeams) and A.invTeamToggle is retired', () => {
+  const a = actions();
+  assert.match(a, /A\.mteamToggle = el => \{[\s\S]{0,200}el\.closest\('\[data-surface="invite"\]'\)[\s\S]{0,600}S\.ui\.inviteTeams[\s\S]{0,600}S\.ui\.memberTeams/, 'mteamToggle lost its surface-aware branch');
+  assert.ok(!/A\.invTeamToggle = /.test(a), 'A.invTeamToggle still exists — the action was not retired');
+});

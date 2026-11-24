@@ -2395,12 +2395,22 @@ A.submitInvite = () => {
     }
   });
 };
-/* D-07: the invite form's team multi-select — same toggle pattern as the
-   member teams picker (mteamToggle), state rides S.ui.inviteTeams. */
-A.invTeamToggle = el => {
-  const cur = S.ui.inviteTeams || [];
-  const id = el.dataset.v;
-  S.ui.inviteTeams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+/* SET-04 (D-12): ONE chip-toggle contract for both Edit-Teams surfaces —
+   the invite form's chips carry data-surface="invite" (on the form) and
+   toggle S.ui.inviteTeams (same state submitInvite reads); the member-edit
+   modal keeps the S.ui.memberTeams draft behavior byte-for-byte. The retired
+   A.invTeamToggle folded into this handler — one component, one behavior. */
+A.mteamToggle = el => {
+  if (el.closest('[data-surface="invite"]')) {
+    const cur = S.ui.inviteTeams || [];
+    const id = el.dataset.v;
+    S.ui.inviteTeams = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+  } else {
+    const st = S.ui.memberTeams;
+    if (!st) return;
+    const id = el.dataset.v;
+    st.teams = st.teams.includes(id) ? st.teams.filter(x => x !== id) : [...st.teams, id];
+  }
   render();
 };
 /* SCOPE-05/06 invite scope pickers retired 2026-11-11 (access limits left the

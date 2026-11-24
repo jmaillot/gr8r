@@ -490,13 +490,13 @@ export function inviteModal(m, H) {
     })
     .join('')}</div><span class="hint">${t('modal.guestProjectHint')}</span></div>`;
   return `${H(t('modal.inviteTo', { name: esc(D().ws.name) }), api.mailEnabled ? t('modal.inviteMailHint') : api.enabled ? t('modal.inviteLinkHint') : t('modal.inviteLocalHint'))}
-  <form class="modal-b" data-submit="submitInvite">
+  <form class="modal-b" data-submit="submitInvite" data-surface="invite">
     <div class="field"><label class="label" for="inv-emails">${t('modal.emailAddresses')}</label><textarea class="textarea ${err ? 'is-error' : ''}" id="inv-emails" data-in="inviteDraft" placeholder="name@company.com, another@company.com" rows="3" autofocus>${esc(S.ui.inviteDraft || '')}</textarea>${err ? `<span class="err">${ic('circle-alert', 12)}${err}</span>` : `<span class="hint">${t('modal.emailHint')}</span>`}</div>
     <div class="row" style="gap:12px"><div class="field grow"><label class="label" for="inv-role">${t('modal.role')}</label><select class="select" id="inv-role" data-in="invRole">${INVITE_ROLE_OPTIONS.map(r => `<option ${role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div></div>
     ${guest ? projectPicker : `<div class="field"><span class="label">${t('nav.route.team')}</span><div class="row" style="flex-wrap:wrap;gap:6px" role="group" aria-label="${t('nav.route.team')}">${(S.ui.inviteTeams || [])
       .map(id => {
         const tm = teamsList().find(x => x.id === id);
-        return `<span class="chip">${ic('users', 12)}<b>${esc(tm?.name || id)}</b><button type="button" class="ibtn" data-a="invTeamToggle" data-v="${id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></span>`;
+        return `<span class="chip">${ic('users', 12)}<b>${esc(tm?.name || id)}</b><button type="button" class="ibtn" data-a="mteamToggle" data-v="${id}" aria-label="${t('act.remove')}">${ic('x', 12)}</button></span>`;
       })
       .join('')}<button type="button" class="btn btn-ghost btn-sm" data-a="teamPickOpen" data-surface="invite">${ic('users', 14)}${t('act.editTeams')}</button></div><span class="hint">${t('modal.inviteTeamsHint')}</span></div>`}
     ${
