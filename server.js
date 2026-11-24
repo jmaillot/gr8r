@@ -7889,6 +7889,84 @@ async function handleApi(req, res, url) {
   }
 
   /* =====================================================================
+     SETTINGS (SET-01/SET-02, phase 95-02) — the My Access aggregate.
+     Cross-workspace read: the caller's member workspaces via membershipsOf
+     (READ-ONLY call — the function body and its call-site set are
+     byte-pinned by test/xws-gate.test.mjs; this route ADDS one caller,
+     it widens nothing). Per workspace, the visibility funnel is copied
+     VERBATIM from the /me/visibility handler above: same superOwner
+     short-circuit, same memberCanReadProject walk, same
+     projectAccessReason ?? 'member' fallback, same single-teamName block.
+     The existing handler is NOT touched — its {projects:[{id,name,reason
+     [,teamName]}]} shape is pinned by members.js:95 and the self-visibility
+     tests. icon/color/role are ADDITIVE display fields (omitted when
+     absent); workspaces whose filtered project list is empty are omitted
+     (D-07: empty workspaces hidden).
+     ===================================================================== */
+  if (pathname === '/api/settings/my-access' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const rows = await membershipsOf(user.id);
+    const workspaces = [];
+    for (const row of rows) {
+      let doc;
+      try {
+        doc = JSON.parse(row.doc);
+      } catch {
+        continue;
+      }
+      normalizeProjects(doc);
+      const myId = row.member_id || null;
+      const memberTeams = await teamsOfMember(row.id, myId, row);
+      /* [2026-11-24] superOwner union copied verbatim from /me/visibility:
+         synthetic operator membership only — a real owner stays blind to
+         private projects they are not on (D-50-5, privacy.test.mjs:236). */
+      const superOwner = ROLE_RANK[row.role] >= ROLE_RANK.owner && row.member_id === null;
+      const projects = [];
+      for (const p of doc?.data?.projects || []) {
+        if (!p?.id) continue;
+        if (!superOwner && !(await memberCanReadProject(p, row.id, myId))) continue;
+        const reason = superOwner ? 'member' : projectAccessReason(p, myId, memberTeams) ?? 'member';
+        const entry = { id: p.id, name: p.name || p.id, reason };
+        if (reason === 'team') {
+          const tid = memberTeams.find(t => Array.isArray(p.teams) && p.teams.includes(t));
+          const tName = (Array.isArray(doc?.data?.teams) ? doc.data.teams : []).find(tm => tm?.id === tid)?.name;
+          if (tName) entry.teamName = String(tName);
+        }
+        /* Additive display fields (T-95-06): raw p.icon/p.color ride through
+           and the CLIENT normalizes against PCOLORS (store.js pColor); role
+           feeds the D-08 badge from the caller's own membership row. */
+        if (p.icon) entry.icon = p.icon;
+        if (p.color) entry.color = p.color;
+        entry.role = row.role;
+        projects.push(entry);
+      }
+      if (projects.length) workspaces.push({ id: row.id, name: row.name, slug: row.slug, projects });
+    }
+    return json(res, 200, { workspaces });
+  }
+
+  /* SET-03 (phase 95-02, D-09/D-10): the honest revoked-key purge. Own keys
+     only, revoked rows only (expired-but-not-revoked is NOT purgeable), one
+     audit event carrying the COUNT only — no key values, labels, hashes or
+     prefixes anywhere (D-10). Guard chain order sameOrigin → requireUser →
+     tooMany never reordered (T-95-04). */
+  if (pathname === '/api/keys/purge-revoked' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`keypurge|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    const del = await db.run('delete from api_keys where user_id = ? and revoked_at is not null', [user.id]);
+    logSecurity(user.id, 'api_key_purged');
+    await db.run(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [uid(), user.id, user.id, 'api_key_purged', 0, clientIp(req), null, user.name, user.email, String(del.changes), 'api-key', now()],
+    );
+    return json(res, 200, { removed: del.changes });
+  }
+
+  /* =====================================================================
      PROJECT WEBHOOKS — hook CRUD (67-03, WHK-01/D-08/D-10/D-11/D-12).
      Funnel per route: requireWorkspace → sameOrigin → project from the
      doc (404 parity) → canManageProject on EVERY route (the server gate

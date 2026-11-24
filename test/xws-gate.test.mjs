@@ -35,7 +35,7 @@ test('membershipsOf: the frozen function body is byte-pinned (declaration + quer
   assert.match(s, /if \(!byId\.has\(w\.id\)\)/);
 });
 
-test('membershipsOf: the call-site set is byte-pinned — exactly the declaration + two consumers, verbatim lines', () => {
+test('membershipsOf: the call-site set is byte-pinned — declaration + the frozen consumers, verbatim lines', () => {
   const lines = serverSrc().split('\n');
   const sites = lines.filter(l => l.includes('membershipsOf('));
   assert.deepEqual(
@@ -43,6 +43,10 @@ test('membershipsOf: the call-site set is byte-pinned — exactly the declaratio
     [
       'async function membershipsOf(userId) {',
       'workspaces: (await membershipsOf(user.id)).map(row => workspacePayload(row, row)),',
+      /* 95-02 (SET-01): the My Access aggregate joins the set as a READ-ONLY
+         caller — it enumerates the caller's own member workspaces and never
+         widens the helper. The body pin above still proves the union intact. */
+      'const rows = await membershipsOf(user.id);',
       'const adminWsIds = (await membershipsOf(user.id)).filter(m => ROLE_RANK[m.role] >= ROLE_RANK.admin).map(m => m.id);',
     ],
     'membershipsOf call sites drifted — cross-workspace visibility is pickers-only; switcher consumers are frozen (XWS-01)',
