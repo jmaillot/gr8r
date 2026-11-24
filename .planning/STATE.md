@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v3.4
 milestone_name: UX Polish & Backup Console Refinement
 status: unknown
-stopped_at: Phase 94 context gathered
-last_updated: "2026-11-24T06:09:58.126Z"
-state_head: 95a89b07468861aa6b95985914f26a10071eb7fa
+stopped_at: Completed 94-1 (phase branch phase-94-backup-console-ux, not merged)
+last_updated: "2026-11-24T08:13:00.257Z"
+state_head: 81494b06f32f2ccdd143fb71549894ca5903e477
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 4
+  completed_plans: 4
   percent: 20
 ---
 
@@ -35,6 +35,12 @@ progress:
 
 - v3.4 plan: 5 phases (91–95), 14 requirements, 100% mapped
 - Suite gates at start: unit ~2050 pass / 0 fail, e2e green per v3.3 close, lint exit 0, chunk gate 498 kB < 500 kB, i18n ×5 parity gate
+
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 94 P1 | 3.5h | 6 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -66,6 +72,7 @@ progress:
 ### Decisions
 
 - 2026-11-23: v3.4 roadmap created — 5 phases numbered 91–95 continuing v3.3 numbering; sequential phase IDs
+- [Phase 94]: cronToPreset = describeCron.kind projection (null=custom); monRestricted fix; badge = client latest-per-task over frozen ?all=1 limit-50; prefill keeps cronDirty=false; 4-scale retention with gfs labels; unified sblock filter enum = served statuses only; poll /runs/current gated on canBackup
 
 ### Blockers
 
@@ -73,8 +80,8 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-11-24T06:09:58.076Z
-**Stopped at:** Phase 94 context gathered
-**Resume file:** .planning/phases/94-backup-console-ux/94-CONTEXT.md
+**Last session:** 2026-11-24T08:12:47.267Z
+**Stopped at:** Completed 94-1 (phase branch phase-94-backup-console-ux, not merged)
+**Resume file:** None
 - **Last action:** roadmap created (ROADMAP.md, STATE.md, REQUIREMENTS.md traceability updated)
 - **Next:** `/gsd-discuss-phase 91` or `/gsd-plan-phase 91`
