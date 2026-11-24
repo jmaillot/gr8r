@@ -586,6 +586,12 @@ const restorePreviewBody = (d, flags) => {
     ctas.push(`<button class="btn btn-primary" data-a="restoreNew" data-id="${esc(d.runId)}">${ic('rotate-ccw', 14)}${t('page.restore.restoreNewAction')}</button>`);
   if (kind === 'workspace' && flags?.canBackup && target)
     ctas.push(`<button class="btn btn-danger" data-a="restoreOverwrite" data-id="${esc(d.runId)}">${ic('pencil', 14)}${t('page.restore.restoreOverwriteAction')}</button>`);
+  /* 95-05 (BKRST-05, D-02): BOTH CTAs for project archives — Overwrite arms
+     only when a target workspace AND a target project are picked (payload-
+     driven chips below). The server re-validates everything against the
+     live doc; the client chrome never replaces that boundary. */
+  if (kind === 'project' && flags?.canBackup && S.ui.restoreTarget && S.ui.restoreTargetProject)
+    ctas.push(`<button class="btn btn-danger" data-a="restoreOverwrite" data-id="${esc(d.runId)}">${ic('pencil', 14)}${t('page.restore.overwriteCta')}</button>`);
   if (kind === 'instance' && api.user?.isInstanceAdmin)
     ctas.push(`<button class="btn btn-danger" data-a="restoreInstance" data-id="${esc(d.runId)}">${ic('hard-drive', 14)}${t('page.restore.restoreInstanceAction')}</button>`);
   /* D-89-23 workspace picker (project archives): live memberships verbatim,
@@ -609,6 +615,23 @@ const restorePreviewBody = (d, flags) => {
           )
           .join('')}</div>${pickedName ? `<div class="hint" style="margin:6px 0 0">${t('page.restore.targetArmed', { name: esc(pickedName) })}</div>` : ''}</div>`
       : '';
+  /* 95-05 (D-02): second picker level — projects of the CHOSEN workspace,
+     read from the same scopes payload (S.ui.backupScopes[].projects). Same
+     chip idiom/classes as the workspace row; picking arms
+     S.ui.restoreTargetProject. A workspace without projects (or the
+     memberships fallback, which carries none) renders NO row — fail-closed. */
+  const pickedWsProjects = Array.isArray(scopeTargets.find(w => w.id === S.ui.restoreTarget)?.projects)
+    ? scopeTargets.find(w => w.id === S.ui.restoreTarget).projects
+    : [];
+  const projectPicker =
+    kind === 'project' && S.ui.restoreTarget && pickedWsProjects.length
+      ? `<div style="margin-top:12px"><div class="label" style="margin-bottom:4px">${t('page.restore.projectPickLabel')}</div><div class="hint" style="margin:0 0 8px">${t('page.restore.projectPickHint')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${pickedWsProjects
+          .map(
+            p =>
+              `<button class="btn btn-sm${S.ui.restoreTargetProject === p.id ? ' btn-primary' : ''}" data-a="restoreProjectPick" data-id="${esc(p.id)}" title="${esc(p.name)}"><span class="trunc" style="max-width:180px">${esc(p.name)}</span></button>`,
+          )
+          .join('')}</div></div>`
+      : '';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px">
       ${previewDetail(t('page.restore.scopeLabel'), esc(String(kind ?? '')))}
       ${previewDetail(t('page.restore.tablesLabel'), esc(String(tables.length)))}
@@ -623,6 +646,7 @@ const restorePreviewBody = (d, flags) => {
         : ''
     }
     ${picker}
+    ${projectPicker}
     <div class="row" style="gap:8px;margin-top:12px">${ctas.join('')}</div>`;
 };
 

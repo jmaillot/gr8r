@@ -2383,5 +2383,9 @@
   "page.restore.targetPickLabel": "Cible de restauration",
   "page.restore.targetPickHint": "Obligatoire — clique un workspace ci-dessous : le projet restauré y sera créé.",
   "page.restore.targetArmed": "Cible : {name} — tu peux restaurer.",
+  "page.restore.projectPickLabel": "Projet",
+  "page.restore.projectPickHint": "Choisis le projet à écraser avec les données de l'archive.",
+  "page.restore.overwriteCta": "Écraser le projet…",
+  "page.restore.overwriteConfirmTitle": "Écraser le projet {name} ?",
   "err.restoreNameCollision": "Un projet portant ce nom existe déjà dans le workspace cible"
 }

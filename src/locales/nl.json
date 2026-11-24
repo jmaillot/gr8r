@@ -2343,5 +2343,9 @@
   "page.restore.targetPickLabel": "Hersteldoel",
   "page.restore.targetPickHint": "Verplicht — klik hieronder op een workspace: het herstelde project wordt daar aangemaakt.",
   "page.restore.targetArmed": "Doel: {name} — je kunt nu herstellen.",
+  "page.restore.projectPickLabel": "Project",
+  "page.restore.projectPickHint": "Kies het project dat met de gegevens uit het archief wordt overschreven.",
+  "page.restore.overwriteCta": "Project overschrijven…",
+  "page.restore.overwriteConfirmTitle": "Project {name} overschrijven?",
   "err.restoreNameCollision": "Er bestaat al een project met deze naam in de doel-workspace"
 }

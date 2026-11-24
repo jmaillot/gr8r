@@ -5642,6 +5642,7 @@ A.restoreNew = async el => {
   S.ui.restorePreview = null;
   S.ui.restorePreviewData = null;
   S.ui.restoreTarget = null;
+  S.ui.restoreTargetProject = null;
   S.ui.restorePending = true;
   backupStartPolling();
   render();
@@ -5649,6 +5650,15 @@ A.restoreNew = async el => {
 
 A.restoreTargetPick = el => {
   S.ui.restoreTarget = el.dataset.id || null;
+  /* 95-05 (D-02): switching the workspace target invalidates the armed
+     project — the second-level chips re-render from the new workspace's
+     projects, never from the stale pick. */
+  S.ui.restoreTargetProject = null;
+  render();
+};
+
+A.restoreProjectPick = el => {
+  S.ui.restoreTargetProject = el.dataset.id || null;
   render();
 };
 
@@ -5661,6 +5671,43 @@ A.restoreTargetPick = el => {
    drawer closes only on the ACCEPTED trigger — a refusal leaves it open. */
 A.restoreOverwrite = el => {
   const runId = el.dataset.id || S.ui.restorePreview?.runId;
+  /* 95-05 (BKRST-05, D-02/D-03): project-archives branch. The target is the
+     PICKED workspace + project from the scopes payload; typeName is the
+     project's CURRENT name from that payload (chrome only — the server
+     re-reads the live doc and re-validates confirmName against it). The
+     payload shape mirrors the 95-04 route contract: targetId (workspace) +
+     targetProjectId + confirmName. Refusals ride the existing
+     tErr/restoreToast vocabulary (restoreNameCollision names the conflict). */
+  if (S.ui.restorePreviewData?.data?.scope?.kind === 'project') {
+    const wsId = S.ui.restoreTarget;
+    const projId = S.ui.restoreTargetProject;
+    if (!runId || !wsId || !projId) return toast(restoreToast('restoreTargetMissing'), { kind: 'err' });
+    const wsEntry = (Array.isArray(S.ui.backupScopes) ? S.ui.backupScopes : []).find(w => w.id === wsId);
+    const targetProject = (Array.isArray(wsEntry?.projects) ? wsEntry.projects : []).find(p => p.id === projId);
+    if (!targetProject) return toast(restoreToast('restoreTargetMissing'), { kind: 'err' });
+    confirmDlg({
+      title: t('page.restore.overwriteConfirmTitle', { name: esc(targetProject.name) }),
+      body: t('page.restore.confirmOverwriteBody', { name: esc(targetProject.name) }),
+      ok: t('page.restore.confirmOverwriteOk'),
+      danger: true,
+      typeName: targetProject.name,
+      run: async () => {
+        const res = await api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name });
+        if (!res.ok) {
+          if (res.status === 401) return;
+          return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+        }
+        S.ui.restorePreview = null;
+        S.ui.restorePreviewData = null;
+        S.ui.restoreTarget = null;
+        S.ui.restoreTargetProject = null;
+        S.ui.restorePending = true;
+        backupStartPolling();
+        render();
+      },
+    });
+    return;
+  }
   const scopeId = S.ui.restorePreviewData?.data?.scope?.id;
   const target = api.workspaces.find(w => w.id === scopeId);
   if (!runId || !target) return;
@@ -5679,6 +5726,7 @@ A.restoreOverwrite = el => {
       S.ui.restorePreview = null;
       S.ui.restorePreviewData = null;
       S.ui.restoreTarget = null;
+      S.ui.restoreTargetProject = null;
       S.ui.restorePending = true;
       backupStartPolling();
       render();

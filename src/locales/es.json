@@ -2343,5 +2343,9 @@
   "page.restore.targetPickLabel": "Destino de restauración",
   "page.restore.targetPickHint": "Obligatorio — haz clic en un workspace abajo: el proyecto restaurado se creará allí.",
   "page.restore.targetArmed": "Destino: {name} — ya puedes restaurar.",
+  "page.restore.projectPickLabel": "Proyecto",
+  "page.restore.projectPickHint": "Elige el proyecto que se sobrescribirá con los datos del archivo.",
+  "page.restore.overwriteCta": "Sobrescribir proyecto…",
+  "page.restore.overwriteConfirmTitle": "¿Sobrescribir el proyecto {name}?",
   "err.restoreNameCollision": "Ya existe un proyecto con este nombre en el workspace de destino"
 }

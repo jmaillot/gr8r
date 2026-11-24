@@ -2343,5 +2343,9 @@
   "page.restore.targetPickLabel": "Restore target",
   "page.restore.targetPickHint": "Required — click a workspace below: the restored project is created there.",
   "page.restore.targetArmed": "Target: {name} — you can restore now.",
+  "page.restore.projectPickLabel": "Project",
+  "page.restore.projectPickHint": "Pick the project to overwrite with the archive's data.",
+  "page.restore.overwriteCta": "Overwrite project…",
+  "page.restore.overwriteConfirmTitle": "Overwrite project {name}?",
   "err.restoreNameCollision": "A project with this name already exists in the target workspace"
 }

@@ -2343,5 +2343,9 @@
   "page.restore.targetPickLabel": "Wiederherstellungsziel",
   "page.restore.targetPickHint": "Erforderlich — klicke unten auf einen Workspace: das wiederhergestellte Projekt wird dort erstellt.",
   "page.restore.targetArmed": "Ziel: {name} — du kannst jetzt wiederherstellen.",
+  "page.restore.projectPickLabel": "Projekt",
+  "page.restore.projectPickHint": "Wähle das Projekt, das mit den Archivdaten überschrieben wird.",
+  "page.restore.overwriteCta": "Projekt überschreiben…",
+  "page.restore.overwriteConfirmTitle": "Projekt {name} überschreiben?",
   "err.restoreNameCollision": "Ein Projekt mit diesem Namen existiert bereits im Ziel-Workspace"
 }
