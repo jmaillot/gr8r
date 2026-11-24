@@ -11,7 +11,7 @@
 - [x] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
 - [x] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
 - [x] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
-- [ ] **Phase 95: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers, project-archive overwrite restore (BKRST-05)
+- [x] **Phase 95: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers, project-archive overwrite restore (BKRST-05)
 
 ## Phase Details
 

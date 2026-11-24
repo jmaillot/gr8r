@@ -46,22 +46,30 @@ human_verification:
   - test: "Open Settings > My Access and confirm the grouped read-only card grid reads well (project-colored icons, workspace subtitles, role badges, empty workspaces hidden)."
     expected: "Card grid, not a flat list; each project shows its own icon/color; no tick icon."
     why_human: "Visual layout quality cannot be judged by slice tests."
+    verified: true
+    verified_by: "owner (Prod, 2026-11-24)"
   - test: "View Settings > General > Workspace URL with a long URL."
     expected: "One line, ellipsis, full URL on hover title; no marquee."
     why_human: "Overflow behavior is visual."
+    verified: true
+    verified_by: "owner (Prod, 2026-11-24)"
   - test: "As Super Admin, open the Backup page: Run-now picker and restore drawer target pickers; restore a project archive and walk Restore-as-new AND Overwrite (with confirm phrase)."
     expected: "All workspaces visible in pickers only; drawer shows both CTAs for project archives; overwrite confirm uses the target project's CURRENT name; success/failure toasts render."
     why_human: "End-to-end drawer interaction and dialog chrome are not exercised by slice tests."
+    verified: true
+    verified_by: "owner (Prod, 2026-11-24)"
   - test: "Check Invite Member > Edit Teams picker feels identical to Teams > Edit team."
     expected: "Same selectable chip picker behavior."
     why_human: "UX parity judgment is visual/interactive."
+    verified: true
+    verified_by: "owner (Prod, 2026-11-24)"
 ---
 
 # Phase 95: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore — Verification Report
 
 **Phase Goal:** Settings surfaces polished (My Access, honest key purge, one-line URL, working Teams picker); operators see all workspaces in Backup/Restore scope pickers only; project-restore archives restorable as NEW or as OVERWRITE.
 **Verified:** 2026-11-24T12:00:00Z
-**Status:** human_needed (all automated must-haves pass; 4 visual/interactive items routed to human)
+**Status:** verified — 20/20 automated must-haves pass; 4/4 human verification items confirmed by owner on Prod (2026-11-24)
 
 **Re-verification:** No — initial verification.
 
