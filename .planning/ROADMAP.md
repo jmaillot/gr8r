@@ -11,7 +11,7 @@
 - [x] **Phase 92: Server Payload Contracts** - Roles aggregation, cron humanization descriptor, name resolution, GFS naming + gfs_bucket, unified runs route, backupScopeWorkspaces endpoint
 - [x] **Phase 93: Governance UX — Instance Roles** - Role-tabbed roster, cumulative badges, rename to "Instance Roles", working selectable pickers
 - [ ] **Phase 94: Backup Console UX** - Real task table, pre-filled editor, GFS retention scales, unified run history with filters and honest authorization
-- [ ] **Phase 95: Settings Polish + Cross-Workspace Pickers** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers
+- [ ] **Phase 95: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore** - My Access view, revoked-key purge, one-line Workspace URL, Edit-Teams picker, operator cross-workspace scope pickers, project-archive overwrite restore (BKRST-05)
 
 ## Phase Details
 
@@ -78,17 +78,18 @@ Plans:
 **Plans**: TBD
 - [x] 94-PLAN.md
 
-### Phase 95: Settings Polish + Cross-Workspace Pickers
+### Phase 95: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore
 
-**Goal**: Settings surfaces are polished (My Access view, honest key purge, one-line URL, working Teams picker) and operators see all workspaces in the Backup/Restore scope pickers only.
-**Depends on**: Phase 92 (backupScopeWorkspaces endpoint); settings items independent
-**Requirements**: XWS-01, SET-01, SET-02, SET-03, SET-04
+**Goal**: Settings surfaces are polished (My Access view, honest key purge, one-line URL, working Teams picker), operators see all workspaces in the Backup/Restore scope pickers only, and project-restore archives can be restored as NEW or as OVERWRITE of an existing project.
+**Depends on**: Phase 92 (backupScopeWorkspaces endpoint); settings items independent; project overwrite extends the 89-05 engine
+**Requirements**: XWS-01, SET-01, SET-02, SET-03, SET-04, BKRST-05
 **Success Criteria** (what must be TRUE):
   1. My Access shows project icons (not the tick icon) or a column layout for a better overview.
   2. API Keys offers an explicit user-triggered button removing revoked keys only — audit trail preserved (append-only), never a silent auto-purge.
   3. Settings > General > Workspace URL displays on a single line.
   4. Invite Member > Edit Teams uses the selectable team picker (same contract as Teams > Edit team).
   5. Super Admin / Backup Op / Restore Op see ALL workspaces in the Backup & Restore scope pickers only; `workspacesForUser` is byte-unchanged (grep gate + switcher-vs-picker differential e2e — navigation and workspace switcher unchanged for everyone).
+  6. BKRST-05 (owner ruling 2026-11-24): a PROJECT archive restores either as NEW (current) or as OVERWRITE of an existing project — the overwrite extends the 89-05 guarded unit (pre-restore snapshot, confirm-phrase against the target project's CURRENT name, scope-kind match, ids verbatim) to project containment: target project's rows replaced inside a single tx, workspace_id remapped to the target workspace, name/slug collision handling keyed, favorites/comments/activity referencing the replaced project kept honest. The drawer offers both CTAs for project archives; every refusal keyed ×5.
 
 **UI hint**: yes
 **Plans**: TBD
@@ -101,4 +102,4 @@ Plans:
 | 92. Server Payload Contracts | 0/? | Not started | - |
 | 93. Governance UX — Instance Roles | 0/? | Not started | - |
 | 94. Backup Console UX | 1/1 | In Progress|  |
-| 95. Settings Polish + Cross-Workspace Pickers | 0/? | Not started | - |
+| 95. Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore | 0/? | Not started | - |

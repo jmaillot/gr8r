@@ -326,11 +326,14 @@ function recentHtml() {
    ===================================================================== */
 const govCandidates = (role, qRaw) => {
   const needle = foldForSearch(qRaw || '').text;
-  const held = new Set((S.ui.govRoles || []).filter(r => r.role === role).map(r => r.userId));
+  /* UAT round-11 (owner ruling): the picker offers ONLY users who do NOT
+     hold the role yet — holders already sit in the roster table above, so
+     offering them again just creates duplicate-grant noise. */
   return (S.ui.operatorUsers || [])
     .filter(u => !u.is_instance_admin)
+    .filter(u => !held.has(u.id))
     .filter(u => !needle || foldForSearch(`${u.name || ''} ${u.email || ''}`).text.includes(needle))
-    .map(u => ({ u, held: held.has(u.id) }));
+    .map(u => ({ u, held: false }));
 };
 const govPickerList = (role, st, listId) => {
   /* UAT round-10 (owner ruling, same as the Super Admins tab): the picker
