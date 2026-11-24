@@ -2379,5 +2379,6 @@
   "page.governance.superCapNote": "{shown} sur {total} correspondances affichées",
   "page.governance.superShowMore": "Afficher 10 de plus",
   "page.governance.superNoMatchesTitle": "Aucun utilisateur ne correspond",
-  "page.governance.superNoMatchesBody": "Aucun nom ou e-mail d’utilisateur ne correspond à « {query} »."
+  "page.governance.superNoMatchesBody": "Aucun nom ou e-mail d’utilisateur ne correspond à « {query} ».",
+  "page.backup.historyDateCol": "Date"
 }

@@ -158,7 +158,7 @@ const GFS_SCALE_KEYS = { daily: 'page.backup.gfsDaily', weekly: 'page.backup.gfs
    keptPosition is not on ?all=1 rows — the label embeds the GFS segment).
    ===================================================================== */
 const HISTORY_FILTER_STATUSES = ['running', 'succeeded', 'failed', 'upload_failed', 'deleted'];
-const historyRow = run => {
+const historyTr = run => {
   const errOpen = S.ui.backupRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at) || Number(run.created_at);
   const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
@@ -167,40 +167,55 @@ const historyRow = run => {
   /* The GFS badge: the payload's gfs_bucket resolves through the four gfs
      keys — no client GFS math, ever (D-90-12/16 doctrine carries over). */
   const gfsKey = GFS_SCALE_KEYS[run.gfs_bucket];
-  /* 94-02 (UAT-3): the Type column — Backup rows lead with the type badge
-     (label reuses the existing nav.route.backup wording); historyColType is
-     the column label (title attr). The task/trigger/status filters apply
-     ONLY to backup rows — the type is never filtered (deferred). */
-  const typeBadge = `<span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('nav.route.backup'))}</span>`;
-  return `<div style="padding:8px 0;border-top:1px solid var(--border)"${chkBusy ? ' aria-busy="true"' : ''}>
-    <div class="row" style="gap:8px;flex-wrap:wrap;font-size:13px;align-items:center">
-      ${typeBadge}
-      <span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>
-      ${gfsKey ? `<span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : ''}
-      <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location] || 'page.restore.locMissing')}</span>
-      <span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(run.label || '')}">${esc(run.label || '')}</span>
-      <span class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</span>
-      <span class="faint">${esc(when)}</span>
-      ${Number(run.missing_blob_count) > 0 ? `<span class="badge red">${ic('triangle-alert', 12)}${t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) })}</span>` : ''}
-      ${run.sha256 ? `<span class="mono faint" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</span>` : ''}
-      ${run.filename ? `<span class="mono faint">${esc(run.filename)}</span>` : ''}
-      ${run.location === 'local' || run.location === 's3' ? `<button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>` : ''}
-      ${run.location === 'local' || run.location === 's3' ? `<button class="btn btn-secondary btn-sm" data-a="backupVerifyChecksum" data-id="${esc(run.id)}"${chkBusy ? ' disabled aria-busy="true"' : ''}>${chkBusy ? t('page.backup.checksumChecking') : `${ic('shield-check', 13)}${t('page.backup.verifyChecksumAction')}`}</button>` : ''}
-      ${chk === 1 ? `<span class="badge green">${t('page.backup.checksumOk')}</span>` : chk === 0 ? `<span class="badge red">${t('page.backup.checksumFail')}</span>` : ''}
-      ${run.checksum_checked_at ? `<span class="faint">${t('page.backup.checksumLastCheck', { time: esc(fmtDate(run.checksum_checked_at)) })}</span>` : ''}
-    </div>
-    ${
-      run.error
-        ? `<div style="margin-top:4px"><a href="#" data-a="backupRunErr" data-id="${esc(run.id)}">${t('page.backup.errorToggle')}</a>${
-            errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
-          }</div>`
-        : ''
-    }
-  </div>`;
+  /* UAT round-4: the unified sblock renders as a REAL TABLE — one <tr> per
+     run under the Type/Run/Trigger/Status/Date headers. The Type badge reuses
+     the nav.route.backup wording; the Run cell carries the 5-segment label
+     (verbatim, esc'd) plus the filename, missing-blob warning, checksum
+     result and the expandable error — the detail never disappears, it moves
+     inside the Run cell. */
+  const runCell = `<span class="mono faint trunc" style="display:inline-block;max-width:320px;vertical-align:bottom" title="${esc(run.label || '')}">${esc(run.label || '')}</span>${
+    run.filename ? `<div class="mono faint" style="font-size:12px">${esc(run.filename)}</div>` : ''
+  }${
+    Number(run.missing_blob_count) > 0 ? `<div style="margin-top:2px"><span class="badge red">${ic('triangle-alert', 12)}${t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) })}</span></div>` : ''
+  }${
+    run.sha256 ? `<div class="mono faint" style="font-size:12px" title="${esc(run.sha256)}">${esc(String(run.sha256).slice(0, 12))}</div>` : ''
+  }${
+    run.error
+      ? `<div style="margin-top:4px"><a href="#" data-a="backupRunErr" data-id="${esc(run.id)}">${t('page.backup.errorToggle')}</a>${
+          errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
+        }</div>`
+      : ''
+  }`;
+  const statusCell = `<span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>${
+    gfsKey ? ` <span class="badge"><span class="mono">${t(gfsKey)}</span></span>` : ''
+  }${
+    run.location === 'local' || run.location === 's3'
+      ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
+      : ''
+  }${
+    chk === 1 ? ` <span class="badge green">${t('page.backup.checksumOk')}</span>` : chk === 0 ? ` <span class="badge red">${t('page.backup.checksumFail')}</span>` : ''
+  }${
+    run.checksum_checked_at ? `<div class="faint" style="font-size:12px;margin-top:2px">${t('page.backup.checksumLastCheck', { time: esc(fmtDate(run.checksum_checked_at)) })}</div>` : ''
+  }`;
+  const actionsCell =
+    run.location === 'local' || run.location === 's3'
+      ? `<span class="row" style="gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>
+          <button class="btn btn-secondary btn-sm" data-a="backupVerifyChecksum" data-id="${esc(run.id)}"${chkBusy ? ' disabled aria-busy="true"' : ''}>${chkBusy ? t('page.backup.checksumChecking') : `${ic('shield-check', 13)}${t('page.backup.verifyChecksumAction')}`}</button>
+        </span>`
+      : '';
+  return `<tr${chkBusy ? ' aria-busy="true"' : ''}>
+    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('nav.route.backup'))}</span></td>
+    <td>${runCell}</td>
+    <td class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</td>
+    <td>${statusCell}</td>
+    <td class="faint">${esc(when)}</td>
+    <td>${actionsCell}</td>
+  </tr>`;
 };
 
 const historySblock = () => {
-  const f = S.ui.backupHistoryFilter || { task: '', trigger: '', status: '', limit: 50, offset: 0 };
+  const f = S.ui.backupHistoryFilter || { task: '', trigger: '', status: '', type: '', limit: 50, offset: 0 };
   const h = S.ui.backupHistoryAll;
   const tasks = Array.isArray(S.ui.backupTasks?.tasks) ? S.ui.backupTasks.tasks : [];
   const sel = (hook, cur, options) =>
@@ -214,24 +229,35 @@ const historySblock = () => {
   );
   const triggerSel = sel('backupHistoryTrigger', f.trigger, [['', t('page.backup.filterAll')], ['manual', t('page.backup.triggerManual')], ['scheduled', t('page.backup.triggerScheduled')]]);
   const statusSel = sel('backupHistoryStatus', f.status, [['', t('page.backup.filterAll')], ...HISTORY_FILTER_STATUSES.map(s => [s, t(RUN_STATUS_KEYS[s])])]);
+  /* UAT round-4: the Type filter (all / backup / restore) — labels reuse the
+     existing nav.route.backup / page.restore.title wordings; no new key. */
+  const typeSel = sel('backupHistoryType', f.type, [['', t('page.backup.filterAll')], ['backup', t('nav.route.backup')], ['restore', t('page.restore.title')]]);
   /* 94-02 (UAT-3): the unified sblock MERGES the restore history rows —
      client-only composition of two already-fetched payloads (S.ui.restoreHistory,
      kicked additively by the page fill loop). Restore rows render ALWAYS —
-     the task/trigger/status filters apply to Backup rows only; the Type
-     column is never filtered (deferred). Fail-closed principle intact: the
-     restore payload is already server-scoped, fields render verbatim. */
+     the task/trigger/status filters apply to Backup rows only. Fail-closed
+     principle intact: the restore payload is already server-scoped, fields
+     render verbatim. */
   /* 94-03 (UAT-3b): "Rotated" is status 'deleted' (page.backup.statusDeleted) —
      the rotation-deleted rows are HIDDEN from the default render (fail-closed
      visibility) and surface only through the Rotated status-filter entry,
      which maps to that status so the owner can review them explicitly. */
+  /* UAT round-4: the Type filter applies to BOTH sides — backup rows show on
+     '' or 'backup', restore rows on '' or 'restore'; task/trigger/status
+     stay backup-only. Rows render as a REAL TABLE (owner request) with
+     column headers — historyTr / restoreRunTr. */
   const visibleRuns = !h || h.err ? [] : f.status === 'deleted' ? h.runs : h.runs.filter(r => r.status !== 'deleted');
   const restoreRuns = !h || h.err ? [] : Array.isArray(S.ui.restoreHistory?.runs) ? S.ui.restoreHistory.runs : [];
+  const showBackup = f.type !== 'restore';
+  const showRestore = f.type !== 'backup';
+  const backupRows = showBackup ? visibleRuns.map(historyTr).join('') : '';
+  const restoreRows = showRestore ? restoreRuns.map(restoreRunTr).join('') : '';
   const body = !h
     ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.backup.historyLoading')}</div>`
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
-      : visibleRuns.length || restoreRuns.length
-        ? `${visibleRuns.map(historyRow).join('')}${restoreRuns.map(restoreRunRow).join('')}`
+      : backupRows || restoreRows
+        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th style="text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.filterTrigger')}</th><th style="text-align:left">${t('page.backup.filterStatus')}</th><th style="text-align:left">${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${backupRows}${restoreRows}</tbody></table></div>`
         : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:center">
@@ -239,6 +265,7 @@ const historySblock = () => {
       <span class="faint" style="font-size:12px">${t('page.backup.historyCap')}</span>
     </div>
     <div class="row" style="gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:8px">
+      <div class="field"><label class="label">${t('page.backup.historyColType')}</label>${typeSel}</div>
       <div class="field"><label class="label">${t('page.backup.colTask')}</label>${taskSel}</div>
       <div class="field"><label class="label">${t('page.backup.filterTrigger')}</label>${triggerSel}</div>
       <div class="field"><label class="label">${t('page.backup.filterStatus')}</label>${statusSel}</div>
@@ -653,6 +680,44 @@ const restoreRunRow = run => {
         : ''
     }
   </div>`;
+};
+
+/* UAT round-4: the unified sblock renders restore history as table rows under
+   the same Type/Run/Trigger/Status/Date headers. Run = final_name (verbatim,
+   esc'd — the server owns the restore-name counter, D-89-13) with the skipped
+   tables report and the expandable error kept inside the Run cell; Trigger is
+   an honest '—' (restores are always operator-triggered). The div-based
+   restoreRunRow above stays for the restore-history card. */
+const restoreRunTr = run => {
+  const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
+  const startedMs = Number(run.started_at);
+  const when = Number.isFinite(startedMs) && startedMs > 0 ? fmtDate(new Date(startedMs).toISOString()) : '—';
+  let skipped = [];
+  try {
+    const s = typeof run.summary === 'string' && run.summary ? JSON.parse(run.summary) : null;
+    skipped = Array.isArray(s?.skipped) ? s.skipped : [];
+  } catch {
+    skipped = [];
+  }
+  const runCell = `<span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>${
+    skipped.length
+      ? `<div class="faint" style="margin-top:2px;font-size:12px">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
+      : ''
+  }${
+    run.error
+      ? `<div style="margin-top:4px"><a href="#" data-a="restoreRunErr" data-id="${esc(run.id)}">${t('page.restore.errorToggle')}</a>${
+          errOpen ? `<div class="mono" style="margin-top:4px;font-size:12px;white-space:pre-wrap">${esc(run.error)}</div>` : ''
+        }</div>`
+      : ''
+  }`;
+  return `<tr>
+    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>
+    <td>${runCell}</td>
+    <td class="faint">—</td>
+    <td><span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span></td>
+    <td class="faint">${esc(when)}</td>
+    <td></td>
+  </tr>`;
 };
 
 const restoreHistoryCard = () => {

@@ -2339,5 +2339,6 @@
   "page.governance.superCapNote": "{shown} van {total} resultaten getoond",
   "page.governance.superShowMore": "Toon 10 meer",
   "page.governance.superNoMatchesTitle": "Geen gebruikers gevonden",
-  "page.governance.superNoMatchesBody": "Geen gebruikersnaam of e-mail komt overeen met „{query}”."
+  "page.governance.superNoMatchesBody": "Geen gebruikersnaam of e-mail komt overeen met „{query}”.",
+  "page.backup.historyDateCol": "Datum"
 }

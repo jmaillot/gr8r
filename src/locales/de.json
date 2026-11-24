@@ -2339,5 +2339,6 @@
   "page.governance.superCapNote": "{shown} von {total} Treffern angezeigt",
   "page.governance.superShowMore": "10 weitere anzeigen",
   "page.governance.superNoMatchesTitle": "Keine Treffer",
-  "page.governance.superNoMatchesBody": "Kein Benutzername und keine E-Mail passt zu „{query}“."
+  "page.governance.superNoMatchesBody": "Kein Benutzername und keine E-Mail passt zu „{query}“.",
+  "page.backup.historyDateCol": "Datum"
 }

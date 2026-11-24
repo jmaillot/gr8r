@@ -5313,7 +5313,7 @@ A.backupTaskRunNow = async el => {
    Names-not-ids: the task select shows task NAMES, requests the id; the
    synthetic `manual` entry maps to the server's task_id IS NULL filter.
    ===================================================================== */
-const BACKUP_HISTORY_FILTER_DEFAULTS = () => ({ task: '', trigger: '', status: '', limit: 50, offset: 0 });
+const BACKUP_HISTORY_FILTER_DEFAULTS = () => ({ task: '', trigger: '', status: '', type: '', limit: 50, offset: 0 });
 const backupHistoryFilter = () => S.ui.backupHistoryFilter || (S.ui.backupHistoryFilter = BACKUP_HISTORY_FILTER_DEFAULTS());
 const backupHistoryStage = (f, patch) => {
   Object.assign(f, patch);
@@ -5324,6 +5324,7 @@ const backupHistoryStage = (f, patch) => {
 IN.backupHistoryTask = el => backupHistoryStage(backupHistoryFilter(), { task: el.value });
 IN.backupHistoryTrigger = el => backupHistoryStage(backupHistoryFilter(), { trigger: el.value });
 IN.backupHistoryStatus = el => backupHistoryStage(backupHistoryFilter(), { status: el.value });
+IN.backupHistoryType = el => backupHistoryStage(backupHistoryFilter(), { type: el.value });
 export async function refreshBackupHistory() {
   if (!api.enabled) return;
   const f = backupHistoryFilter();

@@ -2339,5 +2339,6 @@
   "page.governance.superCapNote": "Showing {shown} of {total} matches",
   "page.governance.superShowMore": "Show 10 more",
   "page.governance.superNoMatchesTitle": "No users match",
-  "page.governance.superNoMatchesBody": "No user name or email matches “{query}”."
+  "page.governance.superNoMatchesBody": "No user name or email matches “{query}”.",
+  "page.backup.historyDateCol": "Date"
 }

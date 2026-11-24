@@ -2339,5 +2339,6 @@
   "page.governance.superCapNote": "Mostrando {shown} de {total} coincidencias",
   "page.governance.superShowMore": "Mostrar 10 más",
   "page.governance.superNoMatchesTitle": "Ningún usuario coincide",
-  "page.governance.superNoMatchesBody": "Ningún nombre o correo de usuario coincide con «{query}»."
+  "page.governance.superNoMatchesBody": "Ningún nombre o correo de usuario coincide con «{query}».",
+  "page.backup.historyDateCol": "Fecha"
 }

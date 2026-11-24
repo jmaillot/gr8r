@@ -89,9 +89,9 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
 });
 
 test('D-04 (Phase 94): the unified history sblock renders the payload verbatim — newest-first, probe pagination, historyCard retired', () => {
-  assert.match(pagesSrc, /const historyRow = run =>/, 'the unified run row renderer exists');
+  assert.match(pagesSrc, /const historyTr = run =>/, 'the unified run row renderer exists (table row, UAT round-4)');
   assert.match(pagesSrc, /const historySblock = \(\) =>/, 'the unified sblock exists');
-  assert.match(pagesSrc, /visibleRuns\.map\(historyRow\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap (visibleRuns = 94-03 Rotated default-exclusion)');
+  assert.match(pagesSrc, /visibleRuns\.map\(historyTr\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap (visibleRuns = 94-03 Rotated default-exclusion)');
   /* D-04: run.label (the 5-segment server-resolved runLabel) renders VERBATIM
      through esc() — the client composes nothing. */
   assert.match(pagesSrc, /esc\(run\.label \|\| ''\)/, 'run.label renders verbatim through esc()');
@@ -291,12 +291,12 @@ test('90-02: the download CTA renders ONLY for payload location local|s3 — the
      never a disabled/dead button (D-90-9). */
   assert.match(
     pagesSrc,
-    /run\.location === 'local' \|\| run\.location === 's3' \? `<button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="\$\{esc\(run\.id\)\}"/,
-    'the download CTA renders only for local|s3 from the payload flag',
+    /run\.location === 'local' \|\| run\.location === 's3'\s*\?\s*`<span class="row"[^>]*>\s*<button class="btn btn-secondary btn-sm" data-a="backupDownload"/,
+    'the download CTA renders only for local|s3 from the payload flag (actions cell, UAT round-4 table)',
   );
   /* The badge reuses the restore location vocabulary (locLocal/locS3/
      locMissing) — neutral badge, accent only for s3, never green/red. */
-  assert.match(pagesSrc, /RESTORE_LOCATION_KEYS\[run\.location\] \|\| 'page\.restore\.locMissing'/, 'the badge reuses the restore location keys');
+  assert.match(pagesSrc, /t\(RESTORE_LOCATION_KEYS\[run\.location\]\)/, 'the badge reuses the restore location keys (table status cell renders known locations only; missing runs have no CTAs)');
   assert.match(pagesSrc, /class="badge\$\{run\.location === 's3' \? ' accent' : ''\}"/, 'the badge is neutral with the s3 accent');
   /* One download path (54-02): Blob + the server's Content-Disposition →
      saveBlob — success never calls res.text(). */
@@ -311,7 +311,7 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
   /* The CTA shares the download's payload-flag condition: the bytes exist
      (local | s3) — a missing run renders NO verify CTA either. */
   assert.match(pagesSrc, /data-a="backupVerifyChecksum"/, 'the verify CTA exists');
-  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyRow ='), pagesSrc.indexOf('const historySblock ='));
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyTr ='), pagesSrc.indexOf('const historySblock ='));
   /* In-flight: the label swaps to the keyed checking copy, the button
      disables and the row flags aria-busy — never a fabricated result during
      an S3 stream-back (D-90-11). */
@@ -320,8 +320,8 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
   assert.match(runRowBody, /aria-busy="true"/, 'the row carries aria-busy while checking');
   /* The result is the DURABLE keyed badge + the server timestamp line —
      rendered from the persisted payload (checksum_ok / checksum_checked_at). */
-  assert.match(runRowBody, /chk === 1 \? `<span class="badge green">/, 'the match badge is keyed green');
-  assert.match(runRowBody, /chk === 0 \? `<span class="badge red">/, 'the mismatch badge is keyed red');
+  assert.match(runRowBody, /chk === 1 \?\s*` ?<span class="badge green">/, 'the match badge is keyed green');
+  assert.match(runRowBody, /chk === 0 \?\s*` ?<span class="badge red">/, 'the mismatch badge is keyed red');
   assert.match(runRowBody, /t\('page\.backup\.checksumLastCheck', \{ time: /, 'the server timestamp renders in the keyed last-check line');
   /* The action: POST via the api method, refusals through the closed map,
      the persisted result re-renders through the 87-04 open-history refresh
@@ -356,9 +356,9 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
    composition under src/).
    ===================================================================== */
 test('90-03 → 94: the unified GFS badge derives from run.gfs_bucket through the four gfs keys — zero client GFS math', () => {
-  const rowBody = pagesSrc.slice(pagesSrc.indexOf('const historyRow ='), pagesSrc.indexOf('const historySblock ='));
+  const rowBody = pagesSrc.slice(pagesSrc.indexOf('const historyTr ='), pagesSrc.indexOf('const historySblock ='));
   assert.match(rowBody, /const gfsKey = GFS_SCALE_KEYS\[run\.gfs_bucket\]/, 'the badge resolves gfs_bucket through the four gfs keys');
-  assert.match(rowBody, /gfsKey \? `<span class="badge"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : ''/, 'the badge renders only when gfs_bucket names a known scale');
+  assert.match(rowBody, /gfsKey \?\s*` ?<span class="badge"><span class="mono">\$\{t\(gfsKey\)\}<\/span><\/span>` : ''/, 'the badge renders only when gfs_bucket names a known scale');
   /* {scale} vocabulary is the FOUR gfs keys — no other scale vocabulary. */
   assert.match(pagesSrc, /const GFS_SCALE_KEYS = \{ daily: 'page\.backup\.gfsDaily', weekly: 'page\.backup\.gfsWeekly', monthly: 'page\.backup\.gfsMonthly', yearly: 'page\.backup\.gfsYearly' \}/, 'the four GFS scale keys are the one scale vocabulary');
   /* Zero client GFS math (T-90-06): no retention arithmetic under src/ and
@@ -380,10 +380,10 @@ test('90-03 → 94: the unified GFS badge derives from run.gfs_bucket through th
    refresh action directly and never refetches unconditionally.
    ===================================================================== */
 test('90-03: the ⚠ missing-blob badge is payload-count chrome (count > 0 only, triangle-alert, red)', () => {
-  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyRow ='), pagesSrc.indexOf('const historySblock ='));
+  const runRowBody = pagesSrc.slice(pagesSrc.indexOf('const historyTr ='), pagesSrc.indexOf('const historySblock ='));
   assert.match(
     runRowBody,
-    /Number\(run\.missing_blob_count\) > 0 \? `<span class="badge red">\$\{ic\('triangle-alert', 12\)\}\$\{t\('page\.backup\.missingBlobWarn', \{ n: Number\(run\.missing_blob_count\) \}\)\}<\/span>` : ''/,
+    /Number\(run\.missing_blob_count\) > 0 \? `<div style="margin-top:2px"><span class="badge red">\$\{ic\('triangle-alert', 12\)\}\$\{t\('page\.backup\.missingBlobWarn', \{ n: Number\(run\.missing_blob_count\) \}\)\}<\/span><\/div>` : ''/,
     'the badge renders only on count > 0, red badge class + triangle-alert glyph + the missingBlobWarn interpolation verbatim',
   );
 });
@@ -453,7 +453,12 @@ test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () 
   /* The sblock body appends the restore rows AFTER the backup rows — the
      backup rows keep the pinned verbatim renderer. */
   const sblockBody = pagesSrc.slice(pagesSrc.indexOf('const historySblock ='), pagesSrc.indexOf('const lastRunBadge ='));
-  assert.match(sblockBody, /\$\{visibleRuns\.map\(historyRow\)\.join\(''\)\}\$\{restoreRuns\.map\(restoreRunRow\)\.join\(''\)\}/, 'restore rows render after the backup rows in the same body');
+  assert.match(sblockBody, /const backupRows = showBackup \? visibleRuns\.map\(historyTr\)\.join\(''\) : '';/, 'backup rows render as table rows (UAT round-4 real table)');
+  assert.match(sblockBody, /const restoreRows = showRestore \? restoreRuns\.map\(restoreRunTr\)\.join\(''\) : '';/, 'restore rows render as table rows after the backup rows');
+  /* UAT round-4: the Type filter gates BOTH sides (all/backup/restore). */
+  assert.match(sblockBody, /const showBackup = f\.type !== 'restore';/, 'the Type filter gates the backup rows');
+  assert.match(sblockBody, /const showRestore = f\.type !== 'backup';/, 'the Type filter gates the restore rows');
+  assert.match(sblockBody, /\$\{t\('page\.backup\.historyDateCol'\)\}/, 'the table renders a Date column header');
   /* Filters apply to Backup rows ONLY — the restore rows are composed
      unconditionally (no filter gating on restoreRuns). */
   assert.match(sblockBody, /Array\.isArray\(S\.ui\.restoreHistory\?\.runs\)/, 'restore rows come from S.ui.restoreHistory');
@@ -479,8 +484,8 @@ test('94-03 UAT-3b: Rotated (deleted) rows excluded from the default render; the
     /const visibleRuns = !h \|\| h\.err \? \[\] : f\.status === 'deleted' \? h\.runs : h\.runs\.filter\(r => r\.status !== 'deleted'\)/,
     'Rotated rows are hidden by default and shown only through the Rotated filter',
   );
-  assert.match(sblockBody, /visibleRuns\.length \|\| restoreRuns\.length/, 'the empty-state gate counts only visible rows');
-  assert.ok(!sblockBody.includes('${h.runs.map(historyRow)'), 'no unfiltered backup-row render remains');
+  assert.match(sblockBody, /backupRows \|\| restoreRows/, 'the empty-state gate counts only visible rendered rows');
+  assert.ok(!sblockBody.includes('${h.runs.map(historyTr)'), 'no unfiltered backup-row render remains');
   /* The Rotated filter entry: 'deleted' is a first-class status-filter option,
      labelled through page.backup.statusDeleted ("Rotated" in en). */
   assert.match(pagesSrc, /const HISTORY_FILTER_STATUSES = \['running', 'succeeded', 'failed', 'upload_failed', 'deleted'\]/, 'the Rotated entry is in the status filter');
