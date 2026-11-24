@@ -52,7 +52,9 @@ Plans:
   3. Grant/revoke ride the existing audited endpoints only (re-skin); implicit Super-Admin membership stays visible with a badge, and last-Super-Admin revoke stays disabled with a ×5-locale reason.
   4. Zero new mutation endpoints; the audit funnel records grants/revokes exactly as before.
 **UI hint**: yes
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 93-01-PLAN.md — Wave-0 static pins + 3-tab seg/roster-as-SA-tab/rolesCard dissolution (D-01,D-04) → per-tab User/Grants/Actions columns (D-02) → selectable pickers + dialog search render() fix (D-03) → full gates; i18n ×5 in every emitting commit
 
 ### Phase 94: Backup Console UX
 **Goal**: The backup task console reads as an honest table — humanized schedules, real Next/Last run columns, all four GFS retention scales editable, and a unified cross-task run history with filters that leaks nothing.
