@@ -5104,6 +5104,9 @@ const backupTaskFormDefaults = () => ({
   /* Phase 98 (D-01): the FTP opt-in mirrors the S3 staging — the checkbox
      itself renders only when api.ftpEnabled is true (render-only). */
   ftpEnabled: false,
+  /* Phase 100 (D-01): the SMB opt-in mirrors the FTP staging — the checkbox
+     itself renders only when api.smbEnabled is true (render-only). */
+  smbEnabled: false,
 });
 /* Preset + fields → the raw 5-field cron string (D-04 serialization).
    Custom sends all five fields verbatim — including `*` — so a Custom
@@ -5162,6 +5165,11 @@ IN.backupTaskS3 = el => {
    on toggle (the checkbox IS the state). */
 IN.backupTaskFtp = el => {
   if (S.ui.backupTaskForm) S.ui.backupTaskForm.ftpEnabled = el.checked;
+};
+/* Phase 100 (D-01): the SMB checkbox stages like the FTP one — no re-render
+   on toggle (the checkbox IS the state). */
+IN.backupTaskSmb = el => {
+  if (S.ui.backupTaskForm) S.ui.backupTaskForm.smbEnabled = el.checked;
 };
 A.backupTaskNew = () => {
   S.ui.backupTaskForm = backupTaskFormDefaults();
@@ -5228,6 +5236,9 @@ A.backupTaskEdit = el => {
     /* Phase 98 (D-01): the checkbox shows the stored FTP opt-in
        (backupTaskShape carries ftp_enabled verbatim). */
     ftpEnabled: task.ftp_enabled === 1,
+    /* Phase 100 (D-01): the checkbox shows the stored SMB opt-in
+       (backupTaskShape carries smb_enabled verbatim). */
+    smbEnabled: task.smb_enabled === 1,
   };
   render();
 };
@@ -5277,6 +5288,11 @@ A.backupTaskSave = async () => {
      false. The server probes at save and HARD-refuses on !ok (no
      deleteFailed accept-with-warning analog). */
   if (api.ftpEnabled) body.ftpEnabled = form.ftpEnabled === true;
+  /* Phase 100 (D-01): the SMB flag rides the write whenever the server says
+     the destination exists — fail-closed: absent when api.smbEnabled is
+     false. The server probes at save and HARD-refuses on !ok (no
+     deleteFailed accept-with-warning analog). */
+  if (api.smbEnabled) body.smbEnabled = form.smbEnabled === true;
   const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
@@ -5311,6 +5327,29 @@ A.backupTaskSave = async () => {
     else if (fprobe.key === 'ftpQuotaExceeded') toast(tErr('ftpQuotaExceeded', null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
     else if (fprobe.key === 'unreachable') toast(t('toast.ftpProbeUnreachable'), { kind: 'err' });
     if (fprobe.httpWarning) toast(tErr('insecureTlsWarning', null, t('toast.ftpProbeUnreachable')));
+  }
+  /* Phase 100 probe visibility: the smbProbe twin — hard-refusal parity.
+     probeSmb keys are smb CLASSES (authFailed, shareNotFound, …); each
+     class maps onto its err.smb* sibling (98 ftp-chain parity). The
+     smbDialectUnsupported branch guards the OQ-3 err-code path (the
+     sentinel currently maps to class generic — 99-SPIKE §4 split).
+     NO httpWarning branch (R-3: SMB has no TLS variant). The guest flag
+     is a keyed INFO toast (SC-2 — informational access notice, never a
+     warning or refusal). */
+  const sprobe = res.data?.smbProbe;
+  if (sprobe) {
+    if (sprobe.key === 'success') toast(t('toast.smbProbeSuccess'));
+    else if (sprobe.key === 'authFailed') toast(tErr('smbAuthFailed', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'shareNotFound') toast(tErr('smbShareNotFound', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'treeConnectFailed') toast(tErr('smbTreeConnectFailed', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'signingRequired') toast(tErr('smbSigningRequired', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'noSpace') toast(tErr('smbNoSpace', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'nameConflict') toast(tErr('smbNameConflict', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'sessionExpired') toast(tErr('smbSessionExpired', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'generic') toast(tErr('smbGeneric', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else if (sprobe.key === 'smbDialectUnsupported') toast(tErr('smbDialectUnsupported', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    else toast(t('toast.smbProbeUnreachable'), { kind: 'err' }); // unreachable / deleteFailed / unknown class
+    if (sprobe.guest === true) toast(t('toast.smbGuestAccess'), { kind: 'info' });
   }
   toast(t(form.editing ? 'page.backup.taskUpdated' : 'page.backup.taskSaved'), { ms: 1500 });
   render();

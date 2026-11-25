@@ -36,6 +36,10 @@ const state = {
      /api/config — the boolean only (never host/credentials). Default
      false fail-closed: the toggle stays hidden until the config lands. */
   ftpEnabled: false,
+  /* Phase 100 (D-01): SMB toggle visibility is SERVER ground truth from
+     /api/config — the boolean only (never host/credentials). Default
+     false fail-closed: the toggle stays hidden until the config lands. */
+  smbEnabled: false,
 };
 
 /* Base URL for links the user can share. Set by the server (APP_URL or the
@@ -159,6 +163,9 @@ export const api = {
   get ftpEnabled() {
     return state.ftpEnabled;
   },
+  get smbEnabled() {
+    return state.smbEnabled;
+  },
   get user() {
     return state.user;
   },
@@ -227,6 +234,9 @@ export const api = {
     /* Phase 98: strict boolean gate value (V5 idiom) — the FTP toggle renders
        ONLY when the server says the destination exists (render-only doctrine). */
     state.ftpEnabled = !!r.data?.ftpEnabled;
+    /* Phase 100: strict boolean gate value (V5 idiom) — the SMB toggle renders
+       ONLY when the server says the destination exists (render-only doctrine). */
+    state.smbEnabled = !!r.data?.smbEnabled;
     return state.enabled;
   },
   async me() {

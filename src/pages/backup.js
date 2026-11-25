@@ -521,6 +521,7 @@ const taskFormCard = () => {
     </div>
     ${api.s3Enabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskS3"${form.s3Enabled ? ' checked' : ''}><span>${esc(t('page.backup.s3Toggle'))}</span></label></div>` : ''}
     ${api.ftpEnabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskFtp"${form.ftpEnabled ? ' checked' : ''}><span>${esc(t('page.backup.ftpToggle'))}</span></label></div>` : ''}
+    ${api.smbEnabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskSmb"${form.smbEnabled ? ' checked' : ''}><span>${esc(t('page.backup.smbToggle'))}</span></label></div>` : ''}
     ${deletionsPanel()}
     <div class="hint" style="margin-top:8px">${t('page.backup.scheduleSummaryPrefix')}: ${esc(summary)}</div>
     <div class="row" style="gap:8px;margin-top:10px">

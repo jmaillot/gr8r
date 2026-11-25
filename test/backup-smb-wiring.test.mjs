@@ -611,3 +611,48 @@ test('probe-at-save EDIT twin: resolved smbEnabled read/keep, hard refuse, UPDAT
   assert.match(ride, /backup_smb_probe_ok/, 'probe outcome audited on edit');
   assert.match(ride, /smbProbe \? \{ smbProbe \}/, 'the probe rides the edit response');
 });
+
+/* =====================================================================
+   100-03 pins: client trio — api trio, toggle row, actions ×5, toast chain.
+   ===================================================================== */
+
+test('api.js trio: smbEnabled state default (fail-closed), getter, strict-boolean config read', () => {
+  const a = src('src/core/api.js');
+  assert.match(a, /smbEnabled: false,/, 'state default false — fail-closed');
+  assert.match(a, /get smbEnabled\(\) \{\n    return state\.smbEnabled;\n  \}/, 'the getter exists');
+  assert.match(a, /state\.smbEnabled = !!r\.data\?\.smbEnabled;/, 'V5 strict-boolean config read');
+});
+
+test('backup.js toggle row: smb row clones the ftp row, render-gated on api.smbEnabled', () => {
+  const p = src('src/pages/backup.js');
+  const i = p.indexOf('data-in="backupTaskSmb"');
+  assert.ok(i !== -1, 'the smb toggle row exists');
+  const ftp = p.indexOf('data-in="backupTaskFtp"');
+  assert.ok(i > ftp, 'the smb row renders AFTER the ftp row');
+  const start = p.lastIndexOf('${api.smbEnabled', i);
+  assert.ok(start !== -1 && p.slice(start, i).length < 200, 'the row is render-gated on api.smbEnabled');
+  const row = p.slice(start, p.indexOf('` : \'\'', i));
+  assert.match(row, /form\.smbEnabled \? ' checked' : ''/, 'checked state rides form.smbEnabled');
+  assert.match(row, /t\('page\.backup\.smbToggle'\)/, 'the label is the smbToggle key');
+});
+
+test('actions.js ×5: smb twins at every ftp site', () => {
+  const a = src('src/actions/actions.js');
+  assert.match(a, /smbEnabled: false,\n\}\);/, 'site 1: backupTaskFormDefaults smbEnabled default');
+  assert.match(a, /IN\.backupTaskSmb = el => \{\n  if \(S\.ui\.backupTaskForm\) S\.ui\.backupTaskForm\.smbEnabled = el\.checked;\n\};/, 'site 2: checkbox handler, no re-render');
+  assert.match(a, /smbEnabled: task\.smb_enabled === 1,/, 'site 3: edit prefill from smb_enabled');
+  assert.match(a, /if \(api\.smbEnabled\) body\.smbEnabled = form\.smbEnabled === true;/, 'site 4: body gate serializes displayed state');
+  assert.match(a, /const sprobe = res\.data\?\.smbProbe;/, 'site 5: probe toast chain reads res.data.smbProbe');
+});
+
+test('actions.js smb toast chain: keyed classes, guest INFO branch, NO httpWarning (R-3)', () => {
+  const a = src('src/actions/actions.js');
+  const i = a.indexOf('const sprobe = res.data?.smbProbe;');
+  const block = a.slice(i, a.indexOf('toast(t(form.editing', i));
+  assert.match(block, /sprobe\.key === 'success'\) toast\(t\('toast\.smbProbeSuccess'\)\)/, 'success branch keyed');
+  for (const k of ['smbAuthFailed', 'smbShareNotFound', 'smbTreeConnectFailed', 'smbSigningRequired', 'smbNoSpace', 'smbNameConflict', 'smbSessionExpired', 'smbGeneric', 'smbDialectUnsupported']) {
+    assert.match(block, new RegExp(`tErr\\('${k}'`), `the ${k} err branch exists`);
+  }
+  assert.match(block, /sprobe\.guest === true\) toast\(t\('toast\.smbGuestAccess'\), \{ kind: 'info' \}\)/, 'guest → keyed INFO toast (SC-2)');
+  assert.ok(!/httpWarning/.test(block), 'R-3: NO httpWarning branch in the smb toast chain');
+});
