@@ -569,8 +569,49 @@ export async function fetchToStaged(config, sourcePath, expectedSha256, stagingD
 }
 
 /* =====================================================================
-   CLIENT FACTORY (D-01 promise API)
-   ===================================================================== */
+   PROBE (OQ-3, mirrors probeS3 :344-371 keyed-result shape verbatim)
+   =====================================================================
+   Connect + STOR of a gr8r-probe marker + DELE. Keyed result — the
+   contract Phase 98 maps into refusals/toasts (no UI strings in 97):
+   { ok: true,  key: 'success',    httpWarning }
+   { ok: false, key: 'deleteFailed', warning: true }        — put OK, delete refused
+   { ok: false, key: 'ftpAuthFailed' | 'ftpTlsFailed' |
+                  'ftpPassiveFailed' | 'ftpPathNotFound' |
+                  'ftpQuotaExceeded' }
+   { ok: false, key: 'unreachable', error }                 — sliced (V14)
+   httpWarning: true when secure === 'none' or insecure (R-3 keyed
+   tlsInsecure-style warning parity — surfaced by 98's UI). */
+function mapFtpProbeError(e, base) {
+  const keyed = ['ftpAuthFailed', 'ftpTlsFailed', 'ftpPassiveFailed', 'ftpPathNotFound', 'ftpQuotaExceeded'];
+  if (keyed.includes(e?.code)) return { ...base, key: e.code };
+  return { ...base, key: 'unreachable', error: sliceError(e) };
+}
+
+export async function probeFtp(config, opts = {}) {
+  const httpWarning = config.secure === 'none' || !!config.insecure;
+  const base = { ok: false, key: null, warning: false, httpWarning };
+  const ftp = connectFtp(config, opts);
+  try {
+    await ftp.connect();
+  } catch (e) {
+    return mapFtpProbeError(e, base);
+  }
+  const marker = `gr8r-probe/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
+  try {
+    await ftp.stor(marker, Buffer.from('gr8r probe'));
+  } catch (e) {
+    await ftp.quit().catch(() => {});
+    return mapFtpProbeError(e, base);
+  }
+  try {
+    await ftp.dele(marker);
+  } catch (e) {
+    await ftp.quit().catch(() => {});
+    return { ...base, key: 'deleteFailed', warning: true };
+  }
+  await ftp.quit().catch(() => {});
+  return { ...base, ok: true, key: 'success' };
+}
 
 function cmdExpect(ctl, line, okCodes, context = '') {
   return sendCommand(ctl, line, { context }).then((res) => {
@@ -714,7 +755,9 @@ export function connectFtp(config, opts = {}) {
       try {
         const stream = typeof source === 'string'
           ? fs.createReadStream(source, { highWaterMark: 1024 * 1024 })
-          : source;
+          : Buffer.isBuffer(source)
+            ? Readable.from([source])
+            : source;
         await storOnce(ctl, targetPath, stream);
         return true;
       } catch (err) {

@@ -16,7 +16,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import tls from 'node:tls';
 import { Readable } from 'node:stream';
-import { connectFtp, fetchToStaged } from '../export/ftp.js';
+import { connectFtp, fetchToStaged, probeFtp } from '../export/ftp.js';
 
 /* ------------- in-process TLS mock (T5/T6-explicit): self-signed pair ------------- */
 
@@ -92,7 +92,13 @@ function fakeFtp(scenario = {}) {
     sock.end();
     retrPending?.();
   };
-  const dataServer = net.createServer((sock) => {
+  /* secureExplicit → the data listener is TLS too (PROT P semantics);
+     the client's data-channel tls.connect would hang forever against a
+     plain socket (no server hello), so the mock must match the mode. */
+  const dataSrvOpts = scenario.secureExplicit
+    ? { key: TEST_KEY, cert: TEST_CERT, rejectUnauthorized: false, maxVersion: 'TLSv1.2' }
+    : undefined;
+  const dataServer = (scenario.secureExplicit ? tls.createServer : net.createServer.bind(net))(dataSrvOpts, (sock) => {
     currentDataSock = sock;
     sock.on('data', (c) => dataReceived.push(c));
     sock.on('end', () => sock.end());
@@ -637,6 +643,73 @@ test('EPSV 5xx → PASV fallback once; both failing → keyed ftpPassiveFailed',
     await ftp.quit();
   } finally {
     await server2.close();
+  }
+});
+
+
+/* ------------------ probeFtp (OQ-3, keyed shape) ------------------ */
+
+test('probeFtp success: { ok, key success, httpWarning false } + marker STOR/DELE recorded', async () => {
+  const server = fakeFtp();
+  await server.listen();
+  try {
+    const res = await probeFtp({ host: '127.0.0.1', port: server.port(), user: 'u', password: 'p', secure: 'none' });
+    assert.deepEqual(
+      { ok: res.ok, key: res.key, warning: res.warning, httpWarning: res.httpWarning },
+      { ok: true, key: 'success', warning: false, httpWarning: true /* secure none → warning even on success */ },
+    );
+    assert.ok(server.commands.some((c) => c.startsWith('STOR gr8r-probe/probe-')), 'gr8r-probe marker STORed');
+    assert.ok(server.commands.some((c) => c.startsWith('DELE gr8r-probe/probe-')), 'marker DELEted');
+  } finally {
+    await server.close();
+  }
+});
+
+test('probeFtp auth failure: keyed ftpAuthFailed', async () => {
+  const server = fakeFtp({ passReply: '530 Login incorrect' });
+  await server.listen();
+  try {
+    const res = await probeFtp({ host: '127.0.0.1', port: server.port(), user: 'u', password: 'wrong', secure: 'none' });
+    assert.equal(res.ok, false);
+    assert.equal(res.key, 'ftpAuthFailed');
+    assert.equal(res.warning, false);
+    assert.ok(server.commands.every((c) => !c.startsWith('STOR')), 'no marker STORed on auth failure');
+  } finally {
+    await server.close();
+  }
+});
+
+test('probeFtp unreachable (connection refused): { ok false, key unreachable, error sliced }', async () => {
+  const res = await probeFtp({ host: '127.0.0.1', port: 1 /* nothing listens */, user: 'u', password: 'p', secure: 'none' }, { attempts: 1 });
+  assert.equal(res.ok, false);
+  assert.equal(res.key, 'unreachable');
+  assert.equal(typeof res.error, 'string');
+  assert.ok(res.error.length <= 300);
+});
+
+test('probeFtp deleteFailed: warning true when DELE is refused', async () => {
+  const server = fakeFtp({ deleReply: '550 Permission denied' });
+  await server.listen();
+  try {
+    const res = await probeFtp({ host: '127.0.0.1', port: server.port(), user: 'u', password: 'p', secure: 'none' });
+    assert.deepEqual(
+      { ok: res.ok, key: res.key, warning: res.warning },
+      { ok: false, key: 'deleteFailed', warning: true },
+    );
+  } finally {
+    await server.close();
+  }
+});
+
+test('probeFtp httpWarning reflects secure mode: explicit+verified → false', async () => {
+  const server = fakeFtp({ secureExplicit: true });
+  await server.listen();
+  try {
+    const res = await probeFtp({ host: '127.0.0.1', port: server.port(), user: 'u', password: 'p', secure: 'explicit', insecure: true });
+    assert.equal(res.key, 'success');
+    assert.equal(res.httpWarning, true, 'insecure:true → httpWarning (R-3 parity)');
+  } finally {
+    await server.close();
   }
 });
 
