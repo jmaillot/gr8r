@@ -2303,6 +2303,8 @@
   "page.restore.listLoading": "Chargement des sauvegardes…",
   "page.restore.locLocal": "Locale",
   "page.restore.locS3": "S3",
+  "page.restore.locFtp": "FTP",
+  "page.restore.locSmb": "SMB",
   "page.restore.locMissing": "Indisponible",
   "page.restore.previewTitle": "Aperçu de la sauvegarde",
   "page.restore.previewCorrupt": "Le manifeste de cette archive n’a pas pu être lu. Elle ne peut être ni prévisualisée ni restaurée.",

@@ -106,3 +106,32 @@ test('the old setter name is gone from the whole codebase (tests included — OQ
     assert.ok(!content.includes('setBackupS3Destination'), `test/${f} still pins the removed setter name`);
   }
 });
+
+test('badge scan (96-02, D-04/OQ-2/SC-5): location derives via the ordered destLocation scan — local > s3 > ftp > smb > missing', () => {
+  const s = serverSrc();
+  assert.match(s, /function destLocation\(r\) \{/, 'the shared destLocation helper exists in server.js');
+  // the ordered scan: local fs membership, then uploaded, ftp_uploaded, smb_uploaded, else missing
+  const helper = s.slice(s.indexOf('function destLocation(r)'), s.indexOf('function destLocation(r)') + 900);
+  assert.match(helper, /fs\.existsSync\(path\.join\(backupsRoot\(\), r\.filename\)\)\) return 'local'/, 'local fs membership checked first');
+  assert.match(helper, /r\.uploaded === 1\) return 's3'/, 's3 checked second (uploaded keeps the D-03 S3/local-published meaning)');
+  assert.match(helper, /r\.ftp_uploaded === 1\) return 'ftp'/, 'ftp checked third');
+  assert.match(helper, /r\.smb_uploaded === 1\) return 'smb'/, 'smb checked fourth');
+  assert.match(helper, /return 'missing'/, 'missing is the fail-closed fallback');
+  // SC-5 one-line extension shape: the helper is the ONLY place the per-run
+  // flag ternary chain lives — no hardcoded s3-only ternary at the call sites.
+  const sites = (s.match(/location: destLocation\(r\)/g) || []).length;
+  assert.ok(sites >= 3, `all three badge call sites use the ordered scan (got ${sites})`);
+  const ternaries = (s.match(/r\.uploaded === 1 \? 's3' : 'missing'/g) || []).length;
+  assert.equal(ternaries, 0, 'no hardcoded uploaded-only badge ternary remains at the call sites');
+});
+
+test('config payload (96-02, D-02/T-96-03): flat sibling ftpEnabled/smbEnabled booleans; s3Enabled untouched; no destinations nesting', () => {
+  const s = serverSrc();
+  const i = s.indexOf('s3Enabled: S3.enabled,');
+  assert.ok(i !== -1, 's3Enabled stays byte-identical in /api/config');
+  const block = s.slice(i, i + 600);
+  assert.match(block, /ftpEnabled: !!\(FTP_HOST && FTP_USER && FTP_PASSWORD\)/, 'ftpEnabled is a flat boolean derived from the boot-frozen consts (D-05)');
+  assert.match(block, /smbEnabled: !!\(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD\)/, 'smbEnabled is a flat boolean derived from the boot-frozen consts (D-05)');
+  // T-96-03: no nested destinations object leaks into the config payload
+  assert.ok(!/destinations: \{/.test(s.slice(s.indexOf("pathname === '/api/config'"), s.indexOf("pathname === '/api/config'") + 800)), 'no destinations:{} nesting in the config payload');
+});

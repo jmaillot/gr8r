@@ -542,7 +542,7 @@ const taskFormCard = () => {
    drawer idiom (same .drawer classes + scrim) rendered from the page
    layer, because the overlay drawer is task-keyed (drawer.js renderLayer).
    ===================================================================== */
-const RESTORE_LOCATION_KEYS = { local: 'page.restore.locLocal', s3: 'page.restore.locS3', missing: 'page.restore.locMissing' };
+const RESTORE_LOCATION_KEYS = { local: 'page.restore.locLocal', s3: 'page.restore.locS3', ftp: 'page.restore.locFtp', smb: 'page.restore.locSmb', missing: 'page.restore.locMissing' };
 const RESTORE_STAGE_KEYS = {
   fetching: 'page.restore.stageFetching',
   validating: 'page.restore.stageValidating',

@@ -2263,6 +2263,8 @@
   "page.restore.listLoading": "Backups werden geladen…",
   "page.restore.locLocal": "Lokal",
   "page.restore.locS3": "S3",
+  "page.restore.locFtp": "FTP",
+  "page.restore.locSmb": "SMB",
   "page.restore.locMissing": "Nicht verfügbar",
   "page.restore.previewTitle": "Backup-Vorschau",
   "page.restore.previewCorrupt": "Das Manifest dieses Archivs konnte nicht gelesen werden. Es kann weder angezeigt noch wiederhergestellt werden.",

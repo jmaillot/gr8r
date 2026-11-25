@@ -2263,6 +2263,8 @@
   "page.restore.listLoading": "Back-ups laden…",
   "page.restore.locLocal": "Lokaal",
   "page.restore.locS3": "S3",
+  "page.restore.locFtp": "FTP",
+  "page.restore.locSmb": "SMB",
   "page.restore.locMissing": "Niet beschikbaar",
   "page.restore.previewTitle": "Back-upvoorbeeld",
   "page.restore.previewCorrupt": "Het manifest van dit archief kon niet gelezen worden. Het kan niet bekeken of hersteld worden.",

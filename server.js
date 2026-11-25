@@ -3905,6 +3905,23 @@ setBackupDestination('smb', {
   manualPrefix: 'backup-smb/', // declared, never used in 96 (D-05)
 });
 
+/* Phase 96 (96-02, D-04/OQ-2): the ordered destination-location scan —
+   local fs membership first (when the archive name exists on disk), then
+   the canonical registry order s3 > ftp > smb over the per-run truth
+   flags. uploaded keeps its S3/local-published meaning byte-for-byte
+   (D-03); phases 98/100 write their own flags in their own success blocks.
+   SC-5: a new destination is ONE more ternary arm here + one
+   RESTORE_LOCATION_KEYS entry — the destination-registry-gate pins this
+   ordered-scan shape so no hardcoded s3-only ternary can drift back in
+   (T-96-04). */
+function destLocation(r) {
+  if (r.filename && fs.existsSync(path.join(backupsRoot(), r.filename))) return 'local';
+  if (r.uploaded === 1) return 's3';
+  if (r.ftp_uploaded === 1) return 'ftp';
+  if (r.smb_uploaded === 1) return 'smb';
+  return 'missing';
+}
+
 export async function runBackupSchedulerPass({ now: at } = {}) {
   const nowMs = at instanceof Date ? at.getTime() : Number(at ?? Date.now());
   const due = await db.all(
@@ -6331,6 +6348,12 @@ async function handleApi(req, res, url) {
       /* Phase 88 (D-88-11/T-88-05): the S3 boolean ground truth only — never
          the endpoint/bucket names. The client hides the toggle when false. */
       s3Enabled: S3.enabled,
+      /* Phase 96 (96-02, D-02/T-96-03): flat sibling booleans derived from
+         the boot-frozen FTP/SMB consts (D-05) — false when env absent.
+         Booleans only; no nested destinations object, no credential
+         material in this payload. */
+      ftpEnabled: !!(FTP_HOST && FTP_USER && FTP_PASSWORD),
+      smbEnabled: !!(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD),
     });
   }
 
@@ -9547,7 +9570,7 @@ async function handleApi(req, res, url) {
       const limit = Math.min(Math.max(Number.parseInt(limitRaw ?? '50', 10) || 50, 1), 200);
       const offset = Math.max(Number.parseInt(offsetRaw ?? '0', 10) || 0, 0);
       const rows = await db.all(
-        `select id, task_id, scope, uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, gfs_bucket
+        `select id, task_id, scope, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, gfs_bucket
            from backup_runs ${where}
           order by created_at desc, id desc limit ? offset ?`,
         [...params, limit, offset],
@@ -9581,9 +9604,7 @@ async function handleApi(req, res, url) {
         void _internal;
         out.push({
           ...pub,
-          location: r.filename
-            ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
-            : (r.uploaded === 1 ? 's3' : 'missing'),
+          location: destLocation(r),
           /* Phase 94 renders this verbatim — the instance-scope-gfs run label,
              resolved server-side (BKNAME-01: the client derives nothing). */
           label: runLabel({ instance: instanceSlug(), scope: scope?.kind ?? 'instance', label: name, gfsBucket: r.gfs_bucket, createdAt: r.created_at }),
@@ -9606,12 +9627,10 @@ async function handleApi(req, res, url) {
     const historyChrome = rows =>
       rows.map(r => ({
         ...r,
-        location: r.filename
-          ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
-          : (r.uploaded === 1 ? 's3' : 'missing'),
+        location: destLocation(r),
       }));
     if (taskId === 'manual') {
-      const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
       return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
@@ -9633,7 +9652,7 @@ async function handleApi(req, res, url) {
       [taskId],
     );
     const kept = succeededAsc.length ? gfsKeptPositions(task, succeededAsc) : null;
-    const rows = await db.all('select id, task_id, uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
     return json(res, 200, {
       runs: historyChrome(rows).map(r => {
         const kp = kept?.get(r.id);
@@ -9741,7 +9760,7 @@ async function handleApi(req, res, url) {
       return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can list restorable backups');
     }
     const rows = await db.all(
-      `select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, uploaded, created_at
+      `select id, task_id, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, uploaded, ftp_uploaded, smb_uploaded, created_at
          from backup_runs
         where status in ('succeeded','upload_failed','deleted') or uploaded = 1
         order by created_at desc, id desc limit 50`,
@@ -9754,9 +9773,7 @@ async function handleApi(req, res, url) {
         status: r.status,
         /* filename can be null (a failed run never produced an archive) —
            fs membership only applies when there is a name to check. */
-        location: r.filename
-          ? (fs.existsSync(path.join(backupsRoot(), r.filename)) ? 'local' : (r.uploaded === 1 ? 's3' : 'missing'))
-          : (r.uploaded === 1 ? 's3' : 'missing'),
+        location: destLocation(r),
         filename: r.filename,
         sizeBytes: r.size_bytes,
         sha256: r.sha256,

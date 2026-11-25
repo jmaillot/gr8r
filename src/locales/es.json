@@ -2263,6 +2263,8 @@
   "page.restore.listLoading": "Cargando copias de seguridad…",
   "page.restore.locLocal": "Local",
   "page.restore.locS3": "S3",
+  "page.restore.locFtp": "FTP",
+  "page.restore.locSmb": "SMB",
   "page.restore.locMissing": "No disponible",
   "page.restore.previewTitle": "Vista previa de la copia de seguridad",
   "page.restore.previewCorrupt": "No se pudo leer el manifiesto de este archivo. No se puede previsualizar ni restaurar.",
