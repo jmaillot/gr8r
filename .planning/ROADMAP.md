@@ -42,11 +42,11 @@ Build order per research SUMMARY.md: seam refactor FIRST (unblocks both wirings)
 4. `FTP_*`/`SMB_*` env custody is boot-frozen mirroring `S3_*` (server.js:208-219) with enabled-derivation and invalid-token warn parity; `membershipsOf` byte-gate and the full suite stay at baseline (2492 tests / 2 documented failures).
 5. Restore location-badge seam (`RESTORE_LOCATION_KEYS` + server flag derivation) generalized so a new destination is a one-line extension.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 
 Plans:
 - [x] 96-01-PLAN.md — Registry refactor: setBackupDestination(name, dest) + S3 install + dormant ftp/smb slots + Wave-0 byte-identity gate (DEST-01, TEST-01)
-- [ ] 96-02-PLAN.md — DDL columns + /api/config flat flags + ordered badge scan + i18n ×5 + full-suite baseline (DEST-01)
+- [x] 96-02-PLAN.md — DDL columns + /api/config flat flags + ordered badge scan + i18n ×5 + full-suite baseline (DEST-01)
 
 ### Phase 97: FTP/FTPS Client (Zero-Dep)
 
@@ -111,7 +111,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 96. Cross-Destination Seam Generalization | 1/2 | In Progress|  |
+| 96. Cross-Destination Seam Generalization | 2/2 | In Progress|  |
 | 97. FTP/FTPS Client (Zero-Dep) | 0/? | Not started | - |
 | 98. FTP Destination End-to-End | 0/? | Not started | - |
 | 99. SMB 2.1 Client (Spike-Hardened) | 0/? | Not started | - |
