@@ -107,7 +107,7 @@ test('golden vector: canonical query sorting (list bucket)', () => {
    The signer must produce the identical signature bytes for the same
    request. */
 test('golden pin: multipart PUT-part matches hand-written canonical request', () => {
-  const bucket = 'gr8r';
+  const bucket = 'projects-studio';
   const key = s3UriEncode('backup-task-t1/archive.tar.gz');
   const query = { partNumber: '1', uploadId: 'abc123' };
   const partHash = crypto.createHash('sha256').update('PART-BYTES').digest('hex');
@@ -127,7 +127,7 @@ test('golden pin: multipart PUT-part matches hand-written canonical request', ()
      partNumber sorts before uploadId (S3 sorts by name then value). */
   const canonicalRequest = [
     'PUT',
-    `/gr8r/backup-task-t1/archive.tar.gz`,
+    `/projects-studio/backup-task-t1/archive.tar.gz`,
     'partNumber=1&uploadId=abc123',
     `host:127.0.0.1:9000\nx-amz-content-sha256:${partHash}\nx-amz-date:${DATE}\n`,
     'host;x-amz-content-sha256;x-amz-date',
@@ -211,7 +211,7 @@ test('error mapping: unmapped body → generic class, message sliced, no secrets
   assert.equal(err.s3Class, 'generic');
   assert.ok(err.message.length <= 320, 'message sliced to 300 chars');
   // T-88-01: secrets and request headers never enter the error text
-  const secret = 'gr8rtest-password';
+  const secret = 'projects-studiotest-password';
   assert.equal(err.message.includes(secret), false);
   assert.equal(err.message.toLowerCase().includes('authorization:'), false);
 });

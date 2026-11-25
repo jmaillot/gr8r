@@ -17,7 +17,7 @@ import { after, before, test } from 'node:test';
 /* DATA_DIR must be set BEFORE export/backup.js is imported (it derives its
    paths from the env at call time via dataDirs(), but keep it deterministic
    for the whole module graph anyway). */
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-backup-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-backup-'));
 process.env.DATA_DIR = DATA_DIR;
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const LOGOS_DIR = path.join(DATA_DIR, 'logos');
@@ -103,7 +103,7 @@ test('project-scope export round-trips through host tar with manifest.json as en
     assert.ok(entries.includes('workspaces.ndjson'), 'table entries present');
 
     // tar xzf extracts
-    const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract');
+    const into = path.join(DATA_DIR, '..', 'projects-studio-backup-extract');
     extractArchive(tarPath, into);
     const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
     assert.equal(manifest.formatVersion, 1);
@@ -133,7 +133,7 @@ test('workspace scope collects member-project files + logo, not other workspaces
   return (async () => {
     const run = await backup.runExport({ kind: 'workspace', id: 'ws1' });
     assert.equal(run.ok, true, `runExport failed: ${run.error}`);
-    const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-ws');
+    const into = path.join(DATA_DIR, '..', 'projects-studio-backup-extract-ws');
     extractArchive(archivePath(run), into);
     const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
     const ids = manifest.files.map(f => f.id);
@@ -177,7 +177,7 @@ test('instance export refuses reserved root entry names (skip + flag, no collidi
       assert.equal(entries.filter(e => e === 'manifest.json').length, 1, 'exactly ONE manifest.json tar entry');
       assert.equal(entries[0], 'manifest.json', 'manifest.json stays entry 0');
       assert.equal(entries.filter(e => e === 'audit_log.ndjson').length, 1, 'no duplicate table-name entry');
-      const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-reserved');
+      const into = path.join(DATA_DIR, '..', 'projects-studio-backup-extract-reserved');
       extractArchive(archivePath(run), into);
       const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
       assert.equal(manifest.files.find(f => f.path === 'manifest.json')?.nameReserved, true);
@@ -195,7 +195,7 @@ test('instance export refuses reserved root entry names (skip + flag, no collidi
    dropped — escapes flagged pathEscaped, in-tree flagged symlinkSkipped ---- */
 test('instance scope flags symlink entries instead of silently skipping them', () => {
   return (async () => {
-    const secret = path.join(os.tmpdir(), 'gr8r-backup-instance-secret.txt');
+    const secret = path.join(os.tmpdir(), 'projects-studio-backup-instance-secret.txt');
     fs.writeFileSync(secret, 'INSTANCE TOP SECRET\n');
     const outLink = path.join(DATA_DIR, 'escape-link');
     const inLink = path.join(DATA_DIR, 'inside-link');
@@ -205,7 +205,7 @@ test('instance scope flags symlink entries instead of silently skipping them', (
     try {
       const run = await backup.runExport({ kind: 'instance' });
       assert.equal(run.ok, true, 'symlinks do not fail the run — record + flag');
-      const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-symlink');
+      const into = path.join(DATA_DIR, '..', 'projects-studio-backup-extract-symlink');
       extractArchive(archivePath(run), into);
       const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
       const escaped = manifest.files.find(f => f.path === 'escape-link');
@@ -242,13 +242,13 @@ test('unknown scope kind fails the run closed', () => {
 /* ---- Task 2: symlink escape skipped + flagged, never followed (D-06/T-86-01) ---- */
 test('symlink escape is flagged in the manifest and excluded from the archive', () => {
   return (async () => {
-    const secret = path.join(os.tmpdir(), 'gr8r-backup-secret.txt');
+    const secret = path.join(os.tmpdir(), 'projects-studio-backup-secret.txt');
     fs.writeFileSync(secret, 'TOP SECRET\n');
     fs.symlinkSync(secret, path.join(FILES_DIR, 'escape'));
     await seedWorkspace('ws-esc', [{ id: 'escape', project: 'p-esc', name: 'e.txt', ext: 'txt' }]);
     const run = await backup.runExport({ kind: 'project', id: 'p-esc' });
     assert.equal(run.ok, true, 'escape does not fail the run — skip + flag');
-    const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-esc');
+    const into = path.join(DATA_DIR, '..', 'projects-studio-backup-extract-esc');
     extractArchive(archivePath(run), into);
     const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
     const rec = manifest.files.find(f => f.id === 'escape');
@@ -270,7 +270,7 @@ test('missing blob records a missingBlob flag and the run still succeeds', () =>
     const run = await backup.runExport({ kind: 'project', id: 'p-miss' });
     assert.equal(run.ok, true, 'missing blob does not fail the run');
     assert.equal(backup.getRunState().stage, 'done');
-    const into = path.join(DATA_DIR, '..', 'gr8r-backup-extract-miss');
+    const into = path.join(DATA_DIR, '..', 'projects-studio-backup-extract-miss');
     extractArchive(archivePath(run), into);
     const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
     const rec = manifest.files.find(f => f.id === 'gone');
@@ -386,7 +386,7 @@ function startS3Sink({ failPuts = false } = {}) {
     const chunks = [];
     req.on('data', c => chunks.push(c));
     req.on('end', () => {
-      const key = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+      const key = decodeURIComponent(url.pathname.replace(/^\/projects-studio\/?/, ''));
       if (req.method === 'POST' && url.searchParams.has('uploads')) {
         return res.writeHead(200).end('<InitiateMultipartUploadResult><UploadId>u1</UploadId></InitiateMultipartUploadResult>');
       }
@@ -413,7 +413,7 @@ function startS3Sink({ failPuts = false } = {}) {
 
 const sinkConfig = port => ({
   endpoint: `http://127.0.0.1:${port}`,
-  bucket: 'gr8r',
+  bucket: 'projects-studio',
   accessKeyId: 't',
   secretAccessKey: 't',
   region: 'us-east-1',
@@ -514,9 +514,9 @@ const todayUtc = () => {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 };
 
-test('92 naming: GR8R_INSTANCE_NAME respected; scheduled run carries the GFS marker; manual run omits it (D-01/D-03)', () => {
+test('92 naming: PROJECTS_STUDIO_INSTANCE_NAME respected; scheduled run carries the GFS marker; manual run omits it (D-01/D-03)', () => {
   return (async () => {
-    process.env.GR8R_INSTANCE_NAME = 'PjStudio!';
+    process.env.PROJECTS_STUDIO_INSTANCE_NAME = 'PjStudio!';
     backup.setBackupGfsBucketProvider(async () => 'daily');
     const created = [];
     try {
@@ -531,7 +531,7 @@ test('92 naming: GR8R_INSTANCE_NAME respected; scheduled run carries the GFS mar
       created.push(manual.filename);
       assert.equal(manual.filename, `pjstudio-instance-${todayUtc()}.tar.gz`, 'manual run: NO GFS marker');
     } finally {
-      delete process.env.GR8R_INSTANCE_NAME;
+      delete process.env.PROJECTS_STUDIO_INSTANCE_NAME;
       backup.setBackupGfsBucketProvider(null);
       for (const f of created) {
         fs.rmSync(path.join(BACKUPS_DIR, f), { force: true });
@@ -541,9 +541,9 @@ test('92 naming: GR8R_INSTANCE_NAME respected; scheduled run carries the GFS mar
   })();
 });
 
-test('92 naming: hostname fallback slugified when GR8R_INSTANCE_NAME unset (D-03)', () => {
+test('92 naming: hostname fallback slugified when PROJECTS_STUDIO_INSTANCE_NAME unset (D-03)', () => {
   return (async () => {
-    delete process.env.GR8R_INSTANCE_NAME;
+    delete process.env.PROJECTS_STUDIO_INSTANCE_NAME;
     try {
       assert.match(backup.instanceSlug(), /^[a-z0-9-]+$/, 'hostname slugified');
       assert.equal(backup.instanceSlug(), backup.instanceSlug().trim());
@@ -555,7 +555,7 @@ test('92 naming: hostname fallback slugified when GR8R_INSTANCE_NAME unset (D-03
 
 test('92 naming: collision suffix -2 lands BEFORE .tar.gz and the sidecar carries the FINAL name (D-01)', () => {
   return (async () => {
-    process.env.GR8R_INSTANCE_NAME = 'collide';
+    process.env.PROJECTS_STUDIO_INSTANCE_NAME = 'collide';
     try {
       const date = todayUtc();
       /* Seed the exact target the run will pick: collide-instance-<today>.tar.gz */
@@ -572,7 +572,7 @@ test('92 naming: collision suffix -2 lands BEFORE .tar.gz and the sidecar carrie
       fs.rmSync(path.join(BACKUPS_DIR, `${run.filename}.sha256`), { force: true });
       fs.rmSync(preExisting, { force: true });
     } finally {
-      delete process.env.GR8R_INSTANCE_NAME;
+      delete process.env.PROJECTS_STUDIO_INSTANCE_NAME;
     }
   })();
 });

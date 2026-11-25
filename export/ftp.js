@@ -571,7 +571,7 @@ export async function fetchToStaged(config, sourcePath, expectedSha256, stagingD
 /* =====================================================================
    PROBE (OQ-3, mirrors probeS3 :344-371 keyed-result shape verbatim)
    =====================================================================
-   Connect + STOR of a gr8r-probe marker + DELE. Keyed result — the
+   Connect + STOR of a projects-studio-probe marker + DELE. Keyed result — the
    contract Phase 98 maps into refusals/toasts (no UI strings in 97):
    { ok: true,  key: 'success',    httpWarning }
    { ok: false, key: 'deleteFailed', warning: true }        — put OK, delete refused
@@ -596,9 +596,9 @@ export async function probeFtp(config, opts = {}) {
   } catch (e) {
     return mapFtpProbeError(e, base);
   }
-  const marker = `gr8r-probe/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
+  const marker = `projects-studio-probe/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
   try {
-    await ftp.stor(marker, Buffer.from('gr8r probe'));
+    await ftp.stor(marker, Buffer.from('projects-studio probe'));
   } catch (e) {
     await ftp.quit().catch(() => {});
     return mapFtpProbeError(e, base);

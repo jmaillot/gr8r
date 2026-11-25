@@ -44,8 +44,8 @@ const maybeMinio = minioUrl ? test : test.skip;
 const S3_ENV = () => ({
   S3_ENDPOINT: minioUrl,
   S3_REGION: 'us-east-1',
-  S3_ACCESS_KEY_ID: process.env.MINIO_TEST_ACCESS_KEY_ID || 'gr8rtest',
-  S3_SECRET_KEY: process.env.MINIO_TEST_SECRET_KEY || 'gr8rtest-password',
+  S3_ACCESS_KEY_ID: process.env.MINIO_TEST_ACCESS_KEY_ID || 'projects-studiotest',
+  S3_SECRET_KEY: process.env.MINIO_TEST_SECRET_KEY || 'projects-studiotest-password',
   S3_PATH_STYLE: 'true',
 });
 
@@ -255,7 +255,7 @@ test('funnel order pinned in source: sameOrigin → requireUser → throttle →
 /* ---------- the S3 leg (88-01 seam, env-gated MinIO) ---------- */
 
 maybeMinio('90-02 e2e: S3-located archive downloads through downloadToStaged — 200 with the uploaded bytes, staged temp cleaned (D-89-16)', async () => {
-  const bucket = `gr8r-dl-e2e-${crypto.randomUUID().slice(0, 8)}`;
+  const bucket = `projects-studio-dl-e2e-${crypto.randomUUID().slice(0, 8)}`;
   await createBucket({ endpoint: minioUrl, bucket, accessKeyId: S3_ENV().S3_ACCESS_KEY_ID, secretAccessKey: S3_ENV().S3_SECRET_KEY, region: 'us-east-1', pathStyle: true });
 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-backup-dl-e2e-'));

@@ -100,8 +100,8 @@ test('4xx sets ftpTransient=true, 5xx sets false (T4)', () => {
 /* ---- T7: scrub discipline (V14 parity, mirrors sigv4 :209-217) ---- */
 
 test('scrub: PASS line + password never appear in err.message for a 530 transcript (T7)', () => {
-  const secret = 'gr8r-super-secret-pw';
-  const transcript = `USER gr8r\r\n530 Login incorrect (PASS ${secret} was rejected)\r\n`;
+  const secret = 'projects-studio-super-secret-pw';
+  const transcript = `USER projects-studio\r\n530 Login incorrect (PASS ${secret} was rejected)\r\n`;
   const err = ftpErrorFrom(530, transcript);
   assert.equal(err.message.includes(secret), false, 'raw password scrubbed from error text');
   assert.ok(err.message.length <= 300, 'message sliced to 300 chars');
@@ -111,7 +111,7 @@ test('scrub: PASS line + password never appear in err.message for a 530 transcri
 test('scrubFtpLine replaces PASS/USER commands with CMD *** (case-insensitive)', () => {
   assert.equal(scrubFtpLine('PASS secret123'), 'PASS ***');
   assert.equal(scrubFtpLine('pass secret123'), 'PASS ***');
-  assert.equal(scrubFtpLine('USER gr8r'), 'USER ***');
+  assert.equal(scrubFtpLine('USER projects-studio'), 'USER ***');
   assert.equal(scrubFtpLine('STOR /backup/x.bin'), 'STOR /backup/x.bin');
 });
 

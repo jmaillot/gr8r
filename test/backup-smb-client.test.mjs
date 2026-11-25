@@ -46,7 +46,7 @@ function verifyFrameWith(key, frame) {
 /* Pre-baked NTLM type-2 (CHALLENGE_MESSAGE): fixed challenge + fixed
    small TargetInfo (AV NetBIOS-domain pair). Constant per module. */
 const MOCK_CHALLENGE = Buffer.from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]);
-const MOCK_TARGET_INFO = Buffer.concat([Buffer.from([0x02, 0x0c]), utf16le('GR8RDOM'), Buffer.from([0x00, 0x00])]);
+const MOCK_TARGET_INFO = Buffer.concat([Buffer.from([0x02, 0x0c]), utf16le('PROJECTS_STUDIODOM'), Buffer.from([0x00, 0x00])]);
 const MOCK_TYPE2 = (() => {
   const buf = Buffer.alloc(48 + MOCK_TARGET_INFO.length);
   buf.write('NTLMSSP\0', 0, 'latin1');
@@ -143,9 +143,9 @@ function fakeSmb(scenario = {}) {
   const replies = [];
   const writes = [];
   const creds = {
-    user: scenario.user ?? 'gr8r',
+    user: scenario.user ?? 'projects-studio',
     domain: scenario.domain ?? 'DOMAIN',
-    password: scenario.password ?? 'gr8r-secret',
+    password: scenario.password ?? 'projects-studio-secret',
   };
   const sockets = new Set();
   let fileIdCounter = 0;
@@ -380,10 +380,10 @@ test('tracer: full handshake (NEGOTIATE → SESSION_SETUP×2 → TREE_CONNECT �
     const smb = connectSmb({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       domain: 'DOMAIN',
-      password: 'gr8r-secret',
-      share: '\\\\127.0.0.1\\gr8r',
+      password: 'projects-studio-secret',
+      share: '\\\\127.0.0.1\\projects-studio',
     });
     await smb.connect();
     await smb.echo();
@@ -425,10 +425,10 @@ test('forged reply signature → connection closed, keyed generic, never dispatc
     const smb = connectSmb({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       domain: 'DOMAIN',
-      password: 'gr8r-secret',
-      share: '\\\\127.0.0.1\\gr8r',
+      password: 'projects-studio-secret',
+      share: '\\\\127.0.0.1\\projects-studio',
     }, { commandTimeoutMs: 2000 });
     await assert.rejects(
       smb.connect(),
@@ -477,7 +477,7 @@ test('multi-chunk upload: serial ≤60416 WRITE frames with strictly increasing 
   const server = fakeSmb();
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
     await smb.connect();
     await smb.write('/backup/big.bin', payload);
     await smb.close();
@@ -506,7 +506,7 @@ test('partial-write knob: reply Count < chunk → re-issue from the un-acked off
   const server = fakeSmb({ partialWrite: true });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
     await smb.connect();
     await smb.write('/backup/partial.bin', payload);
     const back = await smb.read('/backup/partial.bin');
@@ -525,11 +525,11 @@ test('partial-write knob: reply Count < chunk → re-issue from the un-acked off
 });
 
 test('write-then-read round trip + rm recorded over the mock', async () => {
-  const payload = Buffer.from('gr8r smb round trip \xC2\xA9 bytes');
+  const payload = Buffer.from('projects-studio smb round trip \xC2\xA9 bytes');
   const server = fakeSmb();
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
     await smb.connect();
     await smb.write('/backup/rt.bin', payload);
     const back = await smb.read('/backup/rt.bin');
@@ -551,7 +551,7 @@ test('single-chunk small write: exactly one ≤60416 WRITE frame, read matches',
   const server = fakeSmb();
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
     await smb.connect();
     await smb.write('/backup/tiny.bin', payload);
     assert.deepEqual(server.writes.map((w) => [w.offset, w.length]), [[0, 4]], 'one WRITE frame');
@@ -569,7 +569,7 @@ test('sessionExpired mid-WRITE → re-SESSION_SETUP on same transport, replay wi
   const server = fakeSmb({ expireCounts: { [SMB2_COM.WRITE]: 1 } });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
     await smb.connect();
     await smb.write('/backup/exp.bin', payload);
     const back = await smb.read('/backup/exp.bin');
@@ -601,7 +601,7 @@ test('expiry storm → caps 1/command + 2/session surface smbClass sessionExpire
   const server = fakeSmb({ expireAttemptCounts: { [SMB2_COM.ECHO]: 3 } });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
     await smb.connect();
     await smb.echo(); // expiry #1 → replay OK (count 1)
     await smb.echo(); // expiry #2 → replay OK (count 2)
@@ -630,7 +630,7 @@ test('LOGON_FAILED on final SESSION_SETUP → authFailed', async () => {
   const server = fakeSmb({ sessionSetupStatus: 0xc000006d });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'wrong-password', share: '\\\\h\\s' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'wrong-password', share: '\\\\h\\s' });
     await assert.rejects(smb.connect(), (err) => {
       assert.equal(err.code, 'smbAuthFailed');
       assert.equal(err.smbClass, 'authFailed');
@@ -645,7 +645,7 @@ test('BAD_NETWORK_NAME → shareNotFound; ACCESS_DENIED → treeConnectFailed', 
   const server = fakeSmb({ treeConnectStatus: 0xc00000cc });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\missing' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\missing' });
     await assert.rejects(smb.connect(), (err) => err.smbClass === 'shareNotFound' && err.code === 'smbShareNotFound');
   } finally {
     await server.close();
@@ -653,7 +653,7 @@ test('BAD_NETWORK_NAME → shareNotFound; ACCESS_DENIED → treeConnectFailed', 
   const server2 = fakeSmb({ treeConnectStatus: 0xc0000022 });
   await server2.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server2.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\denied' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server2.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\denied' });
     await assert.rejects(smb.connect(), (err) => err.smbClass === 'treeConnectFailed' && err.code === 'smbTreeConnectFailed');
   } finally {
     await server2.close();
@@ -664,7 +664,7 @@ test('DISK_FULL on WRITE → noSpace; OBJECT_NAME_COLLISION on CREATE → nameCo
   const server = fakeSmb({ writeStatus: 0xc000007f });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\projects-studio' });
     await smb.connect();
     await assert.rejects(
       smb.write('/backup/full.bin', Buffer.from('x')),
@@ -677,7 +677,7 @@ test('DISK_FULL on WRITE → noSpace; OBJECT_NAME_COLLISION on CREATE → nameCo
   const server2 = fakeSmb({ createStatus: 0xc0000035 });
   await server2.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server2.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server2.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\projects-studio' });
     await smb.connect();
     await assert.rejects(
       smb.write('/backup/collision.bin', Buffer.from('x')),
@@ -695,7 +695,7 @@ test('dialect refusal (0x0300 reply) → generic + smbDialectUnsupported (OQ-3 a
   const server = fakeSmb({ dialectReply: 0x0300 });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\s' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\s' });
     await assert.rejects(smb.connect(), (err) => {
       assert.equal(err.code, 'smbDialectUnsupported');
       assert.equal(err.smbClass, 'generic', 'dialect-mismatch stays generic — NOT signingRequired');
@@ -710,7 +710,7 @@ test('signing-not-agreed SecurityMode → signingRequired abort (T-99-05, SC-2 e
   const server = fakeSmb({ securityMode: 0x0000 });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\s' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\s' });
     await assert.rejects(smb.connect(), (err) => {
       assert.equal(err.code, 'smbSigningRequired');
       assert.equal(err.smbClass, 'signingRequired');
@@ -744,7 +744,7 @@ test('D-04 scrub: no type-3 / NT-response / password material in ANY surfaced er
     try {
       const smb = connectSmb({
         host: '127.0.0.1', port: server.port(),
-        user: 'gr8r', domain: 'DOMAIN', password: password ?? 'gr8r-secret',
+        user: 'projects-studio', domain: 'DOMAIN', password: password ?? 'projects-studio-secret',
         share: '\\\\h\\s',
       });
       try {
@@ -805,7 +805,7 @@ test('OBJECT_NAME_NOT_FOUND on CREATE → pathNotFound over the wire', async () 
   const server = fakeSmb({ createStatus: 0xc0000034 });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\gr8r' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\projects-studio' });
     await smb.connect();
     await assert.rejects(
       smb.write('/backup/missing.bin', Buffer.from('x')),
@@ -822,7 +822,7 @@ test('guest detection: SessionFlags bit 0x0001 at reply-body offset 2 → __debu
     const server = fakeSmb({ sessionFlags: flags });
     await server.listen();
     try {
-      const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\s' });
+      const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\h\\s' });
       await smb.connect();
       const debug = await smb.__debug();
       assert.equal(debug.guestSession, want, `SessionFlags 0x${flags.toString(16)} → guestSession ${want}`);
@@ -844,7 +844,7 @@ test('export/smb.js imports only node: builtins (zero new dependencies)', () => 
    Phase 100 plan 01 — Task 2: probeSmb + fetchSmbToStaged
    ===================================================================== */
 
-const smbProbeConfig = (port) => ({ host: '127.0.0.1', port, user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+const smbProbeConfig = (port) => ({ host: '127.0.0.1', port, user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
 
 test('probeSmb happy path → keyed { ok: true, key: "success" }, no httpWarning key, marker written then removed', async () => {
   const { probeSmb } = await import('../export/smb.js');
@@ -912,7 +912,7 @@ test('probeSmb with a guest session → result.guest === true on success', async
 
 test('fetchSmbToStaged: matching sha256 → staging file with identical bytes; mismatch → keyed refusal, no file left behind', async () => {
   const { fetchSmbToStaged } = await import('../export/smb.js');
-  const payload = Buffer.from('gr8r smb staged fetch payload');
+  const payload = Buffer.from('projects-studio smb staged fetch payload');
   const sha = crypto.createHash('sha256').update(payload).digest('hex');
   const server = fakeSmb();
   await server.listen();

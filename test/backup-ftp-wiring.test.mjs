@@ -308,7 +308,7 @@ import os from 'node:os';
 
 /* DATA_DIR must exist BEFORE export/backup.js is imported (dynamic import
    below keeps the static slice pins env-independent). */
-const PIPE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ftp-pipe-'));
+const PIPE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ftp-pipe-'));
 process.env.DATA_DIR = PIPE_DATA_DIR;
 
 const { setBackupDestination, setBackupRunWriter, runExport, getRunState, backupsRoot } = await import('../export/backup.js');

@@ -27,7 +27,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-overwrite-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-overwrite-'));
 process.env.DATA_DIR = DATA_DIR;
 process.env.BACKUPS_DIR = ''; // default: DATA_DIR/backups (delete an inherited override)
 delete process.env.BACKUPS_DIR;
@@ -676,7 +676,7 @@ const pollRoute = (ro, read, { timeoutMs = 20000 } = {}) =>
    lands AFTER the export so the overwrite's replacement semantics are
    observable through the route. Returns everything a cell needs. */
 async function bootOverwriteWorld() {
-  const srv = await startServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-route-')) });
+  const srv = await startServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-route-')) });
   const ro = openReader(srv);
   const op = await makeBackupOpRoute(srv, ro, 'ow-op@test.local');
   const ownerId = ro.get('select id from users where email = ?', ADMIN.email).id;
@@ -804,7 +804,7 @@ test('89-05 overwrite route outbox gate: a done overwrite claims one restore_ale
      contacted; the pass send is injected there, here only the CLAIM
      rows are pinned). */
   const srv = await startServer({
-    dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-outbox-')),
+    dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-outbox-')),
     env: { SMTP_HOST: '127.0.0.1', SMTP_PORT: '1', SMTP_REQUIRE_TLS: 'false', MAIL_FROM: 'noreply@test.local', APP_URL: 'http://127.0.0.1:1' },
   });
   const ro = openReader(srv);
@@ -839,7 +839,7 @@ test('89-05 overwrite route outbox gate: a done overwrite claims one restore_ale
 });
 
 test('95-04 D-04 global lock unchanged on the project path: a claimed restore_lock refuses a project overwrite 409 backupRestoreInProgress + audited (no per-scope locking — owner ruling 2026-11-24)', async () => {
-  const srv = await startServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-lock-')) });
+  const srv = await startServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-proj-lock-')) });
   const ro = openReader(srv);
   try {
     const op = await makeBackupOpRoute(srv, ro, 'ow-proj-lock-op@test.local');

@@ -331,7 +331,7 @@ export async function deleteObject(config, key) {
 }
 
 /* ---- Probe (D-88-15, Pitfall 7) ----
-   HeadBucket AND a small PUT under `gr8r-probe/` AND its DELETE.
+   HeadBucket AND a small PUT under `projects-studio-probe/` AND its DELETE.
    Keyed result — the contract plans 02/03 map into toasts/refusals:
    { ok: true,  key: 'success',    httpWarning }          — all three OK
    { ok: false, key: 'deleteFailed', warning: true, httpWarning } — put OK, delete refused:
@@ -349,9 +349,9 @@ export async function probeS3(config) {
   } catch (e) {
     return mapProbeError(e, base);
   }
-  const marker = `gr8r-probe/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
+  const marker = `projects-studio-probe/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
   try {
-    await putObject(config, marker, Buffer.from('gr8r probe'), { contentType: 'text/plain' });
+    await putObject(config, marker, Buffer.from('projects-studio probe'), { contentType: 'text/plain' });
   } catch (e) {
     return mapProbeError(e, base);
   }

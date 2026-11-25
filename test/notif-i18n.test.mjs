@@ -121,7 +121,7 @@ before(async () => {
       SMTP_PORT: String(smtp.port()),
       SMTP_SECURE: 'false',
       SMTP_REQUIRE_TLS: 'false',
-      MAIL_FROM: 'gr8r@test.local',
+      MAIL_FROM: 'projects-studio@test.local',
       APP_URL: 'https://i18n.example.com',
     },
   });

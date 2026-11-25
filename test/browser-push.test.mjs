@@ -152,7 +152,7 @@ const loadSw = () => {
   const shown = [];
   let windowClients = [];
   const selfStub = {
-    location: { origin: 'https://gr8r.test' },
+    location: { origin: 'https://projects-studio.test' },
     registration: {
       showNotification: async (title, options) => shown.push({ title, options }),
     },
@@ -180,7 +180,7 @@ test('public/sw.js owns exactly one push listener and displays the pre-localized
 
 test('a push with an open window client of the origin shows NO OS notification (D-12/D-13)', async () => {
   const sw = loadSw();
-  sw.setClients([{ url: 'https://gr8r.test/w/acme' }]);
+  sw.setClients([{ url: 'https://projects-studio.test/w/acme' }]);
   await sw.firePush(payload({ title: 'Élodie mentioned you', body: 'ELN-1 Website launch', url: '/w/acme/task/ELN-1' }));
   assert.equal(sw.shown.length, 0, 'the visible-tab path owns delivery when any client exists');
 });
@@ -251,7 +251,7 @@ test('a hidden-tab mention yields exactly ONE showNotification with the localize
   assert.ok(call.title.includes('Élodie'), 'the body names the actor');
   assert.ok(call.title.includes('Website launch'), 'the body names the task');
   assert.ok(call.title.includes('mentioned you'), 'the EN catalogue line resolves');
-  assert.equal(call.options.tag, 'gr8r-n-2');
+  assert.equal(call.options.tag, 'projects-studio-n-2');
   assert.equal(call.options.icon, '/favicon.svg');
   assert.equal(call.options.data.url, '/w/acme/task/ELN-1');
   assert.ok(call.options.data.url.startsWith('/'), 'the deep link is same-origin relative (T-48-03)');

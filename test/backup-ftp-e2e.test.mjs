@@ -10,9 +10,9 @@
    E2e target — vsftpd via the fauria/vsftpd image (active + passive
    ports documented; plain FTP on 21 so the default 'none' secure enum
    is exercised — TLS against this image is out of scope):
-     docker run -d --name gr8r-vsftpd-e2e \
+     docker run -d --name projects-studio-vsftpd-e2e \
        -p 2121:21 -p 21100-21110:21100-21110 \
-       -e FTP_USER=gr8rtest -e FTP_PASS=gr8rtest-password \
+       -e FTP_USER=projects-studiotest -e FTP_PASS=projects-studiotest-password \
        -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 \
        fauria/vsftpd
    then:
@@ -20,7 +20,7 @@
    The FTP_* env vars map onto the server's boot-frozen consts
    (server.js FTP_HOST/FTP_PORT/FTP_USER/FTP_PASSWORD/FTP_SECURE/
    FTP_PASV_HOST — see docs/DEPLOY.md §21); here the credentials default
-   to the throwaway gr8rtest pair above and can be overridden with
+   to the throwaway projects-studiotest pair above and can be overridden with
    FTP_TEST_USER / FTP_TEST_PASSWORD. The recipe's credentials are
    throwaway docker-only values — never real secrets (T-98-07).
    ===================================================================== */
@@ -44,8 +44,8 @@ const CONFIG = (() => {
   return {
     host: u.hostname,
     port: Number.parseInt(u.port || '21', 10),
-    user: process.env.FTP_TEST_USER || 'gr8rtest',
-    password: process.env.FTP_TEST_PASSWORD || 'gr8rtest-password',
+    user: process.env.FTP_TEST_USER || 'projects-studiotest',
+    password: process.env.FTP_TEST_PASSWORD || 'projects-studiotest-password',
     secure: 'none', // the vsftpd recipe is plain FTP — explicit-TLS e2e would need FTPS-capable certs
     insecure: false,
   };
@@ -68,10 +68,10 @@ maybeFtp('e2e: backup → FTP → restore full loop (SC-3/SC-5 — archive + sid
      leg proves the server-side artifacts are REAL against vsftpd. */
   const bytes = crypto.randomBytes(256 * 1024);
   const expectedSha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const filename = `gr8r ftp e2e ${taskId}.tar.gz`; // spaces exercise the client's path quoting
+  const filename = `projects-studio ftp e2e ${taskId}.tar.gz`; // spaces exercise the client's path quoting
   const ftpKey = `backup-task-${taskId}/${filename}`;
 
-  const staged = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ftp-e2e-'));
+  const staged = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ftp-e2e-'));
   const archivePath = path.join(staged, 'archive.tar.gz');
   fs.writeFileSync(archivePath, bytes);
 
@@ -88,7 +88,7 @@ maybeFtp('e2e: backup → FTP → restore full loop (SC-3/SC-5 — archive + sid
   }
 
   /* ---- restore leg (D-05): fetchToStaged — single-shot + sha256. */
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ftp-e2e-restore-'));
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ftp-e2e-restore-'));
   const back = await fetchToStaged(CONFIG, ftpKey, expectedSha, stagingDir);
   assert.equal(back.sha256, expectedSha, 'read-back digest verified');
   assert.equal(fs.readFileSync(back.tmpPath).equals(bytes), true, 'restore returns byte-identical content from the FTP copy');

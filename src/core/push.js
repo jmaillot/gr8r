@@ -130,7 +130,7 @@ export async function notifyNewEvents() {
     if (Notification.permission !== 'granted') continue;
     try {
       const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) await reg.showNotification(line, { body: line, tag: `gr8r-${n.id}`, icon: '/favicon.svg', data: { url: buildNotifUrl(n) } });
+      if (reg) await reg.showNotification(line, { body: line, tag: `projects-studio-${n.id}`, icon: '/favicon.svg', data: { url: buildNotifUrl(n) } });
       else new Notification(line, { body: line }); // SW not yet active — constructor fallback (Pattern 1)
     } catch {
       /* dispatch failed: the poll is the delivery guarantee, email is the backstop */

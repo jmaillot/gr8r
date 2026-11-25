@@ -1,7 +1,7 @@
 /* =====================================================================
    BACKUP EXPORTER — Phase 86 (86-01, BKBCK-01)
    =====================================================================
-   Server-only "gr8r backup v1" export pipeline. Lives at the repository
+   Server-only "projects-studio backup v1" export pipeline. Lives at the repository
    ROOT beside export/mspdi.js — never under src/ (the prohibition test
    fails the moment a src/ module reaches this file).
 
@@ -244,8 +244,8 @@ function ustarHeader({ name, size, mtime }) {
   buf.write('0', 156, 1, 'ascii'); // typeflag: regular file
   buf.write('ustar\0', 257, 6, 'ascii'); // magic
   buf.write('00', 263, 2, 'ascii'); // version
-  buf.write('gr8r', 265, 8, 'ascii'); // uname
-  buf.write('gr8r', 297, 8, 'ascii'); // gname
+  buf.write('projects-studio', 265, 8, 'ascii'); // uname
+  buf.write('projects-studio', 297, 8, 'ascii'); // gname
   buf.write(prefix, 345, Math.min(prefix.length, 155), 'ascii'); // prefix
   let sum = 0;
   for (const byte of buf) sum += byte;
@@ -536,7 +536,7 @@ function collectInstanceFiles(dirs, stagingDir, files) {
 
 /* ---- Filename (D-14): <instance-name>-<scope>-<slug>-<gfs>-<date>.tar.gz ---- */
 /* Phase 92 (BKNAME-01, D-01/D-03): the five-segment server-resolved shape.
-   <instance-name> = GR8R_INSTANCE_NAME env var (D-03 ruling 2026-11-24: no
+   <instance-name> = PROJECTS_STUDIO_INSTANCE_NAME env var (D-03 ruling 2026-11-24: no
    settings table exists — env is the zero-DDL mechanism) with a slugified
    hostname fallback. Scheduled runs (meta.taskId set) carry the stored
    GFS marker; manual runs (taskId null) OMIT the <gfs> segment entirely.
@@ -551,10 +551,10 @@ export function scopeTokenFor(kind) {
   return kind === 'project' ? 'project' : 'instance';
 }
 
-/* Instance name segment: GR8R_INSTANCE_NAME env var, else the machine
+/* Instance name segment: PROJECTS_STUDIO_INSTANCE_NAME env var, else the machine
    hostname, slugified (D-03). Resolved ONCE per export run (Pitfall 5). */
 export function instanceSlug() {
-  return slugify(process.env.GR8R_INSTANCE_NAME || os.hostname() || 'gr8r-instance') || 'gr8r-instance';
+  return slugify(process.env.PROJECTS_STUDIO_INSTANCE_NAME || os.hostname() || 'projects-studio-instance') || 'projects-studio-instance';
 }
 
 const slugify = s =>
@@ -767,7 +767,7 @@ export async function runExport(scope, meta = {}) {
     /* Manifest (entry 0) — per-table + per-file sha256 only (Pitfall 1) */
     const manifest = {
       formatVersion: 1,
-      generator: 'gr8r backup v1 (Phase 86)',
+      generator: 'projects-studio backup v1 (Phase 86)',
       scope: { kind: scope.kind, id: scope.id ?? null },
       createdAt: Date.now(),
       tables,

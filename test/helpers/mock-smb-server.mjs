@@ -19,7 +19,7 @@ import {
 } from '../../export/smb.js';
 const SMB2_HDR_REPLY = 0x1;
 const MOCK_CHALLENGE = Buffer.from([0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef]);
-const MOCK_TARGET_INFO = Buffer.concat([Buffer.from([0x02, 0x0c]), utf16le('GR8RDOM'), Buffer.from([0x00, 0x00])]);
+const MOCK_TARGET_INFO = Buffer.concat([Buffer.from([0x02, 0x0c]), utf16le('PROJECTS_STUDIODOM'), Buffer.from([0x00, 0x00])]);
 const MOCK_TYPE2 = (() => {
   const buf = Buffer.alloc(48 + MOCK_TARGET_INFO.length);
   buf.write('NTLMSSP\0', 0, 'latin1');
@@ -94,7 +94,7 @@ function signingKeyFromType3(type3Buf, creds) {
 /* Scripted NBSS frame server with file-storage capture (99 idiom). */
 function fakeSmb(scenario = {}, credsOverride = {}) {
   const commands = [];
-  const creds = { user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', ...credsOverride };
+  const creds = { user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', ...credsOverride };
   const sockets = new Set();
   let fileIdCounter = 0;
   const files = new Map();

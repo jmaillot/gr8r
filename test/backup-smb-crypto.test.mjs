@@ -287,10 +287,10 @@ test('encodeNbssSessionRequest: 1-byte length prefix + 32-byte padded names', ()
   assert.equal(req[0], 32);
   assert.equal(req.subarray(1, 33).toString('latin1'), '*SMBSERVER'.padEnd(32, ' '));
   assert.equal(req[33], 32);
-  assert.equal(req.subarray(34, 66).toString('latin1'), 'GR8R'.padEnd(32, ' '));
-  const req2 = encodeNbssSessionRequest('MY-NAS-SERVER', 'gr8r-backup');
+  assert.equal(req.subarray(34, 66).toString('latin1'), 'PROJECTS-STUDIO'.padEnd(32, ' '));
+  const req2 = encodeNbssSessionRequest('MY-NAS-SERVER', 'projects-studio-backup');
   assert.equal(req2.subarray(1, 33).toString('latin1'), 'MY-NAS-SERVER'.padEnd(32, ' '));
-  assert.equal(req2.subarray(34, 66).toString('latin1'), 'GR8R-BACKUP'.padEnd(32, ' '), 'names uppercased (firstNetBIOS convention)');
+  assert.equal(req2.subarray(34, 66).toString('latin1'), 'PROJECTS-STUDIO-BACKUP'.padEnd(32, ' '), 'names uppercased (firstNetBIOS convention)');
 });
 
 test('SMB2 header round-trips all fields byte-exactly (little-endian)', () => {

@@ -1,6 +1,6 @@
 /* ---- Phase 89 (89-01, BKRST-01): restore engine foundations ----
    Zero-dependency (D-33-11) ustar+gzip stream reader for the frozen
-   "gr8r backup v1" archive format produced by export/backup.js.
+   "projects-studio backup v1" archive format produced by export/backup.js.
 
    The Phase 86 ustar WRITER (export/backup.js ustarHeader) is this
    reader's authoritative layout spec — header offsets are mirrored
@@ -9,7 +9,7 @@
    ceiling — anything over is refused before any data is read),
    mtime@136:12 (epoch SECONDS), chksum@148:8 (summed with the field
    read as 8 spaces — the tar convention the writer used),
-   typeflag@156 ('0' — gr8r archives carry regular files only),
+   typeflag@156 ('0' — projects-studio archives carry regular files only),
    magic 'ustar\0'@257:6, version '00'@263:2, uname@265:8, gname@297:8,
    prefix@345:155 (long names reconstruct as prefix + '/' + name).
 
@@ -180,7 +180,7 @@ function parseHeader(block, archivePath) {
   if (typeflag !== '0') {
     throw keyed(
       'restoreArchiveHeaderInvalid',
-      `restore: unsupported entry type ${JSON.stringify(typeflag)} for "${name}" in ${archivePath} — gr8r archives carry regular files only`,
+      `restore: unsupported entry type ${JSON.stringify(typeflag)} for "${name}" in ${archivePath} — projects-studio archives carry regular files only`,
       { reason: 'typeflag', name },
     );
   }

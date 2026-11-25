@@ -47,7 +47,10 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 /* Phase 48/59 contract: byte-identical proof. Recomputed on every run. */
-const SW_HASH_PIN = '7a700dd8cc70ccb20c444707ac0d86871f9abe24999a40497fc22e5a55cc5b8d';
+/* 2026-11-25 owner-directed rebrand (gr8r → projects-studio): the push
+   notification tag inside sw.js was renamed intentionally — the hash pin
+   updated WITH justification, per the pin's own STOP-and-justify contract. */
+const SW_HASH_PIN = '3536255a9cf7958996177948199295a44175c3f2e6c9c5a593376df54a7a59aa';
 
 /* Walk a directory for .js files (relative to ROOT), deterministically. */
 const jsFiles = dir => {

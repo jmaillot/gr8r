@@ -311,7 +311,7 @@ export function buildMspdi(model) {
        OutlineLevel, Priority, Start, Finish, Duration, ManualStart,
        ManualFinish, ManualDuration, DurationFormat, …, Milestone,
        Summary, …, PercentComplete, ConstraintType, ConstraintDate, …,
-       Notes, PredecessorLink*, ExtendedAttribute* — gr8r's emission
+       Notes, PredecessorLink*, ExtendedAttribute* — projects-studio's emission
        violated it four ways and the template below IS the canonical
        order for the emitted subset.
        Test 11 round 2 (owner 2026-11-17 re-UAT): the canonical order did

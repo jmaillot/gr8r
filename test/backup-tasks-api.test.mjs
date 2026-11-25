@@ -451,9 +451,9 @@ function startSink(behavior) {
 
 const S3_ENV = (endpoint, extra = {}) => ({
   S3_ENDPOINT: endpoint,
-  S3_BUCKET: 'gr8r-test-bucket',
-  S3_ACCESS_KEY_ID: 'gr8r-test-key',
-  S3_SECRET_KEY: 'gr8r-test-secret',
+  S3_BUCKET: 'projects-studio-test-bucket',
+  S3_ACCESS_KEY_ID: 'projects-studio-test-key',
+  S3_SECRET_KEY: 'projects-studio-test-secret',
   ...extra,
 });
 
@@ -504,7 +504,7 @@ test('S3 env set: boolean exposure carries no identifiers (T-88-05); gate accept
     assert.equal(cfg.status, 200);
     assert.equal(cfg.data.s3Enabled, true);
     const raw = JSON.stringify(cfg.data);
-    assert.ok(!raw.includes('gr8r-test-bucket') && !raw.includes(sink.port.toString()) && !raw.includes('gr8r-test-key'),
+    assert.ok(!raw.includes('projects-studio-test-bucket') && !raw.includes(sink.port.toString()) && !raw.includes('projects-studio-test-key'),
       'the config payload never carries the bucket/endpoint/key (T-88-05/D-88-11)');
 
     const created = await op.post('/api/backup/tasks', { name: 'S3 task', scope: { kind: 'instance' }, cron: '30 2 * * *', s3Enabled: true });
@@ -541,8 +541,8 @@ test('probe route maps keyed results: success (+httpWarning), s3ClockSkew, badCr
     assert.equal(probe.data.key, 'success');
     assert.equal(probe.data.httpWarning, true, 'plain-http endpoint warns the operator (D-88-14)');
     assert.ok(okSink.hits.filter(h => h.method === 'HEAD').length >= 1, 'HeadBucket ran');
-    assert.ok(okSink.hits.some(h => h.method === 'PUT' && h.url.includes('gr8r-probe/')), 'marker PUT ran (D-88-15 write+delete)');
-    assert.ok(okSink.hits.some(h => h.method === 'DELETE' && h.url.includes('gr8r-probe/')), 'marker DELETE ran');
+    assert.ok(okSink.hits.some(h => h.method === 'PUT' && h.url.includes('projects-studio-probe/')), 'marker PUT ran (D-88-15 write+delete)');
+    assert.ok(okSink.hits.some(h => h.method === 'DELETE' && h.url.includes('projects-studio-probe/')), 'marker DELETE ran');
     assert.ok(taskAuditRows(okServer).some(r => r.action === 'backup_s3_probe_ok'), 'probe audited');
   } finally {
     await okServer.stop();
@@ -748,15 +748,15 @@ function startS3RideSink() {
       if (req.method === 'POST' && url.searchParams.has('uploadId')) return res.writeHead(200).end('<CompleteMultipartUploadResult></CompleteMultipartUploadResult>');
       if (req.method === 'PUT' && url.searchParams.has('uploadId')) return res.writeHead(200, { etag: '"p"' }).end();
       if (req.method === 'PUT') {
-        /* The SC-1 marker probe (gr8r-probe/) must SUCCEED at save time —
+        /* The SC-1 marker probe (projects-studio-probe/) must SUCCEED at save time —
            the `fail` gate simulates upload-PUT failures only. */
-        if (url.pathname.includes('gr8r-probe/')) return res.writeHead(200).end();
+        if (url.pathname.includes('projects-studio-probe/')) return res.writeHead(200).end();
         if (state.fail) return res.writeHead(503, { 'content-type': 'application/xml' }).end('<?xml version="1.0"?><Error><Code>ServiceUnavailable</Code></Error>');
-        state.objects.set(decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, '')), Buffer.concat(chunks));
+        state.objects.set(decodeURIComponent(url.pathname.replace(/^\/projects-studio\/?/, '')), Buffer.concat(chunks));
         return res.writeHead(200).end();
       }
       if (req.method === 'GET') {
-        const key = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+        const key = decodeURIComponent(url.pathname.replace(/^\/projects-studio\/?/, ''));
         const obj = state.objects.get(key) || (state.fail ? null : Buffer.from('unverified-stub'));
         if (!obj) return res.writeHead(404).end();
         return res.writeHead(200).end(obj);
@@ -819,9 +819,9 @@ async function waitForSmtp(msgs, count, timeoutMs) {
 const S3_RIDE_ENV = (s3Port, smtpPort) => ({
   BACKUP_TEST_TOKEN: S3_RIDE_TOKEN,
   S3_ENDPOINT: `http://127.0.0.1:${s3Port}`,
-  S3_BUCKET: 'gr8r',
-  S3_ACCESS_KEY_ID: 'gr8rtest',
-  S3_SECRET_KEY: 'gr8rtest-secret',
+  S3_BUCKET: 'projects-studio',
+  S3_ACCESS_KEY_ID: 'projects-studiotest',
+  S3_SECRET_KEY: 'projects-studiotest-secret',
   SMTP_HOST: '127.0.0.1',
   SMTP_PORT: String(smtpPort), // SMTP catcher — delivery itself is the D-17/D-88-3 assertion
   SMTP_REQUIRE_TLS: 'false',

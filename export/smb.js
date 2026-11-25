@@ -331,7 +331,7 @@ export function createFrameParser() {
    uppercase padded called/calling names (firstNetBIOS style). The
    client expects 0x82 (positive) / 0x83 (negative) — checked by the
    session engine in 99-02. */
-export function encodeNbssSessionRequest(calledName = '*SMBSERVER', callingName = 'GR8R') {
+export function encodeNbssSessionRequest(calledName = '*SMBSERVER', callingName = 'projects-studio') {
   const pad32 = (s) => Buffer.from(String(s).toUpperCase().slice(0, 32).padEnd(32, ' '), 'latin1');
   return Buffer.concat([Buffer.from([32]), pad32(calledName), Buffer.from([32]), pad32(callingName)]);
 }
@@ -1140,7 +1140,7 @@ export async function probeSmb(config, opts = {}) {
     await smb.echo();
     const marker = `backup-smb/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
     try {
-      await smb.write(marker, Buffer.from('gr8r probe'));
+      await smb.write(marker, Buffer.from('projects-studio probe'));
     } catch (e) {
       return finish({ ...base, key: e?.smbClass || 'unreachable' });
     }

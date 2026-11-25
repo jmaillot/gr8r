@@ -77,7 +77,7 @@ async function waitRunFinished(srv, op, timeoutMs = 30_000) {
 /* ---------- tracer slice: due task fires via sweep → persisted run row ---------- */
 
 test('a due task fires through the sweep → persisted scheduled run row; next_run_at advances (D-05/D-11)', async () => {
-  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, GR8R_INSTANCE_NAME: 'testsuite' } });
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, PROJECTS_STUDIO_INSTANCE_NAME: 'testsuite' } });
   try {
     const op = await makeBackupOp(server, 'op-sched@test.local');
     const created = await op.post('/api/backup/tasks', { name: 'Nightly', scope: { kind: 'instance' }, cron: '30 2 * * *' });
@@ -103,7 +103,7 @@ test('a due task fires through the sweep → persisted scheduled run row; next_r
     assert.equal(row.status, 'succeeded');
     /* Phase 92 (BKNAME-01): the scheduled archive carries the instance name,
        scope token and stored GFS marker (id-based rotation needs no taskId
-       in the name). GR8R_INSTANCE_NAME pinned in this server's env. */
+       in the name). PROJECTS_STUDIO_INSTANCE_NAME pinned in this server's env. */
     assert.match(row.filename, /^testsuite-instance-[a-z]+-\d{4}-\d{2}-\d{2}\.tar\.gz$/, 'scheduled shape: instance-scope-gfs-date');
     assert.ok(row.sha256 && row.sha256.length === 64, 'whole-archive sha256 persisted');
     assert.ok(row.duration_ms >= 0, 'duration persisted');
@@ -120,7 +120,7 @@ test('a due task fires through the sweep → persisted scheduled run row; next_r
 });
 
 test('a manual POST /api/backup/runs run persists a backup_runs row (writer seam covers the manual trigger, 86-D-14 naming frozen)', async () => {
-  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, GR8R_INSTANCE_NAME: 'testsuite' } });
+  const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, PROJECTS_STUDIO_INSTANCE_NAME: 'testsuite' } });
   try {
     const op = await makeBackupOp(server, 'op-manual@test.local');
     const started = await op.post('/api/backup/runs', { scope: { kind: 'instance' } });

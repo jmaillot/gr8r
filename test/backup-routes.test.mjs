@@ -408,7 +408,7 @@ async function seedAllRuns(server) {
 }
 
 test('?all=1 returns cross-task rows with gfs_bucket and a server-resolved label', async () => {
-  const server = await startServer({ env: { GR8R_INSTANCE_NAME: 'alltest' } });
+  const server = await startServer({ env: { PROJECTS_STUDIO_INSTANCE_NAME: 'alltest' } });
   try {
     const { admin, t1 } = await seedAllRuns(server);
     const res = await admin.get('/api/backup/runs?all=1');
@@ -429,7 +429,7 @@ test('?all=1 returns cross-task rows with gfs_bucket and a server-resolved label
 });
 
 test('?all=1 filters: task / task=manual / trigger / status narrow; limit+offset page', async () => {
-  const server = await startServer({ env: { GR8R_INSTANCE_NAME: 'alltest' } });
+  const server = await startServer({ env: { PROJECTS_STUDIO_INSTANCE_NAME: 'alltest' } });
   try {
     const { admin, op, t2 } = await seedAllRuns(server);
     assert.deepEqual((await admin.get('/api/backup/runs?all=1&task=manual')).data.runs.map(r => r.id), ['all-manual-1'], "task=manual matches task_id NULL rows only");
@@ -446,7 +446,7 @@ test('?all=1 filters: task / task=manual / trigger / status narrow; limit+offset
 });
 
 test('?all=1 fail-closed scope: a workspace-scope run is INVISIBLE to an operator without live membership; visible to a member and to super access', async () => {
-  const server = await startServer({ env: { GR8R_INSTANCE_NAME: 'alltest' } });
+  const server = await startServer({ env: { PROJECTS_STUDIO_INSTANCE_NAME: 'alltest' } });
   try {
     const { op, t2 } = await seedAllRuns(server);
     // A second backup operator with NO membership in the seed workspace.

@@ -35,11 +35,11 @@
      everything skipped (D-90-19 — no CI wiring, manual pre-ship run).
 
    Run it as (both containers LIVE):
-     docker start gr8r-pg-test gr8r-minio-e2e   (if not already up)
+     docker start projects-studio-pg-test projects-studio-minio-e2e   (if not already up)
      POSTGRES_TEST_URL=postgres://postgres:postgres@127.0.0.1:5433/postgres \
        MINIO_TEST_URL=http://127.0.0.1:9001 \
        node --test test/backup-restore-fullcycle-e2e.test.mjs
-   MinIO credentials default to the gr8rtest pair (MINIO_TEST_ACCESS_KEY_ID
+   MinIO credentials default to the projects-studiotest pair (MINIO_TEST_ACCESS_KEY_ID
    / MINIO_TEST_SECRET_KEY override). Never prints DSN values (T-45-11).
    ===================================================================== */
 import { test } from 'node:test';
@@ -59,8 +59,8 @@ const maybe = pgUrl && minioUrl ? test : test.skip;
 const S3_ENV = () => ({
   S3_ENDPOINT: minioUrl,
   S3_REGION: 'us-east-1',
-  S3_ACCESS_KEY_ID: process.env.MINIO_TEST_ACCESS_KEY_ID || 'gr8rtest',
-  S3_SECRET_KEY: process.env.MINIO_TEST_SECRET_KEY || 'gr8rtest-password',
+  S3_ACCESS_KEY_ID: process.env.MINIO_TEST_ACCESS_KEY_ID || 'projects-studiotest',
+  S3_SECRET_KEY: process.env.MINIO_TEST_SECRET_KEY || 'projects-studiotest-password',
   S3_PATH_STYLE: 'true',
 });
 
@@ -101,7 +101,7 @@ async function pollRestoreRun(runId, { timeoutMs = 120_000 } = {}) {
 }
 
 maybe('e2e 90-04 full cycle on PG: task → run → S3 upload → local delete → s3 badge → preview via downloadToStaged → DR restore on PG → run report + zero sessions (D-90-17)', async () => {
-  const bucket = `gr8r-fullcycle-${crypto.randomUUID().slice(0, 8)}`;
+  const bucket = `projects-studio-fullcycle-${crypto.randomUUID().slice(0, 8)}`;
   await createBucket({ endpoint: minioUrl, bucket, accessKeyId: S3_ENV().S3_ACCESS_KEY_ID, secretAccessKey: S3_ENV().S3_SECRET_KEY, region: 'us-east-1', pathStyle: true });
 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-fullcycle-e2e-'));

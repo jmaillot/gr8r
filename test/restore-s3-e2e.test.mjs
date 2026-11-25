@@ -17,11 +17,11 @@
    pass state, never silently counted as coverage.
 
    Run it as (the pinned image, user-ratified 2026-11-22):
-     docker run -d --name gr8r-minio-e2e -p 9001:9000 \
-       -e MINIO_ROOT_USER=gr8rtest -e MINIO_ROOT_PASSWORD=gr8rtest-password \
+     docker run -d --name projects-studio-minio-e2e -p 9001:9000 \
+       -e MINIO_ROOT_USER=projects-studiotest -e MINIO_ROOT_PASSWORD=projects-studiotest-password \
        pgsty/minio:latest server /data
    then: MINIO_TEST_URL=http://127.0.0.1:9001 node --test test/restore-s3-e2e.test.mjs
-   Credentials default to the gr8rtest pair and can be overridden with
+   Credentials default to the projects-studiotest pair and can be overridden with
    MINIO_TEST_ACCESS_KEY_ID / MINIO_TEST_SECRET_KEY.
    ===================================================================== */
 
@@ -41,8 +41,8 @@ const maybeMinio = minioUrl ? test : test.skip;
 const S3_ENV = () => ({
   S3_ENDPOINT: minioUrl,
   S3_REGION: 'us-east-1',
-  S3_ACCESS_KEY_ID: process.env.MINIO_TEST_ACCESS_KEY_ID || 'gr8rtest',
-  S3_SECRET_KEY: process.env.MINIO_TEST_SECRET_KEY || 'gr8rtest-password',
+  S3_ACCESS_KEY_ID: process.env.MINIO_TEST_ACCESS_KEY_ID || 'projects-studiotest',
+  S3_SECRET_KEY: process.env.MINIO_TEST_SECRET_KEY || 'projects-studiotest-password',
   S3_PATH_STYLE: 'true',
 });
 
@@ -81,7 +81,7 @@ async function runManualBackup(backupOp) {
 }
 
 maybeMinio('e2e 89-03: S3-located archive — list badge s3 → preview via downloadToStaged → sha256 verified → staged temp cleaned (D-89-14/16/18)', async () => {
-  const bucket = `gr8r-restore-e2e-${crypto.randomUUID().slice(0, 8)}`;
+  const bucket = `projects-studio-restore-e2e-${crypto.randomUUID().slice(0, 8)}`;
   await createBucket({ endpoint: minioUrl, bucket, accessKeyId: S3_ENV().S3_ACCESS_KEY_ID, secretAccessKey: S3_ENV().S3_SECRET_KEY, region: 'us-east-1', pathStyle: true });
 
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-restore-e2e-'));

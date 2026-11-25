@@ -30,7 +30,7 @@ import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs'
 /* DATA_DIR must be set BEFORE export/backup.js / export/restore.js are
    imported (they derive their paths from the env at call time, but keep
    it deterministic for the whole module graph anyway). */
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-'));
 process.env.DATA_DIR = DATA_DIR;
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const LOGOS_DIR = path.join(DATA_DIR, 'logos');
@@ -99,7 +99,7 @@ after(async () => {
    independent of the reader under test (the 86 golden-round-trip
    precedent: "inspectable with tar tzf"). */
 function manifestViaHostTar() {
-  const into = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-host-'));
+  const into = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-host-'));
   execFileSync('tar', ['xzf', tarPath(), '-C', into, 'manifest.json']);
   const manifest = JSON.parse(fs.readFileSync(path.join(into, 'manifest.json'), 'utf8'));
   fs.rmSync(into, { recursive: true, force: true });
@@ -420,7 +420,7 @@ test('89-03 list: honest dual-location rows newest-first — real local run, del
    ===================================================================== */
 
 test('89-03 uploaded: boot ensureColumn adds backup_runs.uploaded to a pre-existing db (default 0); second boot is a no-op', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-uploaded-boot-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-uploaded-boot-'));
   const dbPath = path.join(dataDir, 'projects.db');
   /* Hand-build the post-88 shape: upload_failed CHECK widened, NO uploaded
      column, one legacy row — exactly what a pre-89 deployment has on disk. */
@@ -473,7 +473,7 @@ test('89-03 uploaded: boot ensureColumn adds backup_runs.uploaded to a pre-exist
    ===================================================================== */
 
 test('96-02 destination columns: boot adds ftp_enabled/smb_enabled (backup_tasks) + ftp_uploaded/smb_uploaded (backup_runs), default 0; second boot is a no-op', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-destcols-boot-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-destcols-boot-'));
   const dbPath = path.join(dataDir, 'projects.db');
   /* Hand-build the post-89/pre-96 shape: backup_tasks with s3_enabled but
      NO ftp_enabled/smb_enabled; backup_runs with uploaded but NO
@@ -568,7 +568,7 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
     req.on('data', c => chunks.push(c));
     req.on('end', () => {
       const body = Buffer.concat(chunks);
-      const keyPath = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+      const keyPath = decodeURIComponent(url.pathname.replace(/^\/projects-studio\/?/, ''));
       if (req.method === 'PUT') {
         objects.set(keyPath, discard ? Buffer.alloc(0) : body);
         res.writeHead(200).end();
@@ -611,7 +611,7 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
   });
   const sinkConfig = () => ({
     endpoint: `http://127.0.0.1:${port}`,
-    bucket: 'gr8r',
+    bucket: 'projects-studio',
     accessKeyId: 'test',
     secretAccessKey: 'test-secret',
     region: 'us-east-1',
@@ -696,7 +696,7 @@ test('89-03 streamVerifyArchive: a corrupt manifest refuses keyed restoreManifes
   /* Craft a minimal archive whose ONLY entry is a manifest.json with
      broken JSON — the sha expectation is the CRAFTED archive's true
      digest, so the manifest is the only defect. */
-  const craftDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-craft-'));
+  const craftDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-craft-'));
   fs.writeFileSync(path.join(craftDir, 'manifest.json'), '{ this is not json');
   const crafted = path.join(craftDir, 'corrupt-manifest.tar.gz');
   execFileSync('tar', ['czf', crafted, '--format=ustar', '-C', craftDir, 'manifest.json']);
@@ -739,7 +739,7 @@ const restoreAuditActions = srv =>
    the reader under test). Entries: list of { name, content }. Returns
    { filename, sha256 } for row planting. */
 function craftArchive(dataDir, filename, entries) {
-  const craftDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-craft-'));
+  const craftDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-craft-'));
   for (const e of entries) fs.writeFileSync(path.join(craftDir, e.name), e.content);
   const out = path.join(dataDir, 'backups', filename);
   execFileSync('tar', ['czf', out, '--format=ustar', '-C', craftDir, ...entries.map(e => e.name)]);
@@ -822,7 +822,7 @@ test('89-03 preview: a corrupt manifest refuses keyed restoreManifestCorrupt; an
     assert.ok(restoreAuditActions(server).includes('restore_refused:restoreManifestCorrupt'), 'the manifest refusal is audited');
 
     // traversal entry: the gate refuses DURING the walk, keyed with the reason variant
-    const evilDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-evil-'));
+    const evilDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-evil-'));
     fs.writeFileSync(path.join(evilDir, 'escape.txt'), 'attacker bytes');
     const evil = path.join(dataDir, 'backups', 'evil-traversal.tar.gz');
     execFileSync('tar', ['czf', evil, '--format=ustar', '-C', evilDir, '--transform', 's,^,../,', 'escape.txt']);

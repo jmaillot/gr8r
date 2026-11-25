@@ -40,7 +40,7 @@ self.addEventListener('push', (e) => {
     if (!p.title) return;
     await self.registration.showNotification(p.title, {
       body: p.body || '',
-      tag: p.tag || 'gr8r-push',
+      tag: p.tag || 'projects-studio-push',
       icon: '/favicon.svg',
       data: { url: p.url || '/' },
     });

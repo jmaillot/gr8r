@@ -39,7 +39,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import http from 'node:http';
 
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-instance-dr-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-instance-dr-'));
 process.env.DATA_DIR = DATA_DIR;
 delete process.env.BACKUPS_DIR;
 const FILES_DIR = path.join(DATA_DIR, 'files');
@@ -280,7 +280,7 @@ function startSink(handler) {
     server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
   });
 }
-const sinkConfig = (port, bucket = 'gr8r') => ({
+const sinkConfig = (port, bucket = 'projects-studio') => ({
   endpoint: `http://127.0.0.1:${port}`,
   bucket,
   accessKeyId: 'test',
@@ -418,7 +418,7 @@ const sleep50 = () => new Promise(r => setTimeout(r, 50));
    comes from the API response — no external db read here (the reader is
    the test's own persistent handle, opened by the caller after boot). */
 async function bootWithInstanceArchive() {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-dr-route-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-dr-route-'));
   const srv = await startServer({ dataDir });
   const admin = (await login(srv.base, ADMIN.email, ADMIN.password)).client;
   const run = await admin.post('/api/backup/runs', { scope: { kind: 'instance' } });

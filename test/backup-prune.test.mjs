@@ -146,9 +146,9 @@ function remoteEnv({ ftpPort, smbPort, smbScenario } = {}) {
     FTP_USER: 'u',
     FTP_PASSWORD: 'p',
     SMB_HOST: '127.0.0.1',
-    SMB_SHARE: 'gr8r',
-    SMB_USER: 'gr8r',
-    SMB_PASSWORD: 'gr8r-secret',
+    SMB_SHARE: 'projects-studio',
+    SMB_USER: 'projects-studio',
+    SMB_PASSWORD: 'projects-studio-secret',
   };
   if (smbPort !== undefined) env.SMB_PORT = String(smbPort);
   return env;
@@ -214,7 +214,7 @@ test('runs payload: exactly ONE new key remote_pruned — every existing key byt
 
 test('second boot is a DDL no-op — remote_pruned still a single column, existing rows keep 0', async () => {
   const os = await import('node:os');
-  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'gr8r-prune-reboot-'));
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'projects-studio-prune-reboot-'));
   let server;
   try {
     server = await startServer({ dataDir: dir, env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN } });

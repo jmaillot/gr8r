@@ -214,8 +214,8 @@ test('a hidden private-project file answers the byte-identical unknown-id 404; t
     { id: 'f_in', name: 'f_in.txt', size: 5, type: 'txt', project: 'p_in' },
   );
   withDb(server.dbPath, db => db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), server.wsId));
-  fs.writeFileSync(path.join(server.dataDir, 'files', 'f_priv'), Buffer.from('f_priv:p_priv1:gr8r-scope-suite', 'utf8'));
-  fs.writeFileSync(path.join(server.dataDir, 'files', 'f_in'), Buffer.from('f_in:p_in:gr8r-scope-suite', 'utf8'));
+  fs.writeFileSync(path.join(server.dataDir, 'files', 'f_priv'), Buffer.from('f_priv:p_priv1:projects-studio-scope-suite', 'utf8'));
+  fs.writeFileSync(path.join(server.dataDir, 'files', 'f_in'), Buffer.from('f_in:p_in:projects-studio-scope-suite', 'utf8'));
 
   const hidden = await fileGet(member, 'f_priv');
   assert.equal(hidden.status, 404);

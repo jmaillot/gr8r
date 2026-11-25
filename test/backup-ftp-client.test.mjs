@@ -341,11 +341,11 @@ test('tracer: STOR/DELE round-trip over the mock server (plain FTP, end-to-end)'
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
-      password: 'gr8r-secret',
+      user: 'projects-studio',
+      password: 'projects-studio-secret',
       secure: 'none',
     });
-    const bytes = Buffer.from('hello gr8r ftp tracer round-trip');
+    const bytes = Buffer.from('hello projects-studio ftp tracer round-trip');
     await ftp.stor('/backup/tracer.bin', Readable.from([bytes]));
     await ftp.dele('/backup/tracer.bin');
     await ftp.quit();
@@ -372,14 +372,14 @@ test('tracer: STOR/DELE round-trip over the mock server (plain FTP, end-to-end)'
 /* ------------------- T8: fetchToStaged (D-02, OQ-1) ------------------- */
 
 test('fetchToStaged happy path: staged file with exact bytes + matching sha256 (T8)', async () => {
-  const payload = Buffer.from('gr8r restore payload \xC2\xA9 bytes');
+  const payload = Buffer.from('projects-studio restore payload \xC2\xA9 bytes');
   const sha = crypto.createHash('sha256').update(payload).digest('hex');
   const server = fakeFtp({ retrPayload: payload });
   await server.listen();
-  const stagingDir = path.join(os.tmpdir(), `gr8r-ftp-test-${process.pid}-${Date.now()}`);
+  const stagingDir = path.join(os.tmpdir(), `projects-studio-ftp-test-${process.pid}-${Date.now()}`);
   try {
     const { tmpPath, sha256 } = await fetchToStaged(
-      { host: '127.0.0.1', port: server.port(), user: 'gr8r', password: 'pw', secure: 'none' },
+      { host: '127.0.0.1', port: server.port(), user: 'projects-studio', password: 'pw', secure: 'none' },
       '/backup/archive.tar.gz',
       sha,
       stagingDir,
@@ -398,11 +398,11 @@ test('fetchToStaged corrupt stream: keyed ftpSha256Mismatch AND temp file remove
   const payload = Buffer.from('the actual served bytes');
   const server = fakeFtp({ retrPayload: payload });
   await server.listen();
-  const stagingDir = path.join(os.tmpdir(), `gr8r-ftp-test-${process.pid}-${Date.now()}`);
+  const stagingDir = path.join(os.tmpdir(), `projects-studio-ftp-test-${process.pid}-${Date.now()}`);
   try {
     await assert.rejects(
       fetchToStaged(
-        { host: '127.0.0.1', port: server.port(), user: 'gr8r', password: 'pw', secure: 'none' },
+        { host: '127.0.0.1', port: server.port(), user: 'projects-studio', password: 'pw', secure: 'none' },
         '/backup/archive.tar.gz',
         'deadbeef'.repeat(8),
         stagingDir,
@@ -426,7 +426,7 @@ test('T5: data-channel TLS session reuse observed server-side (implicit pair)', 
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'implicit',
       insecure: true, // self-signed pair
@@ -454,7 +454,7 @@ test('explicit mode: AUTH TLS → PBSZ 0 → PROT P → USER → PASS recorded i
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'explicit',
       insecure: true,
@@ -485,7 +485,7 @@ test('implicit mode: TLS-first with zero AUTH/PBSZ/PROT lines recorded (P9)', as
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'implicit',
       insecure: true,
@@ -509,12 +509,12 @@ test('T6: NOOP sent mid-transfer; stray 200 swallowed; 226 still resolves STOR',
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'none',
       // noopIntervalS in seconds: 0.05s = 50ms — fires well within the 500ms window
     }, { noopIntervalS: 0.05 });
-    const staged = path.join(os.tmpdir(), `gr8r-t6-${process.pid}.bin`);
+    const staged = path.join(os.tmpdir(), `projects-studio-t6-${process.pid}.bin`);
     fs.writeFileSync(staged, payload);
     try {
       await ftp.stor('/backup/t6.bin', staged);
@@ -547,7 +547,7 @@ test('T9: server never replies → keyed rejection AND sockets destroyed, no han
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'none',
     }, { commandTimeoutMs: 250, attempts: 1 });
@@ -567,13 +567,13 @@ test('T10: forced 426 → retry re-opens fresh passive channel, whole file from 
   const payload = Buffer.from('restart-from-byte-zero payload bytes');
   const server = fakeFtp({ storFailures: 1 });
   await server.listen();
-  const staged = path.join(os.tmpdir(), `gr8r-t10-${process.pid}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-t10-${process.pid}.bin`);
   fs.writeFileSync(staged, payload);
   try {
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'none',
     }, { attempts: 3, backoffMs: () => 20 });
@@ -612,7 +612,7 @@ test('EPSV 5xx → PASV fallback once; both failing → keyed ftpPassiveFailed',
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'none',
     });
@@ -632,7 +632,7 @@ test('EPSV 5xx → PASV fallback once; both failing → keyed ftpPassiveFailed',
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server2.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'none',
     }, { attempts: 1 });
@@ -658,8 +658,8 @@ test('probeFtp success: { ok, key success, httpWarning false } + marker STOR/DEL
       { ok: res.ok, key: res.key, warning: res.warning, httpWarning: res.httpWarning },
       { ok: true, key: 'success', warning: false, httpWarning: true /* secure none → warning even on success */ },
     );
-    assert.ok(server.commands.some((c) => c.startsWith('STOR gr8r-probe/probe-')), 'gr8r-probe marker STORed');
-    assert.ok(server.commands.some((c) => c.startsWith('DELE gr8r-probe/probe-')), 'marker DELEted');
+    assert.ok(server.commands.some((c) => c.startsWith('STOR projects-studio-probe/probe-')), 'projects-studio-probe marker STORed');
+    assert.ok(server.commands.some((c) => c.startsWith('DELE projects-studio-probe/probe-')), 'marker DELEted');
   } finally {
     await server.close();
   }
@@ -722,7 +722,7 @@ test('P5: control channel destroyed mid-STOR → keyed ftpTransferAborted', asyn
     const ftp = await connectFtp({
       host: '127.0.0.1',
       port: server.port(),
-      user: 'gr8r',
+      user: 'projects-studio',
       password: 'pw',
       secure: 'none',
     }, { attempts: 1 });

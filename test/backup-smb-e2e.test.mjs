@@ -16,11 +16,11 @@
      # grants guest yes + users all so the guest session can write AND
      # delete the probe marker; `map to guest = Bad User` maps a
      # wrong-password connect onto the guest session (SC-2 guest pin).
-     docker run -d --name gr8r-samba-e2e \
+     docker run -d --name projects-studio-samba-e2e \
        -p 1445:445 \
        dperson/samba \
        -s "backups;/backups;yes;yes;yes;all;none" \
-       -u "gr8rtest;gr8rtest-password" \
+       -u "projects-studiotest;projects-studiotest-password" \
        -g "server min protocol = SMB2" \
        -g "map to guest = Bad User"
 
@@ -28,11 +28,11 @@
      # NEGOTIATE against an SMB3-minimum server must refuse with the
      # KEYED error err.code === 'smbDialectUnsupported' — a specific
      # error at a specific command, never ambiguity (99-SPIKE §3).
-     docker run -d --name gr8r-samba-smb3-e2e \
+     docker run -d --name projects-studio-samba-smb3-e2e \
        -p 1446:445 \
        dperson/samba \
        -s "backups;/backups;yes;yes;yes;all;none" \
-       -u "gr8rtest;gr8rtest-password" \
+       -u "projects-studiotest;projects-studiotest-password" \
        -g "server min protocol = SMB3"
 
    then:
@@ -43,11 +43,11 @@
    The SMB_* env vars map onto the server's boot-frozen consts
    (server.js SMB_HOST/SMB_SHARE/SMB_USER/SMB_PASSWORD/SMB_PORT — see
    docs/DEPLOY.md §21); here the credentials default to the throwaway
-   gr8rtest pair above and can be overridden with SMB_TEST_USER /
+   projects-studiotest pair above and can be overridden with SMB_TEST_USER /
    SMB_TEST_PASSWORD. The recipe's credentials are throwaway
    docker-only values — never real secrets (T-98-07 / T-100-11). The
    gates drive the real 99 client surface (connectSmb / probeSmb /
-   fetchSmbToStaged) DIRECTLY — the gr8r server is never booted.
+   fetchSmbToStaged) DIRECTLY — the projects-studio server is never booted.
 
    If the image needs different flags (A2 falsification), adjust the
    recipe header and note it in the phase SUMMARY — the assertions
@@ -75,8 +75,8 @@ const CONFIG = (() => {
     host: u.hostname,
     port: Number.parseInt(u.port || '445', 10),
     share: process.env.SMB_TEST_SHARE || 'backups',
-    user: process.env.SMB_TEST_USER || 'gr8rtest',
-    password: process.env.SMB_TEST_PASSWORD || 'gr8rtest-password',
+    user: process.env.SMB_TEST_USER || 'projects-studiotest',
+    password: process.env.SMB_TEST_PASSWORD || 'projects-studiotest-password',
   };
 })();
 
@@ -87,8 +87,8 @@ const SMB3_CONFIG = (() => {
     host: u.hostname,
     port: Number.parseInt(u.port || '445', 10),
     share: process.env.SMB_TEST_SHARE || 'backups',
-    user: process.env.SMB_TEST_USER || 'gr8rtest',
-    password: process.env.SMB_TEST_PASSWORD || 'gr8rtest-password',
+    user: process.env.SMB_TEST_USER || 'projects-studiotest',
+    password: process.env.SMB_TEST_PASSWORD || 'projects-studiotest-password',
   };
 })();
 
@@ -109,7 +109,7 @@ maybeSamba('e2e: backup analog → SMB → restore full loop (SC-5 — archive-a
      server-side artifact round-trips against real samba. */
   const bytes = crypto.randomBytes(256 * 1024);
   const expectedSha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const filename = `gr8r smb e2e ${taskId}.tar.gz`; // spaces exercise the client's path encoding
+  const filename = `projects-studio smb e2e ${taskId}.tar.gz`; // spaces exercise the client's path encoding
   const smbKey = `backup-task-${taskId}/${filename}`;
 
   const smb = connectSmb(CONFIG);
@@ -124,7 +124,7 @@ maybeSamba('e2e: backup analog → SMB → restore full loop (SC-5 — archive-a
 
   /* ---- restore leg: fetchSmbToStaged — single-shot + sha256 before
      any staging file exists (T-100-10). */
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-smb-e2e-restore-'));
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-smb-e2e-restore-'));
   const back = await fetchSmbToStaged(CONFIG, smbKey, expectedSha, stagingDir);
   assert.equal(back.sha256, expectedSha, 'read-back digest verified');
   assert.equal(fs.readFileSync(back.tmpPath).equals(bytes), true, 'restore returns byte-identical content from the SMB copy');

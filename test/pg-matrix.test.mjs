@@ -302,7 +302,7 @@ maybe('pg matrix: login_challenges round-trip — facade-level insert/read, no e
    POSTGRES_TEST_URL. Secret hygiene: never prints DB_URL / DSN values. */
 maybe('pg matrix: backup export parity — identical manifest row counts + per-table sha256 across engines', async () => {
   const { execFileSync } = await import('node:child_process');
-  const backupDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-pg-backup-'));
+  const backupDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-pg-backup-'));
   process.env.DATA_DIR = backupDataDir;
   fs.mkdirSync(path.join(backupDataDir, 'files'), { recursive: true });
   fs.mkdirSync(path.join(backupDataDir, 'logos'), { recursive: true });

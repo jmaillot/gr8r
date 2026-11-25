@@ -24,7 +24,7 @@ function startSink(handler) {
   });
 }
 
-function sinkConfig(port, bucket = 'gr8r') {
+function sinkConfig(port, bucket = 'projects-studio') {
   return {
     endpoint: `http://127.0.0.1:${port}`,
     bucket,
@@ -116,7 +116,7 @@ test('download seam: staged temp file lands, pipe-hash matches, returns path+sha
     res.writeHead(400).end();
   });
   try {
-    const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-s3-dl-'));
+    const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-s3-dl-'));
     const result = await downloadToStaged(sinkConfig(port), 'backup-task-t1/a.tar.gz', sha, stagingDir);
     assert.equal(result.sha256, sha);
     assert.ok(fs.existsSync(result.tmpPath));
@@ -134,7 +134,7 @@ test('download seam: corrupted body refuses with keyed sha256Mismatch and remove
     res.writeHead(200).end('CORRUPTED');
   });
   try {
-    const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-s3-dl-'));
+    const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-s3-dl-'));
     const goodSha = crypto.createHash('sha256').update('ORIGINAL').digest('hex');
     await assert.rejects(
       () => downloadToStaged(sinkConfig(port), 'backup-task-t1/a.tar.gz', goodSha, stagingDir),
@@ -177,7 +177,7 @@ function startS3Sink({ failPart = null, discard = false, completeErrorBody = fal
     req.on('data', c => chunks.push(c));
     req.on('end', () => {
       const body = Buffer.concat(chunks);
-      const path = decodeURIComponent(url.pathname.replace(/^\/gr8r\/?/, ''));
+      const path = decodeURIComponent(url.pathname.replace(/^\/projects-studio\/?/, ''));
       const respond = (status, payload = '', headers = {}) => {
         res.writeHead(status, headers);
         res.end(payload);
@@ -187,7 +187,7 @@ function startS3Sink({ failPart = null, discard = false, completeErrorBody = fal
         const id = `upload-${++uploadIdCounter}`;
         state.initUploadIds.push(id);
         state.parts.set(id, new Map());
-        return respond(200, `<?xml version="1.0"?><InitiateMultipartUploadResult><Bucket>gr8r</Bucket><Key>${path}</Key><UploadId>${id}</UploadId></InitiateMultipartUploadResult>`);
+        return respond(200, `<?xml version="1.0"?><InitiateMultipartUploadResult><Bucket>projects-studio</Bucket><Key>${path}</Key><UploadId>${id}</UploadId></InitiateMultipartUploadResult>`);
       }
       // CompleteMultipartUpload: POST <key>?uploadId=
       if (req.method === 'POST' && url.searchParams.has('uploadId')) {
@@ -197,7 +197,7 @@ function startS3Sink({ failPart = null, discard = false, completeErrorBody = fal
           // MIN-06 regression input: HTTP 200 with an error in the body (S3 quirk)
           return respond(200, '<?xml version="1.0"?><Error><Code>InternalError</Code><Message>we committed it anyway</Message></Error>');
         }
-        return respond(200, `<?xml version="1.0"?><CompleteMultipartUploadResult><Location>lo</Location><Bucket>gr8r</Bucket><Key>${path}</Key><ETag>"etag"</ETag></CompleteMultipartUploadResult>`);
+        return respond(200, `<?xml version="1.0"?><CompleteMultipartUploadResult><Location>lo</Location><Bucket>projects-studio</Bucket><Key>${path}</Key><ETag>"etag"</ETag></CompleteMultipartUploadResult>`);
       }
       // UploadPart: PUT <key>?partNumber=&uploadId=
       if (req.method === 'PUT' && url.searchParams.has('uploadId')) {
@@ -241,7 +241,7 @@ const KB = 1024;
 test('executor: payload ≤ threshold goes as ONE signed PUT with explicit Content-Length + real payload hash, then the sidecar', async () => {
   const bytes = crypto.randomBytes(64 * KB);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-up-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-up-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink();
   try {
@@ -269,7 +269,7 @@ test('executor: payload above threshold goes CreateMultipartUpload → serial pa
   const partSize = 2 * KB;
   const bytes = crypto.randomBytes(5 * partSize);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-up-mp-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-up-mp-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink();
   try {
@@ -309,7 +309,7 @@ test('executor: a part failing twice then succeeding resumes from the SAME stage
   const partSize = 2 * KB;
   const bytes = crypto.randomBytes(4 * partSize);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-up-retry-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-up-retry-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink({ failPart: { partNumber: 2, failTimes: 2 } });
   try {
@@ -337,7 +337,7 @@ test('executor: a part failing twice then succeeding resumes from the SAME stage
 test('executor: a part failing 3 times triggers AbortMultipartUpload and rejects with the last error', async () => {
   const bytes = crypto.randomBytes(8 * KB);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-up-abort-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-up-abort-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink({ failPart: { partNumber: 1, failTimes: 99 } });
   try {
@@ -378,7 +378,7 @@ test('executor: memory stays bounded — every byte path is a createReadStream s
   const partSize = 4 * KB;
   const bytes = crypto.randomBytes(3 * partSize);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-up-bounded-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-up-bounded-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink();
   try {
@@ -422,7 +422,7 @@ test('host construction: path-style (default) keeps the bucket in the path, endp
   });
   try {
     await s3Request(sinkConfig(port), { method: 'PUT', key: 'backup-task-t1/a.tar.gz', body: Buffer.from('x') });
-    assert.deepEqual(seen, [{ host: `127.0.0.1:${port}`, url: '/gr8r/backup-task-t1/a.tar.gz' }]);
+    assert.deepEqual(seen, [{ host: `127.0.0.1:${port}`, url: '/projects-studio/backup-task-t1/a.tar.gz' }]);
   } finally {
     server.close();
   }
@@ -438,7 +438,7 @@ test('host construction: virtual-host mode (pathStyle false) addresses <bucket>.
     const config = { ...sinkConfig(port), pathStyle: false };
     await s3Request(config, { method: 'PUT', key: 'backup-task-t1/a.tar.gz', body: Buffer.from('x') });
     assert.equal(seen.length, 1);
-    assert.equal(seen[0].host, `gr8r.127.0.0.1:${port}`, 'the bucket is prepended to the endpoint host');
+    assert.equal(seen[0].host, `projects-studio.127.0.0.1:${port}`, 'the bucket is prepended to the endpoint host');
     assert.equal(seen[0].url, '/backup-task-t1/a.tar.gz', 'the path carries the key only');
     /* The signature's SignedHeaders set must carry `host` — the signer signs
        the same virtual host the wire uses, so a real provider accepts it. */
@@ -458,8 +458,8 @@ test('host construction: an endpoint path prefix is preserved in both addressing
     await s3Request({ ...sinkConfig(port), endpoint: `http://127.0.0.1:${port}/alias` }, { method: 'PUT', key: 'k.bin', body: Buffer.from('x') });
     await s3Request({ ...sinkConfig(port), endpoint: `http://127.0.0.1:${port}/alias`, pathStyle: false }, { method: 'PUT', key: 'k.bin', body: Buffer.from('x') });
     assert.deepEqual(seen, [
-      { host: `127.0.0.1:${port}`, url: '/alias/gr8r/k.bin' },
-      { host: `gr8r.127.0.0.1:${port}`, url: '/alias/k.bin' },
+      { host: `127.0.0.1:${port}`, url: '/alias/projects-studio/k.bin' },
+      { host: `projects-studio.127.0.0.1:${port}`, url: '/alias/k.bin' },
     ]);
   } finally {
     server.close();
@@ -474,7 +474,7 @@ test('host construction: virtual-host mode with no key (HeadBucket) targets the 
   });
   try {
     await s3Request({ ...sinkConfig(port), pathStyle: false }, { method: 'HEAD' });
-    assert.deepEqual(seen, [{ host: `gr8r.127.0.0.1:${port}`, url: '/', method: 'HEAD' }]);
+    assert.deepEqual(seen, [{ host: `projects-studio.127.0.0.1:${port}`, url: '/', method: 'HEAD' }]);
   } finally {
     server.close();
   }
@@ -489,7 +489,7 @@ test('min-05: an early error response destroys the piped request stream (no orph
     res.writeHead(503, { 'content-type': 'application/xml' }).end(XML('ServiceUnavailable'));
   });
   try {
-    const staged = path.join(os.tmpdir(), `gr8r-s3-destroy-${Date.now()}.bin`);
+    const staged = path.join(os.tmpdir(), `projects-studio-s3-destroy-${Date.now()}.bin`);
     fs.writeFileSync(staged, crypto.randomBytes(64 * KB));
     const stream = fs.createReadStream(staged, { highWaterMark: 1024 * 1024 });
     try {
@@ -519,7 +519,7 @@ test('min-06: a Complete answered 200-with-<Error> does NOT abort the committed 
   const partSize = 2 * KB;
   const bytes = crypto.randomBytes(2 * partSize);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-complete-err-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-complete-err-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink({ completeErrorBody: true });
   try {
@@ -546,7 +546,7 @@ test('min-04: cancellation between multipart parts aborts the transaction and re
   const partSize = 2 * KB;
   const bytes = crypto.randomBytes(4 * partSize);
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  const staged = path.join(os.tmpdir(), `gr8r-s3-cancel-${Date.now()}.bin`);
+  const staged = path.join(os.tmpdir(), `projects-studio-s3-cancel-${Date.now()}.bin`);
   fs.writeFileSync(staged, bytes);
   const { server, port, state } = await startS3Sink();
   try {

@@ -39,7 +39,7 @@ import { after, before, test } from 'node:test';
 
 /* DATA_DIR must be set BEFORE export/backup.js / export/restore.js are
    imported (paths derive from the env at call time). */
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-import-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-import-'));
 process.env.DATA_DIR = DATA_DIR;
 const FILES_DIR = path.join(DATA_DIR, 'files');
 const LOGOS_DIR = path.join(DATA_DIR, 'logos');

@@ -225,7 +225,7 @@ function buildUnsubscribePage(message) {
     '<!doctype html>',
     '<html><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<title>gr8r</title></head>',
+    '<title>projects-studio</title></head>',
     '<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,\'Segoe UI\',Roboto,Helvetica,Arial,sans-serif;">',
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:48px 16px;">',
     '<div style="max-width:420px;background:#ffffff;border-radius:8px;padding:32px;text-align:center;">',

@@ -3484,7 +3484,7 @@ async function deliverWebhook(d, atMs, fetchFn, lookup) {
   try {
     res = await send(hook.url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-gr8r-signature': `sha256=${signature}` },
+      headers: { 'content-type': 'application/json', 'x-projects-studio-signature': `sha256=${signature}` },
       body: bodyStr,
       redirect: 'error', // T-67-01: a redirect could point at an internal address
       signal: AbortSignal.timeout(10_000),
@@ -3699,7 +3699,7 @@ function webhookTestFetch(spec = {}, calls = []) {
           return '?';
         }
       })(),
-      signature: init?.headers?.['x-gr8r-signature'] || null,
+      signature: init?.headers?.['x-projects-studio-signature'] || null,
       body: typeof init?.body === 'string' ? init.body : '',
     });
     if (spec.throw) throw new Error(String(spec.throw));

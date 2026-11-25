@@ -145,7 +145,7 @@ import os from 'node:os';
 
 /* DATA_DIR must exist BEFORE export/backup.js is imported (dynamic import
    keeps the static slice pins env-independent). */
-const PIPE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-smb-pipe-'));
+const PIPE_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-smb-pipe-'));
 process.env.DATA_DIR = PIPE_DATA_DIR;
 
 const { setBackupDestination, setBackupRunWriter, runExport, getRunState, backupsRoot } = await import('../export/backup.js');
@@ -176,7 +176,7 @@ async function pipeInsertTask(id, smbEnabled) {
 }
 
 function mockSmbConfig(mock) {
-  return { host: '127.0.0.1', share: '\\\\127.0.0.1\\gr8r', port: mock.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret' };
+  return { host: '127.0.0.1', share: '\\\\127.0.0.1\\projects-studio', port: mock.port(), user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret' };
 }
 
 /* Descriptor with the server.js closure CONTRACT (taskId + smb_enabled fail-closed). */

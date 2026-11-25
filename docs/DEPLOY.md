@@ -787,11 +787,11 @@ docker compose logs --tail=20 projects
 `docker cp` preserves the snapshot's owner. The entrypoint runs `chown` on `/data` before
 dropping to `PUID:PGID`, so a backup written by root is usable without extra steps.
 
-### The two backup engines: gr8r backup v1 (in-app) vs the legacy `--backup` CLI
+### The two backup engines: projects-studio backup v1 (in-app) vs the legacy `--backup` CLI
 
 Two engines ship with the app. The `--backup` walkthrough above is the **legacy** one.
 
-**gr8r backup v1 (in-app — the primary engine)** builds `tar.gz` archives that carry the
+**projects-studio backup v1 (in-app — the primary engine)** builds `tar.gz` archives that carry the
 database dump **and** the uploaded files/logos, not just the database. Every archive
 carries a `manifest.json`, and integrity is checked with sha256 at three levels — each
 entry on the pipe, the manifest, and the whole archive (recorded on the run row and in a
@@ -1604,7 +1604,7 @@ Operational notes for the operator:
   honoring `Retry-After` for 5 attempts, then go dead; dead deliveries purge
   silently after 7 days. Hook health is visible in the project's hook settings
   (never the URL itself — Teams webhook URLs are secrets).
-- Outbound POSTs are HMAC-signed (`x-gr8r-signature` header) with a per-hook
+- Outbound POSTs are HMAC-signed (`x-projects-studio-signature` header) with a per-hook
   secret shown exactly once at creation. Payloads are capped at 28 KB with
   truncate-and-deliver; Teams enforces ~4 requests/second per hook, which the
   backoff respects.
@@ -1617,7 +1617,7 @@ Operational notes for the operator:
 
 ## 18. Installable app (PWA)
 
-gr8r ships a web app manifest and is installable as a standalone app on
+projects-studio ships a web app manifest and is installable as a standalone app on
 Chromium browsers (desktop Chrome/Edge, Android Chrome). This section
 documents the deployment posture and its constraints — there is no custom
 service worker beyond the existing push one, and that is deliberate.
@@ -1626,7 +1626,7 @@ service worker beyond the existing push one, and that is deliberate.
 
 The manifest's `start_url`, `scope` and `id` are all frozen to `/`. The app
 must be served at the domain root. Deploying under a subpath (e.g.
-`https://example.com/gr8r/`) will break installability: the manifest paths
+`https://example.com/projects-studio/`) will break installability: the manifest paths
 are absolute and the service worker registers at root scope only. Multi-tenant
 `/w/:slug`-style subpath deployments are outside manifest scope by design —
 see the milestone decision record for the rationale.
@@ -1702,7 +1702,7 @@ set in `.env` to take effect.
 
 Since v3.4, archive filenames **and** run-history labels share one scheme:
 `<instance>-<scope>-<name-slug>-<gfs>-<YYYY-MM-DD>.tar.gz`. The instance segment comes from
-`GR8R_INSTANCE_NAME` (machine hostname as fallback), the scope token is `instance`, `ws` or
+`PROJECTS_STUDIO_INSTANCE_NAME` (machine hostname as fallback), the scope token is `instance`, `ws` or
 `project`, and the workspace/project name is resolved server-side at run time (UTC date).
 Only scheduled runs carry the GFS marker (`daily`/`weekly`/`monthly`/`yearly`); manual
 Run-now runs omit that segment entirely. Names are fixed at creation and never renamed
@@ -1752,7 +1752,7 @@ route is a no-op refusal — the feature is fully invisible to operators.
    - `s3:GetObject` — read-back is used for the post-upload integrity verify
      and Phase 89's restore path;
    - `s3:DeleteObject` — the probe writes and deletes a marker object under
-     `gr8r-probe/*` (scope the permission to that prefix if you can — without
+     `projects-studio-probe/*` (scope the permission to that prefix if you can — without
      it every probe ends in the `deleteFailed` warning);
    - `s3:ListBucket` — the probe's `HeadBucket` check;
    - `s3:AbortMultipartUpload` — abort on a failed multipart transaction.
@@ -1832,19 +1832,19 @@ The e2e recipe (test/backup-ftp-e2e.test.mjs, gated by `VSFTPD_TEST_URL`)
 provisions a throwaway server with:
 
 ```bash
-docker run -d --name gr8r-vsftpd-e2e \
+docker run -d --name projects-studio-vsftpd-e2e \
   -p 2121:21 -p 21100-21110:21100-21110 \
-  -e FTP_USER=gr8rtest -e FTP_PASS=gr8rtest-password \
+  -e FTP_USER=projects-studiotest -e FTP_PASS=projects-studiotest-password \
   -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 \
   fauria/vsftpd
 ```
 
-Map it onto the gr8r env (the 127.0.0.1 values are the recipe's throwaway
+Map it onto the projects-studio env (the 127.0.0.1 values are the recipe's throwaway
 pair — use real credentials in production):
 
 ```bash
 FTP_HOST=127.0.0.1 FTP_PORT=2121 \
-FTP_USER=gr8rtest FTP_PASSWORD=gr8rtest-password \
+FTP_USER=projects-studiotest FTP_PASSWORD=projects-studiotest-password \
 PASV ports: open the passive range (21100-21110) on the firewall and set
 FTP_PASV_HOST to the address clients should reach.
 ```
@@ -1904,7 +1904,7 @@ durability bar. It is never treated as an error.
 **Share permissions & ACLs (the prune contract — read before first save):**
 
 - **Prune is DELETE, not overwrite.** When rotation rotates an archive
-  out, gr8r also deletes the remote mirror (the `pruned` badge in the run
+  out, projects-studio also deletes the remote mirror (the `pruned` badge in the run
   history). The share must therefore grant **delete** permission, not
   just write. A share that accepts writes but refuses deletes passes the
   probe's lifecycle test only if the probe marker delete also fails — it
@@ -1914,7 +1914,7 @@ durability bar. It is never treated as an error.
   `backup_prune_failed:smb` audit line.
 - **Ownership/mask settings.** Production shares typically need
   `force user` (or equivalent ACL inheritance) and a permissive
-  `create mask`/`directory mask` so the gr8r user can overwrite and
+  `create mask`/`directory mask` so the projects-studio user can overwrite and
   delete rotated-out files created by earlier runs. On Windows hosts the
   effective permission is **NTFS ACLs ∩ share permissions** — a
   read-only share fails at the probe (write refused); a share with
@@ -1943,7 +1943,7 @@ data connections.
 FTP data connections use the **passive range** the server advertises —
 the vsftpd recipe above opens `21100-21110`. On a firewall, that exact
 range must be open inbound to the FTP host, and `FTP_PASV_HOST` must be
-set to an address the gr8r server can actually reach (the NAT-advertised
+set to an address the projects-studio server can actually reach (the NAT-advertised
 IP is often wrong in docker deployments). Symptoms of a closed/ranged
 range: the probe or upload hangs at the first data transfer (list,
 STOR, download) while the control connection works — always check the
@@ -1952,7 +1952,7 @@ passive range before suspecting credentials or TLS.
 ### `FTP_INSECURE` semantics
 
 - Default `false` = **system CA validation** (R-3). The server's
-  certificate must chain to a CA the gr8r host trusts. A self-signed or
+  certificate must chain to a CA the projects-studio host trusts. A self-signed or
   internal-CA certificate fails the handshake with a keyed
   `ftpTlsFailed`-class result.
 - `FTP_INSECURE=true` accepts self-signed / untrusted certificates — the

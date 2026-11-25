@@ -21,7 +21,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { after, before, test } from 'node:test';
 
-const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-sec-'));
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-sec-'));
 process.env.DATA_DIR = DATA_DIR;
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 
@@ -101,8 +101,8 @@ function ustarHeader({ name, size, override = {} }) {
   buf.write(fields.typeflag, 156, 1, 'ascii');
   buf.write(fields.magic, 257, 6, 'ascii');
   buf.write(fields.version, 263, 2, 'ascii');
-  buf.write('gr8r', 265, 8, 'ascii');
-  buf.write('gr8r', 297, 8, 'ascii');
+  buf.write('projects-studio', 265, 8, 'ascii');
+  buf.write('projects-studio', 297, 8, 'ascii');
   if (override.chksumDelta) {
     // corrupt variant: shift the stored checksum without touching the sum basis
     let sum = 0;
@@ -308,7 +308,7 @@ function sha256Hex(buf) {
 function craftBackup(filename, { tables = [], files = [], extras = [] }) {
   const manifest = {
     formatVersion: 1,
-    generator: 'gr8r restore-security fixture',
+    generator: 'projects-studio restore-security fixture',
     scope: { kind: 'workspace', id: 'ws-fix' },
     createdAt: 1700000000000,
     tables: tables.map(t => ({ path: `${t.name}.ndjson`, sha256: sha256Hex(t.content) })),
@@ -391,7 +391,7 @@ test('89-01 extraction: pathEscaped/nameReserved/symlinkSkipped rows carried wit
 });
 
 test('89-01 extraction: extraction into a symlinked subdirectory under destDir refuses keyed — nothing escapes', async () => {
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-outside-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-outside-'));
   const canary = path.join(outside, 'canary.txt');
   fs.writeFileSync(canary, 'do not delete');
   try {

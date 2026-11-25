@@ -214,7 +214,7 @@ test('sendNotif embeds the task URL verbatim in the text and HTML bodies', async
       SMTP_PORT: String(smtp.port()),
       SMTP_SECURE: 'false',
       SMTP_REQUIRE_TLS: 'false',
-      MAIL_FROM: 'gr8r@test.local',
+      MAIL_FROM: 'projects-studio@test.local',
     });
     assert.ok(mailer.enabled, 'the fake-SMTP config must enable the mailer');
     const url = `${APP_URL}/w/acme/task/K-12`;

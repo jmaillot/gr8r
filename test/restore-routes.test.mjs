@@ -61,7 +61,7 @@ const insertRunRow = (db, { id, trigger = 'import_new', status, stage, startedAt
   ).run(id, '{}', trigger, status, stage, startedAt, finishedAt, error, startedAt);
 
 async function bootTwice(plants = null) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-'));
   const first = await startServer({ dataDir: dir });
   await first.stop();
   if (plants) withDb(first.dbPath, plants);
@@ -399,7 +399,7 @@ const pollRestoreCurrent = (op, { until = null, timeoutMs = 20000 } = {}) =>
   });
 
 test('89-04 trigger+poll: POST returns a fresh uuid immediately; the pipeline walks to done; current serves the stage verbatim then idle; the D-89-13 counter chain lands -restored then -restored-2', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-trigger-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-trigger-'));
   const srv = await startServer({ dataDir });
   try {
     const op = await makeDualOp(srv, 'trigger-op@test.local');
@@ -466,7 +466,7 @@ test('89-04 trigger+poll: POST returns a fresh uuid immediately; the pipeline wa
 });
 
 test('89-04 D-89-1 restore-side half: an active export refuses the restore trigger 409 backupRestoreInProgress + audited; a held lock refuses the same way', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-mutex-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-mutex-'));
   /* 600 x 24KB blobs → the instance-scope export stays visibly active */
   fs.mkdirSync(path.join(dataDir, 'files'), { recursive: true });
   for (let i = 0; i < 600; i++) fs.writeFileSync(path.join(dataDir, 'files', `blob-${i}`), crypto.randomBytes(24 * 1024));
@@ -513,7 +513,7 @@ test('89-04 D-89-1 restore-side half: an active export refuses the restore trigg
 });
 
 test('89-04 D-89-1: a held restore_lock refusal is audited on a quiet system (lock untouched by the refusal)', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-lockaudit-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-lockaudit-'));
   const srv = await startServer({ dataDir });
   try {
     const op = await makeDualOp(srv, 'lockaudit-op@test.local');
@@ -551,7 +551,7 @@ test('89-04 D-89-1: a held restore_lock refusal is audited on a quiet system (lo
 });
 
 test('89-04 gates: a plain member gets 403 backupRoleRequired + audited; five refused tries are consumed, the sixth is 429', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-gates-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-gates-'));
   const srv = await startServer({ dataDir });
   try {
     /* 403: signed-in user WITHOUT the restore role */
@@ -581,7 +581,7 @@ test('89-04 gates: a plain member gets 403 backupRoleRequired + audited; five re
 });
 
 test('89-04 D-89-23 targeting matrix: project archive without a target / with a non-member target / operator with zero memberships all refuse restoreNoWorkspace BEFORE the lock claim; a live-member target restores', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-target-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-target-'));
   const srv = await startServer({ dataDir });
   try {
     const op = await makeDualOp(srv, 'target-op@test.local');
@@ -625,7 +625,7 @@ test('89-04 D-89-23 targeting matrix: project archive without a target / with a 
 });
 
 test('89-04 D-89-33 at run level: an entry-gate-violating archive fails the run at validating with restoreEntryRejected persisted, zero rows, lock released', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-restore-crafted-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-restore-crafted-'));
   const srv = await startServer({ dataDir });
   try {
     const op = await makeDualOp(srv, 'crafted-op@test.local');
@@ -738,7 +738,7 @@ test('89-04 history: GET /api/backup/restore/runs is capped at 50 rows, newest-f
    records skipped_overlap) are pinned above / in backup-scheduler. These
    cells pin the NEW overwrite route against BOTH halves. */
 test('89-05 mutual exclusion, overwrite direction: an active export refuses POST /api/backup/restore/overwrite 409 backupRestoreInProgress + audited; a held lock refuses the same way', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-mutex-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-mutex-'));
   /* 600 x 24KB blobs → the instance-scope export stays visibly active */
   fs.mkdirSync(path.join(dataDir, 'files'), { recursive: true });
   for (let i = 0; i < 600; i++) fs.writeFileSync(path.join(dataDir, 'files', `blob-${i}`), crypto.randomBytes(24 * 1024));
@@ -833,7 +833,7 @@ async function bootProjectOverwriteWorld(srv, email) {
 }
 
 test('95-04 overwrite route accepts project scope: Backup-Op member + exact live PROJECT name → 200; the run lands done; the target project is replaced verbatim with the other project untouched; audit token project', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-proj-'));
   const srv = await startServer({ dataDir });
   try {
     const w = await bootProjectOverwriteWorld(srv, 'ow-proj-op@test.local');
@@ -861,7 +861,7 @@ test('95-04 overwrite route accepts project scope: Backup-Op member + exact live
 });
 
 test('95-04 overwrite route project scope: confirmName is validated against the LIVE PROJECT name server-side, BEFORE archive resolution — near-misses refuse keyed confirmPhraseMismatch; an unknown targetProjectId refuses 404 restoreTargetMissing', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-cname-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-proj-cname-'));
   const srv = await startServer({ dataDir });
   try {
     const w = await bootProjectOverwriteWorld(srv, 'ow-proj-cname-op@test.local');
@@ -893,7 +893,7 @@ test('95-04 overwrite route project scope: confirmName is validated against the 
 });
 
 test('95-04 overwrite route project-scope role matrix: a Backup Operator WITHOUT membership refuses restoreNoWorkspace; a Super Admin bypasses without membership; the guard chain order is unchanged (Restore-Op still 403 backupManageRequired)', async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-ow-proj-roles-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-ow-proj-roles-'));
   const srv = await startServer({ dataDir });
   try {
     /* A Backup Operator that is NOT a member of ws-target — the D-05
