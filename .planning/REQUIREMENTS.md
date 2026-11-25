@@ -15,7 +15,7 @@
 
 ### Cross-destination semantics (DEST)
 
-- [ ] **DEST-01**: The S3 single-slot seam (`setBackupS3Destination`, export/backup.js:635-645) becomes a destination registry; per-task opt-in via flat boolean columns (`ftp_enabled`, `smb_enabled` added beside `s3_enabled`, dual-engine DDL `adapterEnsureColumn`), env-only custody (`FTP_*`, `SMB_*` frozen at boot mirroring `S3_*` server.js:208-219). Mirror failure keeps the single terminal `upload_failed` status naming the failed destination(s); local publish stays valid; alerts ride the existing `handleBackupTaskOutcome` transition gate verbatim.
+- [x] **DEST-01**: The S3 single-slot seam (`setBackupS3Destination`, export/backup.js:635-645) becomes a destination registry; per-task opt-in via flat boolean columns (`ftp_enabled`, `smb_enabled` added beside `s3_enabled`, dual-engine DDL `adapterEnsureColumn`), env-only custody (`FTP_*`, `SMB_*` frozen at boot mirroring `S3_*` server.js:208-219). Mirror failure keeps the single terminal `upload_failed` status naming the failed destination(s); local publish stays valid; alerts ride the existing `handleBackupTaskOutcome` transition gate verbatim.
 - [ ] **DEST-02**: Scheduled runs only are mirrored (R-2); best-effort follow-local prune removes SMB/FTP copies of rotated-out runs (R-1); every refusal keyed and audited ×5 locales.
 - [ ] **DEST-03**: Probe parity — probe-at-save is a hard 400 refusal while the destination is enabled-but-unreachable; write+delete marker probe route per destination with typed error classes ×5 locales (S3 classes preserved; FTP: authFailed/unreachable/tlsFailed/passiveFailed/pathNotFound/quotaExceeded + insecureTls warning; SMB: authFailed/shareNotFound/treeConnectFailed/unreachable/signingRequired/noSpace/nameConflict + guestSession info).
 
@@ -31,7 +31,7 @@
 
 ### Verification & tests (TEST)
 
-- [ ] **TEST-01**: Golden-vector discipline — MD4 RFC 1320 vectors, NTLM transcript pins, FTP response-parser pins, mirroring the SigV4 suite; env-gated docker e2e recipes (vsftpd, dperson/samba) mirroring the MinIO recipe; `membershipsOf` byte-gate and existing suites stay green.
+- [x] **TEST-01**: Golden-vector discipline — MD4 RFC 1320 vectors, NTLM transcript pins, FTP response-parser pins, mirroring the SigV4 suite; env-gated docker e2e recipes (vsftpd, dperson/samba) mirroring the MinIO recipe; `membershipsOf` byte-gate and existing suites stay green.
 
 ## Future Requirements (deferred)
 
@@ -51,11 +51,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEST-01 | Phase 96 | Pending |
+| DEST-01 | Phase 96 | Complete |
 | DEST-02 | Phase 100 | Pending |
 | DEST-03 | Phase 98 (FTP classes + pattern), Phase 100 (SMB classes) | Pending |
 | FTP-01 | Phase 97 | Pending |
 | FTP-02 | Phase 98 | Pending |
 | SMB-01 | Phase 99 | Pending |
 | SMB-02 | Phase 100 | Pending |
-| TEST-01 | Distributed — byte-gate pin Phase 96; golden vectors Phases 97/99; e2e recipes Phases 98/100 | Pending |
+| TEST-01 | Distributed — byte-gate pin Phase 96; golden vectors Phases 97/99; e2e recipes Phases 98/100 | Complete |

@@ -31,6 +31,7 @@ Build order per research SUMMARY.md: seam refactor FIRST (unblocks both wirings)
 ## Phase Details
 
 ### Phase 96: Cross-Destination Seam Generalization
+
 **Goal**: The S3 single-slot seam becomes a destination registry so FTP and SMB can plug in without S3 behavior changing one byte.
 **Depends on**: Nothing (first phase of v3.5)
 **Requirements**: DEST-01, TEST-01 (byte-gate portion)
@@ -40,13 +41,15 @@ Build order per research SUMMARY.md: seam refactor FIRST (unblocks both wirings)
 3. Run truth is per-destination integer flags and the run status stays the single terminal `upload_failed`, whose error text names the failed destination(s); local publish stays valid; alerts ride the `handleBackupTaskOutcome` transition gate verbatim.
 4. `FTP_*`/`SMB_*` env custody is boot-frozen mirroring `S3_*` (server.js:208-219) with enabled-derivation and invalid-token warn parity; `membershipsOf` byte-gate and the full suite stay at baseline (2492 tests / 2 documented failures).
 5. Restore location-badge seam (`RESTORE_LOCATION_KEYS` + server flag derivation) generalized so a new destination is a one-line extension.
-**Plans**: 2 plans
+
+**Plans**: 1/2 plans executed
 
 Plans:
-- [ ] 96-01-PLAN.md — Registry refactor: setBackupDestination(name, dest) + S3 install + dormant ftp/smb slots + Wave-0 byte-identity gate (DEST-01, TEST-01)
+- [x] 96-01-PLAN.md — Registry refactor: setBackupDestination(name, dest) + S3 install + dormant ftp/smb slots + Wave-0 byte-identity gate (DEST-01, TEST-01)
 - [ ] 96-02-PLAN.md — DDL columns + /api/config flat flags + ordered badge scan + i18n ×5 + full-suite baseline (DEST-01)
 
 ### Phase 97: FTP/FTPS Client (Zero-Dep)
+
 **Goal**: A tested, standalone FTP/FTPS client module exists — parser, transfers, TLS — with no pipeline wiring yet.
 **Depends on**: Phase 96
 **Requirements**: FTP-01, TEST-01 (FTP golden vectors)
@@ -56,9 +59,11 @@ Plans:
 3. Reply-parser golden vectors (multiline 2xx, 227/229 pasv parsing, 4xx-vs-5xx classification) are first-class tests mirroring the SigV4 suite idiom.
 4. The PASS line and credential-bearing command lines are never present in errors or logs (scrub verified by test); error surfaces carry keyed classes (`ftpAuthFailed`, `ftpUnreachable`, `ftpTlsFailed`, `ftpPassiveFailed`, `ftpPathNotFound`, `ftpQuotaExceeded`, `ftpGeneric`).
 5. Package.json diff shows zero new dependencies; full suite stays at baseline.
+
 **Plans**: TBD
 
 ### Phase 98: FTP Destination End-to-End
+
 **Goal**: An operator can enable FTP/FTPS mirroring per backup task and the full pipeline — upload, verify, probe, restore, badges — works against a real FTP server.
 **Depends on**: Phase 97 (client), Phase 96 (seam)
 **Requirements**: FTP-02, DEST-03 (FTP probe parity — establishes the pattern SMB reuses), TEST-01 (FTP e2e recipe)
@@ -68,10 +73,12 @@ Plans:
 3. Run rows and the restore list show the FTP location badge (`RESTORE_LOCATION_KEYS` extended); restore read-back works via `fetchToStaged` with sha256 verification.
 4. Mirror failure yields the single terminal `upload_failed` naming FTP, local archive survives, alert fires through the unchanged transition gate; secrets never appear in logs.
 5. An env-gated vsftpd docker e2e recipe (mirroring the MinIO recipe, skip-when-absent) proves backup→FTP→restore end-to-end; full suite at baseline.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 99: SMB 2.1 Client (Spike-Hardened)
+
 **Goal**: A golden-vector-pinned, standalone SMB2.1 client exists — the research-heavy risk item contained to a well-tested module before any wiring.
 **Depends on**: Phase 96 (seam is ready; client itself is independent of FTP phases)
 **Requirements**: SMB-01, TEST-01 (MD4/NTLM golden vectors)
@@ -81,10 +88,12 @@ Plans:
 3. Errors carry typed `smbClass` classes (`authFailed`, `treeConnectFailed`, `shareNotFound`, `unreachable`, `signingRequired`, `noSpace`, `nameConflict`, `sessionExpired`, `generic`) and NTLM type-3 material is scrubbed from all errors/logs (V14 parity, test-pinned).
 4. A spike report records the actual LOC vs the ~1,400–1,600 MEDIUM-confidence estimate and any dialect surprises; dialect-rejection exposure (SMB2-min-3.0 fleets) is documented as a known risk, not silently absorbed.
 5. Package.json diff shows zero new dependencies; full suite stays at baseline.
+
 **Plans**: TBD
 **Risk**: SMB LOC estimate is MEDIUM confidence (research) — spike/golden-vector phase is the containment; fleet dialect coverage (SMB 2.1 minimum on home-NAS fleets) is MEDIUM confidence — DEPLOY.md note + feedback loop required.
 
 ### Phase 100: SMB Destination End-to-End + Remote Prune
+
 **Goal**: An operator can enable SMB mirroring per backup task on the proven FTP harness, and rotated-out runs are best-effort pruned from remote mirrors.
 **Depends on**: Phase 99 (client), Phase 98 (harness pattern)
 **Requirements**: SMB-02, DEST-02 (scheduled-only + best-effort follow-local prune, R-1/R-2), DEST-03 (SMB probe classes), TEST-01 (SMB e2e recipe)
@@ -94,6 +103,7 @@ Plans:
 3. Best-effort follow-local prune (R-1) deletes SMB/FTP copies of runs whose local status becomes `deleted` by rotation — failure logged, never fatal, floor-guard against deleting a mirror that is the only surviving copy; prune activity audited.
 4. Mirror failure yields the single terminal `upload_failed` naming the failed destination(s), local publish stays valid; all DEST-02/DEST-03 refusals are keyed and audited ×5 locales.
 5. An env-gated dperson/samba docker e2e recipe (ideally a signing-required variant) proves backup→SMB→restore end-to-end; DEPLOY.md gains §21 (share perms, ACL pitfall) and §22 (FTPS passive ranges, cert trust); `membershipsOf` byte-gate and the full suite stay at baseline.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -101,7 +111,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 96. Cross-Destination Seam Generalization | 0/? | Not started | - |
+| 96. Cross-Destination Seam Generalization | 1/2 | In Progress|  |
 | 97. FTP/FTPS Client (Zero-Dep) | 0/? | Not started | - |
 | 98. FTP Destination End-to-End | 0/? | Not started | - |
 | 99. SMB 2.1 Client (Spike-Hardened) | 0/? | Not started | - |

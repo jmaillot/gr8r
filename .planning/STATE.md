@@ -5,16 +5,16 @@ milestone_name: Backup Destinations SMB & FTP
 current_phase: 96
 current_phase_name: Cross-Destination Seam Generalization
 status: executing
-stopped_at: Completed 95-05-PLAN.md
-last_updated: "2026-11-25T06:34:50.707Z"
+stopped_at: Completed 96-01-PLAN.md
+last_updated: "2026-11-25T06:58:32.555Z"
 last_activity: 2026-11-25
-last_activity_desc: Milestone v3.5 started
-state_head: 5ad5e6bd9c58d471bd752d1d0030c77e44bdf983
+last_activity_desc: Phase 96 execution started
+state_head: 0061c90954e8f1aa63adf0b7a3cd26963d5c7182
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 2
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 96 (Cross-Destination Seam Generalization) — READY TO EXECUTE
-Plan: —
+Phase: 96 (Cross-Destination Seam Generalization) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-11-25 — Milestone v3.5 started
+Last activity: 2026-11-25 — Phase 96 execution started
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Last activity: 2026-11-25 — Milestone v3.5 started
 | Phase 95 P04 | 2h | 4 tasks | 11 files |
 | Phase 95 P02 | 50m | 3 tasks | 16 files |
 | Phase 95 P05 | 55m | 3 tasks | 13 files |
+| Phase 96 P01 | 50m | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,7 @@ Last activity: 2026-11-25 — Milestone v3.5 started
 - [Phase 95]: 95-02: my-access aggregate (GET /api/settings/my-access) copies the /me/visibility funnel verbatim per workspace with additive icon/color/role; role badge reuses common.role.*; purge POST /api/keys/purge-revoked writes a count-only audit event (no key values); locale keys land in the emitting-markup commit (live dead-key gate)
 - [Phase 95]: 95-05: scopes projects are unfiltered (picker needs names; server re-validates at overwrite); client confirmDlg is chrome only
 - [Phase 95]: 95-05: overwrite POST key is targetId (route contract), not the plan's targetWorkspaceId
+- [Phase 96]: 96-01: setBackupDestination(name,dest) registry (D-01 descriptor) replaces setBackupS3Destination outright (OQ-1, no shim; twins in rename commit); dormant ftp/smb slots env-derived, order s3>ftp>smb (D-04/D-05); Wave-0 gate pins seam shape + raw s3SliceError path + single uploaded=1 site
 
 ### Blockers
 
@@ -92,8 +94,8 @@ Last activity: 2026-11-25 — Milestone v3.5 started
 
 ## Session Continuity
 
-**Last session:** 2026-11-24T20:47:08.466Z
-**Stopped at:** Completed 95-05-PLAN.md
+**Last session:** 2026-11-25T06:58:32.523Z
+**Stopped at:** Completed 96-01-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
