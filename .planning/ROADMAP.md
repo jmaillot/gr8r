@@ -60,10 +60,10 @@ Plans:
 4. The PASS line and credential-bearing command lines are never present in errors or logs (scrub verified by test); error surfaces carry keyed classes (`ftpAuthFailed`, `ftpUnreachable`, `ftpTlsFailed`, `ftpPassiveFailed`, `ftpPathNotFound`, `ftpQuotaExceeded`, `ftpGeneric`).
 5. Package.json diff shows zero new dependencies; full suite stays at baseline.
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans executed
 
 Plans:
-- [ ] 97-01-PLAN.md — Standalone zero-dep FTP/FTPS client (export/ftp.js): parser SM + golden vectors, mock-server client tests, TLS modes + session reuse, fetchToStaged, scrub, probeFtp, phase gates (FTP-01, TEST-01)
+- [x] 97-01-PLAN.md — Standalone zero-dep FTP/FTPS client (export/ftp.js): parser SM + golden vectors, mock-server client tests, TLS modes + session reuse, fetchToStaged, scrub, probeFtp, phase gates (FTP-01, TEST-01)
 
 ### Phase 98: FTP Destination End-to-End
 
@@ -115,7 +115,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 96. Cross-Destination Seam Generalization | 2/2 | In Progress|  |
-| 97. FTP/FTPS Client (Zero-Dep) | 0/? | Not started | - |
+| 97. FTP/FTPS Client (Zero-Dep) | 1/1 | In Progress|  |
 | 98. FTP Destination End-to-End | 0/? | Not started | - |
 | 99. SMB 2.1 Client (Spike-Hardened) | 0/? | Not started | - |
 | 100. SMB Destination End-to-End + Remote Prune | 0/? | Not started | - |

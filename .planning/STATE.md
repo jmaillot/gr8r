@@ -4,17 +4,17 @@ milestone: v3.5
 milestone_name: Backup Destinations SMB & FTP
 current_phase: 97
 current_phase_name: FTP/FTPS Client (Zero-Dep)
-status: executing
-stopped_at: Completed 96-02-PLAN.md
-last_updated: "2026-11-25T09:43:03.256Z"
+status: verifying
+stopped_at: Completed 97-01-PLAN.md
+last_updated: "2026-11-25T11:06:08.534Z"
 last_activity: 2026-11-25
-last_activity_desc: Phase 96 marked complete
-state_head: 763dc87c0534c14f75c3b538a14ff14ae3c59f2d
+last_activity_desc: Phase 97 execution started
+state_head: dbcfd63029b31212813614e09050a975e787b8b3
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 20
 ---
 
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 97 (FTP/FTPS Client (Zero-Dep)) — READY TO EXECUTE
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-11-25 — Phase 96 marked complete
+Phase: 97 (FTP/FTPS Client (Zero-Dep)) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-11-25 — Phase 97 execution started
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Last activity: 2026-11-25 — Phase 96 marked complete
 | Phase 95 P05 | 55m | 3 tasks | 13 files |
 | Phase 96 P01 | 50m | 3 tasks | 5 files |
 | Phase 96 P02 | 2h | 3 tasks | 10 files |
+| Phase 97 P97-01 | 2 sessions | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,7 @@ Last activity: 2026-11-25 — Phase 96 marked complete
 - [Phase 95]: 95-05: overwrite POST key is targetId (route contract), not the plan's targetWorkspaceId
 - [Phase 96]: 96-01: setBackupDestination(name,dest) registry (D-01 descriptor) replaces setBackupS3Destination outright (OQ-1, no shim; twins in rename commit); dormant ftp/smb slots env-derived, order s3>ftp>smb (D-04/D-05); Wave-0 gate pins seam shape + raw s3SliceError path + single uploaded=1 site
 - [Phase 96]: 96-02: destLocation(r) ordered scan lives in server.js; flag columns selected as scan inputs but stripped from published projections to keep D-05 golden byte-identity (phases 98/100 own their payload reveal)
+- [Phase 97]: EPSV parse regex matches real wire format (|||port|); P8 session reuse via getSession() on every data-channel connect; STOR retry = fresh channel + whole-file re-read, zero REST (P6/T10)
 
 ### Blockers
 
@@ -96,8 +98,8 @@ Last activity: 2026-11-25 — Phase 96 marked complete
 
 ## Session Continuity
 
-**Last session:** 2026-11-25T09:13:51.340Z
-**Stopped at:** Completed 96-02-PLAN.md
+**Last session:** 2026-11-25T11:06:08.221Z
+**Stopped at:** Completed 97-01-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)

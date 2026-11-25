@@ -21,7 +21,7 @@
 
 ### FTP/FTPS destination (FTP)
 
-- [ ] **FTP-01**: Hand-rolled FTP/FTPS client (export/ftp.js, ~350 LOC, node:net/node:tls only) — `FTP_SECURE` enum `explicit`(default)/`implicit`/`none`; USER/PASS, TYPE I, EPSV with PASV fallback (control-host rule + `FTP_PASV_HOST` override), STOR, DELE, PBSZ/PROT P, QUIT; NOOP keep-alive against idle timeouts; REST resume mirroring the D-88-16 retry idiom; TLS session-reuse on the data channel.
+- [x] **FTP-01**: Hand-rolled FTP/FTPS client (export/ftp.js, ~350 LOC, node:net/node:tls only) — `FTP_SECURE` enum `explicit`(default)/`implicit`/`none`; USER/PASS, TYPE I, EPSV with PASV fallback (control-host rule + `FTP_PASV_HOST` override), STOR, DELE, PBSZ/PROT P, QUIT; NOOP keep-alive against idle timeouts; REST resume mirroring the D-88-16 retry idiom; TLS session-reuse on the data channel.
 - [ ] **FTP-02**: FTP destination wired end-to-end — toggle in the task editor (render-gated on `/api/config` payload flag), staged upload after local publish, SIZE+sidecar verify (R-4), location badge in run rows and restore list (RESTORE_LOCATION_KEYS extended), restore read-back via `fetchToStaged` on the shared contract.
 
 ### SMB destination (SMB)
@@ -54,7 +54,7 @@
 | DEST-01 | Phase 96 | Complete |
 | DEST-02 | Phase 100 | Pending |
 | DEST-03 | Phase 98 (FTP classes + pattern), Phase 100 (SMB classes) | Pending |
-| FTP-01 | Phase 97 | Pending |
+| FTP-01 | Phase 97 | Complete |
 | FTP-02 | Phase 98 | Pending |
 | SMB-01 | Phase 99 | Pending |
 | SMB-02 | Phase 100 | Pending |
