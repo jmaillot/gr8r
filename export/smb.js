@@ -877,9 +877,38 @@ async function sessionAuthRound(s) {
 }
 
 async function treeConnect(s) {
-  const res = await sendRequest(s, SMB2_COM.TREE_CONNECT, buildTreeConnectRequest(s.config.share), { context: 'tree connect' });
+  const res = await runWithExpiry(
+    s,
+    () => sendRequest(s, SMB2_COM.TREE_CONNECT, buildTreeConnectRequest(s.config.share), { context: 'tree connect' }),
+    'tree connect',
+  );
   expectOk(res, 'tree connect');
   s.treeId = res.header.treeId;
+}
+
+/* ---------------------------------------------------------------------
+   sessionExpired RETRY ENVELOPE (T-99-04)
+   ---------------------------------------------------------------------
+   On STATUS_NETWORK_SESSION_EXPIRED (0xC000005A): discard the reply,
+   re-run SESSION_SETUP (NTLMv2) on the SAME transport, replay the
+   failed command ONCE with a FRESH MessageId. WRITE chains resume
+   from the failed chunk's offset — never restart from 0 (the offset
+   lives in the caller's loop, not in the replay). Caps: 1 replay per
+   command (structural — the envelope replays exactly once) and
+   2 per session lifetime; at the cap the error surfaces keyed as
+   smbClass sessionExpired (pitfall 6 replay-storm defense). */
+
+async function runWithExpiry(s, runOnce, context) {
+  const res = await runOnce();
+  if (res.header.status !== STATUS_SESSION_EXPIRED) return res;
+  if (s.sessionExpiredCount >= 2) throw smbErrorFrom(STATUS_SESSION_EXPIRED, context);
+  s.sessionExpiredCount++;
+  await sessionAuthRound(s);   // fresh NTLMv2 on the SAME transport
+  const replay = await runOnce(); // fresh MessageId (new sendRequest)
+  if (replay.header.status === STATUS_SESSION_EXPIRED) {
+    throw smbErrorFrom(STATUS_SESSION_EXPIRED, context);
+  }
+  return replay;
 }
 
 /* ---------------------------------------------------------------------
@@ -887,7 +916,11 @@ async function treeConnect(s) {
    --------------------------------------------------------------------- */
 
 async function createFile(s, name, { access, disposition, createOptions = 0 }) {
-  const res = await sendRequest(s, SMB2_COM.CREATE, buildCreateRequest(name, { access, disposition, createOptions }), { context: `create ${name}` });
+  const res = await runWithExpiry(
+    s,
+    () => sendRequest(s, SMB2_COM.CREATE, buildCreateRequest(name, { access, disposition, createOptions }), { context: `create ${name}` }),
+    `create ${name}`,
+  );
   expectOk(res, `create ${name}`);
   if ((res.header.credits ?? 0) < 1) throw genericError(`server granted zero credits on CREATE ${name}`);
   return fileIdFromCreateReply(res.body);
@@ -901,7 +934,13 @@ async function writeFile(s, fileId, buffer) {
   let offset = 0;
   while (offset < buffer.length) {
     const chunk = buffer.subarray(offset, offset + SMB_MAX_WRITE_BYTES);
-    const res = await sendRequest(s, SMB2_COM.WRITE, buildWriteRequest(fileId, chunk, offset), { context: 'write' });
+    /* The closure pins THIS chunk's offset: an expiry replays the same
+       offset after re-auth — never chunk 0. */
+    const res = await runWithExpiry(
+      s,
+      () => sendRequest(s, SMB2_COM.WRITE, buildWriteRequest(fileId, chunk, offset), { context: `write at offset ${offset}` }),
+      `write at offset ${offset}`,
+    );
     expectOk(res, `write at offset ${offset}`);
     if ((res.header.credits ?? 0) < 1) throw genericError('server granted zero credits on WRITE');
     const count = countFromWriteReply(res.body);
@@ -919,7 +958,11 @@ async function readFile(s, fileId) {
   let offset = 0;
   const parts = [];
   for (;;) {
-    const res = await sendRequest(s, SMB2_COM.READ, buildReadRequest(fileId, SMB_MAX_WRITE_BYTES, offset), { context: `read at offset ${offset}` });
+    const res = await runWithExpiry(
+      s,
+      () => sendRequest(s, SMB2_COM.READ, buildReadRequest(fileId, SMB_MAX_WRITE_BYTES, offset), { context: `read at offset ${offset}` }),
+      `read at offset ${offset}`,
+    );
     expectOk(res, `read at offset ${offset}`);
     const data = dataFromReadReply(res);
     if (data.length === 0) break;
@@ -931,7 +974,11 @@ async function readFile(s, fileId) {
 }
 
 async function closeFile(s, fileId, context = 'close') {
-  const res = await sendRequest(s, SMB2_COM.CLOSE, buildCloseRequest(fileId), { context });
+  const res = await runWithExpiry(
+    s,
+    () => sendRequest(s, SMB2_COM.CLOSE, buildCloseRequest(fileId), { context }),
+    context,
+  );
   expectOk(res, context);
 }
 
@@ -1026,7 +1073,11 @@ export function connectSmb(config, opts = {}) {
     },
     echo: async () => {
       const s = await ensure();
-      const res = await sendRequest(s, SMB2_COM.ECHO, buildEchoRequest(), { context: 'echo' });
+      const res = await runWithExpiry(
+        s,
+        () => sendRequest(s, SMB2_COM.ECHO, buildEchoRequest(), { context: 'echo' }),
+        'echo',
+      );
       expectOk(res, 'echo');
       return true;
     },

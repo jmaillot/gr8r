@@ -166,6 +166,8 @@ function fakeSmb(scenario = {}) {
     const treeId = 0x5678;
     let signingKey = null;      // server's current view of the signing key
     let expireCounts = { ...(scenario.expireCounts ?? {}) };
+    let expireAttemptCounts = { ...(scenario.expireAttemptCounts ?? {}) };
+    const expiryOccurrences = {};
     let treeConnected = false;
 
     const send = (reqFrame, { status = 0, credits = 1, treeId: tid, sessionId: sid, sign = true, body = Buffer.alloc(0), signingKeyOverride = null }) => {
@@ -216,6 +218,28 @@ function fakeSmb(scenario = {}) {
         sigValid,
       });
 
+      /* Expiry injection knobs:
+         - expireCounts[cmd] = n → the first n OCCURRENCES of the
+           command get 0xC000005A (replays included → per-command cap).
+         - expireAttemptCounts[cmd] = n → n expiry replies on ODD
+           occurrences only (attempts; serial replays are the even
+           occurrences → session-cap storm scenarios).
+         Never injected on the handshake commands themselves. */
+      const ekey = String(hdr.command);
+      if (hdr.command !== SMB2_COM.NEGOTIATE && hdr.command !== SMB2_COM.SESSION_SETUP) {
+        const occ = (expiryOccurrences[ekey] = (expiryOccurrences[ekey] ?? 0) + 1);
+        if ((expireCounts[ekey] ?? 0) > 0) {
+          expireCounts[ekey]--;
+          send(frame, { status: 0xc000005a });
+          return;
+        }
+        if ((expireAttemptCounts[ekey] ?? 0) > 0 && occ % 2 === 1) {
+          expireAttemptCounts[ekey]--;
+          send(frame, { status: 0xc000005a });
+          return;
+        }
+      }
+
       switch (hdr.command) {
         case SMB2_COM.NEGOTIATE: {
           send(frame, { sign: false, body: negotiateBody(scenario.dialectReply ?? 0x0210, scenario.securityMode ?? 0x0003) });
@@ -232,10 +256,11 @@ function fakeSmb(scenario = {}) {
             return;
           }
           /* Round 2 (type-3): derive the session's signing key; knobs
-             can poison the reply signature or fail the logon. */
+             can poison the reply signature or fail the logon (a failed
+             logon leaves the session UNESTABLISHED → unsigned reply). */
           signingKey = signingKeyFromType3(sec, creds);
           if (scenario.wrongSigningKey) signingKey = Buffer.alloc(16, 0xee);
-          send(frame, { status: scenario.sessionSetupStatus ?? 0, body: sessionSetupBody(Buffer.alloc(0)) });
+          send(frame, { status: scenario.sessionSetupStatus ?? 0, sign: !scenario.sessionSetupStatus, body: sessionSetupBody(Buffer.alloc(0)) });
           return;
         }
         case SMB2_COM.TREE_CONNECT: {
@@ -257,14 +282,6 @@ function fakeSmb(scenario = {}) {
           return;
         }
         case SMB2_COM.WRITE: {
-          /* Expiry injection knobs: expireCounts[command] = n → the
-             first n occurrences of the command get 0xC000005A. */
-          const key = String(hdr.command);
-          if (expireCounts[key] > 0) {
-            expireCounts[key]--;
-            send(frame, { status: 0xc000005a });
-            return;
-          }
           if (scenario.writeStatus) { send(frame, { status: scenario.writeStatus }); return; }
           const dataOff = body.readUInt16LE(2);
           const len = body.readUInt32LE(4);
@@ -541,5 +558,216 @@ test('single-chunk small write: exactly one ≤60416 WRITE frame, read matches',
     await smb.close();
   } finally {
     await server.close();
+  }
+});
+
+/* ------------- Task 3: sessionExpired envelope + class map ------------- */
+
+test('sessionExpired mid-WRITE → re-SESSION_SETUP on same transport, replay with FRESH MessageId at the SAME offset', async () => {
+  const payload = Buffer.from('expiry-resume payload');
+  const server = fakeSmb({ expireCounts: { [SMB2_COM.WRITE]: 1 } });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    await smb.connect();
+    await smb.write('/backup/exp.bin', payload);
+    const back = await smb.read('/backup/exp.bin');
+    assert.ok(back.equals(payload), 'data intact after the expiry + replay');
+
+    const cmds = server.commands;
+    /* The expiry reply was served for the FIRST WRITE attempt. */
+    const expiryReplies = server.replies.filter((h) => h.status === 0xc000005a);
+    assert.equal(expiryReplies.length, 1, 'exactly one sessionExpired reply injected');
+    /* Re-auth round: 4 SESSION_SETUPs total (initial pair + re-auth pair). */
+    const setups = cmds.filter((c) => c.command === SMB2_COM.SESSION_SETUP);
+    assert.equal(setups.length, 4, `initial + re-auth SESSION_SETUP rounds (got ${setups.length})`);
+    /* Replay: fresh MessageId. `writes` records only storage-backed
+       (successful) writes — the expiry reply never reached storage. */
+    const writes = cmds.filter((c) => c.command === SMB2_COM.WRITE);
+    assert.equal(writes.length, 2, 'the WRITE was replayed exactly once');
+    assert.ok(writes[1].messageId > writes[0].messageId, `fresh MessageId on replay (${writes[1].messageId} > ${writes[0].messageId})`);
+    assert.deepEqual(server.writes.map((w) => w.offset), [0], 'replay landed at the failed chunk offset 0 (no restart, no duplication)');
+    /* Signatures valid across the re-auth boundary. */
+    for (const c of cmds) {
+      if (c.sigValid !== null) assert.equal(c.sigValid, true, `cmd=${c.command} signature valid after re-auth`);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
+test('expiry storm → caps 1/command + 2/session surface smbClass sessionExpired', async () => {
+  const server = fakeSmb({ expireAttemptCounts: { [SMB2_COM.ECHO]: 3 } });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    await smb.connect();
+    await smb.echo(); // expiry #1 → replay OK (count 1)
+    await smb.echo(); // expiry #2 → replay OK (count 2)
+    await assert.rejects(
+      smb.echo(),   // expiry #3 → at cap
+      (err) => {
+        assert.equal(err.code, 'smbSessionExpired');
+        assert.equal(err.smbClass, 'sessionExpired');
+        return true;
+      },
+      'the third expiry surfaces sessionExpired instead of looping',
+    );
+    const debug = await smb.__debug();
+    assert.equal(debug.sessionExpiredCount, 2, 'exactly 2 lifetime replays consumed');
+    /* Expiry replies recorded ×3, successful replays ×2. */
+    const echoes = server.commands.filter((c) => c.command === SMB2_COM.ECHO);
+    assert.equal(echoes.length, 5, '3 expiring echoes + 2 successful replays (3rd never replayed)');
+  } finally {
+    await server.close();
+  }
+});
+
+/* ---------------- per-class error scenarios (SC-3 map) ---------------- */
+
+test('LOGON_FAILED on final SESSION_SETUP → authFailed', async () => {
+  const server = fakeSmb({ sessionSetupStatus: 0xc000006d });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'wrong-password', share: '\\\\h\\s' });
+    await assert.rejects(smb.connect(), (err) => {
+      assert.equal(err.code, 'smbAuthFailed');
+      assert.equal(err.smbClass, 'authFailed');
+      return true;
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+test('BAD_NETWORK_NAME → shareNotFound; ACCESS_DENIED → treeConnectFailed', async () => {
+  const server = fakeSmb({ treeConnectStatus: 0xc00000cc });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\missing' });
+    await assert.rejects(smb.connect(), (err) => err.smbClass === 'shareNotFound' && err.code === 'smbShareNotFound');
+  } finally {
+    await server.close();
+  }
+  const server2 = fakeSmb({ treeConnectStatus: 0xc0000022 });
+  await server2.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server2.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\denied' });
+    await assert.rejects(smb.connect(), (err) => err.smbClass === 'treeConnectFailed' && err.code === 'smbTreeConnectFailed');
+  } finally {
+    await server2.close();
+  }
+});
+
+test('DISK_FULL on WRITE → noSpace; OBJECT_NAME_COLLISION on CREATE → nameConflict', async () => {
+  const server = fakeSmb({ writeStatus: 0xc000007f });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\gr8r' });
+    await smb.connect();
+    await assert.rejects(
+      smb.write('/backup/full.bin', Buffer.from('x')),
+      (err) => err.smbClass === 'noSpace' && err.code === 'smbNoSpace',
+    );
+    await smb.close();
+  } finally {
+    await server.close();
+  }
+  const server2 = fakeSmb({ createStatus: 0xc0000035 });
+  await server2.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server2.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\gr8r' });
+    await smb.connect();
+    await assert.rejects(
+      smb.write('/backup/collision.bin', Buffer.from('x')),
+      (err) => err.smbClass === 'nameConflict' && err.code === 'smbNameConflict',
+    );
+    await smb.close();
+  } finally {
+    await server2.close();
+  }
+});
+
+/* ---------------- dialect / signing-agreement knobs (OQ-3, T-99-05) ---------------- */
+
+test('dialect refusal (0x0300 reply) → generic + smbDialectUnsupported (OQ-3 adopted resolution)', async () => {
+  const server = fakeSmb({ dialectReply: 0x0300 });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\s' });
+    await assert.rejects(smb.connect(), (err) => {
+      assert.equal(err.code, 'smbDialectUnsupported');
+      assert.equal(err.smbClass, 'generic', 'dialect-mismatch stays generic — NOT signingRequired');
+      return true;
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+test('signing-not-agreed SecurityMode → signingRequired abort (T-99-05, SC-2 explicit path)', async () => {
+  const server = fakeSmb({ securityMode: 0x0000 });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\s' });
+    await assert.rejects(smb.connect(), (err) => {
+      assert.equal(err.code, 'smbSigningRequired');
+      assert.equal(err.smbClass, 'signingRequired');
+      return true;
+    });
+  } finally {
+    await server.close();
+  }
+});
+
+/* ---------------- D-04 scrub across every error path ---------------- */
+
+test('D-04 scrub: no type-3 / NT-response / password material in ANY surfaced error message', async () => {
+  const PASSWORD = 'top-secret-password-123';
+  const scenarios = [
+    { knob: { wrongSigningKey: true } },
+    { knob: { sessionSetupStatus: 0xc000006d }, password: PASSWORD },
+    { knob: { treeConnectStatus: 0xc00000cc } },
+    { knob: { treeConnectStatus: 0xc0000022 } },
+    { knob: { createStatus: 0xc0000035 } },
+    { knob: { writeStatus: 0xc000007f } },
+    { knob: { dialectReply: 0x0300 } },
+    { knob: { securityMode: 0x0000 } },
+    { knob: { nbssRefuse: true } },
+    { knob: { expireCounts: { [SMB2_COM.ECHO]: 3 } } },
+  ];
+  const errors = [];
+  for (const { knob, password } of scenarios) {
+    const server = fakeSmb(knob);
+    await server.listen();
+    try {
+      const smb = connectSmb({
+        host: '127.0.0.1', port: server.port(),
+        user: 'gr8r', domain: 'DOMAIN', password: password ?? 'gr8r-secret',
+        share: '\\\\h\\s',
+      });
+      try {
+        await smb.connect();
+        await smb.echo().catch((e) => errors.push(e));
+        await smb.write('/x.bin', Buffer.from('x')).catch((e) => errors.push(e));
+      } catch (e) {
+        errors.push(e);
+      }
+    } finally {
+      await server.close();
+    }
+  }
+  const refused = connectSmb({ host: '127.0.0.1', port: 1, user: 'u', domain: 'D', password: PASSWORD, share: '\\\\h\\s' });
+  await refused.connect().catch((e) => errors.push(e));
+
+  assert.ok(errors.length >= 8, `error scenarios produced errors (got ${errors.length})`);
+  for (const err of errors) {
+    const msg = String(err?.message ?? '');
+    assert.ok(!msg.includes('NTLMSSP'), `no NTLMSSP marker in: ${msg}`);
+    assert.ok(!msg.includes(PASSWORD), `no password material in: ${msg}`);
+    assert.ok(!/[0-9a-f]{64}/i.test(msg), `no NT-response-scale hex in: ${msg}`);
+    assert.ok(msg.length <= 300, 'message sliced ≤300');
+    assert.ok(err.smbClass, 'keyed smbClass present');
+    assert.ok(err.code?.startsWith('smb'), 'keyed code present');
   }
 });
