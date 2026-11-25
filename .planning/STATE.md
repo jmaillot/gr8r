@@ -5,16 +5,16 @@ milestone_name: Backup Destinations SMB & FTP
 current_phase: 100
 current_phase_name: SMB Destination End-to-End + Remote Prune
 status: executing
-stopped_at: Completed 100-04-PLAN.md (remote prune)
-last_updated: "2026-11-25T19:15:51.453Z"
+stopped_at: Completed 100-05-PLAN.md
+last_updated: "2026-11-25T19:46:29.635Z"
 last_activity: 2026-11-25
 last_activity_desc: Phase 100 execution started
-state_head: 5b0ad4f6461e926df3ee7ff082809d0461215efb
+state_head: bb0fc5725503bd874a9bbaca7aa5b462e66eaaf1
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
   percent: 20
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 100 (SMB Destination End-to-End + Remote Prune) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-11-25 — Phase 100 execution started
 
@@ -61,6 +61,7 @@ Last activity: 2026-11-25 — Phase 100 execution started
 | Phase 100 P02 | 34m | 3 tasks | 4 files |
 | Phase 100 P03 | 55m | 3 tasks | 14 files |
 | Phase 100 P04 | ~2.5h | 3 tasks | 12 files |
+| Phase 100 P05 | ~1.5h | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,7 @@ Last activity: 2026-11-25 — Phase 100 execution started
 - [Phase 100]: 100-02: smb upload arm clones the ftp arm minus SIZE (R-4); smb_uploaded=1 at exactly one success-block site; registry gate released backup.js from the not-wired pin
 - [Phase 100]: 100-04: failed-prune audit detail rides action column as backup_prune_failed:<dest>:<key> (key-only); skipped token has no dest suffix (OQ-2)
 - [Phase 100]: 100-04: SMB_PORT boot-frozen env const (default 445) added as the test client-port seam
+- [Phase 100]: 100-05: restore twins keep per-site posture (import_new outer-flow, DR failWith funnel); smbConfig rides ftpConfig's seams; SMB fully released from dormant custody
 
 ### Blockers
 
@@ -120,8 +122,8 @@ Last activity: 2026-11-25 — Phase 100 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-11-25T19:15:47.065Z
-**Stopped at:** Completed 100-04-PLAN.md (remote prune)
+**Last session:** 2026-11-25T19:46:29.568Z
+**Stopped at:** Completed 100-05-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
