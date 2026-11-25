@@ -16,7 +16,7 @@
 ### Cross-destination semantics (DEST)
 
 - [x] **DEST-01**: The S3 single-slot seam (`setBackupS3Destination`, export/backup.js:635-645) becomes a destination registry; per-task opt-in via flat boolean columns (`ftp_enabled`, `smb_enabled` added beside `s3_enabled`, dual-engine DDL `adapterEnsureColumn`), env-only custody (`FTP_*`, `SMB_*` frozen at boot mirroring `S3_*` server.js:208-219). Mirror failure keeps the single terminal `upload_failed` status naming the failed destination(s); local publish stays valid; alerts ride the existing `handleBackupTaskOutcome` transition gate verbatim.
-- [ ] **DEST-02**: Scheduled runs only are mirrored (R-2); best-effort follow-local prune removes SMB/FTP copies of rotated-out runs (R-1); every refusal keyed and audited ×5 locales.
+- [x] **DEST-02**: Scheduled runs only are mirrored (R-2); best-effort follow-local prune removes SMB/FTP copies of rotated-out runs (R-1); every refusal keyed and audited ×5 locales.
 - [x] **DEST-03**: Probe parity — probe-at-save is a hard 400 refusal while the destination is enabled-but-unreachable; write+delete marker probe route per destination with typed error classes ×5 locales (S3 classes preserved; FTP: authFailed/unreachable/tlsFailed/passiveFailed/pathNotFound/quotaExceeded + insecureTls warning; SMB: authFailed/shareNotFound/treeConnectFailed/unreachable/signingRequired/noSpace/nameConflict + guestSession info).
 
 ### FTP/FTPS destination (FTP)
@@ -52,7 +52,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DEST-01 | Phase 96 | Complete |
-| DEST-02 | Phase 100 | Pending |
+| DEST-02 | Phase 100 | Complete |
 | DEST-03 | Phase 98 (FTP classes + pattern), Phase 100 (SMB classes) | Complete |
 | FTP-01 | Phase 97 | Complete |
 | FTP-02 | Phase 98 | Complete |
