@@ -90,7 +90,7 @@ test('server.js: both restore triggers pass ftpConfig next to s3Config, sourced 
 
 test('server.js: both restore-trigger selects carry ftp_uploaded', () => {
   const s = serverSrc();
-  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded from backup_runs where id = \?/g) || []).length, 2, 'import_new + DR selects read ftp_uploaded (the overwrite trigger has no read-back seam — untouched)');
+  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded(, smb_uploaded)? from backup_runs where id = \?/g) || []).length, 2, 'import_new + DR selects read ftp_uploaded (the overwrite trigger has no read-back seam — untouched; 100-05 additively appends smb_uploaded to the same select)');
 });
 
 test('server.js: backupRun carries ftp_uploaded into both units', () => {
