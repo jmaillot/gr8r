@@ -467,6 +467,7 @@ export const SQLITE_SCHEMA = `
     uploaded     integer not null default 0,
     ftp_uploaded integer not null default 0,
     smb_uploaded integer not null default 0,
+    remote_pruned integer not null default 0,
     /* Phase 90 (D-90-11, 90-02): the verify-checksum result — nullable until
        the first verify lands (null = never checked, 1 = match, 0 = mismatch —
        a comment here must never end a line with a semicolon, runSchema splits

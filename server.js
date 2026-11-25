@@ -239,6 +239,9 @@ const SMB_HOST = String(process.env.SMB_HOST || '').trim();
 const SMB_SHARE = String(process.env.SMB_SHARE || '').trim();
 const SMB_USER = String(process.env.SMB_USER || '').trim();
 const SMB_PASSWORD = String(process.env.SMB_PASSWORD || '');
+/* Phase 100 (100-04): the client-port override the prune suite (and any
+   non-standard share) needs — additive, boot-frozen, default 445. */
+const SMB_PORT = Number.parseInt(process.env.SMB_PORT || '', 10) || 445;
 
 /* ------------------------------ LOG_LEVEL ------------------------------- */
 /* Zero-dependency leveled logging (Kanzo #9): one ladder — debug < info
@@ -449,7 +452,7 @@ const SMB = {
   config: () => ({
     host: SMB_HOST,
     share: SMB_SHARE,
-    port: 445,
+    port: SMB_PORT,
     user: SMB_USER,
     password: SMB_PASSWORD,
   }),
@@ -909,6 +912,13 @@ const SCHEMA = `
        a semicolon — runSchema splits statements on ';-newline'). */
     ftp_uploaded integer not null default 0,
     smb_uploaded integer not null default 0,
+    /* Phase 100 (100-04, D-03): remote-prune truth — set to 1 ONLY after a
+       prune destination's remote delete succeeded (success-block-only, one
+       write site). Stays 0 on prune failure so the badge never lies.
+       Existing rows default 0 via the boot ensureColumn (a comment here must
+       never end a line with a semicolon — runSchema splits statements on
+       ';-newline'). */
+    remote_pruned integer not null default 0,
     /* Phase 90 (D-90-11, 90-02): the verify-checksum result — nullable until
        the first verify lands (null = never checked, 1 = match, 0 = mismatch —
        a comment here must never end a line with a semicolon, runSchema splits
@@ -1122,6 +1132,11 @@ async function initDb() {
   await adapterEnsureColumn('backup_tasks', 'smb_enabled', 'integer not null default 0');
   await adapterEnsureColumn('backup_runs', 'ftp_uploaded', 'integer not null default 0');
   await adapterEnsureColumn('backup_runs', 'smb_uploaded', 'integer not null default 0');
+  /* Phase 100 (100-04, D-03): remote-prune truth — the pruned badge's
+     payload source. Def byte-identical to the SCHEMA declaration (Pitfall
+     P-B); existing rows default 0 — no run has been remote-pruned before
+     this column existed. */
+  await adapterEnsureColumn('backup_runs', 'remote_pruned', 'integer not null default 0');
   // Phase 90 (D-90-11, 90-02): the verify-checksum result columns — defs
   // byte-identical to the SCHEMA declaration (Pitfall P-B); nullable, no
   // default — null = never checked. No data migration.
@@ -9864,7 +9879,7 @@ async function handleApi(req, res, url) {
       const limit = Math.min(Math.max(Number.parseInt(limitRaw ?? '50', 10) || 50, 1), 200);
       const offset = Math.max(Number.parseInt(offsetRaw ?? '0', 10) || 0, 0);
       const rows = await db.all(
-        `select id, task_id, scope, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, gfs_bucket
+        `select id, task_id, scope, uploaded, ftp_uploaded, smb_uploaded, remote_pruned, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, gfs_bucket
            from backup_runs ${where}
           order by created_at desc, id desc limit ? offset ?`,
         [...params, limit, offset],
@@ -9933,7 +9948,7 @@ async function handleApi(req, res, url) {
         };
       });
     if (taskId === 'manual') {
-      const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
+      const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, remote_pruned, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
       return json(res, 200, { runs: historyChrome(rows) });
     }
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(taskId)) return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
@@ -9955,7 +9970,7 @@ async function handleApi(req, res, url) {
       [taskId],
     );
     const kept = succeededAsc.length ? gfsKeptPositions(task, succeededAsc) : null;
-    const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
+    const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, remote_pruned, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id = ? order by created_at desc, id desc limit 50', [taskId]);
     return json(res, 200, {
       runs: historyChrome(rows).map(r => {
         const kp = kept?.get(r.id);
