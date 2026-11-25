@@ -170,12 +170,13 @@ test('remote_pruned DDL: SCHEMA declaration, pg mirror, boot ensureColumn — de
 test('remote_pruned rides all three runs SELECTs (all=1 / manual / task) — restore SELECT untouched', () => {
   const s = serverSrc();
   const selects = s.split('\n').filter(l => /uploaded, ftp_uploaded, smb_uploaded/.test(l));
-  assert.equal(selects.length, 4, `three runs SELECT lines + the restore-list SELECT (${selects.length})`);
+  assert.equal(selects.length, 5, `three runs SELECTs + delete-set + restore-list lines (${selects.length})`);
   const runsSelects = selects.filter(l => l.includes('checksum_ok'));
   assert.equal(runsSelects.length, 3, 'three runs SELECT lines carry the full history chrome');
   for (const q of runsSelects) assert.ok(q.includes('remote_pruned'), 'each runs SELECT carries remote_pruned');
-  const restoreSelect = selects.find(l => !l.includes('checksum_ok'));
-  assert.ok(!restoreSelect.includes('remote_pruned'), 'the restore-list SELECT stays untouched (remote_pruned is not restore data)');
+  const untouched = selects.filter(l => !l.includes('checksum_ok'));
+  assert.equal(untouched.length, 2, 'the widened delete-set SELECT + the restore-list SELECT remain');
+  assert.ok(untouched.every(l => !l.includes('remote_pruned')), 'delete-set + restore SELECTs stay free of remote_pruned (restore never publishes it)');
 });
 
 test('runs payload: exactly ONE new key remote_pruned — every existing key byte-identical (golden set)', async () => {
@@ -245,10 +246,13 @@ test('floor-guard (D-01): a sole mirror (uploaded=0, S3 enabled) is NEVER delete
     const taskId = await makeTask(server, op, 'Floor-guard task');
     setRetention(server, taskId, { daily: 1 });
     const day = 24 * 3600 * 1000;
-    const base = Date.UTC(2026, 10, 2, 2, 30);
+    const base = Date.UTC(2026, 10, 3, 2, 30);
     seedRun(server, taskId, { id: 'prune-anchor', at: Date.UTC(2025, 0, 2, 2, 30), filename: `backup-task-${taskId}-20250102-023000.tar.gz` });
-    const sole = seedRun(server, taskId, { id: 'prune-sole', at: base, filename: `backup-task-${taskId}-20261102-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
-    seedRun(server, taskId, { id: 'prune-new', at: base + 2 * day, filename: `backup-task-${taskId}-20261104-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'prune-primer', at: Date.UTC(2026, 0, 5, 2, 30), filename: `backup-task-${taskId}-20260105-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'prune-monthly', at: Date.UTC(2026, 10, 1, 2, 0), filename: `backup-task-${taskId}-20261101-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'prune-weekly', at: Date.UTC(2026, 10, 2, 2, 0), filename: `backup-task-${taskId}-20261102-020000.tar.gz` });
+    const sole = seedRun(server, taskId, { id: 'prune-sole', at: base, filename: `backup-task-${taskId}-20261103-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
+    seedRun(server, taskId, { id: 'prune-new', at: base + day, filename: `backup-task-${taskId}-20261105-023000.tar.gz` });
 
     const report = await rotationPass(server, { taskId });
     assert.equal(report.deleted, 1, 'rotation proceeds normally (sole run expired + deleted locally)');
@@ -268,7 +272,7 @@ test('floor-guard (D-01): a sole mirror (uploaded=0, S3 enabled) is NEVER delete
 test('no S3 configured → floor-guard open: mirrors prune with backup_prune_ok (D-01 "no S3 custody" branch)', async () => {
   const ftp = fakeFtp();
   await ftp.listen();
-  const smb = fakeSmb({});
+  const smb = fakeSmb({}, { domain: "" });
   await smb.listen();
   const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, ...remoteEnv({ ftpPort: ftp.port(), smbPort: smb.port() }) } });
   try {
@@ -276,10 +280,13 @@ test('no S3 configured → floor-guard open: mirrors prune with backup_prune_ok 
     const taskId = await makeTask(server, op, 'No-S3 prune');
     setRetention(server, taskId, { daily: 1 });
     const day = 24 * 3600 * 1000;
-    const base = Date.UTC(2026, 10, 2, 2, 30);
+    const base = Date.UTC(2026, 10, 3, 2, 30);
     seedRun(server, taskId, { id: 'ns-anchor', at: Date.UTC(2025, 0, 2, 2, 30), filename: `backup-task-${taskId}-20250102-023000.tar.gz` });
-    const doomed = seedRun(server, taskId, { id: 'ns-doomed', at: base, filename: `backup-task-${taskId}-20261102-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
-    seedRun(server, taskId, { id: 'ns-new', at: base + 2 * day, filename: `backup-task-${taskId}-20261104-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'ns-primer', at: Date.UTC(2026, 0, 5, 2, 30), filename: `backup-task-${taskId}-20260105-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'ns-monthly', at: Date.UTC(2026, 10, 1, 2, 0), filename: `backup-task-${taskId}-20261101-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'ns-weekly', at: Date.UTC(2026, 10, 2, 2, 0), filename: `backup-task-${taskId}-20261102-020000.tar.gz` });
+    const doomed = seedRun(server, taskId, { id: 'ns-doomed', at: base, filename: `backup-task-${taskId}-20261103-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
+    seedRun(server, taskId, { id: 'ns-new', at: base + day, filename: `backup-task-${taskId}-20261105-023000.tar.gz` });
 
     const report = await rotationPass(server, { taskId });
     assert.equal(report.deleted, 1, 'rotation proceeds');
@@ -305,7 +312,7 @@ test('no S3 configured → floor-guard open: mirrors prune with backup_prune_ok 
 test('idempotency: an already-pruned mirror (DELE 550 / SMB 0xc0000034) prunes as backup_prune_ok — no failed audit', async () => {
   const ftp = fakeFtp({ deleReply: '550 file not found' });
   await ftp.listen();
-  const smb = fakeSmb({ createStatus: 0xc0000034 }); // STATUS_OBJECT_NAME_NOT_FOUND
+  const smb = fakeSmb({ createStatus: 0xc0000034 }, { domain: '' }); // STATUS_OBJECT_NAME_NOT_FOUND
   await smb.listen();
   const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, ...remoteEnv({ ftpPort: ftp.port(), smbPort: smb.port() }) } });
   try {
@@ -313,10 +320,13 @@ test('idempotency: an already-pruned mirror (DELE 550 / SMB 0xc0000034) prunes a
     const taskId = await makeTask(server, op, 'Idempotent prune');
     setRetention(server, taskId, { daily: 1 });
     const day = 24 * 3600 * 1000;
-    const base = Date.UTC(2026, 10, 2, 2, 30);
+    const base = Date.UTC(2026, 10, 3, 2, 30);
     seedRun(server, taskId, { id: 'idem-anchor', at: Date.UTC(2025, 0, 2, 2, 30), filename: `backup-task-${taskId}-20250102-023000.tar.gz` });
-    const doomed = seedRun(server, taskId, { id: 'idem-doomed', at: base, filename: `backup-task-${taskId}-20261102-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
-    seedRun(server, taskId, { id: 'idem-new', at: base + 2 * day, filename: `backup-task-${taskId}-20261104-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'idem-primer', at: Date.UTC(2026, 0, 5, 2, 30), filename: `backup-task-${taskId}-20260105-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'idem-monthly', at: Date.UTC(2026, 10, 1, 2, 0), filename: `backup-task-${taskId}-20261101-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'idem-weekly', at: Date.UTC(2026, 10, 2, 2, 0), filename: `backup-task-${taskId}-20261102-020000.tar.gz` });
+    const doomed = seedRun(server, taskId, { id: 'idem-doomed', at: base, filename: `backup-task-${taskId}-20261103-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
+    seedRun(server, taskId, { id: 'idem-new', at: base + day, filename: `backup-task-${taskId}-20261105-023000.tar.gz` });
 
     await rotationPass(server, { taskId });
     const row = runRow(server, doomed);
@@ -337,10 +347,13 @@ test('containment (D-05): unreachable mirrors prune-fail per destination — aud
     const taskId = await makeTask(server, op, 'Fail-containment task');
     setRetention(server, taskId, { daily: 1 });
     const day = 24 * 3600 * 1000;
-    const base = Date.UTC(2026, 10, 2, 2, 30);
+    const base = Date.UTC(2026, 10, 3, 2, 30);
     seedRun(server, taskId, { id: 'fail-anchor', at: Date.UTC(2025, 0, 2, 2, 30), filename: `backup-task-${taskId}-20250102-023000.tar.gz` });
-    const doomed = seedRun(server, taskId, { id: 'fail-doomed', at: base, filename: `backup-task-${taskId}-20261102-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
-    seedRun(server, taskId, { id: 'fail-new', at: base + 2 * day, filename: `backup-task-${taskId}-20261104-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'fail-primer', at: Date.UTC(2026, 0, 5, 2, 30), filename: `backup-task-${taskId}-20260105-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'fail-monthly', at: Date.UTC(2026, 10, 1, 2, 0), filename: `backup-task-${taskId}-20261101-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'fail-weekly', at: Date.UTC(2026, 10, 2, 2, 0), filename: `backup-task-${taskId}-20261102-020000.tar.gz` });
+    const doomed = seedRun(server, taskId, { id: 'fail-doomed', at: base, filename: `backup-task-${taskId}-20261103-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
+    seedRun(server, taskId, { id: 'fail-new', at: base + day, filename: `backup-task-${taskId}-20261105-023000.tar.gz` });
 
     const report = await rotationPass(server, { taskId });
     assert.equal(report.deleted, 1, 'prune failure NEVER blocks the rotation (report shape intact: scanned/deleted/floorHeld/tasks)');
@@ -361,7 +374,7 @@ test('containment (D-05): unreachable mirrors prune-fail per destination — aud
 test('prune keys mirror the UPLOAD arm (backup-task-<taskId>/<filename>) — manualPrefixes never used', async () => {
   const ftp = fakeFtp();
   await ftp.listen();
-  const smb = fakeSmb({});
+  const smb = fakeSmb({}, { domain: "" });
   await smb.listen();
   const server = await startServer({ env: { BACKUP_TEST_TOKEN: BACKUP_TOKEN, ...remoteEnv({ ftpPort: ftp.port(), smbPort: smb.port() }) } });
   try {
@@ -369,14 +382,17 @@ test('prune keys mirror the UPLOAD arm (backup-task-<taskId>/<filename>) — man
     const taskId = await makeTask(server, op, 'Key-shape task');
     setRetention(server, taskId, { daily: 1 });
     const day = 24 * 3600 * 1000;
-    const base = Date.UTC(2026, 10, 2, 2, 30);
+    const base = Date.UTC(2026, 10, 3, 2, 30);
     seedRun(server, taskId, { id: 'key-anchor', at: Date.UTC(2025, 0, 2, 2, 30), filename: `backup-task-${taskId}-20250102-023000.tar.gz` });
-    seedRun(server, taskId, { id: 'key-doomed', at: base, filename: `backup-task-${taskId}-20261102-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
-    seedRun(server, taskId, { id: 'key-new', at: base + 2 * day, filename: `backup-task-${taskId}-20261104-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'key-primer', at: Date.UTC(2026, 0, 5, 2, 30), filename: `backup-task-${taskId}-20260105-023000.tar.gz` });
+    seedRun(server, taskId, { id: 'key-monthly', at: Date.UTC(2026, 10, 1, 2, 0), filename: `backup-task-${taskId}-20261101-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'key-weekly', at: Date.UTC(2026, 10, 2, 2, 0), filename: `backup-task-${taskId}-20261102-020000.tar.gz` });
+    seedRun(server, taskId, { id: 'key-doomed', at: base, filename: `backup-task-${taskId}-20261103-023000.tar.gz`, flags: { ftp_uploaded: 1, smb_uploaded: 1 } });
+    seedRun(server, taskId, { id: 'key-new', at: base + day, filename: `backup-task-${taskId}-20261105-023000.tar.gz` });
 
     await rotationPass(server, { taskId });
     const dele = ftp.commands.find(c => c.startsWith('DELE '));
-    assert.ok(dele.includes(`backup-task-${taskId}/backup-task-${taskId}-20261102-023000.tar.gz`), 'FTP prune key = upload-arm key shape');
+    assert.ok(dele.includes(`backup-task-${taskId}/backup-task-${taskId}-20261103-023000.tar.gz`), 'FTP prune key = upload-arm key shape');
     assert.ok(!ftp.commands.some(c => c.includes('backup-ftp/')), 'manualPrefix backup-ftp/ NEVER used');
   } finally {
     await server.stop();

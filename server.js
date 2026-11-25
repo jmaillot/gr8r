@@ -89,7 +89,7 @@ import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { connectFtp, probeFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03)
-import { probeSmb } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity)
+import { probeSmb, connectSmb } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity); 100-04: connectSmb for the prune wrappers
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
@@ -4287,6 +4287,89 @@ function gfsKeptPositions(task, runsAsc) {
 
 /* One rotation pass. taskId rotates just that task; omitted rotates every
    task that has rotation-eligible rows. Injectable clock for tests. */
+
+/* Phase 100 (100-04, DEST-02): remote-prune wrappers — connect → delete the
+   task-scoped mirror key, best-effort. "Target not found" maps to
+   already-pruned SUCCESS (Pitfall 1): no pre-delete existence check
+   (TOCTOU-free) — FTP 550 → ftpPathNotFound (ftp.js:186) and SMB
+   STATUS_OBJECT_NAME_NOT_FOUND → smbPathNotFound class (smb.js SMB_ERROR_
+   CLASSES, 100-01 additive) both mean the mirror is already gone, which is
+   exactly the state prune wants. Any other error rethrows with its KEYED
+   code for the audit funnel (Pitfall 5 — the caller audits key-only). */
+async function pruneFtp(key) {
+  const ftp = connectFtp(FTP.config());
+  try {
+    await ftp.connect();
+    await ftp.dele(key);
+  } catch (err) {
+    if (err?.code === 'ftpPathNotFound') return; // already pruned — success
+    throw err;
+  } finally {
+    await ftp.quit().catch(() => { /* best-effort */ });
+  }
+}
+async function pruneSmb(key) {
+  const smb = connectSmb(SMB.config());
+  try {
+    await smb.connect();
+    await smb.rm(key);
+  } catch (err) {
+    if (err?.smbClass === 'pathNotFound' || err?.code === 'smbPathNotFound') return; // already pruned — success
+    throw err;
+  } finally {
+    await smb.close().catch(() => { /* best-effort */ });
+  }
+}
+
+/* Per-run remote prune, called AFTER the local status='deleted' commit and
+   the rotation audit (D-05: follow-local best-effort inside the same pass).
+   - Keys mirror the UPLOAD arm exactly: backup-task-<taskId>/<filename>
+     (export/backup.js:875) — the manualPrefixes are probe-marker-only and
+     are NEVER used here (Pitfall 6).
+   - D-01 floor-guard: soleCopy = row.uploaded !== 1 && S3.enabled, computed
+     per-run on the FRESH rows of THIS pass's delete-set select (never
+     cached rotation state). A mirror with a copy on a sole-copy run is
+     audited backup_prune_skipped:soleCopy (destination-agnostic token,
+     OQ-2) and left alone — never delete the only surviving off-site copy.
+   - A mirror with NO copy (flag 0) is a silent no-op — no audit.
+   - Per-destination try/catch is the PRIMARY containment (D-05): a failed
+     delete audits backup_prune_failed:<dest>:<key> (keyed code ONLY —
+     never raw error text or config, Pitfall 5), leaves remote_pruned at 0
+     (the badge never lies), and never blocks the sibling destination's
+     prune nor the rotation loop. Success writes remote_pruned = 1 at the
+     ONE write site (one-site-per-flag rule, Pitfall 7) and audits
+     backup_prune_ok:<dest>. */
+async function pruneRunMirrors(taskId, taskName, deleteSet) {
+  for (const row of deleteSet) {
+    const soleCopy = row.uploaded !== 1 && S3.enabled; // D-01 floor-guard, fresh row
+    const key = `backup-task-${taskId}/${row.filename}`;
+    const pruneTargets = [
+      ['ftp', row.ftp_uploaded === 1, pruneFtp],
+      ['smb', row.smb_uploaded === 1, pruneSmb],
+    ];
+    for (const [dest, hasCopy, dele] of pruneTargets) {
+      if (!hasCopy) continue; // silent no-op — nothing on this mirror
+      const audit = action =>
+        db.run(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [uid(), null, taskId, action, 0, null, null, 'Backup rotation', '', taskName, '', now()],
+        );
+      try {
+        if (soleCopy) {
+          await audit('backup_prune_skipped:soleCopy'); // no dest suffix (OQ-2: the skip decision is destination-agnostic)
+          continue;
+        }
+        await dele(key); // not-found → already-pruned success (Pitfall 1, inside the wrappers)
+        await db.run('update backup_runs set remote_pruned = 1 where id = ?', [row.id]);
+        await audit(`backup_prune_ok:${dest}`);
+      } catch (err) {
+        await audit(`backup_prune_failed:${dest}:${err?.key || err?.code || 'unknown'}`).catch(() => { /* the audit never becomes fatal */ });
+        logWarn(`backup prune ${dest} run ${row.id}: ${err?.key || err?.code || err?.message || err}`);
+      }
+    }
+  }
+}
+
 export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}) {
   void at; // clock accepted for pass-shape parity (bucket math is UTC-calendar, not wall-clock)
   const taskIds = onlyTaskId
@@ -4342,7 +4425,7 @@ export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}
          an explicit `id <> ?` parameter — the exclusion lives in the QUERY,
          not only in the JS arithmetic above. */
       const deleteSet = await db.all(
-        `select id, filename from backup_runs where task_id = ? and status = 'succeeded' and id in (${candidates.map(() => '?').join(',')}) and id <> ?`,
+        `select id, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where task_id = ? and status = 'succeeded' and id in (${candidates.map(() => '?').join(',')}) and id <> ?`,
         [taskId, ...candidates, newestVerified.id],
       );
       /* D-13 refuse-to-empty floor (independent second guard): a pass that
@@ -4381,6 +4464,10 @@ export async function runBackupRotationPass({ now: at, taskId: onlyTaskId } = {}
         'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
         [uid(), null, taskId, `backup_rotation:expired:${detail}`, 0, null, null, 'Backup rotation', '', task.name, '', now()],
       );
+      /* Phase 100 (100-04, DEST-02/D-05): the remote prune — AFTER the local
+         status commit and the rotation audit. Best-effort per destination;
+         failure never blocks the sibling prune nor this loop. */
+      await pruneRunMirrors(taskId, task.name, deleteSet);
       report.deleted += marked?.changes || 0;
       report.tasks.push({ taskId, deletedRunIds: ids });
       logInfo(`backup rotation: task ${taskId} deleted ${ids.length} expired archive(s) (${detail})`);

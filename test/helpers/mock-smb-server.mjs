@@ -92,9 +92,9 @@ function signingKeyFromType3(type3Buf, creds) {
 }
 
 /* Scripted NBSS frame server with file-storage capture (99 idiom). */
-function fakeSmb(scenario = {}) {
+function fakeSmb(scenario = {}, credsOverride = {}) {
   const commands = [];
-  const creds = { user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret' };
+  const creds = { user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', ...credsOverride };
   const sockets = new Set();
   let fileIdCounter = 0;
   const files = new Map();
