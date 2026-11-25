@@ -5,16 +5,16 @@ milestone_name: Backup Destinations SMB & FTP
 current_phase: 100
 current_phase_name: SMB Destination End-to-End + Remote Prune
 status: executing
-stopped_at: Completed 100-01-PLAN.md
-last_updated: "2026-11-25T17:41:16.384Z"
+stopped_at: Completed 100-02-PLAN.md
+last_updated: "2026-11-25T17:51:32.355Z"
 last_activity: 2026-11-25
 last_activity_desc: Phase 100 execution started
-state_head: c3bee78c9fc50102b10e52a6a10d30712c4be758
+state_head: 70d447681ae20cb57f54691aff16ff86f8718869
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 11
   percent: 20
 ---
 
@@ -58,6 +58,7 @@ Last activity: 2026-11-25 — Phase 100 execution started
 | Phase 99 P01 | 37m | 3 tasks | 2 files |
 | Phase 99 P02 | 68m | 3 tasks | 4 files |
 | Phase 100 P01 | 28m | 2 tasks | 3 files |
+| Phase 100 P02 | 34m | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,7 @@ Last activity: 2026-11-25 — Phase 100 execution started
 - [Phase 99]: 99-01: SMB2 header offsets follow MS-SMB2 §2.2.1.1 spec layout (research §2 map mis-transcribed by one byte); davenport 04b8e0ba NTLMv2 value DOES reproduce with correct MD4 (research erratum claim reversed) but is not pinned — independent hand-written chain pin used instead; type-3 data block @64 (LM/NT/user/ws, no session-key buffer); destination-registry-gate updated: smb.js may exist, no wiring until 100
 - [Phase 99]: 99-02: session engine verify-before-dispatch + structural sessionExpired envelope (1/command, 2/session caps, offset-resume); OQ-3 split pinned (dialect→smbDialectUnsupported generic, signing-refusal→signingRequired); 99-SPIKE.md GO verdict for 100 conditioned on real-server e2e first
 - [Phase 100]: 100-01: probeSmb marker-rm failure = HARD refuse (deleteFailed, no D-88-15 analog); keyed results only (T-100-01); fetchSmbToStaged sha256-gates BEFORE staging write (T-100-02); guestSession from SessionFlags bit 0x0001 @ body offset 2 (A1, e2e falsifies); 0xc0000034 → pathNotFound additive (prune idempotency)
+- [Phase 100]: 100-02: smb upload arm clones the ftp arm minus SIZE (R-4); smb_uploaded=1 at exactly one success-block site; registry gate released backup.js from the not-wired pin
 
 ### Blockers
 
@@ -114,8 +116,8 @@ Last activity: 2026-11-25 — Phase 100 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-11-25T17:41:16.322Z
-**Stopped at:** Completed 100-01-PLAN.md
+**Last session:** 2026-11-25T17:51:32.293Z
+**Stopped at:** Completed 100-02-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)

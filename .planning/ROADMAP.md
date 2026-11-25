@@ -125,7 +125,7 @@ Plans:
 4. Mirror failure yields the single terminal `upload_failed` naming the failed destination(s), local publish stays valid; all DEST-02/DEST-03 refusals are keyed and audited ×5 locales.
 5. An env-gated dperson/samba docker e2e recipe (ideally a signing-required variant) proves backup→SMB→restore end-to-end; DEPLOY.md gains §21 (share perms, ACL pitfall) and §22 (FTPS passive ranges, cert trust); `membershipsOf` byte-gate and the full suite stay at baseline.
 
-**Plans**: 1/5 plans executed
+**Plans**: 2/5 plans executed
 **UI hint**: yes
 
 Plans:
@@ -133,7 +133,7 @@ Plans:
 - [x] 100-01-PLAN.md — smb.js client additions: probeSmb + fetchSmbToStaged + guest detection + pathNotFound class (DEST-03)
 
 **Wave 2** *(blocked on Wave 1)*
-- [ ] 100-02-PLAN.md — Tracer: SMB.config() + install closure (R-2 inversion) + smb upload arm + mock-pipeline wiring test (SMB-02)
+- [x] 100-02-PLAN.md — Tracer: SMB.config() + install closure (R-2 inversion) + smb upload arm + mock-pipeline wiring test (SMB-02)
 
 **Wave 3** *(blocked on Wave 2)*
 - [ ] 100-03-PLAN.md — smb-probe route + probe-at-save twins + client trio + probe toasts (guest info) + i18n ×5 (SMB-02, DEST-03)
@@ -152,4 +152,4 @@ Plans:
 | 97. FTP/FTPS Client (Zero-Dep) | 1/1 | In Progress|  |
 | 98. FTP Destination End-to-End | 4/4 | In Progress|  |
 | 99. SMB 2.1 Client (Spike-Hardened) | 2/2 | In Progress|  |
-| 100. SMB Destination End-to-End + Remote Prune | 1/5 | In Progress|  |
+| 100. SMB Destination End-to-End + Remote Prune | 2/5 | In Progress|  |
