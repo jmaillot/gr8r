@@ -56,7 +56,7 @@ marker only, since manual uploads never happen).
 ## 3. Probe parity (DEST-03) — the pattern SMB reuses
 
 Dedicated route (D-02), cloned from `/api/backup/s3/probe` (server.js:9349-9372):
-`POST /api/backup/ftp/probe` with the VERBATIM guard chain — sameOrigin →
+`POST /api/backup/tasks/ftp-probe` with the VERBATIM guard chain — sameOrigin →
 requireUser → `tooMany('backupprobe|'+user.id, 10, 15min)` →
 `hasInstanceRole(CAP.BACKUP_MANAGE)` → `FTP.enabled` check (keyed
 `ftpNotConfigured` 400, audited `backup_probe_refused:ftpNotConfigured`) →

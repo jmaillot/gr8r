@@ -11,7 +11,7 @@
 |---|---|---|---|---|
 | `export/backup.js` upload loop (:852-900) | service | batch/transform (per-destination upload) | ITSELF — generalized in place; s3 arm byte-preserved | exact (self) |
 | `server.js` ftp install closure (fills dormant slot :3897-3901) | provider (registry descriptor) | event/CRUD | `server.js:3871-3888` S3 closure | exact, with R-2 inversion |
-| `server.js` `POST /api/backup/ftp/probe` | route | request-response | `server.js:9353-9370` `/api/backup/s3/probe` | exact |
+| `server.js` `POST /api/backup/tasks/ftp-probe` | route | request-response | `server.js:9353-9370` `/api/backup/s3/probe` | exact |
 | `server.js` probe-at-save CREATE twin | route (validation) | request-response | `server.js:9133-9146` + INSERT `:9166`/`:9172` | exact |
 | `server.js` probe-at-save EDIT twin | route (validation) | request-response | `server.js:9289-9300` + UPDATE `:9328`/`:9332` | exact |
 | `server.js` `backupTaskShape` (`:9015`) — **no edit needed** | utility | transform | ITSELF — `{ ...row }` spread carries `ftp_enabled` automatically | exact (self) |
