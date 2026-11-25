@@ -442,8 +442,8 @@ const FTP = {
    recomputed at the call sites. `.config()` is the ONE seam that
    resolves the request config the 99 client (export/smb.js) consumes:
    { host, share, port, user, domain?, password } — port defaults to
-   445 hard-coded (SMB_PORT has no env seam yet; a DEPLOY-visible option
-   only if a later need proves it). domain stays absent when unset —
+   445 (SMB_PORT boot-frozen env const, 100-04 — documented in DEPLOY
+   §21). domain stays absent when unset —
    the 99 client treats a missing domain as the default workgroup. Raw
    values never leave these consts: no log line or error text carries a
    credential (V14) — the config object is built, never serialized. */

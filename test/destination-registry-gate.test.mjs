@@ -96,16 +96,12 @@ test('dormant custody: FTP/SMB boot-frozen consts in server.js; no wiring, smb c
   // unlocked export/ftp.js; Phase 99 unlocked export/smb.js. Phase 100
   // (100-02) wired the smb client into export/backup.js's upload arm —
   // the gate released backup.js then. 100-03 wired probeSmb into
-  // server.js (probe route + probe-at-save twins) — server.js is
-  // released here; export/restore.js stays pinned until 100-05
-  // (fetchToStaged wiring).
+  // server.js (probe route + probe-at-save twins) — server.js was
+  // released there. 100-05 wired fetchSmbToStaged into export/restore.js
+  // (restore read-back twins) — the smb client is now FULLY released;
+  // the wired-file loop stays as the pattern for any future module.
   assert.ok(fs.existsSync(path.join(ROOT, 'export', 'ftp.js')), 'export/ftp.js exists since Phase 97 (zero-dep client)');
   assert.ok(fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js exists since Phase 99 (zero-dep client)');
-  for (const wiredFile of [path.join('export', 'restore.js')]) {
-    const wired = fs.readFileSync(path.join(ROOT, wiredFile), 'utf8');
-    assert.ok(!/from ['"].*smb(\.js)?['"]/.test(wired) && !/require\(['"].*smb(\.js)?['"]\)/.test(wired),
-      `${wiredFile} must NOT wire the smb client yet (phase 100's job)`);
-  }
 });
 
 test('the old setter name is gone from the whole codebase (tests included — OQ-1 knowingly-updated twins)', () => {

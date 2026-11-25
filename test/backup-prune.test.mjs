@@ -167,15 +167,15 @@ test('remote_pruned DDL: SCHEMA declaration, pg mirror, boot ensureColumn — de
   assert.ok(!/remote_pruned: _/.test(s), 'remote_pruned is NOT in any strip-list destructure');
 });
 
-test('remote_pruned rides all three runs SELECTs (all=1 / manual / task) — restore SELECT untouched', () => {
+test('remote_pruned rides all three runs SELECTs (all=1 / manual / task) — restore publishes nothing new (100-05: restore-trigger selects read the flag but never publish it)', () => {
   const s = serverSrc();
   const selects = s.split('\n').filter(l => /uploaded, ftp_uploaded, smb_uploaded/.test(l));
-  assert.equal(selects.length, 5, `three runs SELECTs + delete-set + restore-list lines (${selects.length})`);
+  assert.equal(selects.length, 7, `three runs SELECTs + delete-set + restore-list + two 100-05 restore-trigger SELECTs (${selects.length})`);
   const runsSelects = selects.filter(l => l.includes('checksum_ok'));
   assert.equal(runsSelects.length, 3, 'three runs SELECT lines carry the full history chrome');
   for (const q of runsSelects) assert.ok(q.includes('remote_pruned'), 'each runs SELECT carries remote_pruned');
   const untouched = selects.filter(l => !l.includes('checksum_ok'));
-  assert.equal(untouched.length, 2, 'the widened delete-set SELECT + the restore-list SELECT remain');
+  assert.equal(untouched.length, 4, 'the delete-set SELECT + the restore-list SELECT + the two 100-05 restore-trigger SELECTs remain');
   assert.ok(untouched.every(l => !l.includes('remote_pruned')), 'delete-set + restore SELECTs stay free of remote_pruned (restore never publishes it)');
 });
 

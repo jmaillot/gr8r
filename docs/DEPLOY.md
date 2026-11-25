@@ -1877,3 +1877,100 @@ refusal-class probe result, NOT an accept-with-warning: unlike the S3
 probe's warning posture, an FTP server that cannot delete the probe marker
 cannot be trusted for the write+delete lifecycle, so the probe reports the
 failure and probe-at-save refuses the save.
+
+### SMB destination (Phase 100)
+
+Backup tasks can also mirror every archive to an **SMB/CIFS server** after
+the local publish succeeds — same local-first posture as FTP (§21) and S3
+(§20). Zero config = off-site copy disabled; the destination is fully
+invisible to operators until all four required variables are set.
+
+| Variable | Meaning |
+|----------|---------|
+| `SMB_HOST` | SMB server hostname, e.g. `nas.internal`. |
+| `SMB_PORT` | optional; defaults `445` (set it for a docker-published port or a non-default listener). |
+| `SMB_SHARE` | the share name to write under (e.g. `backups`). |
+| `SMB_USER` | SMB login user. |
+| `SMB_PASSWORD` | secret — **never log it, never commit it**. |
+
+**Guest access:** an SMB server that maps unknown users onto a guest
+session (samba `map to guest = Bad User`, Windows guest fallback) accepts
+the connection but flags it as a guest session in the protocol
+SESSION_SETUP response. The probe surfaces this as an informational
+`guest` flag on an otherwise-successful result — the UI shows the flag
+and the operator decides whether a guest-writable share meets their
+durability bar. It is never treated as an error.
+
+**Share permissions & ACLs (the prune contract — read before first save):**
+
+- **Prune is DELETE, not overwrite.** When rotation rotates an archive
+  out, gr8r also deletes the remote mirror (the `pruned` badge in the run
+  history). The share must therefore grant **delete** permission, not
+  just write. A share that accepts writes but refuses deletes passes the
+  probe's lifecycle test only if the probe marker delete also fails — it
+  doesn't: the probe **hard-refuses** (`deleteFailed`) and probe-at-save
+  refuses the save. A share that permits the probe but restricts deeper
+  paths fails only at the first rotation: the operator signal is the
+  `backup_prune_failed:smb` audit line.
+- **Ownership/mask settings.** Production shares typically need
+  `force user` (or equivalent ACL inheritance) and a permissive
+  `create mask`/`directory mask` so the gr8r user can overwrite and
+  delete rotated-out files created by earlier runs. On Windows hosts the
+  effective permission is **NTFS ACLs ∩ share permissions** — a
+  read-only share fails at the probe (write refused); a share with
+  ACL-restricted delete fails only at first prune
+  (`backup_prune_failed:smb` audit = the operator signal).
+- **ACCESS_DENIED (0xc0000022).** ACL-restricted or
+  `hide unreadable`-configured shares make the probe marker `rm` fail
+  with ACCESS_DENIED; the probe's hard-refuse catches this pre-save —
+  the task is never saved against such a share.
+- **Key layout:** mirrors FTP exactly — `backup-task-<taskId>/<archive
+  filename>.tar.gz` (+ `.sha256` sidecar). Restore is the read-back: the
+  99 client's `fetchSmbToStaged` downloads the whole archive and
+  sha256-verifies it **before any staging file exists**; a mismatch
+  refuses the restore. **Prune floor-guard:** a run that is the sole
+  surviving S3 copy is never pruned remotely — the guard is computed
+  per-run inside the rotation pass (audit `backup_prune_skipped:soleCopy`).
+
+## 22. FTPS hardening (passive ranges + certificate trust)
+
+The FTP destination of §21 has two TLS postures; both have operator-side
+consequences that don't show up until a probe fails or a firewall drops
+data connections.
+
+### Passive-range firewall openings
+
+FTP data connections use the **passive range** the server advertises —
+the vsftpd recipe above opens `21100-21110`. On a firewall, that exact
+range must be open inbound to the FTP host, and `FTP_PASV_HOST` must be
+set to an address the gr8r server can actually reach (the NAT-advertised
+IP is often wrong in docker deployments). Symptoms of a closed/ranged
+range: the probe or upload hangs at the first data transfer (list,
+STOR, download) while the control connection works — always check the
+passive range before suspecting credentials or TLS.
+
+### `FTP_INSECURE` semantics
+
+- Default `false` = **system CA validation** (R-3). The server's
+  certificate must chain to a CA the gr8r host trusts. A self-signed or
+  internal-CA certificate fails the handshake with a keyed
+  `ftpTlsFailed`-class result.
+- `FTP_INSECURE=true` accepts self-signed / untrusted certificates — the
+  connection is encrypted but **not authenticated** (MITM-visible). Every
+  probe and save then carries the keyed insecure-transport warning, so
+  the UI never silently treats it as trusted. Use it for lab/throwaway
+  servers only; in production, install a CA-signed certificate (e.g.
+  Let's Encrypt) or add the internal CA to the host's trust store.
+
+### Implicit vs explicit TLS
+
+- **Explicit TLS (AUTH TLS)** — `FTP_SECURE=true`, the default port 21
+  posture: the connection starts plaintext and upgrades on AUTH TLS.
+  Most FTPS servers (vsftpd included) use this. The certificate is
+  presented on the handshake; system CA validation applies as above.
+- **Implicit TLS** — TLS from the first byte, conventionally port 990.
+  There is **no env seam for implicit TLS yet**: if your server only
+  speaks implicit TLS, either enable its explicit-TLS listener or wait
+  for a future phase. Do not point `FTP_PORT` at 990 with
+  `FTP_SECURE=true` — the client will send plaintext AUTH on a TLS-only
+  socket and the handshake will fail.
