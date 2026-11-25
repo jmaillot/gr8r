@@ -93,11 +93,14 @@ test('dormant custody: FTP/SMB boot-frozen consts in server.js; no wiring, smb c
   // warn parity, NOT the S3 hard boot-refuse (SC-4)
   assert.match(s, /partially set — destination disabled/, 'partial FTP/SMB env warns at boot (SC-4)');
   // NO client modules until their own phase (D-05 hard rule) — Phase 97
-  // unlocked export/ftp.js; Phase 99 unlocked export/smb.js (still
-  // UNWIRED: nothing imports it until phase 100's descriptor work).
+  // unlocked export/ftp.js; Phase 99 unlocked export/smb.js. Phase 100
+  // (100-02) wired the smb client into export/backup.js's upload arm —
+  // the gate releases backup.js from the not-wired list and keeps the
+  // remaining waves pinned: server.js until 100-03 (probe route) and
+  // export/restore.js until 100-05 (fetchToStaged wiring).
   assert.ok(fs.existsSync(path.join(ROOT, 'export', 'ftp.js')), 'export/ftp.js exists since Phase 97 (zero-dep client)');
   assert.ok(fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js exists since Phase 99 (zero-dep client)');
-  for (const wiredFile of ['server.js', path.join('export', 'backup.js'), path.join('export', 'restore.js')]) {
+  for (const wiredFile of ['server.js', path.join('export', 'restore.js')]) {
     const wired = fs.readFileSync(path.join(ROOT, wiredFile), 'utf8');
     assert.ok(!/from ['"].*smb(\.js)?['"]/.test(wired) && !/require\(['"].*smb(\.js)?['"]\)/.test(wired),
       `${wiredFile} must NOT wire the smb client yet (phase 100's job)`);

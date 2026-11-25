@@ -66,6 +66,7 @@ import { pipeline } from 'node:stream/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { uploadArchive, s3BackupKey, sliceError as s3SliceError, downloadToStaged, getObject } from './s3.js';
 import { connectFtp } from './ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — ftp upload arm
+import { connectSmb } from './smb.js'; // Phase 100 (100-02): the 99 zero-dep client — smb upload arm
 import { backendKind, toPgSql, pgPoolRef, run as dbRun, get as dbGet, all as dbAll } from '../db-adapter.mjs';
 
 /* ---- Paths (same derivation as server.js:126-132) ----
@@ -904,6 +905,38 @@ export async function runExport(scope, meta = {}) {
              path (upload_failed and ftp-disabled runs keep ftp_uploaded
              = 0). Exactly ONE write site for this flag in this file. */
           await dbRun('update backup_runs set ftp_uploaded = 1 where id = ?', [runId]);
+        } else if (destName === 'smb') {
+          /* Phase 100 (100-02): the smb arm — ftp-arm clone with the
+             documented R-4 divergence: NO SIZE verify (the SMB2 client
+             exposes no size query — the sidecar sha256 below is the
+             integrity stamp; restore re-verifies sha256 at read-back
+             per 100-05). The manualPrefix NEVER uploads (R-2: the
+             closure returns null for taskId-less meta, so this arm is
+             unreachable for manual runs by construction). */
+          const smbKey = `backup-task-${runMeta.taskId}/${filename}`;
+          const smb = connectSmb(provided.config);
+          try {
+            await smb.connect();
+            /* Whole-archive WRITE under the task prefix (Pitfall 6:
+               SAME key shape as the ftp arm). Client-owned retry/expiry
+               posture (P6) — zero pipeline-level session logic here. */
+            await smb.write(smbKey, destination);
+            /* Sidecar sha256 (R-4) — same "<hash>  <name>\n" shape the
+               local + ftp + s3 sidecars carry, so every consumer splits
+               identically. */
+            await smb.write(`${smbKey}.sha256`, Buffer.from(`${sha256}  ${filename}\n`));
+          } finally {
+            /* Best-effort session teardown (TREE_DISCONNECT → LOGOFF —
+               the ftp quit analog): the upload outcome rides the write
+               results. */
+            await smb.close().catch(() => { /* best-effort */ });
+          }
+          /* 96-02 one-site rule mirror: smb_uploaded is the run's honest
+             SMB badge source. Marked ONLY here — after the archive AND
+             the sidecar writes both passed; NEVER in a catch path
+             (upload_failed and smb-disabled runs keep smb_uploaded = 0).
+             Exactly ONE write site for this flag in this file. */
+          await dbRun('update backup_runs set smb_uploaded = 1 where id = ?', [runId]);
         } else {
         await uploadArchive(provided.config, destination, key, sha256, (partsDone, partsTotal) => {
           currentRun = { ...currentRun, partsDone, partsTotal };
