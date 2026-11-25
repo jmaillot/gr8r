@@ -434,6 +434,8 @@ export const SQLITE_SCHEMA = `
     next_run_at         integer,
     last_notified_state text,
     s3_enabled          integer not null default 0,
+    ftp_enabled         integer not null default 0,
+    smb_enabled         integer not null default 0,
     created_at          integer not null,
     updated_at          integer not null
   );
@@ -463,6 +465,8 @@ export const SQLITE_SCHEMA = `
        byte-for-byte (pg tables are created fresh from this variant each
        boot; existing dbs get the additive ensureColumn twin). */
     uploaded     integer not null default 0,
+    ftp_uploaded integer not null default 0,
+    smb_uploaded integer not null default 0,
     /* Phase 90 (D-90-11, 90-02): the verify-checksum result — nullable until
        the first verify lands (null = never checked, 1 = match, 0 = mismatch —
        a comment here must never end a line with a semicolon, runSchema splits

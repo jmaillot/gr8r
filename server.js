@@ -9600,8 +9600,11 @@ async function handleApi(req, res, url) {
         let scope = null;
         try { scope = JSON.parse(r.scope); } catch { scope = null; }
         const name = await scopeLabel(scope);
-        const { scope: _internal, ...pub } = r;
-        void _internal;
+        /* Phase 96 (96-02, D-05 byte-identity): ftp_uploaded/smb_uploaded ride
+           the row ONLY as destLocation inputs — never published; phases 98/100
+           own their payload reveal. */
+        const { scope: _internal, ftp_uploaded: _ftp, smb_uploaded: _smb, ...pub } = r;
+        void _internal; void _ftp; void _smb;
         out.push({
           ...pub,
           location: destLocation(r),
@@ -9625,10 +9628,16 @@ async function handleApi(req, res, url) {
        payload carries only the derived location flag — uploaded rides along
        as the honest tier input, checksum fields arrive with task 3. */
     const historyChrome = rows =>
-      rows.map(r => ({
-        ...r,
-        location: destLocation(r),
-      }));
+      rows.map(r => {
+        /* Phase 96 (96-02, D-05 byte-identity): ftp_uploaded/smb_uploaded are
+           destLocation inputs only — never published (see the ?all=1 site). */
+        const { ftp_uploaded: _ftp, smb_uploaded: _smb, ...pub } = r;
+        void _ftp; void _smb;
+        return {
+          ...pub,
+          location: destLocation(r),
+        };
+      });
     if (taskId === 'manual') {
       const rows = await db.all('select id, task_id, uploaded, ftp_uploaded, smb_uploaded, checksum_ok, checksum_checked_at, missing_blob_count, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at from backup_runs where task_id is null order by created_at desc, id desc limit 50');
       return json(res, 200, { runs: historyChrome(rows) });
