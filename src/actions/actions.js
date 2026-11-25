@@ -5101,6 +5101,9 @@ const backupTaskFormDefaults = () => ({
   /* Phase 88 (D-88-12): S3 opt-in stages in the form like every other field;
      the checkbox itself renders only when api.s3Enabled is true (render-only). */
   s3Enabled: false,
+  /* Phase 98 (D-01): the FTP opt-in mirrors the S3 staging — the checkbox
+     itself renders only when api.ftpEnabled is true (render-only). */
+  ftpEnabled: false,
 });
 /* Preset + fields → the raw 5-field cron string (D-04 serialization).
    Custom sends all five fields verbatim — including `*` — so a Custom
@@ -5154,6 +5157,11 @@ IN.backupTaskRetention = el => {
    re-render on toggle (the checkbox IS the state). */
 IN.backupTaskS3 = el => {
   if (S.ui.backupTaskForm) S.ui.backupTaskForm.s3Enabled = el.checked;
+};
+/* Phase 98 (D-01): the FTP checkbox stages like the S3 one — no re-render
+   on toggle (the checkbox IS the state). */
+IN.backupTaskFtp = el => {
+  if (S.ui.backupTaskForm) S.ui.backupTaskForm.ftpEnabled = el.checked;
 };
 A.backupTaskNew = () => {
   S.ui.backupTaskForm = backupTaskFormDefaults();
@@ -5217,6 +5225,9 @@ A.backupTaskEdit = el => {
     /* Edit mode: the checkbox shows the stored opt-in (task list rows carry
        s3_enabled verbatim through backupTaskShape). */
     s3Enabled: task.s3_enabled === 1,
+    /* Phase 98 (D-01): the checkbox shows the stored FTP opt-in
+       (backupTaskShape carries ftp_enabled verbatim). */
+    ftpEnabled: task.ftp_enabled === 1,
   };
   render();
 };
@@ -5261,6 +5272,11 @@ A.backupTaskSave = async () => {
      displayed checkbox state is ALWAYS serialized (on AND off). The server
      probes at save (SC-1): unreachable/badCreds/s3ClockSkew refuse keyed. */
   if (api.s3Enabled) body.s3Enabled = form.s3Enabled === true;
+  /* Phase 98 (D-01): the FTP flag rides the write whenever the server says
+     the destination exists — fail-closed: absent when api.ftpEnabled is
+     false. The server probes at save and HARD-refuses on !ok (no
+     deleteFailed accept-with-warning analog). */
+  if (api.ftpEnabled) body.ftpEnabled = form.ftpEnabled === true;
   const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
@@ -5281,6 +5297,20 @@ A.backupTaskSave = async () => {
     else if (probe.key === 's3ClockSkew') toast(tErr('s3ClockSkew', null, t('toast.s3ProbeUnreachable')), { kind: 'err' });
     else if (probe.key === 's3NoBucket') toast(tErr('s3NoBucket', null, t('toast.s3ProbeUnreachable')), { kind: 'err' }); // MIN-01: bucket-name typo gets its own keyed message
     if (probe.httpWarning) toast(t('toast.s3ProbeHttpWarning'));
+  }
+  /* Phase 98 probe visibility: the ftpProbe twin — hard-refusal parity
+     (NO deleteFailed branch: a DELE marker failure is a hard refusal
+     server-side, the documented D-88-15 divergence). */
+  const fprobe = res.data?.ftpProbe;
+  if (fprobe) {
+    if (fprobe.key === 'success') toast(t('toast.ftpProbeSuccess'));
+    else if (fprobe.key === 'ftpAuthFailed') toast(tErr('ftpAuthFailed', null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
+    else if (fprobe.key === 'ftpTlsFailed') toast(tErr('ftpTlsFailed', null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
+    else if (fprobe.key === 'ftpPassiveFailed') toast(tErr('ftpPassiveFailed', null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
+    else if (fprobe.key === 'ftpPathNotFound') toast(tErr('ftpPathNotFound', null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
+    else if (fprobe.key === 'ftpQuotaExceeded') toast(tErr('ftpQuotaExceeded', null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
+    else if (fprobe.key === 'unreachable') toast(t('toast.ftpProbeUnreachable'), { kind: 'err' });
+    if (fprobe.httpWarning) toast(tErr('insecureTlsWarning', null, t('toast.ftpProbeUnreachable')));
   }
   toast(t(form.editing ? 'page.backup.taskUpdated' : 'page.backup.taskSaved'), { ms: 1500 });
   render();

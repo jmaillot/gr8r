@@ -250,6 +250,50 @@ test('i18n: page.backup.ftpToggle present in all 5 locales (same-commit rule)', 
   }
 });
 
+test('actions.js: the four ftp mirror sites sit beside their s3 analogs (D-01)', () => {
+  const a = src('src/actions/actions.js');
+  assert.match(a, /ftpEnabled: false,\n\}\);/, 'form default beside s3Enabled');
+  assert.match(a, /IN\.backupTaskFtp = el => \{\n  if \(S\.ui\.backupTaskForm\) S\.ui\.backupTaskForm\.ftpEnabled = el\.checked;\n\};/, 'IN handler staged (no re-render)');
+  assert.match(a, /ftpEnabled: task\.ftp_enabled === 1,/, 'hydration from the stored flag');
+  assert.match(a, /if \(api\.ftpEnabled\) body\.ftpEnabled = form\.ftpEnabled === true;/, 'payload strict-boolean, gated on api.ftpEnabled');
+  const payload = a.indexOf('if (api.ftpEnabled) body.ftpEnabled');
+  const s3Payload = a.indexOf('if (api.s3Enabled) body.s3Enabled');
+  assert.ok(payload > s3Payload && payload - s3Payload < 400, 'the ftp payload line sits beside the s3 one');
+});
+
+test('actions.js: ftpProbe toast twin — keyed refusals + insecureTlsWarning, NO deleteFailed branch', () => {
+  const a = src('src/actions/actions.js');
+  const i = a.indexOf("res.data?.ftpProbe");
+  assert.ok(i !== -1, 'the ftpProbe toast block exists');
+  const block = a.slice(i - 200, i + 1400);
+  assert.match(block, /toast\.ftpProbeSuccess/, 'success toast');
+  for (const k of ['ftpAuthFailed', 'ftpTlsFailed', 'ftpPassiveFailed', 'ftpPathNotFound', 'ftpQuotaExceeded']) {
+    assert.match(block, new RegExp(`fprobe\\.key === '${k}'`), `per-key toast for ${k}`);
+  }
+  assert.match(block, /fprobe\.key === 'unreachable'/, 'unreachable toast');
+  assert.match(block, /fprobe\.httpWarning.*insecureTlsWarning/s, 'R-3 insecureTlsWarning toast emitted');
+  const blockEnd = a.indexOf('toast(t(form.editing', i);
+  const seg = a.slice(i, blockEnd);
+  assert.ok(!/deleteFailed/.test(seg), 'NO deleteFailed branch in the ftp toast block');
+});
+
+test('i18n: ftpProbe toast keys + insecureTlsWarning present in all 5 locales (same-commit rule)', () => {
+  for (const l of ['en', 'fr', 'nl', 'de', 'es']) {
+    const s = src(`src/locales/${l}.json`);
+    assert.match(s, /"toast\.ftpProbeSuccess"/, `${l} carries toast.ftpProbeSuccess`);
+    assert.match(s, /"toast\.ftpProbeUnreachable"/, `${l} carries toast.ftpProbeUnreachable`);
+    assert.match(s, /"err\.insecureTlsWarning"/, `${l} carries err.insecureTlsWarning`);
+  }
+});
+
+test('client↔server twin contract: body.ftpEnabled ↔ server body?.ftpEnabled probe-at-save reads', () => {
+  const a = src('src/actions/actions.js');
+  const s = serverSrc();
+  assert.match(a, /body\.ftpEnabled = form\.ftpEnabled === true/, 'client sends strict boolean');
+  assert.match(s, /body\?\.ftpEnabled === true/, 'server CREATE twin reads the boolean');
+  assert.match(s, /ftp_enabled: body\?\.ftpEnabled === true \? 1 : 0/, 'server persists the boolean');
+});
+
 /* =====================================================================
    Functional pipeline tests — the REAL runExport upload loop against
    an in-process scripted mock FTP server (97 fakeFtp harness idiom,
