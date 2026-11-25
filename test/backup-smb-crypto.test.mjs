@@ -375,7 +375,7 @@ test('smbErrorFrom: status→smbClass map (SC-3 closed 9-enum)', () => {
     [0xc0000044, 'noSpace'],      // QUOTA_EXCEEDED
     ['SMB_SIGNING_REFUSED', 'signingRequired'],
     [0xc000005a, 'sessionExpired'], // NETWORK_SESSION_EXPIRED
-    [0xc0000034, 'generic'],      // OBJECT_NAME_NOT_FOUND (unmapped)
+    [0xc0000034, 'pathNotFound'], // OBJECT_NAME_NOT_FOUND (100-01 additive — prune idempotency)
   ];
   for (const [status, cls] of cases) {
     const err = smbErrorFrom(status);
