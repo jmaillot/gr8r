@@ -218,3 +218,136 @@ test('deriveSigningKey: HMAC-SHA256(sbk, SMB2AESKey+0x00)[:16] — self-pinned',
   assert.equal(key.toString('hex'), expected.toString('hex'));
   assert.equal(key.toString('hex'), '8faae6a2cbf71e317031379d7cd02c08');
 });
+
+/* =====================================================================
+   TASK 2 — NBSS + SMB2 HEADER CODECS (MS-SMB2 §2.1/§2.2.1.1/§2.2.1.2)
+   NBSS is 4-byte BIG-ENDIAN framing; SMB2 header is 64-byte
+   LITTLE-ENDIAN — the BE/LE contrast is the core trap.
+   NOTE: field offsets follow the MS-SMB2 §2.2.1.1 spec layout
+   (Command u16@12, Credits u16@14, Flags@16, NextCommand@20,
+   MessageId@24, AsyncId/Reserved@32, TreeId@36, SessionId@40,
+   Signature@48) — 99-RESEARCH's §2 field map was mis-transcribed
+   (offsets shifted by one); the spec layout is implemented and
+   pinned here (deviation documented in 99-01-SUMMARY).
+   ===================================================================== */
+
+import {
+  encodeNbssHeader, createFrameParser, encodeNbssSessionRequest,
+  encodeSmb2Header, decodeSmb2Header,
+} from '../export/smb.js';
+
+test('encodeNbssHeader: 4-byte big-endian, 0x1FFFF encodes exactly', () => {
+  const h = encodeNbssHeader(0x00, 0x1FFFF);
+  assert.equal(h.length, 4);
+  assert.deepEqual([...h], [0x00, 0x01, 0xff, 0xff], '17th bit lives in byte-1 bit 0 (RFC 1002)');
+  const h2 = encodeNbssHeader(0x81, 0);
+  assert.deepEqual([...h2], [0x81, 0x00, 0x00, 0x00]);
+});
+
+test('encodeNbssHeader: 0x20000 refuses with keyed generic protocol violation', () => {
+  assert.throws(
+    () => encodeNbssHeader(0x00, 0x20000),
+    (e) => e.smbClass === 'generic' && e.code === 'smbGeneric',
+  );
+});
+
+test('createFrameParser: 1-byte-then-remainder split reassembles one frame with consumed accounting', () => {
+  const payload = Buffer.from('PAYLOAD-BYTES');
+  const frame = Buffer.concat([encodeNbssHeader(0x00, payload.length), payload]);
+  const p = createFrameParser();
+  const r1 = p.feed(frame.subarray(0, 1));
+  assert.equal(r1.frames.length, 0, 'partial header yields no frame');
+  assert.equal(r1.consumed, 0);
+  const r2 = p.feed(frame.subarray(1));
+  assert.equal(r2.frames.length, 1);
+  assert.equal(r2.frames[0].type, 0x00);
+  assert.equal(r2.frames[0].payload.toString(), 'PAYLOAD-BYTES');
+  assert.equal(r2.consumed, frame.length, 'consumed = 4-byte prefix + payload');
+  const r3 = p.feed(Buffer.alloc(0));
+  assert.equal(r3.frames.length, 0);
+});
+
+test('createFrameParser: two frames in one chunk dispatch in order', () => {
+  const a = Buffer.from('AAAA');
+  const b = Buffer.from('BBBBBB');
+  const both = Buffer.concat([
+    encodeNbssHeader(0x00, a.length), a,
+    encodeNbssHeader(0x00, b.length), b,
+  ]);
+  const r = createFrameParser().feed(both);
+  assert.equal(r.frames.length, 2);
+  assert.equal(r.frames[0].payload.toString(), 'AAAA');
+  assert.equal(r.frames[1].payload.toString(), 'BBBBBB');
+  assert.equal(r.consumed, both.length);
+});
+
+test('encodeNbssSessionRequest: 1-byte length prefix + 32-byte padded names', () => {
+  const req = encodeNbssSessionRequest();
+  assert.equal(req.length, 66);
+  assert.equal(req[0], 32);
+  assert.equal(req.subarray(1, 33).toString('latin1'), '*SMBSERVER'.padEnd(32, ' '));
+  assert.equal(req[33], 32);
+  assert.equal(req.subarray(34, 66).toString('latin1'), 'GR8R'.padEnd(32, ' '));
+  const req2 = encodeNbssSessionRequest('MY-NAS-SERVER', 'gr8r-backup');
+  assert.equal(req2.subarray(1, 33).toString('latin1'), 'MY-NAS-SERVER'.padEnd(32, ' '));
+  assert.equal(req2.subarray(34, 66).toString('latin1'), 'GR8R-BACKUP'.padEnd(32, ' '), 'names uppercased (firstNetBIOS convention)');
+});
+
+test('SMB2 header round-trips all fields byte-exactly (little-endian)', () => {
+  const hdr = encodeSmb2Header({
+    command: 0x09, // WRITE
+    creditCharge: 0,
+    status: 0,
+    credits: 1,
+    flags: 0x00000008, // SIGNED
+    nextCommand: 0,
+    messageId: 0x1122334455667788n,
+    asyncId: 0n,
+    treeId: 0x0a0b0c0d,
+    sessionId: 0x0102030405060708n,
+    signature: Buffer.alloc(16),
+  });
+  assert.equal(hdr.length, 64);
+  assert.deepEqual([...hdr.subarray(0, 4)], [0xfe, 0x53, 0x4d, 0x42]);
+  assert.equal(hdr.readUInt16LE(4), 64, 'StructureSize');
+  const d = decodeSmb2Header(hdr);
+  assert.equal(d.command, 0x09);
+  assert.equal(d.creditCharge, 0);
+  assert.equal(d.status, 0);
+  assert.equal(d.credits, 1);
+  assert.equal(d.flags, 0x00000008);
+  assert.equal(d.nextCommand, 0);
+  assert.equal(d.messageId, 0x1122334455667788n);
+  assert.equal(d.treeId, 0x0a0b0c0d);
+  assert.equal(d.sessionId, 0x0102030405060708n);
+  assert.deepEqual([...d.signature], new Array(16).fill(0));
+  // Field-offset pins (spec layout): Command u16 @12, Credits @14,
+  // Flags @16, NextCommand @20, MessageId @24, TreeId @36, SessionId @40.
+  assert.equal(hdr.readUInt16LE(12), 0x09);
+  assert.equal(hdr.readUInt16LE(14), 1);
+  assert.equal(hdr.readUInt32LE(16), 0x00000008);
+  assert.equal(hdr.readUInt32LE(20), 0);
+  assert.equal(hdr.readBigUInt64LE(24), 0x1122334455667788n);
+  assert.equal(hdr.readUInt32LE(36), 0x0a0b0c0d);
+  assert.equal(hdr.readBigUInt64LE(40), 0x0102030405060708n);
+  assert.deepEqual([...hdr.subarray(48, 64)], new Array(16).fill(0));
+
+  // Non-zero signature round-trips too.
+  const sig = Buffer.from('0123456789abcdef0123456789abcdef', 'hex');
+  const hdr2 = encodeSmb2Header({ command: 0x0b, credits: 1, messageId: 7n, signature: sig });
+  assert.deepEqual([...decodeSmb2Header(hdr2).signature], [...sig]);
+});
+
+test('async-flag reply decodes without misreading SessionId (AsyncId @32)', () => {
+  const hdr = encodeSmb2Header({
+    command: 0x09, status: 0x00000103, credits: 1,
+    flags: 0x00000002 | 0x00000001, // ASYNC | REPLY
+    messageId: 42n, asyncId: 0xdeadbeefn, sessionId: 0x0102030405060708n,
+  });
+  const d = decodeSmb2Header(hdr);
+  assert.equal(d.flags & 0x00000002, 0x00000002);
+  assert.equal(d.status, 0x00000103);
+  assert.equal(d.asyncId, 0xdeadbeefn);
+  assert.equal(d.sessionId, 0x0102030405060708n);
+  assert.equal(hdr.readBigUInt64LE(32), 0xdeadbeefn, 'AsyncId occupies @32');
+});

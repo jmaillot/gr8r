@@ -257,3 +257,123 @@ export function deriveSigningKey(sessionKey) {
     .update(Buffer.concat([Buffer.from('SMB2AESKey', 'latin1'), Buffer.from([0x00])]))
     .digest().subarray(0, 16);
 }
+
+/* =====================================================================
+   NBSS + SMB2 FRAME CODECS (MS-SMB2 §2.1/§2.2.1.1/§2.2.1.2)
+   =====================================================================
+   NBSS: 4-byte BIG-ENDIAN header — type, flags, 17-bit length
+   (≤ 0x1FFFF; NO Multi-Protocol-Reply negotiation — overflow is a
+   keyed generic protocol violation, T-99-01).
+   SMB2 header: 64-byte LITTLE-ENDIAN, spec field layout:
+     0  ProtocolId FE 53 4D 42      4  StructureSize 64
+     6  CreditCharge                8  Status
+     12 Command (u16)               14 Credits (u16)
+     16 Flags (SIGNED 0x8, ASYNC 0x2, REPLY 0x1)
+     20 NextCommand (0 — no compounding)
+     24 MessageId (u64)             32 AsyncId (async) / Reserved
+     36 TreeId                      40 SessionId (u64)
+     48 Signature (16)                                     */
+const NBSS_MAX_LENGTH = 0x1ffff;
+
+function nbssViolation(message) {
+  const err = new Error(`smb: ${message}`);
+  err.code = 'smbGeneric';
+  err.smbClass = 'generic';
+  return err;
+}
+
+export function encodeNbssHeader(type, length) {
+  if (!Number.isInteger(length) || length < 0 || length > NBSS_MAX_LENGTH) {
+    throw nbssViolation(`NBSS length ${length} exceeds the 17-bit maximum (${NBSS_MAX_LENGTH})`);
+  }
+  const h = Buffer.alloc(4);
+  h[0] = type & 0xff;
+  h[1] = length > 0xffff ? 0x01 : 0x00; // bit 0 = 17th length bit (RFC 1002)
+  h.writeUInt16BE(length & 0xffff, 2);
+  return h;
+}
+
+/* Pure feed-accumulating frame parser (ftp.js createReplyState idiom,
+   translated to byte counts). buffer-in → {frames, consumed}-out;
+   never crashes on partial input; one frame per length prefix. */
+export function createFrameParser() {
+  let buf = Buffer.alloc(0);
+  let consumedTotal = 0;
+  return {
+    feed(chunk) {
+      buf = Buffer.concat([buf, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
+      const frames = [];
+      let consumed = 0;
+      while (buf.length - consumed >= 4) {
+        const type = buf[consumed];
+        const flags = buf[consumed + 1];
+        const length = ((flags & 0x01) << 16) | buf.readUInt16BE(consumed + 2);
+        if (length > NBSS_MAX_LENGTH) throw nbssViolation('NBSS length exceeds the 17-bit maximum');
+        if (buf.length - consumed < 4 + length) break; // partial frame — keep accumulating
+        frames.push({
+          type,
+          flags,
+          payload: Buffer.from(buf.subarray(consumed + 4, consumed + 4 + length)),
+        });
+        consumed += 4 + length;
+      }
+      consumedTotal += consumed;
+      buf = buf.subarray(consumed);
+      return { frames, consumed: consumedTotal };
+    },
+  };
+}
+
+/* NBSS session request (type 0x81): 1-byte length prefix + 32-byte
+   uppercase padded called/calling names (firstNetBIOS style). The
+   client expects 0x82 (positive) / 0x83 (negative) — checked by the
+   session engine in 99-02. */
+export function encodeNbssSessionRequest(calledName = '*SMBSERVER', callingName = 'GR8R') {
+  const pad32 = (s) => Buffer.from(String(s).toUpperCase().slice(0, 32).padEnd(32, ' '), 'latin1');
+  return Buffer.concat([Buffer.from([32]), pad32(calledName), Buffer.from([32]), pad32(callingName)]);
+}
+
+/* SMB2 64-byte header codec. messageId/sessionId/asyncId are BigInt
+   (u64); signature is a 16-byte Buffer (zeros = unsigned). */
+export function encodeSmb2Header({
+  command = 0, creditCharge = 0, status = 0, credits = 1, flags = 0,
+  nextCommand = 0, messageId = 0n, asyncId = 0n, treeId = 0,
+  sessionId = 0n, signature = null,
+} = {}) {
+  const h = Buffer.alloc(64);
+  h[0] = 0xfe; h[1] = 0x53; h[2] = 0x4d; h[3] = 0x42; // FE 'S' 'M' 'B'
+  h.writeUInt16LE(64, 4);
+  h.writeUInt16LE(creditCharge, 6);
+  h.writeUInt32LE(status >>> 0, 8);
+  h.writeUInt16LE(command & 0xffff, 12);
+  h.writeUInt16LE(credits & 0xffff, 14);
+  h.writeUInt32LE(flags >>> 0, 16);
+  h.writeUInt32LE(nextCommand >>> 0, 20);
+  h.writeBigUInt64LE(BigInt(messageId), 24);
+  h.writeBigUInt64LE(BigInt(asyncId), 32);
+  h.writeUInt32LE(treeId >>> 0, 36);
+  h.writeBigUInt64LE(BigInt(sessionId), 40);
+  if (signature) signature.copy(h, 48);
+  return h;
+}
+
+export function decodeSmb2Header(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 64 ||
+      buf[0] !== 0xfe || buf[1] !== 0x53 || buf[2] !== 0x4d || buf[3] !== 0x42) {
+    throw nbssViolation('not an SMB2 frame (bad ProtocolId)');
+  }
+  return {
+    structureSize: buf.readUInt16LE(4),
+    creditCharge: buf.readUInt16LE(6),
+    status: buf.readUInt32LE(8),
+    command: buf.readUInt16LE(12),
+    credits: buf.readUInt16LE(14),
+    flags: buf.readUInt32LE(16),
+    nextCommand: buf.readUInt32LE(20),
+    messageId: buf.readBigUInt64LE(24),
+    asyncId: buf.readBigUInt64LE(32),
+    treeId: buf.readUInt32LE(36),
+    sessionId: buf.readBigUInt64LE(40),
+    signature: Buffer.from(buf.subarray(48, 64)),
+  };
+}
