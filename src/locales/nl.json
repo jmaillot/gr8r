@@ -2237,7 +2237,7 @@
   "err.s3ClockSkew": "S3-klokkwijking — de serverklok loopt uit op de S3-endpoint. Corrigeer de systeemklok en probeer opnieuw",
   "err.s3NoBucket": "S3-bucket niet gevonden — de endpoint antwoordde met NoSuchBucket. Controleer de bucketnaam",
   "err.badCreds": "S3-referenties geweigerd — controleer de access key id en de secret key",
-  "err.unreachable": "S3-endpoint onbereikbaar — controleer de endpoint-URL en de netwerktoegankelijkheid",
+  "err.unreachable": "Eindpunt van de bestemming onbereikbaar — controleer de endpoint-URL en de netwerktoegankelijkheid",
   "err.ftpNotConfigured": "FTP-bestemming is niet geconfigureerd op deze instantie",
   "err.invalidFtpEnabled": "ftpEnabled moet een boolean zijn",
   "err.ftpAuthFailed": "FTP-authenticatie mislukt — controleer de FTP-gebruiker en het wachtwoord",

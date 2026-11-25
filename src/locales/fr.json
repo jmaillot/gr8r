@@ -2277,7 +2277,7 @@
   "err.s3ClockSkew": "Décalage d'horloge S3 — l'horloge du serveur diffère du point de terminaison S3. Corrigez l'horloge système et réessayez",
   "err.s3NoBucket": "Bucket S3 introuvable — le point de terminaison a répondu NoSuchBucket. Vérifiez le nom du bucket",
   "err.badCreds": "Identifiants S3 refusés — vérifiez l'ID de clé d'accès et la clé secrète",
-  "err.unreachable": "Point de terminaison S3 injoignable — vérifiez l'URL du point de terminaison et l'accessibilité du réseau",
+  "err.unreachable": "Point de terminaison de la destination injoignable — vérifiez l’URL du point de terminaison et l’accessibilité du réseau",
   "err.ftpNotConfigured": "La destination FTP n’est pas configurée sur cette instance",
   "err.invalidFtpEnabled": "ftpEnabled doit être un booléen",
   "err.ftpAuthFailed": "Authentification FTP refusée — vérifiez l’utilisateur et le mot de passe FTP",

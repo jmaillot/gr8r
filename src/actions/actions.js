@@ -5296,7 +5296,14 @@ A.backupTaskSave = async () => {
   const res = form.editing ? await api.backupTaskUpdate(form.editing, body) : await api.backupTaskCreate(body);
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
-    return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+    /* SMB probe-refusal remap: the server refuses with the RAW smbClass
+       ('authFailed', 'shareNotFound', …) as the code — without this remap
+       tErr misses the err.* lookup and falls back to the untranslated
+       server raw message (same misattribution family as the err.unreachable
+       S3-wording fix). The err.smb* family is catalogued client-only in the
+       error-codes allowlist (100-03). Non-SMB codes pass through unchanged. */
+    const SMB_CLASS_CODES = { authFailed: 'smbAuthFailed', shareNotFound: 'smbShareNotFound', treeConnectFailed: 'smbTreeConnectFailed', signingRequired: 'smbSigningRequired', noSpace: 'smbNoSpace', nameConflict: 'smbNameConflict', sessionExpired: 'smbSessionExpired', generic: 'smbGeneric' };
+    return toast(tErr(SMB_CLASS_CODES[res.data?.code] || res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
   }
   S.ui.backupTaskForm = null;
   S.ui.backupDeletions = null; // 90-03: ephemeral projection cleared on save — the policy changed, re-preview before trusting

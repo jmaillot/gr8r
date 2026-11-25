@@ -2237,7 +2237,7 @@
   "err.s3ClockSkew": "S3-Uhrabweichung — die Serveruhr geht gegenüber dem S3-Endpunkt falsch. Korrigieren Sie die Systemuhr und versuchen Sie es erneut",
   "err.s3NoBucket": "S3-Bucket nicht gefunden — der Endpunkt antwortete mit NoSuchBucket. Prüfen Sie den Bucket-Namen",
   "err.badCreds": "S3-Anmeldeinformationen abgelehnt — prüfen Sie die Access Key ID und den Secret Key",
-  "err.unreachable": "S3-Endpunkt nicht erreichbar — prüfen Sie die Endpunkt-URL und die Netzwerkerreichbarkeit",
+  "err.unreachable": "Ziel-Endpunkt nicht erreichbar — prüfen Sie die Endpunkt-URL und die Netzwerkerreichbarkeit",
   "err.ftpNotConfigured": "Das FTP-Ziel ist auf dieser Instanz nicht konfiguriert",
   "err.invalidFtpEnabled": "ftpEnabled muss ein boolescher Wert sein",
   "err.ftpAuthFailed": "FTP-Authentifizierung fehlgeschlagen — prüfen Sie FTP-Benutzer und Passwort",

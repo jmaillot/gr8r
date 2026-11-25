@@ -2237,7 +2237,7 @@
   "err.s3ClockSkew": "Desfase de reloj S3 — el reloj del servidor difiere del punto de conexión S3. Corrija el reloj del sistema e inténtelo de nuevo",
   "err.s3NoBucket": "Bucket S3 no encontrado — el punto de conexión respondió NoSuchBucket. Compruebe el nombre del bucket",
   "err.badCreds": "Credenciales S3 rechazadas — compruebe el ID de la clave de acceso y la clave secreta",
-  "err.unreachable": "Punto de conexión S3 inaccesible — compruebe la URL del punto de conexión y la accesibilidad de la red",
+  "err.unreachable": "Punto de conexión de destino inaccesible — compruebe la URL del punto de conexión y la accesibilidad de la red",
   "err.ftpNotConfigured": "El destino FTP no está configurado en esta instancia",
   "err.invalidFtpEnabled": "ftpEnabled debe ser un booleano",
   "err.ftpAuthFailed": "Autenticación FTP rechazada — compruebe el usuario y la contraseña FTP",

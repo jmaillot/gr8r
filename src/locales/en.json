@@ -2237,7 +2237,7 @@
   "err.s3ClockSkew": "S3 clock skew — the server clock drifts from the S3 endpoint. Fix the system clock and retry",
   "err.s3NoBucket": "S3 bucket not found — the endpoint answered NoSuchBucket. Check the bucket name",
   "err.badCreds": "S3 credentials rejected — check the access key id and the secret key",
-  "err.unreachable": "S3 endpoint unreachable — check the endpoint URL and the network reachability",
+  "err.unreachable": "Destination endpoint unreachable — check the endpoint URL and the network reachability",
   "err.ftpNotConfigured": "FTP destination is not configured on this instance",
   "err.invalidFtpEnabled": "ftpEnabled must be a boolean",
   "err.ftpAuthFailed": "FTP authentication failed — check the FTP user and password",
