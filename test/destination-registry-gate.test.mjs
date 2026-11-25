@@ -29,12 +29,17 @@ test('registry seam: export/backup.js exports setBackupDestination and NOT setBa
   assert.match(b, /manualPrefix/, 'the manual-run prefix is DECLARED BY the destination (D-01)');
 });
 
-test('registry order: s3 is installed via setBackupDestination and registered FIRST (D-04)', () => {
+test('registry order: canonical registration s3, ftp, smb in server.js (D-04)', () => {
   const s = serverSrc();
   const i3 = s.indexOf("setBackupDestination('s3'");
+  const iftp = s.indexOf("setBackupDestination('ftp'");
+  const ismb = s.indexOf("setBackupDestination('smb'");
   assert.ok(i3 !== -1, 's3 is installed via setBackupDestination');
-  const first = s.indexOf('setBackupDestination(');
-  assert.equal(first, i3, 's3 must be the FIRST registered destination — D-04 precedence (s3 > ftp > smb)');
+  assert.ok(iftp !== -1, 'ftp dormant slot is registered');
+  assert.ok(ismb !== -1, 'smb dormant slot is registered');
+  assert.ok(i3 < iftp && iftp < ismb, `registration order must be s3 < ftp < smb (got ${i3}, ${iftp}, ${ismb}) — D-04 precedence`);
+  assert.match(s, /manualPrefix: 'backup-ftp\/'/, 'ftp declares its manual prefix (D-01, unused in 96)');
+  assert.match(s, /manualPrefix: 'backup-smb\/'/, 'smb declares its manual prefix (D-01, unused in 96)');
 });
 
 test('S3 install shape: descriptor with verbatim upload closure + declared manualPrefix (D-01/D-06)', () => {
@@ -72,6 +77,24 @@ test('upload slot: ordered registry iteration with the dormant-slot skip contrac
   assert.match(b, /typeof dest\.upload !== 'function'\) continue;/, 'slots whose upload fn is unset are SKIPPED — the dormant-slot contract phases 97/100 fill');
   assert.match(b, /setStage\('uploading'\)/, 'the uploading stage transition survives');
   assert.match(b, /downloadToStaged\(provided\.config, key, sha256/, 'the D-88-8 stream-back verify survives');
+});
+
+test('dormant custody: FTP/SMB boot-frozen consts in server.js; NO client modules created (D-05)', () => {
+  const s = serverSrc();
+  for (const name of ['FTP_HOST', 'FTP_PORT', 'FTP_USER', 'FTP_PASSWORD', 'FTP_SECURE', 'FTP_PASV_HOST', 'FTP_INSECURE']) {
+    assert.match(s, new RegExp(`const ${name} = `), `FTP ${name} boot-frozen const present`);
+  }
+  for (const name of ['SMB_HOST', 'SMB_SHARE', 'SMB_USER', 'SMB_PASSWORD']) {
+    assert.match(s, new RegExp(`const ${name} = `), `SMB ${name} boot-frozen const present`);
+  }
+  // enabled derivation mirrors the S3 pattern
+  assert.match(s, /enabled: !!\(FTP_HOST && FTP_USER && FTP_PASSWORD\)/, 'ftp enabled derives from env (D-05)');
+  assert.match(s, /enabled: !!\(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD\)/, 'smb enabled derives from env (D-05)');
+  // warn parity, NOT the S3 hard boot-refuse (SC-4)
+  assert.match(s, /partially set — destination disabled/, 'partial FTP/SMB env warns at boot (SC-4)');
+  // NO client modules this phase (D-05 hard rule)
+  assert.ok(!fs.existsSync(path.join(ROOT, 'export', 'ftp.js')), 'export/ftp.js must NOT exist in 96');
+  assert.ok(!fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js must NOT exist in 96');
 });
 
 test('the old setter name is gone from the whole codebase (tests included — OQ-1 knowingly-updated twins)', () => {

@@ -220,6 +220,24 @@ const S3_PATH_STYLE =
         ? false
         : null; // sentinel → boot-refuse
 
+/* Phase 96 (D-05): dormant FTP/SMB destination env — boot-frozen like the
+   S3 pair. Read ONCE here; no process.env reads after boot. No FTP/SMB
+   client exists yet (phases 98/100 install them) — these consts only
+   custody the raw values and feed the enabled derivation the registry and
+   /api/config expose. Raw values never leave these consts (D-88-11
+   custody / V14): no log line or error text carries a key. */
+const FTP_HOST = String(process.env.FTP_HOST || '').trim();
+const FTP_PORT = Number.parseInt(process.env.FTP_PORT || '', 10) || 21;
+const FTP_USER = String(process.env.FTP_USER || '').trim();
+const FTP_PASSWORD = String(process.env.FTP_PASSWORD || '');
+const FTP_SECURE = process.env.FTP_SECURE === 'true';
+const FTP_PASV_HOST = String(process.env.FTP_PASV_HOST || '').trim();
+const FTP_INSECURE = process.env.FTP_INSECURE === 'true';
+const SMB_HOST = String(process.env.SMB_HOST || '').trim();
+const SMB_SHARE = String(process.env.SMB_SHARE || '').trim();
+const SMB_USER = String(process.env.SMB_USER || '').trim();
+const SMB_PASSWORD = String(process.env.SMB_PASSWORD || '');
+
 /* ------------------------------ LOG_LEVEL ------------------------------- */
 /* Zero-dependency leveled logging (Kanzo #9): one ladder — debug < info
    (default) < warn < error — selected by the LOG_LEVEL env variable. Every
@@ -244,6 +262,16 @@ const logDebug = msg => logLine('debug', msg);
 const logInfo = msg => logLine('info', msg);
 const logWarn = msg => logLine('warn', msg);
 const logError = msg => logLine('error', msg);
+/* Phase 96 (D-05/SC-4): partial-config warn parity for the dormant
+   destinations — a HALF-set FTP/SMB env pair disables the slot and warns
+   at boot. Unlike S3's S3_PATH_STYLE hard boot-refuse (the S3 sentinel),
+   absent/partial FTP/SMB env NEVER exits the process (SC-4 wording). */
+if ((FTP_HOST || FTP_USER || FTP_PASSWORD) && !(FTP_HOST && FTP_USER && FTP_PASSWORD)) {
+  logWarn('backup ftp: FTP_HOST/FTP_USER/FTP_PASSWORD partially set — destination disabled (all three required)');
+}
+if ((SMB_HOST || SMB_SHARE || SMB_USER || SMB_PASSWORD) && !(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD)) {
+  logWarn('backup smb: SMB_HOST/SMB_SHARE/SMB_USER/SMB_PASSWORD partially set — destination disabled (all four required)');
+}
 
 /* Phase 78 (T-78-01): boot-refuse on an invalid WORKSPACE_CREATION token — a
    typo must never silently weaken or open the gate. Runs before listen (the
@@ -3832,6 +3860,24 @@ setBackupDestination('s3', {
     }
     return { config: S3.config() };
   },
+});
+
+/* Phase 96 (D-05): dormant ftp/smb registry slots — canonical order s3,
+   ftp, smb (D-04), registered AFTER s3. enabled derives from the
+   boot-frozen env consts (D-05); upload/verify/probe/fetchToStaged are
+   deliberately UNSET — phases 98/100 install the real clients. The
+   manualPrefixes are DECLARED per-destination (D-01) but never used in 96.
+   NO fake probe, NO UI render, NO export/ftp.js or export/smb.js this
+   phase (D-05); /api/config exposes ftpEnabled/smbEnabled as false in 96. */
+setBackupDestination('ftp', {
+  label: 'FTP',
+  enabled: !!(FTP_HOST && FTP_USER && FTP_PASSWORD), // derived from env — D-05
+  manualPrefix: 'backup-ftp/', // declared, never used in 96 (D-05)
+});
+setBackupDestination('smb', {
+  label: 'SMB',
+  enabled: !!(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD), // derived from env — D-05
+  manualPrefix: 'backup-smb/', // declared, never used in 96 (D-05)
 });
 
 export async function runBackupSchedulerPass({ now: at } = {}) {
