@@ -5,16 +5,16 @@ milestone_name: Backup Destinations SMB & FTP
 current_phase: 99
 current_phase_name: SMB 2.1 Client (Spike-Hardened)
 status: executing
-stopped_at: Completed 98-04-PLAN.md
-last_updated: "2026-11-25T15:13:31.749Z"
+stopped_at: Completed-99-01
+last_updated: "2026-11-25T15:52:23.336Z"
 last_activity: 2026-11-25
 last_activity_desc: Phase 99 execution started
-state_head: bf44ec7c5a00bbb655efefa1144c0477228c0e3d
+state_head: 156f9e7154e7fe7132c86c8f32fdfb5b71f53bf1
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 20
 ---
 
@@ -29,8 +29,8 @@ progress:
 ## Current Position
 
 Phase: 99 (SMB 2.1 Client (Spike-Hardened)) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 99
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-11-25 — Phase 99 execution started
 
 ## Performance Metrics
@@ -54,6 +54,8 @@ Last activity: 2026-11-25 — Phase 99 execution started
 | Phase 98 P02 | 38m | 3 tasks | 7 files |
 | Phase 98 P03 | 31m | 3 tasks | 11 files |
 | Phase 98 P04 | 34m | 3 tasks | 5 files |
+| Phase 99 P01 | 37m | 3 tasks | 2 files |
+| Phase 99 P01 | 37m | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -100,6 +102,7 @@ Last activity: 2026-11-25 — Phase 99 execution started
 - [Phase 98]: 98-03: ftpProbe refusal keys toast via tErr over the 98-02 err.ftp* catalogue; only ftpProbeSuccess/Unreachable are new toast keys; no deleteFailed branch (hard-refusal parity)
 - [Phase 98]: 98-04: ftp restore read-back twins keyed on ftp_uploaded===1 && opts.ftpConfig via 97 fetchToStaged (sha256, T-98-06); overwrite unit has no read-back seam — untouched
 - [Phase 98]: 98-04: e2e backup leg mirrors the ftp arm at client level vs real vsftpd (fauria image, pasv ports documented) — runExport loop already proven in-process by 98-01
+- [Phase 99]: 99-01: SMB2 header offsets follow MS-SMB2 §2.2.1.1 spec layout (research §2 map mis-transcribed by one byte); davenport 04b8e0ba NTLMv2 value DOES reproduce with correct MD4 (research erratum claim reversed) but is not pinned — independent hand-written chain pin used instead; type-3 data block @64 (LM/NT/user/ws, no session-key buffer); destination-registry-gate updated: smb.js may exist, no wiring until 100
 
 ### Blockers
 
@@ -107,8 +110,8 @@ Last activity: 2026-11-25 — Phase 99 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-11-25T14:20:09.876Z
-**Stopped at:** Completed 98-04-PLAN.md
+**Last session:** 2026-11-25T15:52:22.752Z
+**Stopped at:** Completed-99-01
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)

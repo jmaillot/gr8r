@@ -26,7 +26,7 @@
 
 ### SMB destination (SMB)
 
-- [ ] **SMB-01**: Hand-rolled SMB2.1-only client (export/smb.js, ~1,400–1,600 LOC, node:crypto only) — NEGOTIATE/SESSION_SETUP (NTLMv2, hand-rolled MD4 pinned by RFC 1320 vectors)/TREE_CONNECT/CREATE/serial 60KB WRITE×N/CLOSE + READ for staged download; unconditional HMAC-SHA256 signing; NTLM type-3 material scrubbed from errors/logs (V14 parity).
+- [x] **SMB-01**: Hand-rolled SMB2.1-only client (export/smb.js, ~1,400–1,600 LOC, node:crypto only) — NEGOTIATE/SESSION_SETUP (NTLMv2, hand-rolled MD4 pinned by RFC 1320 vectors)/TREE_CONNECT/CREATE/serial 60KB WRITE×N/CLOSE + READ for staged download; unconditional HMAC-SHA256 signing; NTLM type-3 material scrubbed from errors/logs (V14 parity).
 - [ ] **SMB-02**: SMB destination wired end-to-end — same seams as FTP-02 (toggle, staged upload after local publish, SIZE+sidecar verify per R-4, badges, restore read-back, probe with SMB error classes).
 
 ### Verification & tests (TEST)
@@ -56,6 +56,6 @@
 | DEST-03 | Phase 98 (FTP classes + pattern), Phase 100 (SMB classes) | Complete |
 | FTP-01 | Phase 97 | Complete |
 | FTP-02 | Phase 98 | Complete |
-| SMB-01 | Phase 99 | Pending |
+| SMB-01 | Phase 99 | Complete |
 | SMB-02 | Phase 100 | Pending |
 | TEST-01 | Distributed — byte-gate pin Phase 96; golden vectors Phases 97/99; e2e recipes Phases 98/100 | Complete |

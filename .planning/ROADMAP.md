@@ -103,12 +103,12 @@ Plans:
 4. A spike report records the actual LOC vs the ~1,400–1,600 MEDIUM-confidence estimate and any dialect surprises; dialect-rejection exposure (SMB2-min-3.0 fleets) is documented as a known risk, not silently absorbed.
 5. Package.json diff shows zero new dependencies; full suite stays at baseline.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 **Risk**: SMB LOC estimate is MEDIUM confidence (research) — spike/golden-vector phase is the containment; fleet dialect coverage (SMB 2.1 minimum on home-NAS fleets) is MEDIUM confidence — DEPLOY.md note + feedback loop required.
 
 Plans:
 **Wave 1**
-- [ ] 99-01-PLAN.md — Crypto + codec pure layer: MD4/NTLMv2/signing-key golden vectors, NBSS/SMB2 codecs, smbClass error factory + scrub (SMB-01, TEST-01)
+- [x] 99-01-PLAN.md — Crypto + codec pure layer: MD4/NTLMv2/signing-key golden vectors, NBSS/SMB2 codecs, smbClass error factory + scrub (SMB-01, TEST-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 99-02-PLAN.md — Session engine + promise command surface + retry envelope + scrub gates + 99-SPIKE.md (SMB-01, TEST-01)
@@ -135,5 +135,5 @@ Plans:
 | 96. Cross-Destination Seam Generalization | 2/2 | In Progress|  |
 | 97. FTP/FTPS Client (Zero-Dep) | 1/1 | In Progress|  |
 | 98. FTP Destination End-to-End | 4/4 | In Progress|  |
-| 99. SMB 2.1 Client (Spike-Hardened) | 0/? | Not started | - |
+| 99. SMB 2.1 Client (Spike-Hardened) | 1/2 | In Progress|  |
 | 100. SMB Destination End-to-End + Remote Prune | 0/? | Not started | - |
