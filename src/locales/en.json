@@ -2242,7 +2242,6 @@
   "err.ftpPassiveFailed": "FTP passive mode failed — check the passive address and the server port range",
   "err.ftpPathNotFound": "FTP path not found — check the remote directory",
   "err.ftpQuotaExceeded": "The FTP server rejected the write — quota or permissions exceeded",
-  "err.insecureTlsWarning": "The FTP connection does not use TLS — credentials travel unencrypted",
   "toast.s3ProbeSuccess": "S3 destination verified",
   "toast.s3ProbeDeleteFailed": "S3 probe warning: the marker object could not be deleted",
   "toast.s3ProbeUnreachable": "S3 endpoint unreachable",

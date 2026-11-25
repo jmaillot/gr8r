@@ -2242,7 +2242,6 @@
   "err.ftpPassiveFailed": "FTP-Passivmodus fehlgeschlagen — prüfen Sie die passive Adresse und den Portbereich des Servers",
   "err.ftpPathNotFound": "FTP-Pfad nicht gefunden — prüfen Sie das entfernte Verzeichnis",
   "err.ftpQuotaExceeded": "Der FTP-Server hat den Schreibvorgang abgelehnt — Quota oder Berechtigungen überschritten",
-  "err.insecureTlsWarning": "Die FTP-Verbindung verwendet kein TLS — Anmeldeinformationen werden unverschlüsselt übertragen",
   "toast.s3ProbeSuccess": "S3-Ziel überprüft",
   "toast.s3ProbeDeleteFailed": "S3-Probe-Warnung: das Markerobjekt konnte nicht gelöscht werden",
   "toast.s3ProbeUnreachable": "S3-Endpunkt nicht erreichbar",

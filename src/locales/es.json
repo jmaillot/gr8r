@@ -2242,7 +2242,6 @@
   "err.ftpPassiveFailed": "Error en el modo pasivo FTP — compruebe la dirección pasiva y el rango de puertos del servidor",
   "err.ftpPathNotFound": "Ruta FTP no encontrada — compruebe el directorio remoto",
   "err.ftpQuotaExceeded": "El servidor FTP rechazó la escritura — cuota o permisos excedidos",
-  "err.insecureTlsWarning": "La conexión FTP no usa TLS — las credenciales viajan sin cifrar",
   "toast.s3ProbeSuccess": "Destino S3 verificado",
   "toast.s3ProbeDeleteFailed": "Advertencia de prueba S3: el objeto marcador no pudo eliminarse",
   "toast.s3ProbeUnreachable": "Punto de conexión S3 inaccesible",
