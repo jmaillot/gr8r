@@ -88,7 +88,7 @@ import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRu
 import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
-import { connectFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring
+import { connectFtp, probeFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03)
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
@@ -9428,6 +9428,40 @@ async function handleApi(req, res, url) {
     const result = await probeS3(S3.config());
     await auditBackupTask(user, result.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', user.id, result.key);
     logInfo(`s3 probe: ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
+    return json(res, 200, result);
+  }
+
+  /* -------------- FTP probe route (Phase 98, D-02, DEST-03) --------------
+     POST /api/backup/tasks/ftp-probe clones the S3 probe funnel above: the
+     guard chain is VERBATIM in order — sameOrigin → requireUser →
+     operator-keyed throttle → CAP.BACKUP_MANAGE → FTP.enabled → probeFtp —
+     every refusal keyed AND audited (T-98-03). probeFtp's keyed result
+     returns VERBATIM (success / ftpAuthFailed / ftpTlsFailed /
+     ftpPassiveFailed / ftpPathNotFound / ftpQuotaExceeded / unreachable /
+     deleteFailed) with httpWarning riding for the plain/insecure-TLS
+     warning (R-3 parity with the S3 httpWarning).
+     Pitfall 7: ftp has NO deleteFailed accept-with-warning analog — the
+     marker DELE failing means the probe cannot prove marker cleanup, so a
+     DELE failure is a HARD refuse (ok:false); warning:true on the client
+     shape is informational only.
+     Audit detail carries result.key only — never the config (Pitfall 5 /
+     T-98-04); the 97 scrub covers client error text. */
+  if (pathname === '/api/backup/tasks/ftp-probe' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`backupprobe|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'backup_probe_refused:backupManageRequired');
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can probe the FTP destination');
+    }
+    if (!FTP.enabled) {
+      await auditBackupTask(user, 'backup_probe_refused:ftpNotConfigured');
+      return fail(res, 400, 'ftpNotConfigured', 'FTP destination is not configured on this instance');
+    }
+    const result = await probeFtp(FTP.config());
+    await auditBackupTask(user, result.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', user.id, result.key);
+    logInfo(`ftp probe: ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
     return json(res, 200, result);
   }
 

@@ -122,6 +122,60 @@ test('upload loop: ftp failure names ftp via the RAW slice — composed branch u
 });
 
 /* =====================================================================
+   Phase 98 plan 02 — Task 1 pins: the /api/backup/tasks/ftp-probe route.
+   Guard-chain order is pinned TOKEN-FOR-TOKEN against the S3 probe
+   (D-02 clone contract); audit funnel + keyed refusals per T-98-03/04.
+   ===================================================================== */
+
+test('ftp probe route: pathname + POST method, cloned after the s3 probe (D-02)', () => {
+  const s = serverSrc();
+  const ftpRoute = s.indexOf("pathname === '/api/backup/tasks/ftp-probe' && method === 'POST'");
+  const s3Route = s.indexOf("pathname === '/api/backup/s3/probe' && method === 'POST'");
+  assert.ok(s3Route !== -1, 'the s3 probe route exists');
+  assert.ok(ftpRoute > s3Route, 'the ftp probe route is cloned after the s3 probe');
+});
+
+test('ftp probe route: guard-chain order matches the S3 probe token-for-token (T-98-03)', () => {
+  const s = serverSrc();
+  const slice = (name) => {
+    const i = s.indexOf(`pathname === '${name}' && method === 'POST'`);
+    return s.slice(i, i + 1200);
+  };
+  const s3 = slice('/api/backup/s3/probe');
+  const ftp = slice('/api/backup/tasks/ftp-probe');
+  const tokens = [
+    /if \(!sameOrigin\(req\)\) return fail\(res, 403, 'crossOriginRejected'/,
+    /const user = await requireUser\(req, res\);\n    if \(!user\) return;/,
+    /tooMany\(`backupprobe\|\$\{user\.id\}`, 10, 15 \* 60 \* 1000\)/,
+    /hasInstanceRole\(user\.id, CAP\.BACKUP_MANAGE\)/,
+    /auditBackupTask\(user, 'backup_probe_refused:backupManageRequired'\)/,
+    /fail\(res, 403, 'backupManageRequired'/,
+  ];
+  for (const t of tokens) {
+    assert.match(s3, t, `s3 probe carries ${t}`);
+    assert.match(ftp, t, `ftp probe carries the SAME token (verbatim clone)`);
+  }
+  assert.match(ftp, /if \(!FTP\.enabled\) \{[\s\S]*?backup_probe_refused:ftpNotConfigured[\s\S]*?fail\(res, 400, 'ftpNotConfigured'/, 'the FTP.enabled gate refuses keyed AND audited');
+  assert.ok(s.indexOf('FTP.enabled') < s.indexOf('probeFtp(FTP.config())') || true, 'enabled gate precedes the probe call');
+  const ftpSlice = slice('/api/backup/tasks/ftp-probe');
+  assert.ok(ftpSlice.indexOf('if (!FTP.enabled)') < ftpSlice.indexOf('probeFtp(FTP.config())'), 'enabled gate BEFORE probeFtp');
+  assert.ok(ftpSlice.indexOf('tooMany(') < ftpSlice.indexOf('hasInstanceRole('), 'throttle BEFORE the capability gate');
+  assert.ok(ftpSlice.indexOf('sameOrigin') < ftpSlice.indexOf('requireUser'), 'sameOrigin FIRST');
+});
+
+test('ftp probe route: audit funnel tokens + key-only detail (Pitfall 5/T-98-04)', () => {
+  const s = serverSrc();
+  const i = s.indexOf("pathname === '/api/backup/tasks/ftp-probe' && method === 'POST'");
+  const route = s.slice(s.lastIndexOf('/* --------------', i), s.indexOf('backup run endpoints', i));
+  assert.match(route, /result\.ok \? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed'/, 'both probe outcomes audited');
+  assert.match(route, /user\.id, result\.key\)/, 'audit detail carries result.key ONLY');
+  assert.ok(!/FTP_PASSWORD|FTP_USER|FTP_HOST/.test(route.slice(route.indexOf('probeFtp'))), 'no credential const appears after the probe call');
+  assert.match(route, /json\(res, 200, result\)/, 'the keyed probeFtp result returns verbatim');
+  assert.match(route, /NO deleteFailed accept-with-warning analog[\s\S]*?HARD refuse/, 'the NO-deleteFailed-analog divergence is documented in the route comment');
+});
+
+
+/* =====================================================================
    Functional pipeline tests — the REAL runExport upload loop against
    an in-process scripted mock FTP server (97 fakeFtp harness idiom,
    extended with SIZE). The descriptor injected here carries the SAME
