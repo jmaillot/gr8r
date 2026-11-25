@@ -73,6 +73,7 @@ import zlib from 'node:zlib';
 import { backupsRoot, TABLES, runExport } from './backup.js';
 import { downloadToStaged, s3BackupKey } from './s3.js';
 import { fetchToStaged } from './ftp.js'; // Phase 98 (98-04): the 97 client restore seam — ftp read-back twins
+import { fetchSmbToStaged } from './smb.js'; // Phase 100 (100-05): the 99 client restore seam — smb read-back twins
 
 const BLOCK = 512;
 const MAX_USTAR_SIZE = 0o77777777777; // 8 GiB - 1 — the writer's own ceiling (ustarHeader)
@@ -2082,6 +2083,17 @@ export async function runRestore(opts = {}) {
       archivePath = back.tmpPath;
       stagedTmp = back.tmpPath;
     }
+    /* Phase 100 (100-05): smb read-back twin — an smb_uploaded run whose
+       local archive rotated away comes home through the 99 client's
+       fetchSmbToStaged (single-shot + sha256, keyed on smb_uploaded === 1).
+       Key derivation mirrors the 100-02 upload arm: task-prefix + filename.
+       Local-first ordering preserved — this gate is additive below it.
+       sha256 verification lives in fetchSmbToStaged (100-01) — no re-verify. */
+    if (!archivePath && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
+      const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    }
     if (!archivePath || !fs.existsSync(archivePath)) {
       throw keyed('restoreArchiveMissing', 'restore: archive not found at either destination');
     }
@@ -2331,6 +2343,21 @@ export async function restoreInstanceUnit(opts = {}) {
     } catch (err) {
       dropStagedTmp();
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
+    }
+  }
+  /* Phase 100 (100-05): smb read-back twin — GUARDED like the s3/ftp twins:
+     the seam throw routes through failWith so the funnel releases the
+     restore_lock. fetchSmbToStaged enforces sha256 (T-100-10) — mismatch
+     refuses the restore, no unverified bytes reach it. Key derivation
+     mirrors the 100-02 upload arm (task-prefix + filename). */
+  if (!archivePath && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
+    try {
+      const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    } catch (err) {
+      dropStagedTmp();
+      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
   if (!archivePath || !fs.existsSync(archivePath)) {
