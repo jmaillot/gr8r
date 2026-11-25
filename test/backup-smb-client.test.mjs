@@ -372,7 +372,7 @@ test('tracer: full handshake (NEGOTIATE → SESSION_SETUP×2 → TREE_CONNECT �
     await smb.close();
 
     const cmds = server.commands;
-    const order = [SMB2_COM.NEGOTIATE, SMB2_COM.SESSION_SETUP, SMB2_COM.SESSION_SETUP, SMB2_COM.TREE_CONNECT, SMB2_COM.ECHO];
+    const order = [SMB2_COM.NEGOTIATE, SMB2_COM.SESSION_SETUP, SMB2_COM.SESSION_SETUP, SMB2_COM.TREE_CONNECT, SMB2_COM.ECHO, SMB2_COM.TREE_DISCONNECT, SMB2_COM.LOGOFF];
     assert.equal(cmds.length, order.length, `exactly ${order.length} commands recorded (got ${cmds.length}: ${cmds.map((c) => c.command).join(',')})`);
     order.forEach((cmd, i) => assert.equal(cmds[i].command, cmd, `command #${i} is ${cmd} in order`));
     /* MessageId correlation: strictly increasing from 0. */
@@ -446,6 +446,99 @@ test('NBSS session request refused (0x83) → keyed generic', async () => {
   try {
     const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'u', domain: 'D', password: 'p', share: '\\\\h\\s' });
     await assert.rejects(smb.connect(), (err) => err.smbClass === 'generic');
+  } finally {
+    await server.close();
+  }
+});
+
+/* ------------- Task 2: multi-chunk WRITE / READ / rm / close ------------- */
+
+test('multi-chunk upload: serial ≤60416 WRITE frames with strictly increasing offsets', async () => {
+  const payload = Buffer.alloc(150_000);
+  for (let i = 0; i < payload.length; i++) payload[i] = i % 251;
+  const server = fakeSmb();
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    await smb.connect();
+    await smb.write('/backup/big.bin', payload);
+    await smb.close();
+
+    const writes = server.writes;
+    assert.equal(writes.length, 3, `150000 bytes → 3 chunks (60416+60416+29168); got ${writes.length}`);
+    assert.deepEqual(writes.map((w) => w.offset), [0, 60416, 120832], 'offsets advance by acked bytes — no skip, no repeat');
+    for (const w of writes) assert.ok(w.length <= 60416, `no oversized WRITE frame (${w.length})`);
+    assert.equal(writes[2].length, 29168, 'final chunk carries exactly the remainder');
+    /* Command order includes TREE_DISCONNECT before LOGOFF. */
+    const cmds = server.commands.map((c) => c.command);
+    const disIdx = cmds.indexOf(SMB2_COM.TREE_DISCONNECT);
+    const logIdx = cmds.indexOf(SMB2_COM.LOGOFF);
+    assert.ok(disIdx > -1 && logIdx > disIdx, 'close() sends TREE_DISCONNECT then LOGOFF');
+    /* All signed commands carry valid signatures. */
+    for (const c of server.commands) {
+      if (c.sigValid !== null) assert.equal(c.sigValid, true, `cmd=${c.command} signature valid`);
+    }
+  } finally {
+    await server.close();
+  }
+});
+
+test('partial-write knob: reply Count < chunk → re-issue from the un-acked offset (no hang, no repeat)', async () => {
+  const payload = Buffer.from('partial-write round-trip payload bytes');
+  const server = fakeSmb({ partialWrite: true });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    await smb.connect();
+    await smb.write('/backup/partial.bin', payload);
+    const back = await smb.read('/backup/partial.bin');
+    assert.ok(back.equals(payload), 'read-back equality despite halved acks');
+    /* Offset continuity: every WRITE starts where the previous ACK
+       left off (offset = sum of prior counts). */
+    let expect = 0;
+    for (const w of server.writes) {
+      assert.equal(w.offset, expect, `WRITE re-issued from the un-acked offset (${w.offset} vs ${expect})`);
+      expect += w.count;
+    }
+    assert.equal(expect, payload.length, 'sum of acked counts equals the payload length');
+  } finally {
+    await server.close();
+  }
+});
+
+test('write-then-read round trip + rm recorded over the mock', async () => {
+  const payload = Buffer.from('gr8r smb round trip \xC2\xA9 bytes');
+  const server = fakeSmb();
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    await smb.connect();
+    await smb.write('/backup/rt.bin', payload);
+    const back = await smb.read('/backup/rt.bin');
+    assert.ok(back.equals(payload), 'read-back equality');
+    await smb.rm('/backup/rt.bin');
+    await smb.close();
+    /* rm = CREATE (delete-on-close) → CLOSE. */
+    const cmds = server.commands.map((c) => c.command);
+    assert.ok(cmds.includes(SMB2_COM.CREATE), 'CREATE recorded for rm');
+    const disIdx = cmds.indexOf(SMB2_COM.TREE_DISCONNECT);
+    assert.ok(cmds.indexOf(SMB2_COM.LOGOFF) > disIdx, 'TREE_DISCONNECT → LOGOFF order');
+  } finally {
+    await server.close();
+  }
+});
+
+test('single-chunk small write: exactly one ≤60416 WRITE frame, read matches', async () => {
+  const payload = Buffer.from('tiny');
+  const server = fakeSmb();
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+    await smb.connect();
+    await smb.write('/backup/tiny.bin', payload);
+    assert.deepEqual(server.writes.map((w) => [w.offset, w.length]), [[0, 4]], 'one WRITE frame');
+    assert.ok((await smb.read('/backup/tiny.bin')).equals(payload));
+    await smb.close();
   } finally {
     await server.close();
   }

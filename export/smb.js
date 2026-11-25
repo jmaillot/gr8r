@@ -662,6 +662,30 @@ function ntTimestamp() {
   return (BigInt(Date.now()) + 11644473600000n) * 10000n;
 }
 
+/* CREATE access masks / dispositions / options (MS-SMB2 §2.2.13 /
+   §2.2.94). GENERIC masks are the safest against Samba ACL checks. */
+const GENERIC_READ = 0x80000000;
+const GENERIC_WRITE = 0x40000000;
+const DELETE_ACCESS = 0x00010000;
+const FILE_OPEN_IF = 0x00000001;
+const FILE_DELETE_ON_CLOSE = 0x00001000;
+
+/* Reply-body parsers (spec structs; see provenance in the engine
+   header). CREATE: FileId (16 bytes) at body offset 64 (§2.2.14.2).
+   WRITE: Count u32 at body offset 4 (§2.2.22). READ: DataOffset u16@2,
+   DataLength u32@4 (§2.2.20) — data at frame offset DataOffset. */
+function fileIdFromCreateReply(body) {
+  return Buffer.from(body.subarray(64, 80));
+}
+function countFromWriteReply(body) {
+  return body.readUInt32LE(4);
+}
+function dataFromReadReply(res) {
+  const dataOffset = res.body.readUInt16LE(2);
+  const dataLength = res.body.readUInt32LE(4);
+  return res.frame.subarray(dataOffset, dataOffset + dataLength);
+}
+
 /* ---------------------------------------------------------------------
    SESSION ENGINE (one command in flight; verify-before-dispatch)
    --------------------------------------------------------------------- */
@@ -858,6 +882,59 @@ async function treeConnect(s) {
   s.treeId = res.header.treeId;
 }
 
+/* ---------------------------------------------------------------------
+   COMMAND LAYER (serial, offset-tracked) — D-01 surface bodies
+   --------------------------------------------------------------------- */
+
+async function createFile(s, name, { access, disposition, createOptions = 0 }) {
+  const res = await sendRequest(s, SMB2_COM.CREATE, buildCreateRequest(name, { access, disposition, createOptions }), { context: `create ${name}` });
+  expectOk(res, `create ${name}`);
+  if ((res.header.credits ?? 0) < 1) throw genericError(`server granted zero credits on CREATE ${name}`);
+  return fileIdFromCreateReply(res.body);
+}
+
+/* Serial WRITE×N: ≤60KB chunks, Offset advances by the bytes the
+   server ACKNOWLEDGED (Count from the reply) — a partial final write
+   re-issues from the un-acked offset; the chain never skips or repeats
+   acknowledged bytes. WRITE chains never restart from 0. */
+async function writeFile(s, fileId, buffer) {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const chunk = buffer.subarray(offset, offset + SMB_MAX_WRITE_BYTES);
+    const res = await sendRequest(s, SMB2_COM.WRITE, buildWriteRequest(fileId, chunk, offset), { context: 'write' });
+    expectOk(res, `write at offset ${offset}`);
+    if ((res.header.credits ?? 0) < 1) throw genericError('server granted zero credits on WRITE');
+    const count = countFromWriteReply(res.body);
+    if (count <= 0 || count > chunk.length) {
+      throw genericError(`WRITE acknowledged an impossible byte count (${count} for a ${chunk.length}-byte chunk)`);
+    }
+    offset += count;
+  }
+  return buffer.length;
+}
+
+/* READ loop to EOF: DataOffset/DataLength per reply; a short read
+   (< requested) is the EOF marker. Returns the concatenated buffer. */
+async function readFile(s, fileId) {
+  let offset = 0;
+  const parts = [];
+  for (;;) {
+    const res = await sendRequest(s, SMB2_COM.READ, buildReadRequest(fileId, SMB_MAX_WRITE_BYTES, offset), { context: `read at offset ${offset}` });
+    expectOk(res, `read at offset ${offset}`);
+    const data = dataFromReadReply(res);
+    if (data.length === 0) break;
+    parts.push(data);
+    offset += data.length;
+    if (data.length < SMB_MAX_WRITE_BYTES) break;
+  }
+  return Buffer.concat(parts);
+}
+
+async function closeFile(s, fileId, context = 'close') {
+  const res = await sendRequest(s, SMB2_COM.CLOSE, buildCloseRequest(fileId), { context });
+  expectOk(res, context);
+}
+
 async function establish(config, opts) {
   const port = config.port ?? 445;
   const socket = net.connect(port, config.host);
@@ -915,6 +992,38 @@ export function connectSmb(config, opts = {}) {
 
   const smb = {
     connect: async () => { await ctlP; },
+    write: async (path, buffer) => {
+      const s = await ensure();
+      const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+      const fileId = await createFile(s, path, { access: GENERIC_WRITE, disposition: FILE_OPEN_IF });
+      try {
+        await writeFile(s, fileId, buf);
+      } finally {
+        await closeFile(s, fileId, `close after write ${path}`).catch(() => { /* close failure never masks the write result */ });
+      }
+      return true;
+    },
+    read: async (path) => {
+      const s = await ensure();
+      const fileId = await createFile(s, path, { access: GENERIC_READ, disposition: FILE_OPEN_IF });
+      try {
+        return await readFile(s, fileId);
+      } finally {
+        await closeFile(s, fileId, `close after read ${path}`).catch(() => { /* close failure never masks the data */ });
+      }
+    },
+    rm: async (path) => {
+      const s = await ensure();
+      /* Delete-on-close: CREATE with FILE_DELETE_ON_CLOSE + DELETE
+         access; the CLOSE executes the delete server-side. */
+      const fileId = await createFile(s, path, {
+        access: GENERIC_WRITE | DELETE_ACCESS,
+        disposition: FILE_OPEN_IF,
+        createOptions: FILE_DELETE_ON_CLOSE,
+      });
+      await closeFile(s, fileId, `delete ${path}`);
+      return true;
+    },
     echo: async () => {
       const s = await ensure();
       const res = await sendRequest(s, SMB2_COM.ECHO, buildEchoRequest(), { context: 'echo' });
@@ -925,6 +1034,14 @@ export function connectSmb(config, opts = {}) {
       const s = await ensure().catch(() => null);
       if (!s) return;
       if (s.echoTimer) clearInterval(s.echoTimer);
+      /* TREE_DISCONNECT → LOGOFF → NBSS end. Best-effort: the socket
+         goes either way (ftp quit parity — destroy on failure). */
+      try {
+        const res1 = await sendRequest(s, SMB2_COM.TREE_DISCONNECT, buildTreeDisconnectRequest(), { context: 'tree disconnect' });
+        expectOk(res1, 'tree disconnect');
+        const res2 = await sendRequest(s, SMB2_COM.LOGOFF, buildLogoffRequest(), { context: 'logoff' });
+        expectOk(res2, 'logoff');
+      } catch { /* best-effort — destroy below regardless */ }
       try { s.socket.destroy(); } catch { /* gone */ }
     },
     /* Test/debug surface (not a user API): expiry counter + MessageId
