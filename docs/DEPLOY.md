@@ -1799,3 +1799,81 @@ the run history: the local archive is kept, the row carries the archive hash
 and a 300-char sliced error (never a secret), and the regular backup failure
 email fires (with a recovery email when a later run uploads clean). The run
 history shows the multipart parts progress while an upload is in flight.
+
+## 21. FTP/FTPS destination for backup tasks (Phase 98)
+
+Backup tasks can mirror every archive to an **FTP/FTPS server** after the
+local publish succeeds. Zero config = off-site copy disabled; the
+local-first behavior is unchanged (identical posture to §20).
+
+### Enable the destination
+
+Two env variables turn the surface on (host + credentials); the per-task
+opt-in then lives in the backup UI (create/edit form, FTP toggle next to
+the S3 toggle):
+
+| Variable | Meaning |
+|----------|---------|
+| `FTP_HOST` | FTP server hostname, e.g. `backup.internal`. |
+| `FTP_PORT` | optional; defaults `21` (explicit TLS also starts on 21; implicit TLS would need port `990` — no env seam yet). |
+| `FTP_USER` | FTP login user. |
+| `FTP_PASSWORD` | secret — **never log it, never commit it**. |
+| `FTP_SECURE` | `true` upgrades the control+data connections to explicit TLS (AUTH TLS). Default `false` = plain FTP — **every probe and save then carries a keyed insecure-transport warning** (same posture as the S3 plain-`http://` warning). |
+| `FTP_PASV_HOST` | optional; the advertised passive-address host when the server's NAT-advertised IP is wrong (e.g. the docker `PASV_ADDRESS`). |
+| `FTP_INSECURE` | `true` accepts self-signed / untrusted-server certificates on FTPS. Default `false` = **system CA validation** (R-3); enabling it keeps the keyed warning on every probe. |
+
+With `FTP_HOST` + `FTP_USER` + `FTP_PASSWORD` unset, `ftpEnabled` is
+refused on every task write and the probe route is a no-op refusal — the
+feature is fully invisible to operators.
+
+### Server setup (vsftpd recipe)
+
+The e2e recipe (test/backup-ftp-e2e.test.mjs, gated by `VSFTPD_TEST_URL`)
+provisions a throwaway server with:
+
+```bash
+docker run -d --name gr8r-vsftpd-e2e \
+  -p 2121:21 -p 21100-21110:21100-21110 \
+  -e FTP_USER=gr8rtest -e FTP_PASS=gr8rtest-password \
+  -e PASV_ADDRESS=127.0.0.1 -e PASV_MIN_PORT=21100 -e PASV_MAX_PORT=21110 \
+  fauria/vsftpd
+```
+
+Map it onto the gr8r env (the 127.0.0.1 values are the recipe's throwaway
+pair — use real credentials in production):
+
+```bash
+FTP_HOST=127.0.0.1 FTP_PORT=2121 \
+FTP_USER=gr8rtest FTP_PASSWORD=gr8rtest-password \
+PASV ports: open the passive range (21100-21110) on the firewall and set
+FTP_PASV_HOST to the address clients should reach.
+```
+
+Run the probe from the backup UI before enabling a task (probe route +
+probe-at-save hard refusal when the server is unreachable — "task was not
+saved" parity with S3); it reports the exact failure class: `success`,
+`deleteFailed` (warning), `badCreds`, `unreachable`, plus the TLS classes
+(`ftpTlsFailed` on handshake trouble).
+
+### Key layout & verify posture
+
+Archives land under the task prefix (manual Run-now runs stay local-only —
+R-2):
+
+```
+backup-task-<taskId>/<original archive filename>.tar.gz (+ .sha256 sidecar)
+```
+
+**Integrity (R-4 — documented deviation from §20's stream-back):** the
+upload verifies by **SIZE** against the published byte count, then stores a
+`.sha256` sidecar carrying the run-row hash. There is NO post-upload
+read-back; **restore** is the read-back — the 97 client's
+`fetchToStaged` single-shot download sha256-verifies every byte before it
+reaches the restore staging dir. A digest mismatch refuses the restore —
+no unverified bytes are ever imported.
+
+**Probe hard-refuse:** a `DELE` marker failure (`deleteFailed`) is a
+refusal-class probe result, NOT an accept-with-warning: unlike the S3
+probe's warning posture, an FTP server that cannot delete the probe marker
+cannot be trusted for the write+delete lifecycle, so the probe reports the
+failure and probe-at-save refuses the save.
