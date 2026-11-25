@@ -1,0 +1,1 @@
+- [98-04 note] Transient: 98-04 ran while 98-03 commit (138ba780) was mid-flight; wiring-test actions.js slices failed transiently, baseline restored after 98-03 landed. No 98-04 defect.

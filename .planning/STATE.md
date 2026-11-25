@@ -4,17 +4,17 @@ milestone: v3.5
 milestone_name: Backup Destinations SMB & FTP
 current_phase: 98
 current_phase_name: FTP Destination End-to-End
-status: executing
-stopped_at: Completed 98-03-PLAN.md
-last_updated: "2026-11-25T14:10:40.280Z"
+status: verifying
+stopped_at: Completed 98-04-PLAN.md
+last_updated: "2026-11-25T14:20:09.925Z"
 last_activity: 2026-11-25
 last_activity_desc: Phase 98 execution started
-state_head: c5e76511658b5c4a7018974a7f08a9bee33d4fb0
+state_head: 702df5600586635dc8905ea3e3a4e4ba951376a5
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 20
 ---
 
@@ -30,7 +30,7 @@ progress:
 
 Phase: 98 (FTP Destination End-to-End) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-11-25 — Phase 98 execution started
 
 ## Performance Metrics
@@ -53,6 +53,7 @@ Last activity: 2026-11-25 — Phase 98 execution started
 | Phase 98 P01 | 17m | 3 tasks | 3 files |
 | Phase 98 P02 | 38m | 3 tasks | 7 files |
 | Phase 98 P03 | 31m | 3 tasks | 11 files |
+| Phase 98 P04 | 34m | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Last activity: 2026-11-25 — Phase 98 execution started
 - [Phase 98]: 98-02: ftp probe-at-save hard-refuses on ANY !ok (no deleteFailed exemption — S3 D-88-15 accept-with-warning stays s3-only)
 - [Phase 98]: 98-02: err.insecureTlsWarning deferred to 98-03's emitting commit (error-codes reverse-parity gate refuses emitted-nowhere keys)
 - [Phase 98]: 98-03: ftpProbe refusal keys toast via tErr over the 98-02 err.ftp* catalogue; only ftpProbeSuccess/Unreachable are new toast keys; no deleteFailed branch (hard-refusal parity)
+- [Phase 98]: 98-04: ftp restore read-back twins keyed on ftp_uploaded===1 && opts.ftpConfig via 97 fetchToStaged (sha256, T-98-06); overwrite unit has no read-back seam — untouched
+- [Phase 98]: 98-04: e2e backup leg mirrors the ftp arm at client level vs real vsftpd (fauria image, pasv ports documented) — runExport loop already proven in-process by 98-01
 
 ### Blockers
 
@@ -104,8 +107,8 @@ Last activity: 2026-11-25 — Phase 98 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-11-25T14:10:40.232Z
-**Stopped at:** Completed 98-03-PLAN.md
+**Last session:** 2026-11-25T14:20:09.876Z
+**Stopped at:** Completed 98-04-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)

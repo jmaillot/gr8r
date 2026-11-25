@@ -77,7 +77,7 @@ Plans:
 4. Mirror failure yields the single terminal `upload_failed` naming FTP, local archive survives, alert fires through the unchanged transition gate; secrets never appear in logs.
 5. An env-gated vsftpd docker e2e recipe (mirroring the MinIO recipe, skip-when-absent) proves backup→FTP→restore end-to-end; full suite at baseline.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 **UI hint**: yes
 
 Plans:
@@ -89,7 +89,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [x] 98-03-PLAN.md — Toggle UI mirror + actions/api wiring + probe toasts + i18n ×5 (FTP-02, DEST-03)
-- [ ] 98-04-PLAN.md — Restore read-back twins + vsftpd e2e recipe + DEPLOY §21 (FTP-02, TEST-01)
+- [x] 98-04-PLAN.md — Restore read-back twins + vsftpd e2e recipe + DEPLOY §21 (FTP-02, TEST-01)
 
 ### Phase 99: SMB 2.1 Client (Spike-Hardened)
 
@@ -127,6 +127,6 @@ Plans:
 |-------|----------------|--------|-----------|
 | 96. Cross-Destination Seam Generalization | 2/2 | In Progress|  |
 | 97. FTP/FTPS Client (Zero-Dep) | 1/1 | In Progress|  |
-| 98. FTP Destination End-to-End | 3/4 | In Progress|  |
+| 98. FTP Destination End-to-End | 4/4 | In Progress|  |
 | 99. SMB 2.1 Client (Spike-Hardened) | 0/? | Not started | - |
 | 100. SMB Destination End-to-End + Remote Prune | 0/? | Not started | - |
