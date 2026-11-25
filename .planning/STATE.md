@@ -5,16 +5,16 @@ milestone_name: Backup Destinations SMB & FTP
 current_phase: 98
 current_phase_name: FTP Destination End-to-End
 status: executing
-stopped_at: Completed 98-02-PLAN.md
-last_updated: "2026-11-25T13:44:45.721Z"
+stopped_at: Completed 98-03-PLAN.md
+last_updated: "2026-11-25T14:10:40.280Z"
 last_activity: 2026-11-25
 last_activity_desc: Phase 98 execution started
-state_head: fb0ee75fda4cd7c5412c2f3e554b0cb612e9c6c3
+state_head: c5e76511658b5c4a7018974a7f08a9bee33d4fb0
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 20
 ---
 
@@ -29,7 +29,7 @@ progress:
 ## Current Position
 
 Phase: 98 (FTP Destination End-to-End) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-11-25 — Phase 98 execution started
 
@@ -52,6 +52,7 @@ Last activity: 2026-11-25 — Phase 98 execution started
 | Phase 97 P97-01 | 2 sessions | 4 tasks | 5 files |
 | Phase 98 P01 | 17m | 3 tasks | 3 files |
 | Phase 98 P02 | 38m | 3 tasks | 7 files |
+| Phase 98 P03 | 31m | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,7 @@ Last activity: 2026-11-25 — Phase 98 execution started
 - [Phase 97]: EPSV parse regex matches real wire format (|||port|); P8 session reuse via getSession() on every data-channel connect; STOR retry = fresh channel + whole-file re-read, zero REST (P6/T10)
 - [Phase 98]: 98-02: ftp probe-at-save hard-refuses on ANY !ok (no deleteFailed exemption — S3 D-88-15 accept-with-warning stays s3-only)
 - [Phase 98]: 98-02: err.insecureTlsWarning deferred to 98-03's emitting commit (error-codes reverse-parity gate refuses emitted-nowhere keys)
+- [Phase 98]: 98-03: ftpProbe refusal keys toast via tErr over the 98-02 err.ftp* catalogue; only ftpProbeSuccess/Unreachable are new toast keys; no deleteFailed branch (hard-refusal parity)
 
 ### Blockers
 
@@ -102,8 +104,8 @@ Last activity: 2026-11-25 — Phase 98 execution started
 
 ## Session Continuity
 
-**Last session:** 2026-11-25T13:44:45.677Z
-**Stopped at:** Completed 98-02-PLAN.md
+**Last session:** 2026-11-25T14:10:40.232Z
+**Stopped at:** Completed 98-03-PLAN.md
 **Resume file:** None
 - **Last action:** 94-VERIFICATION.md + phase close (ROADMAP checkbox, progress table, front-matter 80%)
 - **Next:** `/gsd-plan-phase 95` (scope: SET-01..04, XWS-01, BKRST-05 project-overwrite restore)
