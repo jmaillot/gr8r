@@ -377,3 +377,75 @@ export function decodeSmb2Header(buf) {
     signature: Buffer.from(buf.subarray(48, 64)),
   };
 }
+
+/* =====================================================================
+   KEYED ERROR FACTORY + SCRUB (D-04, SC-3 closed 9-enum, T-99-02)
+   =====================================================================
+   smbErrorFrom(statusOrErrno, context) → plain Error carrying
+   err.code ('smb<Class>') + err.smbClass. Messages are FIXED text
+   keyed on the class (no transcript parsing anywhere); context
+   passes through smbScrubMessage (NTLMSSP blobs / password-derived
+   hex are redacted defensively) and is sliced to 300 chars.
+   String sentinels: 'SMB_SIGNING_REFUSED' → signingRequired;
+   'SMB_DIALECT_UNSUPPORTED' → generic + code smbDialectUnsupported
+   (OQ-3 adopted resolution: the two refusal paths stay distinct).
+   Errno strings (ECONNREFUSED/ETIMEDOUT/EHOSTUNREACH) → unreachable. */
+export const SMB_ERROR_CLASSES = {
+  0xc000006d: 'authFailed',        // STATUS_LOGON_FAILED
+  0xc000006a: 'authFailed',        // STATUS_WRONG_PASSWORD
+  0xc0000064: 'authFailed',        // STATUS_NO_SUCH_USER
+  0xc00000cc: 'shareNotFound',     // STATUS_BAD_NETWORK_NAME
+  0xc0000022: 'treeConnectFailed', // STATUS_ACCESS_DENIED
+  0xc0000035: 'nameConflict',      // STATUS_OBJECT_NAME_COLLISION
+  0xc000007f: 'noSpace',           // STATUS_DISK_FULL
+  0xc0000044: 'noSpace',           // STATUS_QUOTA_EXCEEDED
+  0xc000005a: 'sessionExpired',    // STATUS_NETWORK_SESSION_EXPIRED
+};
+
+const SMB_CLASS_MESSAGES = {
+  authFailed: 'smb authentication failed (logon rejected)',
+  shareNotFound: 'smb share not found (bad network name)',
+  treeConnectFailed: 'smb tree connect failed (access denied)',
+  nameConflict: 'smb object name collision',
+  noSpace: 'smb target out of space (disk full or quota exceeded)',
+  unreachable: 'smb server unreachable (transport error)',
+  sessionExpired: 'smb session expired',
+  signingRequired: 'smb server refused the signing agreement',
+  generic: 'smb protocol error',
+};
+
+/* V14-parity scrub (D-04 / T-99-02): redact NTLMSSP blob material and
+   password-derived hex defensively, then slice. Fixed semantics — no
+   transcript parsing. */
+export function smbScrubMessage(text) {
+  let s = String(text ?? '')
+    .replace(/NTLMSSP[\s\S]*$/g, '***')
+    .replace(/[0-9a-fA-F]{32,}/g, '***');
+  s = s.slice(0, 300);
+  return s;
+}
+
+export function smbErrorFrom(statusOrErrno, context = '') {
+  let smbClass = 'generic';
+  let code = 'smbGeneric';
+
+  if (statusOrErrno === 'SMB_SIGNING_REFUSED') {
+    smbClass = 'signingRequired';
+    code = 'smbSigningRequired';
+  } else if (statusOrErrno === 'SMB_DIALECT_UNSUPPORTED') {
+    smbClass = 'generic';
+    code = 'smbDialectUnsupported'; // OQ-3: NOT signingRequired
+  } else if (['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH'].includes(statusOrErrno)) {
+    smbClass = 'unreachable';
+    code = 'smbUnreachable';
+  } else if (typeof statusOrErrno === 'number') {
+    smbClass = SMB_ERROR_CLASSES[statusOrErrno >>> 0] || 'generic';
+    code = `smb${smbClass.charAt(0).toUpperCase()}${smbClass.slice(1)}`;
+  }
+
+  const err = new Error(smbScrubMessage(`${SMB_CLASS_MESSAGES[smbClass]}${context ? ` — ${context}` : ''}`));
+  err.code = code;
+  err.smbClass = smbClass;
+  if (typeof statusOrErrno === 'number') err.smbStatus = statusOrErrno >>> 0;
+  return err;
+}

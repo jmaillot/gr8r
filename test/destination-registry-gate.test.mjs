@@ -92,11 +92,16 @@ test('dormant custody: FTP/SMB boot-frozen consts in server.js; no wiring, smb c
   assert.match(s, /enabled: !!\(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD\)/, 'smb enabled derives from env (D-05)');
   // warn parity, NOT the S3 hard boot-refuse (SC-4)
   assert.match(s, /partially set — destination disabled/, 'partial FTP/SMB env warns at boot (SC-4)');
-  // NO client modules this phase (D-05 hard rule) — Phase 97 unlocked
-  // export/ftp.js (hand-rolled, zero-dep, tested by 97-01); smb.js stays
-  // dormant until its own phase.
+  // NO client modules until their own phase (D-05 hard rule) — Phase 97
+  // unlocked export/ftp.js; Phase 99 unlocked export/smb.js (still
+  // UNWIRED: nothing imports it until phase 100's descriptor work).
   assert.ok(fs.existsSync(path.join(ROOT, 'export', 'ftp.js')), 'export/ftp.js exists since Phase 97 (zero-dep client)');
-  assert.ok(!fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js must NOT exist yet');
+  assert.ok(fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js exists since Phase 99 (zero-dep client)');
+  for (const wiredFile of ['server.js', path.join('export', 'backup.js'), path.join('export', 'restore.js')]) {
+    const wired = fs.readFileSync(path.join(ROOT, wiredFile), 'utf8');
+    assert.ok(!/from ['"].*smb(\.js)?['"]/.test(wired) && !/require\(['"].*smb(\.js)?['"]\)/.test(wired),
+      `${wiredFile} must NOT wire the smb client yet (phase 100's job)`);
+  }
 });
 
 test('the old setter name is gone from the whole codebase (tests included — OQ-1 knowingly-updated twins)', () => {

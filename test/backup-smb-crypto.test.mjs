@@ -351,3 +351,80 @@ test('async-flag reply decodes without misreading SessionId (AsyncId @32)', () =
   assert.equal(d.sessionId, 0x0102030405060708n);
   assert.equal(hdr.readBigUInt64LE(32), 0xdeadbeefn, 'AsyncId occupies @32');
 });
+
+/* =====================================================================
+   TASK 3 — smbErrorFrom KEYED FACTORY + smbScrubMessage (D-04, SC-3)
+   Closed 9-enum: authFailed / shareNotFound / treeConnectFailed /
+   nameConflict / noSpace / unreachable / sessionExpired /
+   signingRequired / generic. OQ-3 adopted resolution: dialect-
+   mismatch → generic + code smbDialectUnsupported (NOT
+   signingRequired); signing refusal → signingRequired.
+   ===================================================================== */
+
+import { smbErrorFrom, smbScrubMessage } from '../export/smb.js';
+
+test('smbErrorFrom: status→smbClass map (SC-3 closed 9-enum)', () => {
+  const cases = [
+    [0xc000006d, 'authFailed'],   // LOGON_FAILED
+    [0xc000006a, 'authFailed'],   // WRONG_PASSWORD
+    [0xc0000064, 'authFailed'],   // NO_SUCH_USER
+    [0xc00000cc, 'shareNotFound'],// BAD_NETWORK_NAME
+    [0xc0000022, 'treeConnectFailed'], // ACCESS_DENIED
+    [0xc0000035, 'nameConflict'], // OBJECT_NAME_COLLISION
+    [0xc000007f, 'noSpace'],      // DISK_FULL
+    [0xc0000044, 'noSpace'],      // QUOTA_EXCEEDED
+    ['SMB_SIGNING_REFUSED', 'signingRequired'],
+    [0xc000005a, 'sessionExpired'], // NETWORK_SESSION_EXPIRED
+    [0xc0000034, 'generic'],      // OBJECT_NAME_NOT_FOUND (unmapped)
+  ];
+  for (const [status, cls] of cases) {
+    const err = smbErrorFrom(status);
+    assert.equal(err.smbClass, cls, `status ${status}`);
+    assert.equal(err.code, `smb${cls.charAt(0).toUpperCase()}${cls.slice(1)}`, `code for ${status}`);
+  }
+  assert.equal(smbErrorFrom(0xc000005a).smbClass, 'sessionExpired');
+});
+
+test('smbErrorFrom: transport errnos → unreachable', () => {
+  for (const errno of ['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH']) {
+    assert.equal(smbErrorFrom(errno).smbClass, 'unreachable', errno);
+    assert.equal(smbErrorFrom(errno).code, 'smbUnreachable');
+  }
+});
+
+test('OQ-3: dialect-mismatch → generic class + smbDialectUnsupported code', () => {
+  const err = smbErrorFrom('SMB_DIALECT_UNSUPPORTED');
+  assert.equal(err.smbClass, 'generic');
+  assert.equal(err.code, 'smbDialectUnsupported');
+  // signing-refusal remains signingRequired — the two paths stay distinct
+  assert.notEqual(smbErrorFrom('SMB_SIGNING_REFUSED').smbClass, 'generic');
+});
+
+test('D-04 scrub: poisoned type-3/NT-response/password fixtures never appear in error messages', () => {
+  const password = 'SecREt01';
+  const t2 = parseNtlmType2(buildType2Fixture());
+  const out = buildNtlmType3(t2, 'user', 'DOMAIN', password, CLIENT_NONCE, TIMESTAMP);
+  const poison1 = out.message.toString('latin1');                 // type-3 blob
+  const poison2 = out.ntProofStr.toString('hex') + out.lmv2.toString('hex'); // NT/LMv2 response hex
+  const poison3 = out.sessionBaseKey.toString('hex');             // key bytes hex
+
+  const errs = [
+    smbErrorFrom(0xc000006d),
+    smbErrorFrom(0xc000006d, `context with ${poison1} embedded`),
+    smbErrorFrom('ECONNREFUSED', `retry after ${poison2}`),
+    smbErrorFrom(0xdeadbeef, `blob ${poison3} leaked?`),
+    smbErrorFrom('SMB_SIGNING_REFUSED', `${poison1} ${poison2} ${poison3}`),
+  ];
+  for (const err of errs) {
+    assert.ok(err.message.length <= 320, 'message sliced (~300 chars)');
+    assert.ok(!err.message.includes(password), 'password never in message');
+    assert.ok(!err.message.includes(out.ntProofStr.toString('hex')), 'NT-response hex never in message');
+    assert.ok(!err.message.includes(out.sessionBaseKey.toString('hex')), 'key hex never in message');
+    assert.ok(!err.message.includes('NTLMSSP'), 'type-3 blob never in message');
+  }
+  // smbScrubMessage redacts NTLMSSP-blob and long-hex material defensively.
+  const scrubbed = smbScrubMessage(`failure NTLMSSP\0${poison1} proof ${out.ntProofStr.toString('hex')} end`);
+  assert.ok(!scrubbed.includes('NTLMSSP'));
+  assert.ok(!scrubbed.includes(out.ntProofStr.toString('hex')));
+  assert.ok(scrubbed.length <= 300);
+});
