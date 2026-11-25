@@ -40,7 +40,11 @@ Build order per research SUMMARY.md: seam refactor FIRST (unblocks both wirings)
 3. Run truth is per-destination integer flags and the run status stays the single terminal `upload_failed`, whose error text names the failed destination(s); local publish stays valid; alerts ride the `handleBackupTaskOutcome` transition gate verbatim.
 4. `FTP_*`/`SMB_*` env custody is boot-frozen mirroring `S3_*` (server.js:208-219) with enabled-derivation and invalid-token warn parity; `membershipsOf` byte-gate and the full suite stay at baseline (2492 tests / 2 documented failures).
 5. Restore location-badge seam (`RESTORE_LOCATION_KEYS` + server flag derivation) generalized so a new destination is a one-line extension.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 96-01-PLAN.md — Registry refactor: setBackupDestination(name, dest) + S3 install + dormant ftp/smb slots + Wave-0 byte-identity gate (DEST-01, TEST-01)
+- [ ] 96-02-PLAN.md — DDL columns + /api/config flat flags + ordered badge scan + i18n ×5 + full-suite baseline (DEST-01)
 
 ### Phase 97: FTP/FTPS Client (Zero-Dep)
 **Goal**: A tested, standalone FTP/FTPS client module exists — parser, transfers, TLS — with no pipeline wiring yet.
