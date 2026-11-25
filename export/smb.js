@@ -46,6 +46,7 @@
    ===================================================================== */
 
 import crypto from 'node:crypto';
+import net from 'node:net';
 
 /* ---- UTF-16LE helper (no BOM — MS-NLMP §3.3.2 identity encoding) ---- */
 export function utf16le(s) {
@@ -448,4 +449,490 @@ export function smbErrorFrom(statusOrErrno, context = '') {
   err.smbClass = smbClass;
   if (typeof statusOrErrno === 'number') err.smbStatus = statusOrErrno >>> 0;
   return err;
+}
+
+/* =====================================================================
+   SESSION ENGINE + PROMISE CLIENT (99-02) — D-01 surface
+   =====================================================================
+   Strictly serial, one-command-in-flight (ftp.js discipline translated
+   to NBSS frames). Every post-NEGOTIATE request is SIGNED (SC-2); the
+   single dispatch point verifies a reply signature (when the SIGNED
+   flag is set) BEFORE MessageId correlation and promise resolution —
+   mismatch = protocol violation → destroy + keyed generic (T-99-03).
+
+   Wire-format provenance: SMB2 request/reply body struct offsets below
+   follow MS-SMB2 §2.2.x layouts (NEGOTIATE §2.2.3, SESSION_SETUP
+   §2.2.5, TREE_CONNECT §2.2.9, CREATE §2.2.13/14, READ §2.2.19/20,
+   WRITE §2.2.21/22, CLOSE §2.2.15/16, ECHO §2.2.28, TREE_DISCONNECT
+   §2.2.11, LOGOFF §2.2.7). The scripted mock (test/backup-smb-client)
+   encodes/decodes the same structs — byte-consistency is what the
+   mock integration pins; real-server byte truth is phase 100 e2e.
+
+   Transport discipline per ftp.js:242-270 — socket.setTimeout arms
+   per pending command; the timeout handler destroys and rejects keyed
+   unreachable; error/close reject pending unreachable. A reply with
+   the ASYNC flag (STATUS_PENDING interlude) keeps the command waiting
+   — correlation stays on MessageId.
+   ===================================================================== */
+
+/* OQ-1 (D-03 parity with FTP_NOOP_INTERVAL_S): keep-alive ECHO every
+   60s — a const, NOT env. */
+export const SMB_ECHO_INTERVAL_S = 60;
+
+/* Serial WRITE chunk cap: 60,416 bytes (0xEC00) — the classic safe
+   WRITE payload size below the 64KB struct+data limit (research §6). */
+export const SMB_MAX_WRITE_BYTES = 60416;
+
+/* Dialects offered (SC-1): SMB 2.1 first, SMB 2.0.2 fallback. NEVER
+   0x0300+ (SMB3 deferred per D-03/spike scope). */
+export const SMB_DIALECTS_OFFERED = [0x0210, 0x0202];
+
+/* SMB2 command codes (MS-SMB2 §2.2.1.2 Command). */
+export const SMB2_COM = {
+  NEGOTIATE: 0x0000,
+  SESSION_SETUP: 0x0001,
+  LOGOFF: 0x0002,
+  TREE_CONNECT: 0x0003,
+  TREE_DISCONNECT: 0x0004,
+  CREATE: 0x0006,
+  READ: 0x0008,
+  WRITE: 0x0009,
+  ECHO: 0x000b,
+  CLOSE: 0x000c,
+};
+
+const STATUS_MORE_PROCESSING_REQUIRED = 0xc0000016;
+const STATUS_SESSION_EXPIRED = 0xc000005a;
+const SMB2_HDR_FLAGS_REPLY = 0x1;
+const SMB2_HDR_FLAGS_ASYNC = 0x2;
+const SMB2_HDR_FLAGS_SIGNED = 0x8;
+
+/* Signing: HMAC-SHA256 over the full frame with the Signature field
+   zeroed; first 16 digest bytes go at header offset 48 (research §5). */
+function signFrame(signingKey, frame) {
+  const scratch = Buffer.from(frame);
+  scratch.fill(0, 48, 64);
+  const sig = crypto.createHmac('sha256', signingKey).update(scratch).digest();
+  sig.copy(frame, 48, 0, 16);
+  return frame;
+}
+
+function verifyFrameSignature(signingKey, frame) {
+  const scratch = Buffer.from(frame);
+  scratch.fill(0, 48, 64);
+  const expected = crypto.createHmac('sha256', signingKey).update(scratch).digest().subarray(0, 16);
+  return expected.equals(frame.subarray(48, 64));
+}
+
+/* Keyed generic protocol error (scrub applied like every smbErrorFrom
+   path — D-04). */
+function genericError(context) {
+  const err = new Error(smbScrubMessage(`smb protocol error${context ? ` — ${context}` : ''}`));
+  err.code = 'smbGeneric';
+  err.smbClass = 'generic';
+  return err;
+}
+
+/* ---------------------------------------------------------------------
+   REQUEST BODY BUILDERS (spec structs; offsets from the frame start
+   for variable-length buffers — SecurityBufferOffset/NameOffset etc.
+   are frame-relative per MS-SMB2; body-relative = offset − 64).
+   --------------------------------------------------------------------- */
+
+/* NEGOTIATE (§2.2.3): offer {0x0210, 0x0202}, SecurityMode 0x00000003
+   (SIGNING_ENABLED | SIGNING_REQUIRED — SC-2 posture advertisement). */
+function buildNegotiateRequest() {
+  const body = Buffer.alloc(36 + 2 + SMB_DIALECTS_OFFERED.length * 2);
+  body.writeUInt16LE(36, 0);                      // StructureSize
+  body.writeUInt16LE(0x0003, 2);                  // SecurityMode
+  body.writeUInt16LE(0, 4);                       // Reserved
+  body.writeUInt32LE(0, 6);                       // Capabilities
+  const guid = Buffer.from(crypto.randomUUID().replace(/-/g, ''), 'hex');
+  guid.copy(body, 8);                             // ClientGuid @8 (16 bytes)
+  body.writeBigUInt64LE(0n, 24);                  // ClientStartTime
+  body.writeUInt16LE(SMB_DIALECTS_OFFERED.length, 32); // DialectCount
+  SMB_DIALECTS_OFFERED.forEach((d, i) => body.writeUInt16LE(d, 34 + i * 2));
+  return body;
+}
+
+/* SESSION_SETUP (§2.2.5): 24-byte fixed struct + security buffer at
+   frame offset 88 (64 header + 24 struct). */
+function buildSessionSetupRequest(securityBuffer) {
+  const bufOff = 64 + 24;
+  const body = Buffer.alloc(24 + securityBuffer.length);
+  body.writeUInt16LE(25, 0);                      // StructureSize
+  body.writeUInt8(0, 2);                          // VcNumber
+  body.writeUInt8(0x0003 & 0xff, 3);              // SecurityMode (byte field)
+  body.writeUInt32LE(0, 4);                       // Capabilities
+  body.writeUInt32LE(0, 8);                       // Channel
+  body.writeUInt16LE(bufOff, 12);                 // SecurityBufferOffset
+  body.writeUInt16LE(securityBuffer.length, 14);  // SecurityBufferLength
+  body.writeBigUInt64LE(0n, 16);                  // PreviousSessionId
+  securityBuffer.copy(body, 24);
+  return body;
+}
+
+/* TREE_CONNECT (§2.2.9): 8-byte struct + UTF-16LE share path. */
+function buildTreeConnectRequest(sharePath) {
+  const name = utf16le(sharePath);
+  const body = Buffer.alloc(8 + name.length);
+  body.writeUInt16LE(9, 0);                       // StructureSize
+  body.writeUInt16LE(0, 2);                       // Reserved
+  body.writeUInt16LE(64 + 8, 4);                  // PathOffset
+  body.writeUInt16LE(name.length, 6);             // PathLength
+  name.copy(body, 8);
+  return body;
+}
+
+/* CREATE (§2.2.13): 56-byte fixed struct + name buffer at frame
+   offset 120 (64 + 56). */
+function buildCreateRequest(name, { access, disposition, createOptions = 0 }) {
+  const nameBuf = utf16le(name);
+  const body = Buffer.alloc(56 + nameBuf.length);
+  body.writeUInt16LE(57, 0);                      // StructureSize
+  body.writeUInt8(0, 2);                          // SecurityFlags
+  body.writeUInt8(0, 3);                          // RequestedOplockLevel
+  body.writeUInt32LE(0, 4);                       // ImpersonationLevel
+  body.writeBigUInt64LE(0n, 8);                   // SmbCreateFlags
+  body.writeBigUInt64LE(0n, 16);                  // Reserved
+  body.writeUInt32LE(access, 24);                 // DesiredAccess
+  body.writeUInt32LE(0, 28);                      // FileAttributes
+  body.writeUInt32LE(0, 32);                      // ShareAccess
+  body.writeUInt32LE(disposition, 36);            // CreateDisposition
+  body.writeUInt32LE(createOptions, 40);          // CreateOptions
+  body.writeUInt16LE(64 + 56, 44);                // NameOffset
+  body.writeUInt16LE(nameBuf.length, 46);         // NameLength
+  body.writeUInt32LE(0, 48);                      // CreateContextsOffset
+  body.writeUInt32LE(0, 52);                      // CreateContextsLength
+  nameBuf.copy(body, 56);
+  return body;
+}
+
+/* WRITE (§2.2.21): 44-byte struct + data at frame offset 108
+   (64 + 44). */
+function buildWriteRequest(fileId, chunk, offset) {
+  const body = Buffer.alloc(44 + chunk.length);
+  body.writeUInt16LE(49, 0);                      // StructureSize
+  body.writeUInt16LE(64 + 44, 2);                 // DataOffset
+  body.writeUInt32LE(chunk.length, 4);            // Length
+  body.writeBigUInt64LE(BigInt(offset), 8);       // Offset (u64)
+  body.writeUInt32LE(0, 16);                      // Channel
+  fileId.copy(body, 20);                          // FileId (16)
+  body.writeUInt16LE(0, 36);                      // ChannelInfoOffset
+  body.writeUInt16LE(0, 38);                      // ChannelInfoLength
+  body.writeUInt32LE(0, 40);                      // Flags
+  chunk.copy(body, 44);
+  return body;
+}
+
+/* READ (§2.2.19): 48-byte struct, no inline data. */
+function buildReadRequest(fileId, length, offset) {
+  const body = Buffer.alloc(48);
+  body.writeUInt16LE(49, 0);                      // StructureSize
+  body.writeUInt8(0, 2);                          // Padding
+  body.writeUInt8(0, 3);                          // Reserved
+  body.writeUInt32LE(length, 4);                  // Length
+  body.writeBigUInt64LE(BigInt(offset), 8);       // Offset (u64)
+  fileId.copy(body, 16);                          // FileId (16)
+  body.writeUInt32LE(0, 32);                      // MinimumCount
+  body.writeUInt32LE(0, 36);                      // Channel
+  body.writeUInt32LE(0, 40);                      // RemainingBytes
+  body.writeUInt16LE(0, 44);                      // ReadChannelInfoOffset
+  body.writeUInt16LE(0, 46);                      // ReadChannelInfoLength
+  return body;
+}
+
+/* CLOSE (§2.2.15): 24-byte struct with the FileId inline. */
+function buildCloseRequest(fileId) {
+  const body = Buffer.alloc(24);
+  body.writeUInt16LE(24, 0);                      // StructureSize
+  body.writeUInt16LE(0, 2);                       // Flags
+  body.writeUInt32LE(0, 4);                       // Reserved
+  fileId.copy(body, 8);                           // FileId (16)
+  return body;
+}
+
+/* ECHO / TREE_DISCONNECT / LOGOFF: bare StructureSize bodies. */
+const buildEchoRequest = () => Buffer.from([0x04, 0x00]);
+const buildTreeDisconnectRequest = () => Buffer.from([0x04, 0x00]);
+const buildLogoffRequest = () => Buffer.from([0x04, 0x00]);
+
+/* 100ns-ticks since 1601-01-01 (LE u64) for the NTLMv2 blob. */
+function ntTimestamp() {
+  return (BigInt(Date.now()) + 11644473600000n) * 10000n;
+}
+
+/* ---------------------------------------------------------------------
+   SESSION ENGINE (one command in flight; verify-before-dispatch)
+   --------------------------------------------------------------------- */
+
+const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
+
+function createSession(socket, config, opts) {
+  const s = {
+    socket,
+    parser: createFrameParser(),
+    config,
+    opts,
+    pending: null,          // { messageId, resolve, reject }
+    messageId: 0n,
+    sessionId: 0n,
+    treeId: 0,
+    signingKey: null,
+    sessionExpiredCount: 0, // lifetime cap 2 (retry envelope, Task 3)
+    closed: false,
+    fatal: null,
+    echoTimer: null,
+    echoInFlight: false,
+  };
+  return s;
+}
+
+function failPending(s, err) {
+  const p = s.pending;
+  if (s.pending === p) s.pending = null;
+  if (!p) return;
+  try { p.reject(err); } catch { /* already settled */ }
+}
+
+/* Single dispatch point (T-99-03): verify → correlate → resolve. */
+function handleFrame(s, frame) {
+  let hdr;
+  try {
+    hdr = decodeSmb2Header(frame);
+  } catch {
+    protocolViolation(s, 'not an SMB2 frame');
+    return;
+  }
+  if ((hdr.flags & SMB2_HDR_FLAGS_SIGNED) !== 0) {
+    if (!s.signingKey || !verifyFrameSignature(s.signingKey, frame)) {
+      protocolViolation(s, 'reply signature verification failed (verify-before-dispatch)');
+      return;
+    }
+  }
+  /* STATUS_PENDING interlude (ASYNC flag): keep the command waiting —
+     MessageId stays the correlation key; the final sync reply resolves. */
+  if ((hdr.flags & SMB2_HDR_FLAGS_ASYNC) !== 0) return;
+  const p = s.pending;
+  if (!p) return; // stray reply — swallowed (echo-keep-alive parity)
+  if (hdr.messageId !== p.messageId) {
+    protocolViolation(s, `MessageId correlation failure (expected ${p.messageId}, got ${hdr.messageId})`);
+    return;
+  }
+  s.pending = null;
+  s.socket.setTimeout(0);
+  try { p.resolve({ header: hdr, body: frame.subarray(64), frame }); } catch { /* settled */ }
+}
+
+function protocolViolation(s, why) {
+  const err = genericError(why);
+  s.fatal = s.fatal || err;
+  try { s.socket.destroy(); } catch { /* gone */ }
+  failPending(s, err);
+}
+
+function bindTransport(s) {
+  s.socket.on('data', (chunk) => {
+    let frames;
+    try {
+      ({ frames } = s.parser.feed(chunk));
+    } catch (e) {
+      protocolViolation(s, e?.message || 'NBSS framing violation');
+      return;
+    }
+    for (const f of frames) handleFrame(s, f.payload);
+  });
+  s.socket.on('timeout', () => {
+    /* Node does NOT destroy on 'timeout' — we own the destroy (P1 parity). */
+    const p = s.pending;
+    try { s.socket.destroy(); } catch { /* gone */ }
+    failPending(s, p ? smbErrorFrom('ETIMEDOUT', 'timed out waiting for an SMB2 reply') : undefined);
+  });
+  s.socket.on('error', (err) => {
+    s.fatal = s.fatal || smbErrorFrom(err?.code || 'ECONNREFUSED', `transport error: ${String(err?.code ?? '')}`);
+    failPending(s, s.fatal);
+    try { s.socket.destroy(); } catch { /* gone */ }
+  });
+  s.socket.on('close', () => {
+    s.closed = true;
+    if (s.echoTimer) clearInterval(s.echoTimer);
+    failPending(s, s.fatal || smbErrorFrom('ECONNREFUSED', 'connection closed by the server'));
+  });
+}
+
+/* Send one signed request; resolve with the correlated reply. */
+function sendRequest(s, command, body, { signed = true, context = '' } = {}) {
+  return new Promise((resolve, reject) => {
+    if (s.pending) {
+      reject(genericError('a command is already in flight (one-command-in-flight discipline)'));
+      return;
+    }
+    if (s.fatal || s.closed) {
+      reject(s.fatal || smbErrorFrom('ECONNREFUSED', 'connection is closed'));
+      return;
+    }
+    const messageId = s.messageId++;
+    const header = encodeSmb2Header({
+      command,
+      credits: 1,
+      messageId,
+      treeId: s.treeId,
+      sessionId: s.sessionId,
+    });
+    const frame = Buffer.concat([header, body]);
+    if (signed && s.signingKey) {
+      frame.writeUInt32LE(frame.readUInt32LE(16) | SMB2_HDR_FLAGS_SIGNED, 16);
+      signFrame(s.signingKey, frame);
+    }
+    s.pending = { messageId, resolve, reject };
+    s.socket.setTimeout(s.opts.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS);
+    s.socket.write(encodeNbssHeader(0x00, frame.length));
+    s.socket.write(frame);
+  });
+}
+
+/* Reject non-zero statuses keyed (except the sessionExpired envelope,
+   which its callers own). */
+function expectOk(res, context) {
+  if (res.header.status !== 0) throw smbErrorFrom(res.header.status, context);
+  return res;
+}
+
+/* ---------------------------------------------------------------------
+   HANDSHAKE (dial → NBSS 0x81/0x82 → NEGOTIATE → SESSION_SETUP×2 →
+   TREE_CONNECT) and the re-auth round (sessionExpired envelope).
+   --------------------------------------------------------------------- */
+
+async function negotiate(s) {
+  const res = await sendRequest(s, SMB2_COM.NEGOTIATE, buildNegotiateRequest(), { signed: false, context: 'negotiate' });
+  if (res.header.status !== 0) throw smbErrorFrom(res.header.status, 'negotiate');
+  const dialect = res.body.readUInt16LE(4);
+  if (!SMB_DIALECTS_OFFERED.includes(dialect)) {
+    try { s.socket.destroy(); } catch { /* gone */ }
+    throw smbErrorFrom('SMB_DIALECT_UNSUPPORTED', `server selected dialect 0x${dialect.toString(16).padStart(4, '0')} (only 2.0.2/2.1 offered)`);
+  }
+  const securityMode = res.body.readUInt16LE(2);
+  if ((securityMode & 0x0001) === 0) {
+    /* SC-2 unconditional signing: a server that refuses signing is
+       outside the supported envelope — abort keyed (T-99-05). */
+    try { s.socket.destroy(); } catch { /* gone */ }
+    throw smbErrorFrom('SMB_SIGNING_REFUSED', 'server did not negotiate SMB2 signing');
+  }
+  if ((res.header.credits ?? 0) < 1) throw genericError('server granted zero credits at negotiate');
+  return dialect;
+}
+
+/* One full NTLMv2 SESSION_SETUP round (type-1 → type-2 → type-3).
+   Reused verbatim by the sessionExpired retry envelope (Task 3): the
+   same transport, a fresh NTProofStr (fresh client challenge), and a
+   fresh signing key. */
+async function sessionAuthRound(s) {
+  const res1 = await sendRequest(s, SMB2_COM.SESSION_SETUP, buildSessionSetupRequest(buildNtlmType1()), { signed: false, context: 'session setup (type-1)' });
+  if (res1.header.status !== STATUS_MORE_PROCESSING_REQUIRED) {
+    if (res1.header.status !== 0) throw smbErrorFrom(res1.header.status, 'session setup (type-1)');
+    throw genericError('server accepted the type-1 without an NTLM challenge');
+  }
+  s.sessionId = res1.header.sessionId;
+  const bufOff = res1.body.readUInt16LE(4);
+  const bufLen = res1.body.readUInt16LE(6);
+  const type2 = parseNtlmType2(res1.frame.subarray(bufOff, bufOff + bufLen));
+  const type3 = buildNtlmType3(
+    type2,
+    s.config.user,
+    s.config.domain ?? '',
+    s.config.password,
+    crypto.randomBytes(8),
+    (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(ntTimestamp()); return b; })(),
+  );
+  /* Derive the signing key BEFORE the type-3 goes out — the round-2
+     SESSION_SETUP is the first signed request on the wire. */
+  s.signingKey = deriveSigningKey(type3.sessionBaseKey);
+  const res2 = await sendRequest(s, SMB2_COM.SESSION_SETUP, buildSessionSetupRequest(type3.message), { signed: true, context: 'session setup (type-3)' });
+  if (res2.header.status !== 0) throw smbErrorFrom(res2.header.status, 'session setup (type-3)');
+  s.sessionId = res2.header.sessionId;
+}
+
+async function treeConnect(s) {
+  const res = await sendRequest(s, SMB2_COM.TREE_CONNECT, buildTreeConnectRequest(s.config.share), { context: 'tree connect' });
+  expectOk(res, 'tree connect');
+  s.treeId = res.header.treeId;
+}
+
+async function establish(config, opts) {
+  const port = config.port ?? 445;
+  const socket = net.connect(port, config.host);
+  await new Promise((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('error', (err) => reject(smbErrorFrom(err?.code || 'ECONNREFUSED', `connect failed (${String(err?.code ?? 'error')})`)));
+  });
+  /* NBSS session request (0x81) → expect 0x82 positive response. */
+  await new Promise((resolve, reject) => {
+    const onData = (chunk) => {
+      socket.removeListener('data', onData);
+      socket.removeListener('error', onErr);
+      if (chunk[0] === 0x82) resolve();
+      else if (chunk[0] === 0x83) reject(genericError('NBSS session request refused (0x83)'));
+      else reject(genericError('not an NBSS session accept'));
+    };
+    const onErr = (err) => {
+      socket.removeListener('data', onData);
+      reject(smbErrorFrom(err?.code || 'ECONNREFUSED', 'NBSS session request failed'));
+    };
+    socket.on('data', onData);
+    socket.once('error', onErr);
+    socket.write(encodeNbssSessionRequest());
+  });
+  const s = createSession(socket, config, opts);
+  bindTransport(s);
+  await negotiate(s);
+  await sessionAuthRound(s);
+  await treeConnect(s);
+  /* OQ-1 keep-alive: ECHO every SMB_ECHO_INTERVAL_S while idle and
+     connected; unref'd (never keeps the process alive). */
+  const echoMs = (opts.echoIntervalS ?? SMB_ECHO_INTERVAL_S) * 1000;
+  s.echoTimer = setInterval(() => {
+    if (!s.pending && !s.closed && !s.echoInFlight && s.socket.writable) {
+      s.echoInFlight = true;
+      sendRequest(s, SMB2_COM.ECHO, buildEchoRequest(), { context: 'echo keep-alive' })
+        .catch(() => { /* idle echo failures surface on the next command */ })
+        .finally(() => { s.echoInFlight = false; });
+    }
+  }, echoMs);
+  s.echoTimer.unref?.();
+  return s;
+}
+
+/* ---------------------------------------------------------------------
+   D-01 PROMISE CLIENT — connectSmb(config, opts)
+   ---------------------------------------------------------------------
+   write/read/rm/echo/close mirror ftp.js/s3.js promise shape exactly
+   (no frame-level API, no event emitter). Task 1 wires { connect,
+   echo }; the full command surface lands with Task 2. */
+
+export function connectSmb(config, opts = {}) {
+  const ctlP = establish(config, opts);
+  const ensure = () => ctlP;
+
+  const smb = {
+    connect: async () => { await ctlP; },
+    echo: async () => {
+      const s = await ensure();
+      const res = await sendRequest(s, SMB2_COM.ECHO, buildEchoRequest(), { context: 'echo' });
+      expectOk(res, 'echo');
+      return true;
+    },
+    close: async () => {
+      const s = await ensure().catch(() => null);
+      if (!s) return;
+      if (s.echoTimer) clearInterval(s.echoTimer);
+      try { s.socket.destroy(); } catch { /* gone */ }
+    },
+    /* Test/debug surface (not a user API): expiry counter + MessageId
+       cursor; never carries credentials. */
+    __debug: async () => {
+      const s = await ensure().catch(() => null);
+      return { sessionExpiredCount: s?.sessionExpiredCount ?? 0, messageId: String(s?.messageId ?? '0') };
+    },
+  };
+  return smb;
 }
