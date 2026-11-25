@@ -72,6 +72,7 @@ import { pipeline } from 'node:stream/promises';
 import zlib from 'node:zlib';
 import { backupsRoot, TABLES, runExport } from './backup.js';
 import { downloadToStaged, s3BackupKey } from './s3.js';
+import { fetchToStaged } from './ftp.js'; // Phase 98 (98-04): the 97 client restore seam — ftp read-back twins
 
 const BLOCK = 512;
 const MAX_USTAR_SIZE = 0o77777777777; // 8 GiB - 1 — the writer's own ceiling (ustarHeader)
@@ -2071,6 +2072,16 @@ export async function runRestore(opts = {}) {
       archivePath = back.tmpPath;
       stagedTmp = back.tmpPath;
     }
+    /* Phase 98 (98-04, D-05): ftp read-back twin — an ftp_uploaded run whose
+       local archive rotated away comes home through the 97 client's
+       fetchToStaged (single-shot + sha256, keyed on ftp_uploaded === 1).
+       Key derivation mirrors the 98-01 upload arm: task-prefix + filename.
+       Local-first ordering preserved — this gate is additive below it. */
+    if (!archivePath && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
+      const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    }
     if (!archivePath || !fs.existsSync(archivePath)) {
       throw keyed('restoreArchiveMissing', 'restore: archive not found at either destination');
     }
@@ -2305,6 +2316,21 @@ export async function restoreInstanceUnit(opts = {}) {
     } catch (err) {
       dropStagedTmp();
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
+    }
+  }
+  /* Phase 98 (98-04, D-05): ftp read-back twin — GUARDED like the s3 twin:
+     the seam throw routes through failWith so the funnel releases the
+     restore_lock. fetchToStaged enforces sha256 (T-98-06) — mismatch
+     refuses the restore, no unverified bytes reach it. Key derivation
+     mirrors the 98-01 upload arm (task-prefix + filename). */
+  if (!archivePath && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
+    try {
+      const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    } catch (err) {
+      dropStagedTmp();
+      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
   if (!archivePath || !fs.existsSync(archivePath)) {

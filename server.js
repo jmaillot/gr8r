@@ -10005,7 +10005,7 @@ async function handleApi(req, res, url) {
     if (!backupRunId) {
       return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
     }
-    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
+    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded from backup_runs where id = ?', [backupRunId]);
     if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
@@ -10058,7 +10058,7 @@ async function handleApi(req, res, url) {
     await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: scope.id ?? null }, trigger: 'import_new', startedAt: now() });
     runRestore({
       runId: restoreRunId,
-      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, ftp_uploaded: row.ftp_uploaded, taskId: row.task_id },
       scope: { kind: scope.kind, id: scope.id ?? null },
       targetWorkspaceId,
       operatorId: user.id,
@@ -10066,6 +10066,7 @@ async function handleApi(req, res, url) {
       startedAt: now(),
       uniqueSlug: name => uniqueSlug(name),
       s3Config: S3.enabled ? S3.config() : null,
+      ftpConfig: FTP.enabled ? FTP.config() : null, // the 98-04 read-back seam — restore fetches an ftp_uploaded archive via the 97 client
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:import_new', null, scope.kind);
@@ -10117,7 +10118,7 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:confirmPhraseMismatch');
       return fail(res, 400, 'confirmPhraseMismatch', 'Confirmation phrase does not match');
     }
-    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
+    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded from backup_runs where id = ?', [backupRunId]);
     if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
@@ -10147,8 +10148,9 @@ async function handleApi(req, res, url) {
     await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: 'instance', id: null }, trigger: 'instance', startedAt: now() });
     restoreInstanceUnit({
       runId: restoreRunId,
-      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, ftp_uploaded: row.ftp_uploaded, taskId: row.task_id },
       s3Config: S3.enabled ? S3.config() : null, // the 88-01 seam — DR must fetch a rotated-away archive (90-04 e2e, Rule 1)
+      ftpConfig: FTP.enabled ? FTP.config() : null, // the 98-04 read-back seam — DR fetches an ftp_uploaded archive via the 97 client
       operator: { id: user.id, email: user.email },
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`instance restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
