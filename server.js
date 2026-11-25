@@ -88,6 +88,7 @@ import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRu
 import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
+import { connectFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
@@ -391,6 +392,43 @@ const S3 = {
     region: S3_REGION,
     pathStyle: S3_PATH_STYLE !== false,
   }),
+};
+/* Phase 98 (98-01): the boot-frozen FTP capability, mirroring the S3 const
+   above (D-88-11 custody). `.enabled` = host + user + password present —
+   the exact derivation the 96 dormant slot and /api/config already expose
+   (byte-pinned by the destination-registry-gate). `.config()` is the ONE
+   seam that resolves the request config the 97 client (export/ftp.js)
+   consumes; `secure` maps the FTP_SECURE boolean to the client's enum
+   (true = explicit TLS via AUTH/PBSZ/PROT, false = plain — 'implicit'
+   has no env seam yet). pasvHost/insecure ride through as-is (the client
+   treats empty pasvHost as "control-host rule" and insecure as the
+   rejectUnauthorized release). Raw values never leave these consts: no
+   log line or error text carries a credential (V14 / Pitfall 5). */
+const FTP = {
+  enabled: !!(FTP_HOST && FTP_USER && FTP_PASSWORD),
+  config: () => ({
+    host: FTP_HOST,
+    port: FTP_PORT,
+    user: FTP_USER,
+    password: FTP_PASSWORD,
+    secure: FTP_SECURE ? 'explicit' : 'none',
+    pasvHost: FTP_PASV_HOST || undefined,
+    insecure: FTP_INSECURE,
+  }),
+  /* R-4 verify: the 97 client's SIZE-based check — compare the stored
+     byte count against the published archive's size. NO read-back on
+     the upload path (documented deviation from the S3 stream-back,
+     owner-ratified); the sidecar sha256 upload is the integrity stamp. */
+  verify: async (config, key, expectedSizeBytes) => {
+    const ftp = connectFtp(config);
+    try {
+      await ftp.connect();
+      const stored = await ftp.size(key);
+      return stored === expectedSizeBytes;
+    } finally {
+      await ftp.quit().catch(() => { /* best-effort */ });
+    }
+  },
 };
 /* Registry codes the interface actually renders — derived from the same
    source of truth as the client's import.meta.glob (D-07): the build's own
@@ -3894,10 +3932,34 @@ setBackupDestination('s3', {
    manualPrefixes are DECLARED per-destination (D-01) but never used in 96.
    NO fake probe, NO UI render, NO export/ftp.js or export/smb.js this
    phase (D-05); /api/config exposes ftpEnabled/smbEnabled as false in 96. */
+/* Phase 98 (98-01): the FTP destination install — fills the 96 dormant
+   slot in the destination registry (canonical order s3, ftp, smb kept).
+   R-2 INVERSION of the S3 manual leg: MANUAL Run-now runs (taskId-less
+   meta) NEVER upload to FTP — they stay local-only, always (the
+   manualPrefix below is consumed by the probe marker only, 98-02).
+   Task runs gate on the task's ftp_enabled = 1, fail-CLOSED: a missing
+   row or a lookup error skips the upload (warn wording mirrors the S3
+   closure above). Success returns the FTP.config() seam the ftp arm in
+   export/backup.js uploads through; `verify` is the R-4 SIZE-based
+   check wired to the 97 client. handleBackupTaskOutcome and the
+   destLocation badge scan are UNTOUCHED (SC-4 / 96-02 golden bytes). */
 setBackupDestination('ftp', {
   label: 'FTP',
-  enabled: !!(FTP_HOST && FTP_USER && FTP_PASSWORD), // derived from env — D-05
-  manualPrefix: 'backup-ftp/', // declared, never used in 96 (D-05)
+  enabled: FTP.enabled,
+  manualPrefix: 'backup-ftp/', // probe marker prefix only (D-01) — R-2: manual runs never upload
+  upload: async meta => {
+    if (!FTP.enabled) return null;
+    if (!meta?.taskId) return null; // R-2: manual Run-now runs stay local-only — NEVER uploaded to FTP
+    try {
+      const task = await db.get('select ftp_enabled from backup_tasks where id = ?', [meta.taskId]);
+      if (!task || task.ftp_enabled !== 1) return null;
+    } catch (err) {
+      logWarn(`backup ftp: task ${meta.taskId} lookup failed — upload skipped: ${err?.message || err}`);
+      return null;
+    }
+    return { config: FTP.config() };
+  },
+  verify: FTP.verify, // R-4 SIZE-based verify (97 client) — no downloadToStaged read-back on the ftp arm
 });
 setBackupDestination('smb', {
   label: 'SMB',
