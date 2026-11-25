@@ -806,6 +806,20 @@ so all users (including the operator who triggered it) sign in again. The in-app
 the **only** one that supports the Postgres backend. See §19 for archive placement and a
 separate volume, and §20 for the S3 destination.
 
+Beyond the instance DR path, the restore drawer in the backup UI also accepts workspace-
+and project-scope archives as **import-as-new**, and — since v3.4 — as an **overwrite of an
+existing project** in any workspace the operator targets. Permissions match import-as-new
+(Restore Operator membership in the target workspace, Super Admin bypass). An overwrite is a
+total replacement of the target project: its tasks, comments, files, ordering, and every
+activity/notification referencing them are removed and replaced by the archive's own content
+in **one transaction** (full-text search reindexed inside it), with ids preserved verbatim. A
+pre-restore snapshot is taken first, exactly like the DR path. The confirm phrase must match
+the target project's **current** name; overwriting with the same name succeeds (the collision
+scan excludes the armed target), while a name that collides with a *different* project in the
+target workspace is a typed refusal (`restoreNameCollision`, all five locales) — never an
+auto-suffix. As with every restore trigger, the global restore lock applies: one restore at
+a time, across all triggers.
+
 **The legacy `node server.js --backup` CLI** — the script above — is a one-shot,
 SQLite-**only** database dump (`VACUUM INTO` into the path you give it). No schedule, no
 files, no S3, no history. Keep it as an escape hatch on legacy SQLite installs and for
@@ -815,7 +829,13 @@ scripting a quick dump; on a Postgres deployment use the in-app engine.
 
 The scheduler fires against wall-clock time. Each backup task stores a 5-field cron plus
 an IANA timezone; the runner persists the computed `next_run_at` and fires when the clock
-passes it. Daily digests fire at a workspace-local 08:00, and GFS rotation assigns each
+passes it. Daily digests fire at a workspace-local 08:00 — and since v3.4 they are
+**aggregated per user**: a user enrolled in N workspaces receives exactly ONE digest email
+per local day, with one section per workspace inside (empty sections never render) and the
+whole email rendered in the *user's* locale, not the workspace's. The per-user outbox row
+(`digest:user:<userId>:<localDate>`) is claimed inside the same transaction, so a restart
+mid-tick or a disabled MAILER re-collides on the key and can never double-send. The per-workspace `reminders_sent` ledger keeps its
+existing per-workspace claim keys, so per-workspace digest history is unchanged. GFS rotation assigns each
 archive to its daily/weekly/monthly bucket using the run's timestamp.
 
 All of that needs a synced clock. Run an NTP client — chrony is the usual choice — **on
@@ -1678,14 +1698,25 @@ set in `.env` to take effect.
 |----------|---------|
 | `BACKUPS_DIR` | absolute path of the archive directory; default `DATA_DIR/backups` |
 
-### Layout on disk
+### Archive naming (v3.4) & layout on disk
+
+Since v3.4, archive filenames **and** run-history labels share one scheme:
+`<instance>-<scope>-<name-slug>-<gfs>-<YYYY-MM-DD>.tar.gz`. The instance segment comes from
+`GR8R_INSTANCE_NAME` (machine hostname as fallback), the scope token is `instance`, `ws` or
+`project`, and the workspace/project name is resolved server-side at run time (UTC date).
+Only scheduled runs carry the GFS marker (`daily`/`weekly`/`monthly`/`yearly`); manual
+Run-now runs omit that segment entirely. Names are fixed at creation and never renamed
+afterwards — a name collision gets a `-2`, `-3` … suffix instead, and the `.sha256` sidecar
+is written from the **final** (uniquified) filename.
 
 ```
 $BACKUPS_DIR/
-  backup-task-<taskId>-<ts>.tar.gz   # scheduled task archives (GFS-pruned)
-  backup-instance-<ts>.tar.gz        # manual Run-now archives (never rotated)
-  *.tar.gz.sha256                    # sidecar per archive, deleted BEFORE the archive
-  .backup-staging/                   # crash-swept at boot (boot sweep D-13)
+  <instance>-instance-<YYYY-MM-DD>.tar.gz                    # instance-scope archives
+  <instance>-ws-<workspace>-<gfs>-<YYYY-MM-DD>.tar.gz        # scheduled workspace archives (GFS-pruned)
+  <instance>-project-<project>-<gfs>-<YYYY-MM-DD>.tar.gz     # scheduled project archives (GFS-pruned)
+  <instance>-ws-<workspace>-<YYYY-MM-DD>.tar.gz              # manual Run-now archives (no GFS marker, never rotated)
+  *.tar.gz.sha256                                            # sidecar per archive, deleted BEFORE the archive
+  .backup-staging/                                           # crash-swept at boot (boot sweep D-13)
 ```
 
 The boot sweep also still collects legacy `DATA_DIR/tmp/backup-*` debris from
