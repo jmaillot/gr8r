@@ -125,8 +125,24 @@ Plans:
 4. Mirror failure yields the single terminal `upload_failed` naming the failed destination(s), local publish stays valid; all DEST-02/DEST-03 refusals are keyed and audited ×5 locales.
 5. An env-gated dperson/samba docker e2e recipe (ideally a signing-required variant) proves backup→SMB→restore end-to-end; DEPLOY.md gains §21 (share perms, ACL pitfall) and §22 (FTPS passive ranges, cert trust); `membershipsOf` byte-gate and the full suite stay at baseline.
 
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+- [ ] 100-01-PLAN.md — smb.js client additions: probeSmb + fetchSmbToStaged + guest detection + pathNotFound class (DEST-03)
+
+**Wave 2** *(blocked on Wave 1)*
+- [ ] 100-02-PLAN.md — Tracer: SMB.config() + install closure (R-2 inversion) + smb upload arm + mock-pipeline wiring test (SMB-02)
+
+**Wave 3** *(blocked on Wave 2)*
+- [ ] 100-03-PLAN.md — smb-probe route + probe-at-save twins + client trio + probe toasts (guest info) + i18n ×5 (SMB-02, DEST-03)
+
+**Wave 4** *(blocked on Wave 3)*
+- [ ] 100-04-PLAN.md — Remote prune hook + D-01 floor-guard + idempotency + remote_pruned column/payload/badge + audits ×5 locales (DEST-02)
+
+**Wave 5** *(blocked on Waves 3-4)*
+- [ ] 100-05-PLAN.md — Restore read-back twins + dperson/samba e2e recipe (2 containers, D-02) + DEPLOY §21-append/§22 (SMB-02, TEST-01)
 
 ## Progress
 
