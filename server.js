@@ -430,6 +430,29 @@ const FTP = {
     }
   },
 };
+/* Phase 100 (100-02): the boot-frozen SMB capability, mirroring the FTP
+   const above (D-88-11 custody / 98-01 idiom). `.enabled` = the exact
+   all-four conjunction the 96 dormant slot, the :273-274 partial-config
+   warn and /api/config already expose (byte-pinned by the
+   destination-registry-gate) — redefined here as ONE object, never
+   recomputed at the call sites. `.config()` is the ONE seam that
+   resolves the request config the 99 client (export/smb.js) consumes:
+   { host, share, port, user, domain?, password } — port defaults to
+   445 hard-coded (SMB_PORT has no env seam yet; a DEPLOY-visible option
+   only if a later need proves it). domain stays absent when unset —
+   the 99 client treats a missing domain as the default workgroup. Raw
+   values never leave these consts: no log line or error text carries a
+   credential (V14) — the config object is built, never serialized. */
+const SMB = {
+  enabled: !!(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD),
+  config: () => ({
+    host: SMB_HOST,
+    share: SMB_SHARE,
+    port: 445,
+    user: SMB_USER,
+    password: SMB_PASSWORD,
+  }),
+};
 /* Registry codes the interface actually renders — derived from the same
    source of truth as the client's import.meta.glob (D-07): the build's own
    src/locales/*.json files. Was a hardcoded ['en','fr'] pair until phase 77
