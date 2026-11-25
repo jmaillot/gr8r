@@ -372,7 +372,7 @@ test('sweepStaleBackupStaging removes staging orphans (current + legacy homes)',
    In-process sink (the 88-01 idiom) + the injected S3 destination seam
    (server.js installs the real one; tests inject this one). ---- */
 import http from 'node:http';
-import { setBackupS3Destination, setBackupRunWriter } from '../export/backup.js';
+import { setBackupDestination, setBackupRunWriter } from '../export/backup.js';
 
 const S3_XML = code => `<?xml version="1.0"?><Error><Code>${code}</Code><Message>msg</Message></Error>`;
 
@@ -430,7 +430,7 @@ function captureWriter() {
 test('88-03: S3-enabled run — local publish FIRST, then uploading stage with parts progress, stream-back verify, succeeded', async () => {
   const { server, port, state } = await startS3Sink();
   const events = captureWriter();
-  setBackupS3Destination(meta => (meta?.taskId === 't-s3' ? { config: sinkConfig(port) } : null));
+  setBackupDestination('s3', { label: 'S3', enabled: true, upload: meta => (meta?.taskId === 't-s3' ? { config: sinkConfig(port) } : null) });
   try {
     const run = await backup.runExport({ kind: 'project', id: 'p1' }, { taskId: 't-s3', trigger: 'scheduled' });
     assert.equal(run.ok, true, `runExport: ${run.error}`);
@@ -458,7 +458,7 @@ test('88-03: S3-enabled run — local publish FIRST, then uploading stage with p
     assert.equal(progress[0].partsTotal, 1);
     assert.ok(events.some(e => e.kind === 'complete' && e.filename === run.filename), 'complete still emitted after upload');
   } finally {
-    setBackupS3Destination(null);
+    setBackupDestination('s3', null);
     setBackupRunWriter(null);
     server.close();
   }
@@ -467,7 +467,7 @@ test('88-03: S3-enabled run — local publish FIRST, then uploading stage with p
 test('88-03: S3 failure after publish — upload_failed row shape, local archive KEPT, error sliced with no secrets', async () => {
   const { server, port } = await startS3Sink({ failPuts: true });
   const events = captureWriter();
-  setBackupS3Destination(() => ({ config: sinkConfig(port) }));
+  setBackupDestination('s3', { label: 'S3', enabled: true, upload: () => ({ config: sinkConfig(port) }) });
   try {
     const run = await backup.runExport({ kind: 'project', id: 'p1' }, { trigger: 'manual' });
     assert.equal(run.ok, false);
@@ -489,7 +489,7 @@ test('88-03: S3 failure after publish — upload_failed row shape, local archive
     assert.ok(!events.some(e => e.kind === 'complete'), 'no complete event');
     // D-88-9: manual run → backup-manual/ prefix (key attempted)
   } finally {
-    setBackupS3Destination(null);
+    setBackupDestination('s3', null);
     setBackupRunWriter(null);
     server.close();
   }

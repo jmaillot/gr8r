@@ -528,7 +528,7 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
 
   try {
     /* 1 — full verify chain passes → uploaded = 1 */
-    backup.setBackupS3Destination(async () => ({ config: sinkConfig() }));
+    backup.setBackupDestination('s3', { label: 'S3', enabled: true, upload: async () => ({ config: sinkConfig() }) });
     const good = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { trigger: 'manual' });
     assert.equal(good.ok, true, `run 1: ${good.error ?? 'ok'}`);
     const goodRow = await rowFor(good.runId);
@@ -538,7 +538,7 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
     assert.ok(objects.get(`backup-manual/${good.filename}.sha256`), 'the sidecar really landed in the sink');
 
     /* 2 — S3 disabled (provider null) → uploaded stays 0 */
-    backup.setBackupS3Destination(null);
+    backup.setBackupDestination('s3', null);
     const plain = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { trigger: 'manual' });
     assert.equal(plain.ok, true, `run 2: ${plain.error ?? 'ok'}`);
     const plainRow = await rowFor(plain.runId);
@@ -547,7 +547,7 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
 
     /* 3 — stream-back verify fails (discarded bodies) → upload_failed, uploaded stays 0 */
     discard = true;
-    backup.setBackupS3Destination(async () => ({ config: sinkConfig() }));
+    backup.setBackupDestination('s3', { label: 'S3', enabled: true, upload: async () => ({ config: sinkConfig() }) });
     const bad = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { trigger: 'manual' });
     assert.equal(bad.ok, false, 'run 3 fails upload verification');
     assert.equal(bad.code, 'uploadFailed', `run 3 refusal: ${JSON.stringify(bad)}`);
@@ -557,7 +557,7 @@ test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 a
     assert.ok(fs.existsSync(path.join(BACKUPS_DIR, bad.filename)), 'the local archive survives the upload failure (89 D-88-1 posture)');
   } finally {
     sink.close();
-    backup.setBackupS3Destination(null);
+    backup.setBackupDestination('s3', null);
     backup.setBackupRunWriter(null);
   }
 });

@@ -84,7 +84,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupS3Destination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupDestination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
@@ -3805,27 +3805,33 @@ async function handleRestoreRunOutcome(runId, outcome, { error = '', finalName =
    export core. The 'start' event remains the trigger route's own write. */
 setRestoreRunEmitter(event => emitRestoreRunEvent(event));
 
-/* Phase 88 (88-03, D-88-4/6/9): the S3 upload decision — installed as a
-   destination provider so export/backup.js stays env/engine agnostic
-   (the boot-frozen S3_* consts and the s3_enabled column read live HERE,
-   the 88-02 custody). Task runs upload only when the task opted in
+/* Phase 96 (DEST-01, D-01/D-04/D-06): the S3 destination install —
+   re-expressed through the destination registry so export/backup.js stays
+   env/engine agnostic (the boot-frozen S3_* consts and the s3_enabled
+   column read live HERE, the 88-02 custody). `upload` is the existing
+   closure body VERBATIM: task runs upload only when the task opted in
    (s3_enabled = 1, D-88-6); manual Run-now archives (task_id NULL) upload
    whenever S3 is configured (D-88-4) under the backup-manual/ prefix
-   (D-88-9). A task-row lookup error fails CLOSED (upload skipped, warned)
-   — an S3 upload is never attempted on a broken read. Rotation stays
-   local-only either way (D-88-7/D-11). */
-setBackupS3Destination(async meta => {
-  if (!S3.enabled) return null;
-  if (meta?.taskId) {
-    try {
-      const task = await db.get('select s3_enabled from backup_tasks where id = ?', [meta.taskId]);
-      if (!task || task.s3_enabled !== 1) return null;
-    } catch (err) {
-      logWarn(`backup s3: task ${meta.taskId} lookup failed — upload skipped: ${err?.message || err}`);
-      return null;
+   (D-88-9, declared via manualPrefix per D-01). A task-row lookup error
+   fails CLOSED (upload skipped, warned) — an S3 upload is never attempted
+   on a broken read. Rotation stays local-only either way (D-88-7/D-11). */
+setBackupDestination('s3', {
+  label: 'S3',
+  enabled: S3.enabled,
+  manualPrefix: 'backup-manual/', // D-88-9 — DECLARED BY the destination (D-01)
+  upload: async meta => {
+    if (!S3.enabled) return null;
+    if (meta?.taskId) {
+      try {
+        const task = await db.get('select s3_enabled from backup_tasks where id = ?', [meta.taskId]);
+        if (!task || task.s3_enabled !== 1) return null;
+      } catch (err) {
+        logWarn(`backup s3: task ${meta.taskId} lookup failed — upload skipped: ${err?.message || err}`);
+        return null;
+      }
     }
-  }
-  return { config: S3.config() };
+    return { config: S3.config() };
+  },
 });
 
 export async function runBackupSchedulerPass({ now: at } = {}) {

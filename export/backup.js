@@ -632,16 +632,22 @@ export function setBackupRunWriter(fn) {
   backupRunWriter = typeof fn === 'function' ? fn : null;
 }
 
-/* ---- S3 destination seam (Phase 88, 88-03, D-88-4/6/9) ----
-   server.js installs ONE provider via setBackupS3Destination(); runExport
-   consults it AFTER the local publish. The provider receives the run meta
-   and returns { config } to upload, or null to skip (S3 disabled, or the
-   task's s3_enabled off). export/backup.js stays env/engine agnostic —
-   the boot-frozen S3_* consts and the s3_enabled column read live in
-   server.js (the 88-02 custody). */
-let s3DestinationProvider = null;
-export function setBackupS3Destination(fn) {
-  s3DestinationProvider = typeof fn === 'function' ? fn : null;
+/* ---- Destination registry seam (Phase 96, DEST-01, D-01/D-04/D-05) ----
+   server.js installs destinations via setBackupDestination(name, dest);
+   runExport consults the registry AFTER the local publish. dest is the
+   D-01 descriptor: { label, enabled, upload, verify, probe, fetchToStaged,
+   manualPrefix } — the manual-run prefix is DECLARED BY the destination
+   (S3 declares 'backup-manual/' byte-identically). export/backup.js stays
+   env/engine agnostic — the boot-frozen S3/FTP/SMB env consts live in
+   server.js (the 88-02 custody). Registration order is canonical:
+   s3, ftp, smb (D-04 precedence). Dormant slots (upload/verify/probe/
+   fetchToStaged unset — D-05) are skipped by iteration; phases 97/100
+   fill them. NO compat shim — the legacy single-slot setter is removed
+   outright (OQ-1). */
+const destinations = new Map();
+export function setBackupDestination(name, dest) {
+  if (dest && typeof dest === 'object') destinations.set(name, dest);
+  else destinations.delete(name);
 }
 async function emitRunEvent(event) {
   if (!backupRunWriter) return;
@@ -829,42 +835,40 @@ export async function runExport(scope, meta = {}) {
 
     rmStaging(stagingDir); // D-15: only the verified archive remains (staging; the published archive is the upload source now)
 
-    /* ---- S3 upload stage (Phase 88, 88-03 — RATIFIED SLOT: after verify/publish).
+    /* ---- Destination upload stage (Phase 96: THE seam, DEST-01/D-01,
+       RATIFIED SLOT: after verify/publish). Ordered registry iteration
+       (s3 → ftp → smb, D-04). Dormant slots (enabled=false or upload
+       unset) are skipped — the D-05 contract phases 97/100 fill.
        D-88-1: the local archive is already published and immutable. Every
-       failure from here on is upload_failed — NEVER the generic catch below
-       (that would rmStaging/failRun a run whose local archive exists and lie
-       about it). The local archive and its history row survive untouched. ---- */
-    const s3Dest = s3DestinationProvider ? await s3DestinationProvider(runMeta) : null;
-    if (s3Dest?.config) {
-      const uploadFailed = async err => {
-        const msg = s3SliceError(err); // V14/T-88-10: sliced, no headers, no secrets
-        currentRun = { ...currentRun, stage: 'upload_failed', error: msg, finishedAt: Date.now() };
-        await emitRunEvent({
-          kind: 'upload_failed', runId, ...runMeta, filename, sha256, sizeBytes: size,
-          error: msg, startedAt: startedAtMs, finishedAt: currentRun.finishedAt,
-          durationMs: currentRun.finishedAt - startedAtMs,
-        });
-        return { ok: false, runId, code: 'uploadFailed', filename, sha256, sizeBytes: size, error: msg };
-      };
+       failure from here on is upload_failed — NEVER the generic catch
+       below (that would rmStaging/failRun a run whose local archive
+       exists and lie about it). The local archive and its history row
+       survive untouched. ---- */
+    const failedUploads = [];
+    for (const [destName, dest] of destinations) {
+      if (!dest?.enabled || typeof dest.upload !== 'function') continue; // dormant-slot contract (D-05)
+      const provided = await dest.upload(runMeta); // returns { config } to upload, or null to skip (disabled / task s3_enabled off)
+      if (!provided?.config) continue;
       /* Cancellation at the upload boundary routes into upload_failed too —
          the local archive EXISTS, so the generic cancelled-run path would
          misrepresent the outcome. */
       if (currentRun.cancelled) {
-        return await uploadFailed(new Error('backup: cancelled before S3 upload — server shutdown'));
+        failedUploads.push({ name: destName, err: new Error('backup: cancelled before S3 upload — server shutdown') });
+        break;
       }
       setStage('uploading'); // mirrors setStage('archiving') — the D-19 payload picks the stage up verbatim
-      const key = s3BackupKey(runMeta, filename); // D-88-6 task prefix / D-88-9 backup-manual/
+      const key = s3BackupKey(runMeta, filename); // D-88-6 task prefix / D-88-9 backup-manual/ (declared per-destination via descriptor.manualPrefix — identical output, D-01)
       try {
-        await uploadArchive(s3Dest.config, destination, key, sha256, (partsDone, partsTotal) => {
+        await uploadArchive(provided.config, destination, key, sha256, (partsDone, partsTotal) => {
           currentRun = { ...currentRun, partsDone, partsTotal };
           emitRunEvent({ kind: 'progress', runId, stage: 'uploading', partsDone, partsTotal }); // writer errors swallowed by the seam
         }, { isCancelled: () => currentRun.cancelled }); // MIN-04: shutdown mid-upload lands at the next part boundary → abort multipart → upload_failed
         /* D-88-8 verification: stream the object BACK and compare against
            the stored whole-archive sha256 — the ETag is never trusted
            (Pitfall 4). The sidecar must exist AND carry the same hash. */
-        const back = await downloadToStaged(s3Dest.config, key, sha256, dirs.tmpDir);
+        const back = await downloadToStaged(provided.config, key, sha256, dirs.tmpDir);
         fs.rmSync(back.tmpPath, { force: true });
-        const sideRes = await getObject(s3Dest.config, `${key}.sha256`);
+        const sideRes = await getObject(provided.config, `${key}.sha256`);
         const sideText = (await sideRes.body()).toString('utf8');
         if (sideText.split(/\s+/)[0] !== sha256) {
           throw new Error(`s3 upload: sidecar sha256 mismatch for ${key}`);
@@ -880,8 +884,26 @@ export async function runExport(scope, meta = {}) {
            about a state it failed to record. */
         await dbRun('update backup_runs set uploaded = 1 where id = ?', [runId]);
       } catch (err) {
-        return await uploadFailed(err);
+        failedUploads.push({ name: destName, err });
+        break;
       }
+    }
+    if (failedUploads.length) {
+      const { err } = failedUploads[0];
+      const msg = s3SliceError(err); // V14/T-88-10: sliced, no headers, no secrets
+      /* OQ-3 composition: ≥2 destinations failing names them all — but in
+         96 only S3 can upload, so this branch is UNREACHABLE by design and
+         the single-destination path keeps the RAW sliced message (D-06). */
+      const errorText = failedUploads.length >= 2
+        ? `upload failed: ${failedUploads.map(f => f.name).join(', ')} — first error: ${msg}`
+        : msg;
+      currentRun = { ...currentRun, stage: 'upload_failed', error: errorText, finishedAt: Date.now() };
+      await emitRunEvent({
+        kind: 'upload_failed', runId, ...runMeta, filename, sha256, sizeBytes: size,
+        error: errorText, startedAt: startedAtMs, finishedAt: currentRun.finishedAt,
+        durationMs: currentRun.finishedAt - startedAtMs,
+      });
+      return { ok: false, runId, code: 'uploadFailed', filename, sha256, sizeBytes: size, error: errorText };
     }
 
     /* Phase 90 (D-90-23, 90-03): the honest data-quality stamp — count the
