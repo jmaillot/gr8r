@@ -174,6 +174,49 @@ test('ftp probe route: audit funnel tokens + key-only detail (Pitfall 5/T-98-04)
   assert.match(route, /NO deleteFailed accept-with-warning analog[\s\S]*?HARD refuse/, 'the NO-deleteFailed-analog divergence is documented in the route comment');
 });
 
+/* ---- 98-02 Task 2 pins: probe-at-save twins + ftp_enabled persistence ---- */
+
+test('probe-at-save: BOTH twins exist (create AND edit — Pitfall 6) with audited keyed refusal', () => {
+  const s = serverSrc();
+  const createIdx = s.indexOf('insert into backup_tasks');
+  const editIdx = s.indexOf("update backup_tasks set name = ?, scope = ?, cron = ?");
+  assert.ok(createIdx > -1 && editIdx > createIdx, 'both write paths located');
+  const create = s.slice(0, createIdx);
+  const edit = s.slice(createIdx, editIdx);
+  const twin = /let ftpProbe = null;\n    if \((body\?\.ftpEnabled === true|ftpEnabled) && FTP\.enabled\) \{\n      ftpProbe = await probeFtp\(FTP\.config\(\)\);\n      if \(!ftpProbe\.ok\) \{\n        await auditBackupTask\(user, `backup_task_refused:ftpProbe:\$\{ftpProbe\.key\}`(, id)?\);\n        return fail\(res, 400, ftpProbe\.key, 'FTP destination probe failed — the task was not saved'\);/;
+  assert.match(create, twin, 'CREATE twin: hard refusal on !ok');
+  assert.match(edit, twin, 'EDIT twin: hard refusal on !ok (Pitfall 6)');
+  assert.equal((s.match(/backup_task_refused:ftpProbe:/g) || []).length, 2, 'exactly two twin refusal sites');
+  assert.equal((s.match(/key !== 'deleteFailed'/g) || []).length, 2, 'the deleteFailed exemption stays s3-only (two s3 sites, ZERO ftp sites)');
+});
+
+test('probe-at-save: ftp boolean/configured refusals on both paths (invalidFtpEnabled + ftpNotConfigured)', () => {
+  const s = serverSrc();
+  assert.equal((s.match(/backup_task_refused:invalidFtpEnabled/g) || []).length, 2, 'invalidFtpEnabled refused on create AND edit');
+  assert.equal((s.match(/backup_task_refused:ftpNotConfigured/g) || []).length, 2, 'ftpNotConfigured refused on create AND edit (the probe route uses backup_probe_refused:ftpNotConfigured — counted in Task 1 pins)');
+  assert.match(s, /typeof body\.ftpEnabled !== 'boolean'/, 'boolean-only gate (V5 parity)');
+  assert.match(s, /body\.ftpEnabled && !FTP\.enabled/, 'configured gate');
+});
+
+test('ftp_enabled persists: INSERT columns/binding AND UPDATE SET clause (both write paths)', () => {
+  const s = serverSrc();
+  const insert = s.match(/insert into backup_tasks[^']+'/)[0];
+  assert.match(insert, /ftp_enabled/, 'ftp_enabled in the INSERT column list');
+  assert.match(s, /\[task\.id[^\]]*task\.s3_enabled, task\.ftp_enabled, task\.last_notified_state/, 'INSERT binding array carries task.ftp_enabled beside s3_enabled');
+  const updateSql = s.match(/'update backup_tasks set name = \?[^']+'/)[0];
+  assert.match(updateSql, /s3_enabled = \?, ftp_enabled = \?, updated_at = \?/, 'UPDATE SET clause carries ftp_enabled beside s3_enabled');
+  assert.match(s, /updated\.s3_enabled, updated\.ftp_enabled, updated\.updated_at/, 'UPDATE binding array carries updated.ftp_enabled');
+  assert.match(s, /ftp_enabled: body\?\.ftpEnabled === true \? 1 : 0/, 'CREATE task object maps the boolean');
+  assert.match(s, /ftp_enabled: ftpEnabled \? 1 : 0/, 'EDIT updated object maps the resolved flag');
+});
+
+test('ftp probe response + audit ride both save paths (MIN-07 symmetry)', () => {
+  const s = serverSrc();
+  assert.equal((s.match(/(ftpProbe|result)\.ok \? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed'/g) || []).length, 3, 'probe outcome audited on route (result) + create + edit (ftpProbe)');
+  assert.match(s, /\.\.\.\(ftpProbe \? \{ ftpProbe \} : \{\}\)/, 'ftpProbe rides the save response beside s3Probe');
+});
+
+
 
 /* =====================================================================
    Functional pipeline tests — the REAL runExport upload loop against

@@ -9080,7 +9080,9 @@ async function handleApi(req, res, url) {
     /* Phase 94 (D-02): the descriptor grows `preset` — the flat reverse-map
        (cronToPreset, same parseCron discipline) the editor uses to pre-select
        the builder dropdowns; null → the readonly custom fallback. Additive
-       only: every Phase-92 descriptor key is unchanged. */
+       only: every Phase-92 descriptor key is unchanged. Phase 98: ftp_enabled
+       rides the { ...row } spread with no shape edit (D-88-6 s3_enabled
+       posture). */
     return { ...row, scope, schedule: { ...describeCron(row.cron), preset: cronToPreset(row.cron) } };
   };
   /* Phase 92 (D-06): the operator-gated scope picker — the minimal
@@ -9192,6 +9194,16 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_task_refused:s3NotConfigured');
       return fail(res, 400, 's3NotConfigured', 'S3 destination is not configured on this instance');
     }
+    /* Phase 98 (DEST-03): per-task FTP opt-in — the SAME boolean-only +
+       configured gate shape the s3Enabled funnel uses. */
+    if (body?.ftpEnabled !== undefined && typeof body.ftpEnabled !== 'boolean') {
+      await auditBackupTask(user, 'backup_task_refused:invalidFtpEnabled');
+      return fail(res, 400, 'invalidFtpEnabled', 'ftpEnabled must be a boolean');
+    }
+    if (body?.ftpEnabled && !FTP.enabled) {
+      await auditBackupTask(user, 'backup_task_refused:ftpNotConfigured');
+      return fail(res, 400, 'ftpNotConfigured', 'FTP destination is not configured on this instance');
+    }
     /* SC-1 probe-at-save (D-88-15, post-merge gate fix): a task enabled for
        S3 runs the SAME write+delete marker probe the manual route uses,
        BEFORE the write — it exercises the exact operations uploads use.
@@ -9204,6 +9216,19 @@ async function handleApi(req, res, url) {
       if (!s3Probe.ok && s3Probe.key !== 'deleteFailed') {
         await auditBackupTask(user, `backup_task_refused:s3Probe:${s3Probe.key}`);
         return fail(res, 400, s3Probe.key, 'S3 destination probe failed — the task was not saved');
+      }
+    }
+    /* DEST-03 probe-at-save (ftp twin, Phase 98): the SAME write+delete
+       marker probe BEFORE the write. NO deleteFailed exemption — unlike
+       the S3 D-88-15 accept-with-warning, a failing marker DELE is a HARD
+       refuse (Pitfall 7: ftp has no delete-failed analog that maps to
+       "accept with warning"). */
+    let ftpProbe = null;
+    if (body?.ftpEnabled === true && FTP.enabled) {
+      ftpProbe = await probeFtp(FTP.config());
+      if (!ftpProbe.ok) {
+        await auditBackupTask(user, `backup_task_refused:ftpProbe:${ftpProbe.key}`);
+        return fail(res, 400, ftpProbe.key, 'FTP destination probe failed — the task was not saved');
       }
     }
     /* D-04: the raw string is stored verbatim; next_run_at is the persisted
@@ -9226,13 +9251,14 @@ async function handleApi(req, res, url) {
       retention_yearly: retention.yearly,
       next_run_at: nextRun,
       s3_enabled: body?.s3Enabled === true ? 1 : 0,
+      ftp_enabled: body?.ftpEnabled === true ? 1 : 0,
       last_notified_state: null,
       created_at: now(),
       updated_at: now(),
     };
     await db.run(
-      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, s3_enabled, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.s3_enabled, task.last_notified_state, task.created_at, task.updated_at],
+      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, s3_enabled, ftp_enabled, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.s3_enabled, task.ftp_enabled, task.last_notified_state, task.created_at, task.updated_at],
     );
     await auditBackupTask(user, 'backup_task_created', task.id, task.name);
     /* MIN-07: the probe outcome at save is audited too — the backup_* audit
@@ -9241,10 +9267,16 @@ async function handleApi(req, res, url) {
     if (s3Probe) {
       await auditBackupTask(user, s3Probe.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', task.id, s3Probe.key);
     }
+    if (ftpProbe) {
+      await auditBackupTask(user, ftpProbe.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', task.id, ftpProbe.key);
+    }
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
     /* s3Probe rides the response so the client can toast the keyed outcome
-       (SC-1: probe-at-save is visible, not silent). */
-    return json(res, 200, s3Probe ? { task: backupTaskShape(task), s3Probe } : { task: backupTaskShape(task) });
+       (SC-1: probe-at-save is visible, not silent). ftpProbe rides beside
+       it (98-02 DEST-03 parity). */
+    return json(res, 200, s3Probe || ftpProbe
+      ? { task: backupTaskShape(task), ...(s3Probe ? { s3Probe } : {}), ...(ftpProbe ? { ftpProbe } : {}) }
+      : { task: backupTaskShape(task) });
   }
 
   const backupTaskMatch = pathname.match(/^\/api\/backup\/tasks\/([A-Za-z0-9_-]{1,64})$/);
@@ -9348,6 +9380,21 @@ async function handleApi(req, res, url) {
       }
       s3Enabled = body.s3Enabled;
     }
+    /* Phase 98 (DEST-03): per-task FTP opt-in on edit — the same
+       boolean-only + configured gate the POST funnel uses; absent flag
+       keeps the stored value. */
+    let ftpEnabled = row.ftp_enabled === 1;
+    if (body?.ftpEnabled !== undefined) {
+      if (typeof body.ftpEnabled !== 'boolean') {
+        await auditBackupTask(user, 'backup_task_refused:invalidFtpEnabled', id);
+        return fail(res, 400, 'invalidFtpEnabled', 'ftpEnabled must be a boolean');
+      }
+      if (body.ftpEnabled && !FTP.enabled) {
+        await auditBackupTask(user, 'backup_task_refused:ftpNotConfigured', id);
+        return fail(res, 400, 'ftpNotConfigured', 'FTP destination is not configured on this instance');
+      }
+      ftpEnabled = body.ftpEnabled;
+    }
     /* SC-1 probe-at-save on edit (same contract as create): the save only
        probes when the resulting row keeps S3 enabled and the env pair is
        live. Refusal keys identical to the create path; deleteFailed warns
@@ -9358,6 +9405,18 @@ async function handleApi(req, res, url) {
       if (!s3Probe.ok && s3Probe.key !== 'deleteFailed') {
         await auditBackupTask(user, `backup_task_refused:s3Probe:${s3Probe.key}`, id);
         return fail(res, 400, s3Probe.key, 'S3 destination probe failed — the task was not saved');
+      }
+    }
+    /* DEST-03 probe-at-save on edit (ftp twin, same contract as create):
+       probes when the resulting row keeps FTP enabled and the env trio is
+       live. NO deleteFailed exemption — the marker DELE failing is a HARD
+       refuse (Pitfall 7). */
+    let ftpProbe = null;
+    if (ftpEnabled && FTP.enabled) {
+      ftpProbe = await probeFtp(FTP.config());
+      if (!ftpProbe.ok) {
+        await auditBackupTask(user, `backup_task_refused:ftpProbe:${ftpProbe.key}`, id);
+        return fail(res, 400, ftpProbe.key, 'FTP destination probe failed — the task was not saved');
       }
     }
     const cronChanged = cron !== row.cron;
@@ -9388,19 +9447,25 @@ async function handleApi(req, res, url) {
       retention_yearly: retention.yearly,
       next_run_at: nextRun,
       s3_enabled: s3Enabled ? 1 : 0,
+      ftp_enabled: ftpEnabled ? 1 : 0,
       updated_at: now(),
     };
     await db.run(
-      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, s3_enabled = ?, updated_at = ? where id = ?',
-      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.s3_enabled, updated.updated_at, id],
+      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, s3_enabled = ?, ftp_enabled = ?, updated_at = ? where id = ?',
+      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.s3_enabled, updated.ftp_enabled, updated.updated_at, id],
     );
     await auditBackupTask(user, 'backup_task_updated', id, updated.name);
     /* MIN-07: probe outcome audit on edit — same symmetry as the create path. */
     if (s3Probe) {
       await auditBackupTask(user, s3Probe.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', id, s3Probe.key);
     }
+    if (ftpProbe) {
+      await auditBackupTask(user, ftpProbe.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', id, ftpProbe.key);
+    }
     logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
-    return json(res, 200, s3Probe ? { task: backupTaskShape(updated), s3Probe } : { task: backupTaskShape(updated) });
+    return json(res, 200, s3Probe || ftpProbe
+      ? { task: backupTaskShape(updated), ...(s3Probe ? { s3Probe } : {}), ...(ftpProbe ? { ftpProbe } : {}) }
+      : { task: backupTaskShape(updated) });
   }
 
   /* -------------- S3 probe-at-save (Phase 88, D-88-15, SC-1) --------------
