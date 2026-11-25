@@ -401,6 +401,7 @@ export const SMB_ERROR_CLASSES = {
   0xc000007f: 'noSpace',           // STATUS_DISK_FULL
   0xc0000044: 'noSpace',           // STATUS_QUOTA_EXCEEDED
   0xc000005a: 'sessionExpired',    // STATUS_NETWORK_SESSION_EXPIRED
+  0xc0000034: 'pathNotFound',      // STATUS_OBJECT_NAME_NOT_FOUND (100-01 additive — prune idempotency, Pitfall 1)
 };
 
 const SMB_CLASS_MESSAGES = {
@@ -413,6 +414,7 @@ const SMB_CLASS_MESSAGES = {
   sessionExpired: 'smb session expired',
   signingRequired: 'smb server refused the signing agreement',
   generic: 'smb protocol error',
+  pathNotFound: 'smb object not found',
 };
 
 /* V14-parity scrub (D-04 / T-99-02): redact NTLMSSP blob material and
@@ -874,6 +876,12 @@ async function sessionAuthRound(s) {
   const res2 = await sendRequest(s, SMB2_COM.SESSION_SETUP, buildSessionSetupRequest(type3.message), { signed: true, context: 'session setup (type-3)' });
   if (res2.header.status !== 0) throw smbErrorFrom(res2.header.status, 'session setup (type-3)');
   s.sessionId = res2.header.sessionId;
+  /* SessionFlags u16 at reply-body offset 2 (MS-SMB2 §2.2.5); bit
+     0x0001 = SMB2_SESSION_FLAG_IS_GUEST (100-01, ASSUMED A1 — the
+     phase-100 e2e is the live falsification point). Read-only
+     observation of an already-received reply: signing, retry and
+     frame-layout behavior are untouched. */
+  if (res2.body.length >= 4) s.guestSession = (res2.body.readUInt16LE(2) & 0x0001) !== 0;
 }
 
 async function treeConnect(s) {
@@ -1099,7 +1107,7 @@ export function connectSmb(config, opts = {}) {
        cursor; never carries credentials. */
     __debug: async () => {
       const s = await ensure().catch(() => null);
-      return { sessionExpiredCount: s?.sessionExpiredCount ?? 0, messageId: String(s?.messageId ?? '0') };
+      return { sessionExpiredCount: s?.sessionExpiredCount ?? 0, messageId: String(s?.messageId ?? '0'), guestSession: !!s?.guestSession };
     },
   };
   return smb;

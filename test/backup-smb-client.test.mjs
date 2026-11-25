@@ -11,6 +11,7 @@
    ===================================================================== */
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import net from 'node:net';
 import { test } from 'node:test';
 import {
@@ -65,10 +66,10 @@ const MOCK_TYPE2 = (() => {
 
 /* Session-setup reply body: StructureSize 9 + security buffer at frame
    offset 72 (body offset 8). */
-function sessionSetupBody(secBuf) {
+function sessionSetupBody(secBuf, sessionFlags = 0) {
   const b = Buffer.alloc(8 + secBuf.length);
   b.writeUInt16LE(9, 0);
-  b.writeUInt16LE(0, 2);
+  b.writeUInt16LE(sessionFlags, 2); // SessionFlags u16 @ body offset 2 (MS-SMB2 §2.2.5)
   b.writeUInt16LE(64 + 8, 4);  // SecurityBufferOffset
   b.writeUInt16LE(secBuf.length, 6);
   secBuf.copy(b, 8);
@@ -260,7 +261,7 @@ function fakeSmb(scenario = {}) {
              logon leaves the session UNESTABLISHED → unsigned reply). */
           signingKey = signingKeyFromType3(sec, creds);
           if (scenario.wrongSigningKey) signingKey = Buffer.alloc(16, 0xee);
-          send(frame, { status: scenario.sessionSetupStatus ?? 0, sign: !scenario.sessionSetupStatus, body: sessionSetupBody(Buffer.alloc(0)) });
+          send(frame, { status: scenario.sessionSetupStatus ?? 0, sign: !scenario.sessionSetupStatus, body: sessionSetupBody(Buffer.alloc(0), scenario.sessionFlags ?? 0) });
           return;
         }
         case SMB2_COM.TREE_CONNECT: {
@@ -771,3 +772,174 @@ test('D-04 scrub: no type-3 / NT-response / password material in ANY surfaced er
     assert.ok(err.code?.startsWith('smb'), 'keyed code present');
   }
 });
+
+/* =====================================================================
+   Phase 100 plan 01 — Task 1: pathNotFound class + guest detection
+   ===================================================================== */
+
+test('NTSTATUS 0xc0000034 maps to pathNotFound; the pre-existing 9 mappings stay intact (additive enum)', async () => {
+  const { SMB_ERROR_CLASSES, smbErrorFrom } = await import('../export/smb.js');
+  /* Regression pins: every pre-existing code → its existing class. */
+  const expected = {
+    0xc000006d: 'authFailed',
+    0xc000006a: 'authFailed',
+    0xc0000064: 'authFailed',
+    0xc00000cc: 'shareNotFound',
+    0xc0000022: 'treeConnectFailed',
+    0xc0000035: 'nameConflict',
+    0xc000007f: 'noSpace',
+    0xc0000044: 'noSpace',
+    0xc000005a: 'sessionExpired',
+  };
+  for (const [status, cls] of Object.entries(expected)) {
+    assert.equal(smbErrorFrom(Number(status)).smbClass, cls, `0x${Number(status).toString(16)} still maps to ${cls}`);
+  }
+  /* The additive entry. */
+  assert.equal(SMB_ERROR_CLASSES[0xc0000034], 'pathNotFound');
+  const err = smbErrorFrom(0xc0000034);
+  assert.equal(err.smbClass, 'pathNotFound');
+  assert.equal(err.code, 'smbPathNotFound');
+});
+
+test('OBJECT_NAME_NOT_FOUND on CREATE → pathNotFound over the wire', async () => {
+  const server = fakeSmb({ createStatus: 0xc0000034 });
+  await server.listen();
+  try {
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\gr8r' });
+    await smb.connect();
+    await assert.rejects(
+      smb.write('/backup/missing.bin', Buffer.from('x')),
+      (err) => err.smbClass === 'pathNotFound' && err.code === 'smbPathNotFound',
+    );
+    await smb.close();
+  } finally {
+    await server.close();
+  }
+});
+
+test('guest detection: SessionFlags bit 0x0001 at reply-body offset 2 → __debug().guestSession', async () => {
+  for (const [flags, want] of [[0x0001, true], [0x0000, false], [0x0002, false]]) {
+    const server = fakeSmb({ sessionFlags: flags });
+    await server.listen();
+    try {
+      const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\h\\s' });
+      await smb.connect();
+      const debug = await smb.__debug();
+      assert.equal(debug.guestSession, want, `SessionFlags 0x${flags.toString(16)} → guestSession ${want}`);
+      await smb.close();
+    } finally {
+      await server.close();
+    }
+  }
+});
+
+test('export/smb.js imports only node: builtins (zero new dependencies)', () => {
+  const src = fs.readFileSync(new URL('../export/smb.js', import.meta.url), 'utf8');
+  const imports = [...src.matchAll(/^import .* from '([^']+)';?\s*$/gm)].map((m) => m[1]);
+  assert.ok(imports.length >= 2, `imports found (${imports.length})`);
+  for (const i of imports) assert.ok(i.startsWith('node:'), `non-builtin import: ${i}`);
+});
+
+/* =====================================================================
+   Phase 100 plan 01 — Task 2: probeSmb + fetchSmbToStaged
+   ===================================================================== */
+
+const smbProbeConfig = (port) => ({ host: '127.0.0.1', port, user: 'gr8r', domain: 'DOMAIN', password: 'gr8r-secret', share: '\\\\127.0.0.1\\gr8r' });
+
+test('probeSmb happy path → keyed { ok: true, key: "success" }, no httpWarning key, marker written then removed', async () => {
+  const { probeSmb } = await import('../export/smb.js');
+  const server = fakeSmb();
+  await server.listen();
+  try {
+    const result = await probeSmb(smbProbeConfig(server.port()));
+    assert.deepEqual(result, { ok: true, key: 'success', warning: false });
+    assert.ok(!('httpWarning' in result), 'R-3: no httpWarning anywhere in the SMB probe contract');
+    /* Marker under the backup-smb/ prefix; the probe ends with its rm. */
+    const src = fs.readFileSync(new URL('../export/smb.js', import.meta.url), 'utf8');
+    assert.ok(/backup-smb\/probe-/.test(src), 'marker lives under the backup-smb/ prefix');
+    const cmds = server.commands.map((c) => c.command);
+    assert.ok(cmds.includes(SMB2_COM.CREATE) && cmds.includes(SMB2_COM.WRITE), 'probe wrote its marker');
+  } finally {
+    await server.close();
+  }
+});
+
+test('probeSmb marker rm failure → HARD refuse { ok: false, key: "deleteFailed" }, warning stays false', async () => {
+  const { probeSmb } = await import('../export/smb.js');
+  const server = fakeSmb({ closeStatus: 0xc0000022 }); // every CLOSE fails → marker rm fails
+  await server.listen();
+  try {
+    const result = await probeSmb(smbProbeConfig(server.port()));
+    assert.deepEqual(result, { ok: false, key: 'deleteFailed', warning: false });
+  } finally {
+    await server.close();
+  }
+});
+
+test('probeSmb connect/auth failures map to keyed class results — no config, credentials, or error text leaks', async () => {
+  const { probeSmb } = await import('../export/smb.js');
+  /* unreachable */
+  const dead = await probeSmb({ host: '127.0.0.1', port: 1, user: 'secret-user', domain: 'D', password: 'secret-pass', share: '\\\\h\\s' });
+  assert.equal(dead.ok, false);
+  assert.equal(dead.key, 'unreachable');
+  /* authFailed */
+  const server = fakeSmb({ sessionSetupStatus: 0xc000006d });
+  await server.listen();
+  try {
+    const result = await probeSmb({ ...smbProbeConfig(server.port()), password: 'wrong-password' });
+    assert.equal(result.ok, false);
+    assert.equal(result.key, 'authFailed');
+    const flat = JSON.stringify(result);
+    assert.ok(!flat.includes('secret'), 'no credential material in the result');
+    assert.ok(!('error' in result), 'no raw error text rides the keyed result');
+  } finally {
+    await server.close();
+  }
+});
+
+test('probeSmb with a guest session → result.guest === true on success', async () => {
+  const { probeSmb } = await import('../export/smb.js');
+  const server = fakeSmb({ sessionFlags: 0x0001 });
+  await server.listen();
+  try {
+    const result = await probeSmb(smbProbeConfig(server.port()));
+    assert.equal(result.ok, true);
+    assert.equal(result.guest, true);
+  } finally {
+    await server.close();
+  }
+});
+
+test('fetchSmbToStaged: matching sha256 → staging file with identical bytes; mismatch → keyed refusal, no file left behind', async () => {
+  const { fetchSmbToStaged } = await import('../export/smb.js');
+  const payload = Buffer.from('gr8r smb staged fetch payload');
+  const sha = crypto.createHash('sha256').update(payload).digest('hex');
+  const server = fakeSmb();
+  await server.listen();
+  const staging = fs.mkdtempSync('/tmp/opencode/smb-staging-');
+  try {
+    const smb = connectSmb(smbProbeConfig(server.port()));
+    await smb.connect();
+    await smb.write('/backup/staged.bin', payload);
+    await smb.close();
+
+    const { tmpPath } = await fetchSmbToStaged(smbProbeConfig(server.port()), '/backup/staged.bin', sha, staging);
+    assert.ok(tmpPath.startsWith(staging), 'tmpPath lives under stagingDir');
+    assert.ok(fs.readFileSync(tmpPath).equals(payload), 'staged bytes identical');
+
+    await assert.rejects(
+      fetchSmbToStaged(smbProbeConfig(server.port()), '/backup/staged.bin', 'deadbeef'.repeat(8), staging),
+      (err) => err.code === 'smbSha256Mismatch',
+      'sha256 mismatch refuses keyed (T-98-06 discipline)',
+    );
+    const leftovers = fs.readdirSync(staging).filter((f) => f.startsWith('smb-download-'));
+    assert.deepEqual(leftovers.filter((f) => {
+      const buf = fs.readFileSync(`${staging}/${f}`);
+      return !buf.equals(payload);
+    }), [], 'no mismatched staging file left behind');
+  } finally {
+    await server.close();
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+});
+
