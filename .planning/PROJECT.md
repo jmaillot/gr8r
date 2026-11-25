@@ -1,6 +1,17 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-24 — Milestone v3.4 UX Polish & Backup Console Refinement SHIPPED and archived (see MILESTONES.md). Next milestone not yet defined.*
+*Last updated: 2026-11-25 — Milestone v3.5 Backup Destinations — SMB & FTP started. v3.4 shipped and archived 2026-11-24 (see MILESTONES.md).*
+
+## Current Milestone: v3.5 Backup Destinations — SMB & FTP
+
+**Goal:** Étendre la famille de destinations backup (local + S3) avec deux destinations distantes — SMB/CIFS et FTP/FTPS — sur le pipeline v1 existant (staging, checksum, sidecar sha256, rotation GFS, probe), sans nouvelle dépendance npm et en gardant le modèle env-only de D-88.
+
+**Target features:**
+- Destination SMB/CIFS : client zero-dep (à arbitrer en research : client SMB hand-rolled vs montage CIFS), chemins UNC, credentials env
+- Destination FTP/FTPS : client zero-dep sur net/tls natifs, mode passif, TLS explicite
+- Config env-only gelée au boot (D-88 inchangé) : variables SMB_* / FTP_* symétriques des S3_*
+- Toggle par tâche dans l'éditeur backup + badges de localisation (runs + restore list) + probe à classes d'erreur typées ×5
+- Custody des credentials (jamais loggés), audit des refus, invariant local-first puis miroir
 
 ## Milestone v3.4 UX Polish & Backup Console Refinement — SHIPPED (2026-11-24)
 

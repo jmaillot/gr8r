@@ -1,18 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.4
-milestone_name: UX Polish & Backup Console Refinement
-status: active
-stopped_at: Completed 95-05-PLAN.md
-last_updated: "2026-11-24T20:47:08.518Z"
-state_head: 26d17ac2c6f40e9874a3b962fe81f18554231264
+milestone: v3.5
+milestone_name: Backup Destinations — SMB & FTP
+status: planning
+last_updated: "2026-11-25T05:51:12.638Z"
+last_activity: 2026-11-25
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
-current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrite Restore
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Projects Studio — State
@@ -25,12 +23,10 @@ current_phase_name: Settings Polish + Cross-Workspace Pickers + Project Overwrit
 
 ## Current Position
 
-- **Phase:** 95 complete ✓ — plans 01 + 04 + 02 + 05 done (2026-11-24; 05 = BKRST-05 client half, commits c8a09b66..26d17ac2: scopes payload additive projects:[{id,name}], drawer project picker + Overwrite CTA (D-02), confirm-phrase vs CURRENT project name, payload contract targetId/targetProjectId/confirmName)
-- **Plan:** Milestone v3.4 complete — all 5 phases (91–95) verified
-- **Status:** Milestone v3.4 SHIPPED 2026-11-24 (archived; override_closeout documented in MILESTONES.md)
-- **Progress:** ████░ 4/5 phases (v3.4)
-
-**Parallelism note:** Phase 91 (digest) and Phase 92 (server payload contracts) are independent — can be planned/executed in either order or parallel. Phases 93–95 depend on Phase 92's contracts (93 on roles aggregation; 94 on cron descriptor/names/gfs_bucket/unified runs; 95 on backupScopeWorkspaces; settings items in 95 are independent).
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-25 — Milestone v3.5 started
 
 ## Performance Metrics
 
