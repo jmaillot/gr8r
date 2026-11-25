@@ -533,3 +533,81 @@ test('pipeline: smb write fails → single terminal upload_failed naming smb, lo
     setBackupDestination('smb', { label: 'SMB', enabled: false });
   }
 });
+
+/* =====================================================================
+   100-03 pins: smb-probe route + probe-at-save CREATE/EDIT twins.
+   Static source-slice pins over server.js — guard chain order, refusal
+   keys, audit key-only detail, and the hard-refuse (no deleteFailed
+   exemption) posture, sliced against the ftp analogs.
+   ===================================================================== */
+
+test('smb-probe route: path exists with the ftp-probe guard chain order VERBATIM', () => {
+  const s = serverSrc();
+  const i = s.indexOf("pathname === '/api/backup/tasks/smb-probe'");
+  assert.ok(i !== -1, 'the smb-probe route exists');
+  const block = s.slice(i, i + 1400);
+  const order = [
+    ['sameOrigin', block.indexOf("if (!sameOrigin(req))")],
+    ['requireUser', block.indexOf('await requireUser(req, res)')],
+    ['tooMany', block.indexOf("tooMany(`backupprobe|")],
+    ['CAP.BACKUP_MANAGE', block.indexOf('CAP.BACKUP_MANAGE')],
+    ['SMB.enabled', block.indexOf('if (!SMB.enabled)')],
+    ['probeSmb', block.indexOf('await probeSmb(SMB.config())')],
+  ];
+  for (const [name, pos] of order) assert.ok(pos !== -1, `guard present: ${name}`);
+  for (let k = 1; k < order.length; k++) {
+    assert.ok(order[k][1] > order[k - 1][1], `guard order: ${order[k - 1][0]} precedes ${order[k][0]}`);
+  }
+});
+
+test('smb-probe route: refusals keyed + audited, probe audits key-only detail (Pitfall 5)', () => {
+  const s = serverSrc();
+  const i = s.indexOf("pathname === '/api/backup/tasks/smb-probe'");
+  const block = s.slice(i, i + 1400);
+  assert.match(block, /backup_probe_refused:backupManageRequired/);
+  assert.match(block, /backup_probe_refused:smbNotConfigured/);
+  assert.match(block, /fail\(res, 400, 'smbNotConfigured'/, 'the SMB.enabled miss refuses keyed smbNotConfigured');
+  assert.match(block, /result\.ok \? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', user\.id, result\.key\)/, 'probe audit detail = result.key ONLY');
+  assert.ok(!/httpWarning/.test(block), 'R-3: NO httpWarning anywhere in the smb-probe route');
+  assert.ok(!/JSON\.stringify\(SMB/.test(block), 'never serializes config into the audit/result (T-100-06)');
+});
+
+test('probe-at-save CREATE twin: gate, hard refuse, smb_enabled in task + INSERT, response ride', () => {
+  const s = serverSrc();
+  const i = s.indexOf('let smbProbe = null;');
+  assert.ok(i !== -1, 'the CREATE smbProbe twin exists');
+  const block = s.slice(i, i + 700);
+  assert.match(block, /body\?\.smbEnabled === true && SMB\.enabled/, 'CREATE gates on body flag AND destination enabled');
+  assert.match(block, /backup_task_refused:smbProbe:\$\{smbProbe\.key\}/, 'refusal audit keyed with the probe key');
+  assert.match(block, /fail\(res, 400, smbProbe\.key, 'SMB destination probe failed — the task was not saved'\)/, 'hard 400 refusal — task NOT saved');
+  assert.ok(!/deleteFailed/.test(block), 'NO deleteFailed exemption — hard refuse on ANY !ok (98-02 precedent)');
+  const taskBlock = s.slice(s.indexOf('const task = {', i), s.indexOf("await db.run(\n      'insert into backup_tasks", i));
+  assert.match(taskBlock, /smb_enabled: body\?\.smbEnabled === true \? 1 : 0/, 'smb_enabled lands in the task object');
+  const insert = s.slice(s.indexOf("'insert into backup_tasks", i), s.indexOf("await auditBackupTask(user, 'backup_task_created'", i));
+  assert.match(insert, /smb_enabled/, 'smb_enabled is in the INSERT column list and params');
+  const ride = s.slice(s.indexOf('backup_task_created', i), s.indexOf('const backupTaskMatch', i));
+  assert.match(ride, /smbProbe \? \{ smbProbe \}/, 'the probe rides the response (SC-1 symmetry)');
+  assert.match(ride, /backup_smb_probe_ok/, 'probe outcome audited at save (MIN-07 symmetry)');
+});
+
+test('probe-at-save EDIT twin: resolved smbEnabled read/keep, hard refuse, UPDATE, ride with id', () => {
+  const s = serverSrc();
+  const i = s.indexOf('let smbEnabled = row.smb_enabled === 1;');
+  assert.ok(i !== -1, 'the EDIT resolved smbEnabled read/keep exists');
+  const keep = s.slice(i, s.indexOf('let smbProbe = null;', i));
+  assert.match(keep, /body\?\.smbEnabled !== undefined/, 'absent flag keeps the stored value');
+  assert.match(keep, /backup_task_refused:invalidSmbEnabled', id/, 'boolean-only refusal audited with id');
+  assert.match(keep, /backup_task_refused:smbNotConfigured', id/, 'not-configured refusal audited with id');
+  const block = s.slice(s.indexOf('let smbProbe = null;', i), s.indexOf('const cronChanged', i));
+  assert.match(block, /smbEnabled && SMB\.enabled/, 'EDIT probes the RESOLVED resulting smbEnabled (not body)');
+  assert.match(block, /backup_task_refused:smbProbe:\$\{smbProbe\.key\}`, id/, 'refusal audit carries id');
+  assert.match(block, /fail\(res, 400, smbProbe\.key, 'SMB destination probe failed — the task was not saved'\)/, 'hard 400 refusal on edit too');
+  assert.ok(!/deleteFailed/.test(block), 'NO deleteFailed exemption on edit');
+  const updated = s.slice(s.indexOf('const updated = {', i), s.indexOf("'update backup_tasks set", i));
+  assert.match(updated, /smb_enabled: smbEnabled \? 1 : 0/, 'smb_enabled lands in the updated object');
+  const updateSql = s.slice(s.indexOf("'update backup_tasks set", i), s.indexOf('await auditBackupTask(user, \'backup_task_updated\'', i));
+  assert.match(updateSql, /smb_enabled = \?/, 'smb_enabled in the UPDATE set list');
+  const ride = s.slice(s.indexOf('backup_task_updated', i), s.indexOf('S3 probe-at-save', i));
+  assert.match(ride, /backup_smb_probe_ok/, 'probe outcome audited on edit');
+  assert.match(ride, /smbProbe \? \{ smbProbe \}/, 'the probe rides the edit response');
+});

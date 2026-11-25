@@ -89,6 +89,7 @@ import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { connectFtp, probeFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03)
+import { probeSmb } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity)
 import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
@@ -9251,6 +9252,16 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_task_refused:ftpNotConfigured');
       return fail(res, 400, 'ftpNotConfigured', 'FTP destination is not configured on this instance');
     }
+    /* Phase 100 (DEST-03): per-task SMB opt-in — the SAME boolean-only +
+       configured gate shape the s3Enabled/ftpEnabled funnels use. */
+    if (body?.smbEnabled !== undefined && typeof body.smbEnabled !== 'boolean') {
+      await auditBackupTask(user, 'backup_task_refused:invalidSmbEnabled');
+      return fail(res, 400, 'invalidSmbEnabled', 'smbEnabled must be a boolean');
+    }
+    if (body?.smbEnabled && !SMB.enabled) {
+      await auditBackupTask(user, 'backup_task_refused:smbNotConfigured');
+      return fail(res, 400, 'smbNotConfigured', 'SMB destination is not configured on this instance');
+    }
     /* SC-1 probe-at-save (D-88-15, post-merge gate fix): a task enabled for
        S3 runs the SAME write+delete marker probe the manual route uses,
        BEFORE the write — it exercises the exact operations uploads use.
@@ -9278,6 +9289,18 @@ async function handleApi(req, res, url) {
         return fail(res, 400, ftpProbe.key, 'FTP destination probe failed — the task was not saved');
       }
     }
+    /* DEST-03 probe-at-save (smb twin, Phase 100): the SAME write+delete
+       marker probe BEFORE the write. NO deleteFailed exemption — unlike
+       the S3 D-88-15 accept-with-warning, a failing marker rm is a HARD
+       refuse (98-02 precedent: SMB has no accept-with-warning analog). */
+    let smbProbe = null;
+    if (body?.smbEnabled === true && SMB.enabled) {
+      smbProbe = await probeSmb(SMB.config());
+      if (!smbProbe.ok) {
+        await auditBackupTask(user, `backup_task_refused:smbProbe:${smbProbe.key}`);
+        return fail(res, 400, smbProbe.key, 'SMB destination probe failed — the task was not saved');
+      }
+    }
     /* D-04: the raw string is stored verbatim; next_run_at is the persisted
        cache computed in the SAME write (never re-parsed at tick). */
     const nextRun = nextRunAt(cron, tz, now());
@@ -9299,13 +9322,14 @@ async function handleApi(req, res, url) {
       next_run_at: nextRun,
       s3_enabled: body?.s3Enabled === true ? 1 : 0,
       ftp_enabled: body?.ftpEnabled === true ? 1 : 0,
+      smb_enabled: body?.smbEnabled === true ? 1 : 0,
       last_notified_state: null,
       created_at: now(),
       updated_at: now(),
     };
     await db.run(
-      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, s3_enabled, ftp_enabled, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.s3_enabled, task.ftp_enabled, task.last_notified_state, task.created_at, task.updated_at],
+      'insert into backup_tasks (id, name, scope, cron, tz, enabled, retention_daily, retention_weekly, retention_monthly, retention_yearly, next_run_at, s3_enabled, ftp_enabled, smb_enabled, last_notified_state, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [task.id, task.name, task.scope, task.cron, task.tz, task.enabled, task.retention_daily, task.retention_weekly, task.retention_monthly, task.retention_yearly, task.next_run_at, task.s3_enabled, task.ftp_enabled, task.smb_enabled, task.last_notified_state, task.created_at, task.updated_at],
     );
     await auditBackupTask(user, 'backup_task_created', task.id, task.name);
     /* MIN-07: the probe outcome at save is audited too — the backup_* audit
@@ -9317,12 +9341,15 @@ async function handleApi(req, res, url) {
     if (ftpProbe) {
       await auditBackupTask(user, ftpProbe.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', task.id, ftpProbe.key);
     }
+    if (smbProbe) {
+      await auditBackupTask(user, smbProbe.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', task.id, smbProbe.key);
+    }
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
     /* s3Probe rides the response so the client can toast the keyed outcome
        (SC-1: probe-at-save is visible, not silent). ftpProbe rides beside
-       it (98-02 DEST-03 parity). */
-    return json(res, 200, s3Probe || ftpProbe
-      ? { task: backupTaskShape(task), ...(s3Probe ? { s3Probe } : {}), ...(ftpProbe ? { ftpProbe } : {}) }
+       it (98-02 DEST-03 parity); smbProbe rides beside both (100-03). */
+    return json(res, 200, s3Probe || ftpProbe || smbProbe
+      ? { task: backupTaskShape(task), ...(s3Probe ? { s3Probe } : {}), ...(ftpProbe ? { ftpProbe } : {}), ...(smbProbe ? { smbProbe } : {}) }
       : { task: backupTaskShape(task) });
   }
 
@@ -9442,6 +9469,21 @@ async function handleApi(req, res, url) {
       }
       ftpEnabled = body.ftpEnabled;
     }
+    /* Phase 100 (DEST-03): per-task SMB opt-in on edit — the same
+       boolean-only + configured gate the POST funnel uses; absent flag
+       keeps the stored value. */
+    let smbEnabled = row.smb_enabled === 1;
+    if (body?.smbEnabled !== undefined) {
+      if (typeof body.smbEnabled !== 'boolean') {
+        await auditBackupTask(user, 'backup_task_refused:invalidSmbEnabled', id);
+        return fail(res, 400, 'invalidSmbEnabled', 'smbEnabled must be a boolean');
+      }
+      if (body.smbEnabled && !SMB.enabled) {
+        await auditBackupTask(user, 'backup_task_refused:smbNotConfigured', id);
+        return fail(res, 400, 'smbNotConfigured', 'SMB destination is not configured on this instance');
+      }
+      smbEnabled = body.smbEnabled;
+    }
     /* SC-1 probe-at-save on edit (same contract as create): the save only
        probes when the resulting row keeps S3 enabled and the env pair is
        live. Refusal keys identical to the create path; deleteFailed warns
@@ -9464,6 +9506,17 @@ async function handleApi(req, res, url) {
       if (!ftpProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:ftpProbe:${ftpProbe.key}`, id);
         return fail(res, 400, ftpProbe.key, 'FTP destination probe failed — the task was not saved');
+      }
+    }
+    /* DEST-03 probe-at-save on edit (smb twin, same contract as create):
+       probes when the resulting row keeps SMB enabled and the env quartet
+       is live. NO deleteFailed exemption — HARD refuse (Pitfall 7). */
+    let smbProbe = null;
+    if (smbEnabled && SMB.enabled) {
+      smbProbe = await probeSmb(SMB.config());
+      if (!smbProbe.ok) {
+        await auditBackupTask(user, `backup_task_refused:smbProbe:${smbProbe.key}`, id);
+        return fail(res, 400, smbProbe.key, 'SMB destination probe failed — the task was not saved');
       }
     }
     const cronChanged = cron !== row.cron;
@@ -9495,11 +9548,12 @@ async function handleApi(req, res, url) {
       next_run_at: nextRun,
       s3_enabled: s3Enabled ? 1 : 0,
       ftp_enabled: ftpEnabled ? 1 : 0,
+      smb_enabled: smbEnabled ? 1 : 0,
       updated_at: now(),
     };
     await db.run(
-      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, s3_enabled = ?, ftp_enabled = ?, updated_at = ? where id = ?',
-      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.s3_enabled, updated.ftp_enabled, updated.updated_at, id],
+      'update backup_tasks set name = ?, scope = ?, cron = ?, tz = ?, enabled = ?, retention_daily = ?, retention_weekly = ?, retention_monthly = ?, retention_yearly = ?, next_run_at = ?, s3_enabled = ?, ftp_enabled = ?, smb_enabled = ?, updated_at = ? where id = ?',
+      [updated.name, updated.scope, updated.cron, updated.tz, updated.enabled, updated.retention_daily, updated.retention_weekly, updated.retention_monthly, updated.retention_yearly, updated.next_run_at, updated.s3_enabled, updated.ftp_enabled, updated.smb_enabled, updated.updated_at, id],
     );
     await auditBackupTask(user, 'backup_task_updated', id, updated.name);
     /* MIN-07: probe outcome audit on edit — same symmetry as the create path. */
@@ -9509,9 +9563,12 @@ async function handleApi(req, res, url) {
     if (ftpProbe) {
       await auditBackupTask(user, ftpProbe.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', id, ftpProbe.key);
     }
+    if (smbProbe) {
+      await auditBackupTask(user, smbProbe.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', id, smbProbe.key);
+    }
     logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
-    return json(res, 200, s3Probe || ftpProbe
-      ? { task: backupTaskShape(updated), ...(s3Probe ? { s3Probe } : {}), ...(ftpProbe ? { ftpProbe } : {}) }
+    return json(res, 200, s3Probe || ftpProbe || smbProbe
+      ? { task: backupTaskShape(updated), ...(s3Probe ? { s3Probe } : {}), ...(ftpProbe ? { ftpProbe } : {}), ...(smbProbe ? { smbProbe } : {}) }
       : { task: backupTaskShape(updated) });
   }
 
@@ -9574,6 +9631,35 @@ async function handleApi(req, res, url) {
     const result = await probeFtp(FTP.config());
     await auditBackupTask(user, result.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', user.id, result.key);
     logInfo(`ftp probe: ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
+    return json(res, 200, result);
+  }
+
+  /* -------------- SMB probe route (Phase 100, D-04, DEST-03) --------------
+     POST /api/backup/tasks/smb-probe clones the ftp-probe funnel above: the
+     guard chain is VERBATIM in order — sameOrigin → requireUser →
+     operator-keyed throttle → CAP.BACKUP_MANAGE → SMB.enabled → probeSmb —
+     every refusal keyed AND audited (T-100-05). probeSmb's keyed result
+     returns VERBATIM (success / smb classes / unreachable / deleteFailed);
+     a guest session rides the result through (SC-2/D-23 — the client toasts
+     it informationally). R-3: NO httpWarning — SMB has no TLS variant.
+     Audit detail carries result.key only — never the config, never raw
+     error text (Pitfall 5 / T-100-06). */
+  if (pathname === '/api/backup/tasks/smb-probe' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`backupprobe|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'backup_probe_refused:backupManageRequired');
+      return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can probe the SMB destination');
+    }
+    if (!SMB.enabled) {
+      await auditBackupTask(user, 'backup_probe_refused:smbNotConfigured');
+      return fail(res, 400, 'smbNotConfigured', 'SMB destination is not configured on this instance');
+    }
+    const result = await probeSmb(SMB.config());
+    await auditBackupTask(user, result.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', user.id, result.key);
+    logInfo(`smb probe: ${result.key}${result.guest ? ' (guest session)' : ''}`);
     return json(res, 200, result);
   }
 
