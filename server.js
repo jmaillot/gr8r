@@ -4349,11 +4349,12 @@ async function pruneRunMirrors(taskId, taskName, deleteSet) {
     ];
     for (const [dest, hasCopy, dele] of pruneTargets) {
       if (!hasCopy) continue; // silent no-op — nothing on this mirror
-      const audit = action =>
-        db.run(
+      const audit = action => {
+        return db.run(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
           [uid(), null, taskId, action, 0, null, null, 'Backup rotation', '', taskName, '', now()],
         );
+      };
       try {
         if (soleCopy) {
           await audit('backup_prune_skipped:soleCopy'); // no dest suffix (OQ-2: the skip decision is destination-agnostic)
