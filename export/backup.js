@@ -65,6 +65,7 @@ import zlib from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { uploadArchive, s3BackupKey, sliceError as s3SliceError, downloadToStaged, getObject } from './s3.js';
+import { connectFtp } from './ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — ftp upload arm
 import { backendKind, toPgSql, pgPoolRef, run as dbRun, get as dbGet, all as dbAll } from '../db-adapter.mjs';
 
 /* ---- Paths (same derivation as server.js:126-132) ----
@@ -859,6 +860,51 @@ export async function runExport(scope, meta = {}) {
       setStage('uploading'); // mirrors setStage('archiving') — the D-19 payload picks the stage up verbatim
       const key = s3BackupKey(runMeta, filename); // D-88-6 task prefix / D-88-9 backup-manual/ (declared per-destination via descriptor.manualPrefix — identical output, D-01)
       try {
+        /* Phase 98 (98-01): per-destination dispatch. The s3 arm below is
+           byte-preserved (destination-registry-gate pins it); the ftp arm
+           is the R-4 variant — client STOR → SIZE verify → sidecar STOR,
+           NO downloadToStaged read-back (documented deviation, owner-
+           ratified). Both arms land in the SHARED catch: a single ftp
+           failure stays a raw sliced message (the composed-error branch
+           below is UNTOUCHED and only reachable at ≥2 destinations). */
+        if (destName === 'ftp') {
+          /* D-88-6 mirror: task runs upload under their per-task prefix.
+             The manualPrefix ('backup-ftp/') NEVER uploads (R-2: the
+             closure returns null for taskId-less meta, so this arm is
+             unreachable for manual runs by construction). */
+          const ftpKey = `backup-task-${runMeta.taskId}/${filename}`;
+          const ftp = connectFtp(provided.config);
+          try {
+            await ftp.connect();
+            /* Client-owned retry posture (P6): each attempt is a fresh
+               passive channel + whole-file re-read of the immutable
+               published archive — zero REST on the upload path. */
+            await ftp.stor(ftpKey, destination);
+            /* R-4 verification: SIZE against the published archive's
+               byte count — the byte count is never trusted blindly, but
+               no stream-back either (Pitfall 4 of 98-RESEARCH: the sidecar
+               below is the integrity stamp, restore re-verifies sha256
+               at read-back per D-05). */
+            const storedSize = await ftp.size(ftpKey);
+            if (storedSize !== size) {
+              throw new Error(`ftp upload: SIZE verify mismatch for ${ftpKey} (expected ${size}, got ${storedSize})`);
+            }
+            /* Sidecar sha256 (R-4) — same "<hash>  <name>" shape the local
+               + s3 sidecars carry, so every consumer splits identically. */
+            await ftp.stor(`${ftpKey}.sha256`, Buffer.from(`${sha256}  ${filename}\n`));
+          } finally {
+            /* Keep-alive is client-owned (NOOP timer) — no pipeline-level
+               NOOP here (98-RESEARCH Pitfall 3). Quit is best-effort: the
+               upload outcome rides the SIZE + sidecar results. */
+            await ftp.quit().catch(() => { /* best-effort */ });
+          }
+          /* D-89-15 mirror / 96-02 one-site rule: ftp_uploaded is the run's
+             honest FTP badge source. Marked ONLY here — after STOR, the
+             SIZE verify AND the sidecar STOR all passed; NEVER in a catch
+             path (upload_failed and ftp-disabled runs keep ftp_uploaded
+             = 0). Exactly ONE write site for this flag in this file. */
+          await dbRun('update backup_runs set ftp_uploaded = 1 where id = ?', [runId]);
+        } else {
         await uploadArchive(provided.config, destination, key, sha256, (partsDone, partsTotal) => {
           currentRun = { ...currentRun, partsDone, partsTotal };
           emitRunEvent({ kind: 'progress', runId, stage: 'uploading', partsDone, partsTotal }); // writer errors swallowed by the seam
@@ -883,6 +929,7 @@ export async function runExport(scope, meta = {}) {
            failure routes into upload_failed (below) — the run never lies
            about a state it failed to record. */
         await dbRun('update backup_runs set uploaded = 1 where id = ?', [runId]);
+        } // else — s3 arm (byte-preserved)
       } catch (err) {
         failedUploads.push({ name: destName, err });
         break;
