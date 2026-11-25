@@ -328,7 +328,11 @@ const govCandidates = (role, qRaw) => {
   const needle = foldForSearch(qRaw || '').text;
   /* UAT round-11 (owner ruling): the picker offers ONLY users who do NOT
      hold the role yet — holders already sit in the roster table above, so
-     offering them again just creates duplicate-grant noise. */
+     offering them again just creates duplicate-grant noise. `held` is the
+     set of user ids holding THIS tab's role (fix: the filter shipped in
+     79e142dd referenced an undefined binding — ReferenceError on first
+     keystroke). */
+  const held = new Set((S.ui.govRoles || []).filter(r => r.role === role).map(r => r.userId));
   return (S.ui.operatorUsers || [])
     .filter(u => !u.is_instance_admin)
     .filter(u => !held.has(u.id))
