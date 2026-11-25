@@ -315,7 +315,7 @@ test('golden vector: multiline 2xx with embedded same-code body line', () => {
 | A5 | Interim `331` (USER ok) / `350` (REST ok) treated per-command, not generic 3xx | Pattern 2 / error table | LOW — per-command dispatch makes it testable in T2 |
 | A6 | No user-facing strings are added in phase 97 (×5 locales not needed) | Architectural Map | LOW — executor must not add UI copy; if it does, escalate (already stated inline) |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `fetchToStaged` RETR use REST resume at all in 97, or simple single-shot RETR?**
    - What we know: D-02 mirrors `downloadToStaged` (s3.js:380-408), which is single-shot; RETR resume via REST adds partial-file plumbing that only matters for very large archives.
