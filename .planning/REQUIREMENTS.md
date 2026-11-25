@@ -1,77 +1,61 @@
-# Requirements: Milestone v3.4 — UX Polish & Backup Console Refinement
+# Requirements: Milestone v3.5 — Backup Destinations SMB & FTP
 
-**Defined:** 2026-11-23 — from owner fix list + ratified rulings (GFS naming, digest aggregation, cross-workspace pickers-only) + research SUMMARY.md (4 dimensions, HIGH confidence).
+**Defined:** 2026-11-25 — from owner request ("Destination smb et ftp") + research SUMMARY.md (4 dimensions, HIGH confidence on protocol mechanics and in-repo anchors; MEDIUM on SMB LOC estimate and fleet dialect coverage).
 
-**Core Value:** Self-hosted, zero-dependency, multi-tenant project-management workspace — hardening before features. v3.4 refines existing operational surfaces; zero new dependencies.
+**Core Value:** Self-hosted, zero-dependency, multi-tenant project-management workspace. v3.5 extends the backup destination family (local + S3) with SMB/CIFS and FTP/FTPS mirrors on the existing v1 pipeline — zero new npm dependencies, env-only credential custody (D-88 unchanged).
 
-## v3.4 Requirements
+## Owner Rulings (2026-11-25)
 
-### Instance Roles (Governance)
+- **R-1 Remote prune:** best-effort follow-local — the server deletes SMB/FTP copies of runs whose local status becomes `deleted` by rotation; failure is logged, never fatal.
+- **R-2 Manual runs:** scheduled runs ONLY are mirrored; manual runs (Run now) stay local-only.
+- **R-3 FTPS certificates:** system CA validation by default; `FTP_INSECURE=true` escapes for self-signed NAS certs with a keyed probe warning (parity with S3 `httpWarning`).
+- **R-4 Upload verify:** SIZE check + existing sidecar sha256 (lightweight; documented deviation from S3's full read-back D-88-8).
 
-- [ ] **ROLE-01**: The Super Admins & Roles section is a role-tabbed view (Super Admin / Backup Operator / Restore Operator tabs) and is renamed "Instance Roles"
-- [ ] **ROLE-02**: A user holding multiple roles appears once per tab with stacked grant entries (role block, granted date, granted by) aligned to shared columns
-- [ ] **ROLE-03**: The user picker in the Instance Roles tab and in the Grant dialog is selectable like the Teams > Edit team picker, and the Grant dialog search works
+## v3.5 Requirements
 
-### Backup Console (tasks + runs)
+### Cross-destination semantics (DEST)
 
-- [ ] **BKUI-01**: The task list reads as a real table (no blocks-in-blocks) with humanized schedule ("Every Monday at 00:00"), populated Next run, and a Last run column with status (success/warning/error)
-- [ ] **BKUI-02**: Editing a scheduled task pre-fills its current values (cron included) with the "Edit backup task" header above the block
-- [ ] **BKUI-03**: Task retention editing offers all four GFS scales (day/week/month/year)
-- [ ] **BKUI-04**: A unified run history across all tasks renders with real columns and filters (task, trigger, status); viewers only see runs they are authorized to see (instance-scope via hasInstanceRole, workspace/project-scope via live membership)
+- [ ] **DEST-01**: The S3 single-slot seam (`setBackupS3Destination`, export/backup.js:635-645) becomes a destination registry; per-task opt-in via flat boolean columns (`ftp_enabled`, `smb_enabled` added beside `s3_enabled`, dual-engine DDL `adapterEnsureColumn`), env-only custody (`FTP_*`, `SMB_*` frozen at boot mirroring `S3_*` server.js:208-219). Mirror failure keeps the single terminal `upload_failed` status naming the failed destination(s); local publish stays valid; alerts ride the existing `handleBackupTaskOutcome` transition gate verbatim.
+- [ ] **DEST-02**: Scheduled runs only are mirrored (R-2); best-effort follow-local prune removes SMB/FTP copies of rotated-out runs (R-1); every refusal keyed and audited ×5 locales.
+- [ ] **DEST-03**: Probe parity — probe-at-save is a hard 400 refusal while the destination is enabled-but-unreachable; write+delete marker probe route per destination with typed error classes ×5 locales (S3 classes preserved; FTP: authFailed/unreachable/tlsFailed/passiveFailed/pathNotFound/quotaExceeded + insecureTls warning; SMB: authFailed/shareNotFound/treeConnectFailed/unreachable/signingRequired/noSpace/nameConflict + guestSession info).
 
-### Backup Naming
+### FTP/FTPS destination (FTP)
 
-- [ ] **BKNAME-01**: Archive filenames AND run labels carry `<instance-name>-<scope>-<slug>-<gfs>-<date>` with workspace/project names resolved (never raw ids); manual runs carry no GFS marker
-- [ ] **BKNAME-02**: The GFS category is computed by one pure function shared with rotation, stored on the run row (additive column, dual-engine DDL) — archives are never renamed after creation
+- [ ] **FTP-01**: Hand-rolled FTP/FTPS client (export/ftp.js, ~350 LOC, node:net/node:tls only) — `FTP_SECURE` enum `explicit`(default)/`implicit`/`none`; USER/PASS, TYPE I, EPSV with PASV fallback (control-host rule + `FTP_PASV_HOST` override), STOR, DELE, PBSZ/PROT P, QUIT; NOOP keep-alive against idle timeouts; REST resume mirroring the D-88-16 retry idiom; TLS session-reuse on the data channel.
+- [ ] **FTP-02**: FTP destination wired end-to-end — toggle in the task editor (render-gated on `/api/config` payload flag), staged upload after local publish, SIZE+sidecar verify (R-4), location badge in run rows and restore list (RESTORE_LOCATION_KEYS extended), restore read-back via `fetchToStaged` on the shared contract.
 
-### Cross-workspace visibility
+### SMB destination (SMB)
 
-- [x] **XWS-01**: Super Admin, Backup Operator and Restore Operator see all workspaces in the Backup & Restore scope pickers only; `workspacesForUser` and app navigation are byte-unchanged
+- [ ] **SMB-01**: Hand-rolled SMB2.1-only client (export/smb.js, ~1,400–1,600 LOC, node:crypto only) — NEGOTIATE/SESSION_SETUP (NTLMv2, hand-rolled MD4 pinned by RFC 1320 vectors)/TREE_CONNECT/CREATE/serial 60KB WRITE×N/CLOSE + READ for staged download; unconditional HMAC-SHA256 signing; NTLM type-3 material scrubbed from errors/logs (V14 parity).
+- [ ] **SMB-02**: SMB destination wired end-to-end — same seams as FTP-02 (toggle, staged upload after local publish, SIZE+sidecar verify per R-4, badges, restore read-back, probe with SMB error classes).
 
-### Settings
+### Verification & tests (TEST)
 
-- [x] **SET-01**: My Access shows the project icon (not the tick icon), or a column layout for a better overview
-- [x] **SET-02**: API Keys offers a clear button removing revoked keys only (audit trail preserved)
-- [x] **SET-03**: The Settings > General > Workspace URL displays on a single line
-- [x] **SET-04**: The Invite Member > Edit Teams team picker is selectable like the Teams > Edit team picker
-
-### Notifications
-
-- [ ] **NOTIF-01**: The daily digest sends one email per user per day across all workspaces (workspace-grouped sections inside); root cause of the 4× duplicate documented, with a pinned multi-workspace regression test
+- [ ] **TEST-01**: Golden-vector discipline — MD4 RFC 1320 vectors, NTLM transcript pins, FTP response-parser pins, mirroring the SigV4 suite; env-gated docker e2e recipes (vsftpd, dperson/samba) mirroring the MinIO recipe; `membershipsOf` byte-gate and existing suites stay green.
 
 ## Future Requirements (deferred)
 
-- SMB/FTP backup destinations (v2 destination family)
-- Backup format v2
-- Backlog items not in the owner's v3.4 list
+- SMB 3.x dialects (AES-CMAC signing, encryption) if a 2.1-min fleet surfaces
+- Per-destination run-status granularity (single `upload_failed` retained for v3.5)
+- Destination config UI (in-app credential management) — rejected for v3.5, D-88 env-only stands
 
 ## Out of Scope (explicit exclusions)
 
-- **No general cron DSL** — the 5-field cron subset and builder presets stay as-is (custom crons keep an honest raw-expression display)
-- **No retention for manual archives** — shipped invariant (task_id NULL); only a hint is added
-- **No silent auto-purge of revoked keys** — purge is an explicit user action
-- **No operator visibility outside Backup/Restore pickers** — navigation, workspace switcher and project lists unchanged
-- **No archive format change** — "gr8r backup v1" (D-86) stays frozen; naming is metadata/filename only
-- **No re-run-from-history write paths**
+- **No new npm dependencies** — SMB/FTP clients hand-rolled on node stdlib (s3.js precedent)
+- **No cifs/loop mounts** — rejected in research (container capabilities + unprobeable fail modes)
+- **No Kerberos** — NTLMv2 only
+- **No LIST/MLST directory parsing** — probe = write+delete marker on a known path
+- **No per-destination archive format change** — same tar.gz + sha256 sidecar
 
 ## Traceability
 
-Phase → Requirement mapping is filled by the roadmap (gsd-roadmapper).
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NOTIF-01 | Phase 91 | Pending |
-| BKNAME-01 | Phase 92 | Pending |
-| BKNAME-02 | Phase 92 | Pending |
-| ROLE-01 | Phase 93 | Pending |
-| ROLE-02 | Phase 93 | Pending |
-| ROLE-03 | Phase 93 | Pending |
-| BKUI-01 | Phase 94 | Pending |
-| BKUI-02 | Phase 94 | Pending |
-| BKUI-03 | Phase 94 | Pending |
-| BKUI-04 | Phase 94 | Pending |
-| XWS-01 | Phase 95 | Complete |
-| SET-01 | Phase 95 | Complete |
-| SET-02 | Phase 95 | Complete |
-| SET-03 | Phase 95 | Complete |
-| SET-04 | Phase 95 | Complete |
+| DEST-01 | TBD by roadmap | Pending |
+| DEST-02 | TBD by roadmap | Pending |
+| DEST-03 | TBD by roadmap | Pending |
+| FTP-01 | TBD by roadmap | Pending |
+| FTP-02 | TBD by roadmap | Pending |
+| SMB-01 | TBD by roadmap | Pending |
+| SMB-02 | TBD by roadmap | Pending |
+| TEST-01 | TBD by roadmap | Pending |
