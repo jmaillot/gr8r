@@ -60,7 +60,10 @@ Plans:
 4. The PASS line and credential-bearing command lines are never present in errors or logs (scrub verified by test); error surfaces carry keyed classes (`ftpAuthFailed`, `ftpUnreachable`, `ftpTlsFailed`, `ftpPassiveFailed`, `ftpPathNotFound`, `ftpQuotaExceeded`, `ftpGeneric`).
 5. Package.json diff shows zero new dependencies; full suite stays at baseline.
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 97-01-PLAN.md — Standalone zero-dep FTP/FTPS client (export/ftp.js): parser SM + golden vectors, mock-server client tests, TLS modes + session reuse, fetchToStaged, scrub, probeFtp, phase gates (FTP-01, TEST-01)
 
 ### Phase 98: FTP Destination End-to-End
 
