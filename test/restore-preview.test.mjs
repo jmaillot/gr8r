@@ -463,6 +463,99 @@ test('89-03 uploaded: boot ensureColumn adds backup_runs.uploaded to a pre-exist
   }
 });
 
+/* =====================================================================
+   96-02 Task 1 — the additive destination-column seam (SC-2/D-03).
+   (a) boot ensureColumns: a pre-existing db gains ftp_enabled/smb_enabled
+       (backup_tasks) and ftp_uploaded/smb_uploaded (backup_runs) at boot,
+       default 0; a second boot is a no-op with no data loss.
+   `uploaded` is UNTOUCHED — it keeps its S3/local-published meaning
+   (D-03); phases 98/100 write their own flags (Pitfall 1).
+   ===================================================================== */
+
+test('96-02 destination columns: boot adds ftp_enabled/smb_enabled (backup_tasks) + ftp_uploaded/smb_uploaded (backup_runs), default 0; second boot is a no-op', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gr8r-destcols-boot-'));
+  const dbPath = path.join(dataDir, 'projects.db');
+  /* Hand-build the post-89/pre-96 shape: backup_tasks with s3_enabled but
+     NO ftp_enabled/smb_enabled; backup_runs with uploaded but NO
+     ftp_uploaded/smb_uploaded — plus one legacy row per table. */
+  withDb(dbPath, db => {
+    db.exec(`create table backup_tasks (
+      id                  text primary key,
+      name                text not null,
+      scope               text not null default '{}',
+      cron                text not null,
+      tz                  text not null default 'Europe/Paris',
+      enabled             integer not null default 1,
+      retention_daily     integer not null default 7,
+      retention_weekly    integer not null default 4,
+      retention_monthly   integer not null default 12,
+      retention_yearly    integer not null default 5,
+      next_run_at         integer,
+      last_notified_state text,
+      s3_enabled          integer not null default 0,
+      created_at          integer not null,
+      updated_at          integer not null
+    )`);
+    db.exec(`create table backup_runs (
+      id           text primary key,
+      task_id      text,
+      scope        text not null default '{}',
+      trigger      text not null check (trigger in ('manual','scheduled')),
+      status       text not null check (status in ('running','succeeded','failed','upload_failed','interrupted','skipped_overlap','deleted')),
+      started_at   integer not null,
+      finished_at  integer,
+      duration_ms  integer,
+      size_bytes   integer,
+      sha256       text,
+      filename     text,
+      error        text,
+      uploaded     integer not null default 0,
+      checksum_ok          integer,
+      checksum_checked_at  text,
+      missing_blob_count   integer not null default 0,
+      gfs_bucket           text,
+      created_at   integer not null
+    )`);
+    db.prepare("insert into backup_tasks (id, name, cron, created_at, updated_at) values ('legacy-task','Legacy','0 3 * * *',1,1)").run();
+    db.prepare("insert into backup_runs (id, trigger, status, started_at, created_at) values ('legacy-run','manual','succeeded',1,1)").run();
+  });
+  const server = await startServer({ dataDir });
+  try {
+    const taskCols = withDb(dbPath, db => db.prepare('pragma table_info(backup_tasks)').all().map(c => c.name));
+    assert.ok(taskCols.includes('ftp_enabled'), 'ensureColumn added backup_tasks.ftp_enabled at boot');
+    assert.ok(taskCols.includes('smb_enabled'), 'ensureColumn added backup_tasks.smb_enabled at boot');
+    const runCols = withDb(dbPath, db => db.prepare('pragma table_info(backup_runs)').all().map(c => c.name));
+    assert.ok(runCols.includes('ftp_uploaded'), 'ensureColumn added backup_runs.ftp_uploaded at boot');
+    assert.ok(runCols.includes('smb_uploaded'), 'ensureColumn added backup_runs.smb_uploaded at boot');
+    const task = withDb(dbPath, db => db.prepare('select s3_enabled, ftp_enabled, smb_enabled from backup_tasks where id = ?').get('legacy-task'));
+    assert.equal(task.s3_enabled, 0, 'existing s3_enabled row keeps 0');
+    assert.equal(task.ftp_enabled, 0, 'the pre-existing task defaults ftp_enabled to 0');
+    assert.equal(task.smb_enabled, 0, 'the pre-existing task defaults smb_enabled to 0');
+    const run = withDb(dbPath, db => db.prepare('select uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?').get('legacy-run'));
+    assert.equal(run.uploaded, 0, 'uploaded keeps its meaning and value (D-03 — untouched)');
+    assert.equal(run.ftp_uploaded, 0, 'the pre-existing row defaults ftp_uploaded to 0');
+    assert.equal(run.smb_uploaded, 0, 'the pre-existing row defaults smb_uploaded to 0');
+  } finally {
+    await server.stop();
+  }
+  /* Second boot against the SAME database — the additive probes are no-ops. */
+  const server2 = await startServer({ dataDir });
+  try {
+    const again = withDb(dbPath, db => db.prepare('select id, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?').get('legacy-run'));
+    assert.equal(again.id, 'legacy-run', 'second boot keeps the legacy row intact');
+    assert.equal(again.uploaded, 0, 'second boot does not touch uploaded (no-op)');
+    assert.equal(again.ftp_uploaded, 0, 'second boot does not touch ftp_uploaded (no-op)');
+    assert.equal(again.smb_uploaded, 0, 'second boot does not touch smb_uploaded (no-op)');
+    const taskAgain = withDb(dbPath, db => db.prepare('select id, ftp_enabled, smb_enabled from backup_tasks where id = ?').get('legacy-task'));
+    assert.equal(taskAgain.id, 'legacy-task', 'second boot keeps the legacy task intact');
+    assert.equal(taskAgain.ftp_enabled, 0, 'second boot does not touch ftp_enabled (no-op)');
+    assert.equal(taskAgain.smb_enabled, 0, 'second boot does not touch smb_enabled (no-op)');
+  } finally {
+    await server2.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('89-03 uploaded: a fully verified S3 upload marks uploaded=1; disabled S3 and failed uploads keep 0 (Pitfall 6 closed)', async () => {
   /* Minimal S3-shaped sink (the 88-01 startS3Sink idiom): PUT stores the
      object, GET serves it. discard mode stores empty bodies so the D-88-8

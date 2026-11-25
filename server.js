@@ -794,6 +794,12 @@ const SCHEMA = `
        in the boot-frozen S3_* env pair (D-88-11 custody), never in the row.
        Existing rows default 0 via the additive ensureColumn in initDb. */
     s3_enabled          integer not null default 0,
+    /* Phase 96 (96-02, D-05/D-03): per-task ftp/smb opt-ins — the additive
+       sibling slots behind phases 98/100. Boolean-only, credentials stay in
+       the boot-frozen FTP/SMB env pairs (D-05 custody), never in the row.
+       Existing rows default 0 via the boot ensureColumns. */
+    ftp_enabled         integer not null default 0,
+    smb_enabled         integer not null default 0,
     created_at          integer not null,
     updated_at          integer not null
   );
@@ -832,6 +838,15 @@ const SCHEMA = `
        ensureColumn at boot — D-89-14: run-row truth only, never live S3
        state. */
     uploaded     integer not null default 0,
+    /* Phase 96 (96-02, D-03/D-05): per-destination run truth — the additive
+       sibling flags behind the ordered badge scan (D-04/OQ-2). uploaded
+       keeps its S3/local-published meaning byte-for-byte (D-03); phases
+       98/100 write ftp_uploaded/smb_uploaded inside their OWN verified-
+       success blocks (Pitfall 1 — no shared write). Existing rows default 0
+       via the boot ensureColumns (a comment here must never end a line with
+       a semicolon — runSchema splits statements on ';-newline'). */
+    ftp_uploaded integer not null default 0,
+    smb_uploaded integer not null default 0,
     /* Phase 90 (D-90-11, 90-02): the verify-checksum result — nullable until
        the first verify lands (null = never checked, 1 = match, 0 = mismatch —
        a comment here must never end a line with a semicolon, runSchema splits
@@ -1035,6 +1050,16 @@ async function initDb() {
      lie about S3 state. The 88-2 rebuild above predates the column, so
      this ensureColumn must come AFTER it. */
   await adapterEnsureColumn('backup_runs', 'uploaded', 'integer not null default 0');
+  /* Phase 96 (96-02, SC-2/D-03/D-05): the 4 additive destination columns —
+     defs byte-identical to the SCHEMA declarations (Pitfall P-B). Placed
+     AFTER the 88-2 sqliteOnly rebuild and AFTER `uploaded` (Pitfall 3:
+     legacy DBs rebuild before the new columns exist). Dormant in 96 —
+     phases 98/100 write their own flags inside their own success blocks
+     (Pitfall 1); `uploaded` keeps the S3/local-published meaning (D-03). */
+  await adapterEnsureColumn('backup_tasks', 'ftp_enabled', 'integer not null default 0');
+  await adapterEnsureColumn('backup_tasks', 'smb_enabled', 'integer not null default 0');
+  await adapterEnsureColumn('backup_runs', 'ftp_uploaded', 'integer not null default 0');
+  await adapterEnsureColumn('backup_runs', 'smb_uploaded', 'integer not null default 0');
   // Phase 90 (D-90-11, 90-02): the verify-checksum result columns — defs
   // byte-identical to the SCHEMA declaration (Pitfall P-B); nullable, no
   // default — null = never checked. No data migration.
