@@ -520,6 +520,7 @@ const taskFormCard = () => {
       <div class="field"><label class="label" style="text-align:center">${t('page.backup.gfsYearly')}</label><input class="input" type="number" min="0" max="999" style="width:90px" value="${esc(String(form.retention.yearly))}" data-in="backupTaskRetention" data-f="yearly"></div>
     </div>
     ${api.s3Enabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskS3"${form.s3Enabled ? ' checked' : ''}><span>${esc(t('page.backup.s3Toggle'))}</span></label></div>` : ''}
+    ${api.ftpEnabled ? `<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-in="backupTaskFtp"${form.ftpEnabled ? ' checked' : ''}><span>${esc(t('page.backup.ftpToggle'))}</span></label></div>` : ''}
     ${deletionsPanel()}
     <div class="hint" style="margin-top:8px">${t('page.backup.scheduleSummaryPrefix')}: ${esc(summary)}</div>
     <div class="row" style="gap:8px;margin-top:10px">

@@ -219,6 +219,38 @@ test('ftp probe response + audit ride both save paths (MIN-07 symmetry)', () => 
 
 
 /* =====================================================================
+   Phase 98 plan 03 — client-mirror pins: toggle row + api.js wiring.
+   ===================================================================== */
+
+test('toggle row: backupTaskFtp mirror rendered AFTER the S3 row, gated on api.ftpEnabled (D-01)', () => {
+  const b = src('src/pages/backup.js');
+  const s3Row = b.indexOf('data-in="backupTaskS3"');
+  const ftpRow = b.indexOf('data-in="backupTaskFtp"');
+  assert.ok(s3Row !== -1, 'the S3 row exists');
+  assert.ok(ftpRow > s3Row, 'the ftp row renders immediately after the S3 row (same section)');
+  const row = b.slice(ftpRow - 200, ftpRow + 300);
+  assert.match(row, /api\.ftpEnabled \?/, 'the row is render-gated on api.ftpEnabled');
+  assert.match(row, /page\.backup\.ftpToggle/, 'the label key is page.backup.ftpToggle');
+  assert.match(row, /form\.ftpEnabled \? ' checked' : ''/, 'checked mirrors form.ftpEnabled');
+});
+
+test('api.js: ftpEnabled trio — state default + getter + strict-boolean /api/config apply', () => {
+  const a = src('src/core/api.js');
+  assert.match(a, /ftpEnabled: false,/, 'state default fail-closed');
+  assert.match(a, /get ftpEnabled\(\) \{\n    return state\.ftpEnabled;/, 'getter beside the s3 getter');
+  assert.match(a, /state\.ftpEnabled = !!r\.data\?\.ftpEnabled;/, 'strict boolean gate (V5 idiom)');
+  const apply = a.indexOf('state.ftpEnabled = !!r.data?.ftpEnabled;');
+  const s3Apply = a.indexOf('state.s3Enabled = !!r.data?.s3Enabled;');
+  assert.ok(apply > s3Apply, 'the ftp apply sits beside the s3 apply');
+});
+
+test('i18n: page.backup.ftpToggle present in all 5 locales (same-commit rule)', () => {
+  for (const l of ['en', 'fr', 'nl', 'de', 'es']) {
+    assert.match(src(`src/locales/${l}.json`), /"page\.backup\.ftpToggle"/, `${l} carries the toggle key`);
+  }
+});
+
+/* =====================================================================
    Functional pipeline tests — the REAL runExport upload loop against
    an in-process scripted mock FTP server (97 fakeFtp harness idiom,
    extended with SIZE). The descriptor injected here carries the SAME

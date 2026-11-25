@@ -32,6 +32,10 @@ const state = {
      /api/config — the boolean only (D-88-11: never endpoint/bucket names).
      Default false fail-closed: the toggle stays hidden until the config lands. */
   s3Enabled: false,
+  /* Phase 98 (D-01): FTP toggle visibility is SERVER ground truth from
+     /api/config — the boolean only (never host/credentials). Default
+     false fail-closed: the toggle stays hidden until the config lands. */
+  ftpEnabled: false,
 };
 
 /* Base URL for links the user can share. Set by the server (APP_URL or the
@@ -152,6 +156,9 @@ export const api = {
   get s3Enabled() {
     return state.s3Enabled;
   },
+  get ftpEnabled() {
+    return state.ftpEnabled;
+  },
   get user() {
     return state.user;
   },
@@ -217,6 +224,9 @@ export const api = {
     /* Phase 88: strict boolean gate value (V5 idiom) — the S3 toggle renders
        ONLY when the server says the destination exists (render-only doctrine). */
     state.s3Enabled = !!r.data?.s3Enabled;
+    /* Phase 98: strict boolean gate value (V5 idiom) — the FTP toggle renders
+       ONLY when the server says the destination exists (render-only doctrine). */
+    state.ftpEnabled = !!r.data?.ftpEnabled;
     return state.enabled;
   },
   async me() {

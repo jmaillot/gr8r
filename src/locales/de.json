@@ -2170,6 +2170,7 @@
   "page.backup.tzLabel": "Zeitzone",
   "page.backup.nextRunLabel": "Nächste Ausführung",
   "page.backup.s3Toggle": "Archive in S3 hochladen",
+  "page.backup.ftpToggle": "Archive auf FTP hochladen",
   "page.backup.presetDaily": "Täglich",
   "page.backup.presetWeekly": "Wöchentlich",
   "page.backup.presetMonthly": "Monatlich",

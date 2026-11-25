@@ -2210,6 +2210,7 @@
   "page.backup.tzLabel": "Fuseau horaire",
   "page.backup.nextRunLabel": "Prochaine exécution",
   "page.backup.s3Toggle": "Envoyer les archives vers S3",
+  "page.backup.ftpToggle": "Envoyer les archives via FTP",
   "page.backup.presetDaily": "Chaque jour",
   "page.backup.presetWeekly": "Chaque semaine",
   "page.backup.presetMonthly": "Chaque mois",
