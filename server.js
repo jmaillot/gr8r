@@ -3984,10 +3984,34 @@ setBackupDestination('ftp', {
   },
   verify: FTP.verify, // R-4 SIZE-based verify (97 client) — no downloadToStaged read-back on the ftp arm
 });
+/* Phase 100 (100-02): the SMB destination install — fills the 96 dormant
+   slot in the destination registry (canonical order s3, ftp, smb kept).
+   R-2 INVERSION of the S3 manual leg: MANUAL Run-now runs (taskId-less
+   meta) NEVER upload to SMB — they stay local-only, always (the
+   manualPrefix below is consumed by the probe marker only, 100-03).
+   Task runs gate on the task's smb_enabled = 1, fail-CLOSED: a missing
+   row or a lookup error skips the upload (warn wording mirrors the S3
+   closure above). Success returns the SMB.config() seam the smb arm in
+   export/backup.js uploads through; there is NO verify field — no
+   SMB.verify exists (R-4 for SMB = sidecar + read-back at restore,
+   100-05). handleBackupTaskOutcome and the destLocation badge scan are
+   UNTOUCHED (SC-4 / 96-02 golden bytes). */
 setBackupDestination('smb', {
   label: 'SMB',
-  enabled: !!(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD), // derived from env — D-05
-  manualPrefix: 'backup-smb/', // declared, never used in 96 (D-05)
+  enabled: SMB.enabled,
+  manualPrefix: 'backup-smb/', // probe marker prefix only (D-01) — R-2: manual runs never upload
+  upload: async meta => {
+    if (!SMB.enabled) return null;
+    if (!meta?.taskId) return null; // R-2: manual Run-now runs stay local-only — NEVER uploaded to SMB
+    try {
+      const task = await db.get('select smb_enabled from backup_tasks where id = ?', [meta.taskId]);
+      if (!task || task.smb_enabled !== 1) return null;
+    } catch (err) {
+      logWarn(`backup smb: task ${meta.taskId} lookup failed — upload skipped: ${err?.message || err}`);
+      return null;
+    }
+    return { config: SMB.config() };
+  },
 });
 
 /* Phase 96 (96-02, D-04/OQ-2): the ordered destination-location scan —
