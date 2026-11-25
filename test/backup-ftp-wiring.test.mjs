@@ -202,10 +202,10 @@ test('ftp_enabled persists: INSERT columns/binding AND UPDATE SET clause (both w
   const s = serverSrc();
   const insert = s.match(/insert into backup_tasks[^']+'/)[0];
   assert.match(insert, /ftp_enabled/, 'ftp_enabled in the INSERT column list');
-  assert.match(s, /\[task\.id[^\]]*task\.s3_enabled, task\.ftp_enabled, task\.last_notified_state/, 'INSERT binding array carries task.ftp_enabled beside s3_enabled');
+  assert.match(s, /\[task\.id[^\]]*task\.s3_enabled, task\.ftp_enabled, task\.smb_enabled, task\.last_notified_state/, 'INSERT binding array carries task.ftp_enabled beside s3_enabled (smb_enabled additive, 100-03)');
   const updateSql = s.match(/'update backup_tasks set name = \?[^']+'/)[0];
-  assert.match(updateSql, /s3_enabled = \?, ftp_enabled = \?, updated_at = \?/, 'UPDATE SET clause carries ftp_enabled beside s3_enabled');
-  assert.match(s, /updated\.s3_enabled, updated\.ftp_enabled, updated\.updated_at/, 'UPDATE binding array carries updated.ftp_enabled');
+  assert.match(updateSql, /s3_enabled = \?, ftp_enabled = \?, smb_enabled = \?, updated_at = \?/, 'UPDATE SET clause carries ftp_enabled beside s3_enabled (smb_enabled additive, 100-03)');
+  assert.match(s, /updated\.s3_enabled, updated\.ftp_enabled, updated\.smb_enabled, updated\.updated_at/, 'UPDATE binding array carries updated.ftp_enabled');
   assert.match(s, /ftp_enabled: body\?\.ftpEnabled === true \? 1 : 0/, 'CREATE task object maps the boolean');
   assert.match(s, /ftp_enabled: ftpEnabled \? 1 : 0/, 'EDIT updated object maps the resolved flag');
 });
@@ -252,7 +252,7 @@ test('i18n: page.backup.ftpToggle present in all 5 locales (same-commit rule)', 
 
 test('actions.js: the four ftp mirror sites sit beside their s3 analogs (D-01)', () => {
   const a = src('src/actions/actions.js');
-  assert.match(a, /ftpEnabled: false,\n\}\);/, 'form default beside s3Enabled');
+  assert.match(a, /ftpEnabled: false,\n  \/\* Phase 100/, 'form default beside s3Enabled (smb twin additive after it, 100-03)');
   assert.match(a, /IN\.backupTaskFtp = el => \{\n  if \(S\.ui\.backupTaskForm\) S\.ui\.backupTaskForm\.ftpEnabled = el\.checked;\n\};/, 'IN handler staged (no re-render)');
   assert.match(a, /ftpEnabled: task\.ftp_enabled === 1,/, 'hydration from the stored flag');
   assert.match(a, /if \(api\.ftpEnabled\) body\.ftpEnabled = form\.ftpEnabled === true;/, 'payload strict-boolean, gated on api.ftpEnabled');
@@ -272,7 +272,7 @@ test('actions.js: ftpProbe toast twin — keyed refusals + insecureTlsWarning, N
   }
   assert.match(block, /fprobe\.key === 'unreachable'/, 'unreachable toast');
   assert.match(block, /fprobe\.httpWarning.*insecureTlsWarning/s, 'R-3 insecureTlsWarning toast emitted');
-  const blockEnd = a.indexOf('toast(t(form.editing', i);
+  const blockEnd = a.indexOf('const sprobe', i); // 100-03: the smb chain follows — the NO-deleteFailed pin scopes to the ftp block only
   const seg = a.slice(i, blockEnd);
   assert.ok(!/deleteFailed/.test(seg), 'NO deleteFailed branch in the ftp toast block');
 });

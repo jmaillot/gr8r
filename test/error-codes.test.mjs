@@ -272,6 +272,16 @@ const CLIENT_ONLY_ERR_CODES = [
   's3NoBucket', // S3 probe class emitted as probeS3's key (export/s3.js), riding the keyed refusal payload (88 review MIN-01)
   'restoreNameCollision', // keyed by export/restore.js overwriteProjectFragment (95-04) — surfaces through the run failure payload, toasted via the client restore refusal map
   'insecureTlsWarning', // 98-03: emitted by the ftpProbe toast mapping in actions.js (R-3 insecure-TLS warning parity) — client-only by design, never a server refusal code
+  'smbAuthFailed', // 100-03: probeSmb result class keys mapped onto the err.smb* family by the smbProbe toast chain in actions.js — client-only (probe classes, never server refusal codes)
+  'smbShareNotFound', // 100-03: same client-only probe-class mapping
+  'smbTreeConnectFailed', // 100-03: same client-only probe-class mapping
+  'smbUnreachable', // 100-03: same client-only probe-class mapping
+  'smbSigningRequired', // 100-03: same client-only probe-class mapping
+  'smbNoSpace', // 100-03: same client-only probe-class mapping
+  'smbNameConflict', // 100-03: same client-only probe-class mapping
+  'smbSessionExpired', // 100-03: same client-only probe-class mapping
+  'smbGeneric', // 100-03: same client-only probe-class mapping
+  'smbDialectUnsupported', // 100-03: same client-only probe-class mapping (OQ-3 sentinel split)
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {
