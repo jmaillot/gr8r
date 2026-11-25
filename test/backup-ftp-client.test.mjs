@@ -9,10 +9,14 @@
    phase (env-gated recipes are out of scope in 97).
    ===================================================================== */
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { Readable } from 'node:stream';
-import { connectFtp } from '../export/ftp.js';
+import { connectFtp, fetchToStaged } from '../export/ftp.js';
 
 /* ------------------------ scripted mock FTP server ------------------------ */
 
@@ -21,9 +25,23 @@ function fakeFtp(scenario = {}) {
   const dataReceived = []; // buffers captured from data connections
   const delays = scenario.delays ?? {};
 
+  let storPending = null;
+  let retrActive = false;
+  let retrPending = null;
+  let currentDataSock = null;
+  const servedDataSocks = new Set();
+  const serveRetrPayload = (sock) => {
+    if (servedDataSocks.has(sock) || !retrActive || !scenario.retrPayload) return;
+    servedDataSocks.add(sock);
+    sock.write(scenario.retrPayload);
+    sock.end();
+    retrPending?.();
+  };
   const dataServer = net.createServer((sock) => {
+    currentDataSock = sock;
     sock.on('data', (c) => dataReceived.push(c));
     sock.on('end', () => sock.end());
+    serveRetrPayload(sock);
   });
   let dataPort = null;
   const dataReady = new Promise((resolve) => {
@@ -70,6 +88,17 @@ function fakeFtp(scenario = {}) {
             socket.write('150 opening data connection\r\n');
             if (dataDone) storPending();
           }
+        } else if (cmd.startsWith('REST')) {
+          reply(scenario.restReply ?? '350 Restarting at 0. Send STORE or RETRIEVE.');
+        } else if (cmd.startsWith('RETR')) {
+          if (scenario.retrErrorReply) {
+            reply(scenario.retrErrorReply);
+          } else {
+            retrActive = true;
+            retrPending = () => socket.write('226 Transfer complete\r\n');
+            socket.write('150 opening data connection\r\n');
+            serveRetrPayload(currentDataSock);
+          }
         } else if (cmd.startsWith('DELE')) {
           reply(scenario.deleReply ?? '250 deleted', delays.DELE ?? 0);
         } else if (cmd.startsWith('QUIT')) {
@@ -101,7 +130,6 @@ function fakeFtp(scenario = {}) {
       }
     });
   });
-  let storPending = null;
 
   return {
     commands,
@@ -156,6 +184,54 @@ test('tracer: STOR/DELE round-trip over the mock server (plain FTP, end-to-end)'
     }
     assert.ok(cmds.findIndex((c) => c.startsWith('EPSV')) < cmds.findIndex((c) => c.startsWith('STOR')), 'EPSV before STOR');
   } finally {
+    await server.close();
+  }
+});
+
+/* ------------------- T8: fetchToStaged (D-02, OQ-1) ------------------- */
+
+test('fetchToStaged happy path: staged file with exact bytes + matching sha256 (T8)', async () => {
+  const payload = Buffer.from('gr8r restore payload \xC2\xA9 bytes');
+  const sha = crypto.createHash('sha256').update(payload).digest('hex');
+  const server = fakeFtp({ retrPayload: payload });
+  await server.listen();
+  const stagingDir = path.join(os.tmpdir(), `gr8r-ftp-test-${process.pid}-${Date.now()}`);
+  try {
+    const { tmpPath, sha256 } = await fetchToStaged(
+      { host: '127.0.0.1', port: server.port(), user: 'gr8r', password: 'pw', secure: 'none' },
+      '/backup/archive.tar.gz',
+      sha,
+      stagingDir,
+    );
+    assert.equal(sha256, sha);
+    assert.equal(fs.readFileSync(tmpPath).toString('utf8'), payload.toString('utf8'), 'staged file exact bytes');
+    assert.ok(tmpPath.includes('ftp-download-'), 'ftp- prefixed temp name');
+    assert.ok(server.commands.some((c) => c.startsWith('RETR /backup/archive.tar.gz')), 'RETR recorded');
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    await server.close();
+  }
+});
+
+test('fetchToStaged corrupt stream: keyed ftpSha256Mismatch AND temp file removed (T8)', async () => {
+  const payload = Buffer.from('the actual served bytes');
+  const server = fakeFtp({ retrPayload: payload });
+  await server.listen();
+  const stagingDir = path.join(os.tmpdir(), `gr8r-ftp-test-${process.pid}-${Date.now()}`);
+  try {
+    await assert.rejects(
+      fetchToStaged(
+        { host: '127.0.0.1', port: server.port(), user: 'gr8r', password: 'pw', secure: 'none' },
+        '/backup/archive.tar.gz',
+        'deadbeef'.repeat(8),
+        stagingDir,
+      ),
+      (err) => err.code === 'ftpSha256Mismatch',
+    );
+    const leftovers = fs.readdirSync(stagingDir).filter((f) => f.endsWith('.tmp'));
+    assert.equal(leftovers.length, 0, 'no .tmp file left in stagingDir');
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
     await server.close();
   }
 });

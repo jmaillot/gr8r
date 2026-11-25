@@ -66,7 +66,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 
 /* ---- Error slicing (V14: no headers, no secrets in error text) ---- */
 export function sliceError(error) {
@@ -78,12 +78,18 @@ export function scrubFtpLine(line) {
   return String(line).replace(/^(PASS|USER)\s+.*/i, (_m, cmd) => `${cmd.toUpperCase()} ***`);
 }
 
-/* Scrub every line of a reply transcript before it can reach an error. */
+/* Scrub every line of a reply transcript before it can reach an error.
+   Beyond line-start PASS/USER commands (scrubFtpLine contract), a
+   credential-bearing token embedded mid-line in a server reply (e.g.
+   `530 Login incorrect (PASS secret was rejected)`) is ALSO scrubbed —
+   the raw secret never reaches err.message (T7/V14). */
 function scrubTranscript(text) {
-  return String(text ?? '')
-    .split(/\r?\n/)
-    .map(scrubFtpLine)
-    .join('\n');
+  return scrubFtpLine(
+    String(text ?? '')
+      .split(/\r?\n/)
+      .map(scrubFtpLine)
+      .join('\n'),
+  ).replace(/(PASS|USER)(\s+)\S+/gi, (_m, cmd, ws) => `${cmd.toUpperCase()}${ws}***`);
 }
 
 /* ---- D-03: NOOP keep-alive interval (const, NOT env) ---- */
@@ -414,6 +420,91 @@ async function storOnce(ctl, targetPath, stream) {
 }
 
 /* =====================================================================
+   RESTORE SEAM (D-02, mirrors s3.js downloadToStaged :380-408)
+   =====================================================================
+   Single-shot RETR (OQ-1): RETR stream → hashTap Transform → staged
+   file → sha256 vs expectedSha256 → keyed mismatch + temp removed.
+   REST is implemented (rest(), expect 350) for RETR use only — the
+   resume LOOP is deliberately NOT wired here in 97; a stream-level
+   verify failure keys ftpChecksumFailed, a digest mismatch keys
+   ftpSha256Mismatch. */
+
+async function retrTo(ctl, sourcePath, hashTap, out) {
+  const dataSock = await openDataChannel(ctl);
+  ctl.transferDepth++;
+  const finalP = sendCommand(ctl, `RETR ${sourcePath}`, { expect: [226], context: sourcePath });
+  finalP.catch(() => { try { dataSock.destroy(); } catch { /* gone */ } });
+  let pipeErr = null;
+  try {
+    await pipeline(dataSock, hashTap, out);
+  } catch (e) {
+    pipeErr = e;
+  }
+  let finalErr = null;
+  let res = null;
+  try {
+    res = await finalP;
+  } catch (e) {
+    finalErr = e;
+  }
+  ctl.transferDepth--;
+  if (finalErr) {
+    try { dataSock.destroy(); } catch { /* gone */ }
+    throw finalErr;
+  }
+  if (pipeErr) {
+    /* Stream-level verify failure — keyed ftpChecksumFailed (OQ-1). */
+    const err = new Error(
+      sliceError(new Error(`ftp download: RETR stream verify failed for ${sourcePath}: ${sliceError(pipeErr)}`)),
+    );
+    err.code = 'ftpChecksumFailed';
+    err.ftpCode = null;
+    err.ftpTransient = false;
+    try { dataSock.destroy(); } catch { /* gone */ }
+    throw err;
+  }
+  return res;
+}
+
+export async function fetchToStaged(config, sourcePath, expectedSha256, stagingDir, opts = {}) {
+  fs.mkdirSync(stagingDir, { recursive: true });
+  const tmpPath = path.join(stagingDir, `ftp-download-${process.pid}-${crypto.randomUUID().slice(0, 8)}.tmp`);
+  const hash = crypto.createHash('sha256');
+  const hashTap = new Transform({
+    transform(chunk, _enc, cb) {
+      hash.update(chunk);
+      cb(null, chunk);
+    },
+  });
+  const out = fs.createWriteStream(tmpPath);
+  const ctl = await establish(config, opts);
+  try {
+    await retrTo(ctl, sourcePath, hashTap, out);
+  } catch (e) {
+    fs.rmSync(tmpPath, { force: true });
+    try { ctl.socket.destroy(); } catch { /* gone */ }
+    throw e;
+  }
+  const sha256 = hash.digest('hex');
+  if (sha256 !== expectedSha256) {
+    fs.rmSync(tmpPath, { force: true });
+    try { ctl.socket.destroy(); } catch { /* gone */ }
+    const err = new Error(
+      sliceError(new Error(`ftp download: sha256 mismatch for ${sourcePath}: expected ${expectedSha256}, got ${sha256}`)),
+    );
+    err.code = 'ftpSha256Mismatch';
+    err.ftpCode = null;
+    err.ftpTransient = false;
+    throw err;
+  }
+  try {
+    await sendCommand(ctl, 'QUIT', { context: 'quit' });
+  } catch { /* best-effort */ }
+  try { ctl.socket.destroy(); } catch { /* gone */ }
+  return { tmpPath, sha256 };
+}
+
+/* =====================================================================
    CLIENT FACTORY (D-01 promise API)
    ===================================================================== */
 
@@ -491,6 +582,14 @@ export function connectFtp(config, opts = {}) {
       const n = Number((res.lines[0] || '').trim());
       if (!Number.isFinite(n)) throw keyedError(500, 'unparsable SIZE reply', targetPath);
       return n;
+    },
+    /* REST is RETR-only (P6): sets the restart point for a following
+       RETR. NEVER valid on the STOR path — the upload retry is a full
+       restart (T10 pins zero `REST ` lines on the upload transcript). */
+    rest: async (offset) => {
+      const ctl = await ensure();
+      await cmdExpect(ctl, `REST ${Number(offset) | 0}`, 350, `restart@${offset}`);
+      return true;
     },
     noop: async () => {
       const ctl = await ensure();
