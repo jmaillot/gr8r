@@ -107,7 +107,10 @@ Plans:
 **Risk**: SMB LOC estimate is MEDIUM confidence (research) — spike/golden-vector phase is the containment; fleet dialect coverage (SMB 2.1 minimum on home-NAS fleets) is MEDIUM confidence — DEPLOY.md note + feedback loop required.
 
 Plans:
+**Wave 1**
 - [ ] 99-01-PLAN.md — Crypto + codec pure layer: MD4/NTLMv2/signing-key golden vectors, NBSS/SMB2 codecs, smbClass error factory + scrub (SMB-01, TEST-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 99-02-PLAN.md — Session engine + promise command surface + retry envelope + scrub gates + 99-SPIKE.md (SMB-01, TEST-01)
 
 ### Phase 100: SMB Destination End-to-End + Remote Prune
