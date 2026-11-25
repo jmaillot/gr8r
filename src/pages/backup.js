@@ -213,6 +213,16 @@ const historyTr = run => {
         (warn ? ` <span class="badge amber" title="${esc(t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) }))}">${t('page.backup.statusWarning')}</span>` : '') +
         (run.location === 'local' || run.location === 's3'
           ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
+          : '') +
+        /* Phase 100 (100-04, D-03): the pruned badge — remote mirrors were
+           pruned after rotation. Two-condition gate: only a rotated-out
+           (deleted) row with remote_pruned = 1 renders it; live runs can
+           never show it by construction (deleted rows appear only under
+           the Rotated filter). Never coupled to the location ternary — a
+           pruned run's location resolves through destLocation to its
+           surviving flag. */
+        (run.remote_pruned === 1 && run.status === 'deleted'
+          ? ` <span class="badge">${t('page.backup.pruned')}</span>`
           : '')
   ) + `</span>`;
   const actionsCell =

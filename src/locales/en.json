@@ -2227,6 +2227,7 @@
   "page.backup.statusInterrupted": "Interrupted",
   "page.backup.statusSkippedOverlap": "Skipped (overlap)",
   "page.backup.statusDeleted": "Rotated",
+  "page.backup.pruned": "pruned",
   "page.backup.statusUnknown": "Unknown",
   "page.backup.statusUploadFailed": "Error (upload)",
   "page.backup.stageUploading": "Uploading",

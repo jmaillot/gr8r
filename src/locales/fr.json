@@ -2267,6 +2267,7 @@
   "page.backup.statusInterrupted": "Interrompue",
   "page.backup.statusSkippedOverlap": "Ignorée (chevauchement)",
   "page.backup.statusDeleted": "Purgée",
+  "page.backup.pruned": "purgé à distance",
   "page.backup.statusUnknown": "Inconnue",
   "page.backup.statusUploadFailed": "Erreur (envoi)",
   "page.backup.stageUploading": "Envoi en cours",

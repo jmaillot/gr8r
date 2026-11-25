@@ -2227,6 +2227,7 @@
   "page.backup.statusInterrupted": "Onderbroken",
   "page.backup.statusSkippedOverlap": "Overgeslagen (overlap)",
   "page.backup.statusDeleted": "Geroteerd",
+  "page.backup.pruned": "extern opgeruimd",
   "page.backup.statusUnknown": "Onbekend",
   "page.backup.statusUploadFailed": "Fout (upload)",
   "page.backup.stageUploading": "Uploaden",

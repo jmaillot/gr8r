@@ -2227,6 +2227,7 @@
   "page.backup.statusInterrupted": "Interrumpida",
   "page.backup.statusSkippedOverlap": "Omitida (solapamiento)",
   "page.backup.statusDeleted": "Rotada",
+  "page.backup.pruned": "purgado en remoto",
   "page.backup.statusUnknown": "Desconocida",
   "page.backup.statusUploadFailed": "Error (subida)",
   "page.backup.stageUploading": "Subiendo",
