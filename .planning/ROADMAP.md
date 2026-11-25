@@ -81,8 +81,13 @@ Plans:
 **UI hint**: yes
 
 Plans:
+**Wave 1**
 - [ ] 98-01-PLAN.md — Tracer: ftp install closure (R-2) + FTP.config() + loop generalization + mock-pipeline test (FTP-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 98-02-PLAN.md — Probe route + probe-at-save twins + ftp_enabled persistence + i18n ×5 (DEST-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 98-03-PLAN.md — Toggle UI mirror + actions/api wiring + probe toasts + i18n ×5 (FTP-02, DEST-03)
 - [ ] 98-04-PLAN.md — Restore read-back twins + vsftpd e2e recipe + DEPLOY §21 (FTP-02, TEST-01)
 
