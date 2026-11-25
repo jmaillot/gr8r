@@ -271,6 +271,7 @@ const CLIENT_ONLY_ERR_CODES = [
   'noReassignTargets', // keyed refusal composed by A.govOrphanPick when reassign is picked with zero destination workspaces (79 IN-04)
   's3NoBucket', // S3 probe class emitted as probeS3's key (export/s3.js), riding the keyed refusal payload (88 review MIN-01)
   'restoreNameCollision', // keyed by export/restore.js overwriteProjectFragment (95-04) — surfaces through the run failure payload, toasted via the client restore refusal map
+  'insecureTlsWarning', // 98-03: emitted by the ftpProbe toast mapping in actions.js (R-3 insecure-TLS warning parity) — client-only by design, never a server refusal code
 ];
 
 test('reverse parity: every catalogued err.* code is emitted by server.js or allowlisted as client-side', () => {

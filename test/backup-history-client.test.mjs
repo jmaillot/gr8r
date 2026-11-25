@@ -46,7 +46,7 @@ test('A.backupTaskSave follows the handler discipline and refills through refres
   assert.match(actionsSrc, /A\.backupTaskSave =/, 'the save handler exists');
   assert.match(actionsSrc, /A\.backupTaskNew =/, 'the new-task action exists');
   assert.match(actionsSrc, /A\.backupTaskCancel =/, 'the cancel action exists');
-  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 4200);
+  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 5600);
   assert.ok(handler.includes('refreshBackupTasks'), 'the save path refills the task list (fill-loop reuse)');
   assert.ok(handler.includes('api.backupTaskCreate') && handler.includes('api.backupTaskUpdate'), 'create vs update both wired');
   assert.ok(handler.includes('tErr('), 'refusals surface as keyed toasts (tErr)');
@@ -269,7 +269,9 @@ test('Phase 88 SC-1 wiring: the S3 checkbox renders only with the config flag, s
 });
 
 test('Phase 88 SC-1 wiring: a successful save carrying s3Probe toasts the keyed outcome', () => {
-  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 4000);
+  const handler = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskSave ='), actionsSrc.indexOf('A.backupTaskSave =') + 5600);
+  /* 98-03 note: the window grew to cover the ftpProbe twin block beside the
+     s3Probe mapping (this byte window predates the FTP toast family). */
   /* Mapping contract (D-88-15/17): success is neutral, deleteFailed is the
      warned-but-accepted path, badCreds/unreachable are errors, s3ClockSkew
      rides the keyed refusal catalogue with the unreachable fallback. */
