@@ -76,7 +76,7 @@ The client itself mirrors `export/ftp.js` (827 LOC [VERIFIED: export/ftp.js — 
 
 > Confidence: HIGH where verified against RFC/spec text fetched this session or empirically executed; MEDIUM where dialect-behavior is fleet-dependent (marked per item).
 
-### 1. NBSS (NetBIOS Session Service) — [CITED: MS-SMB2 §2.1 / RFC 1002]
+### 1. RESOLVED: SMB_ECHO_INTERVAL_S = 60 (both plans adopt). Original: NBSS (NetBIOS Session Service) — [CITED: MS-SMB2 §2.1 / RFC 1002]
 
 ```
 NBSS header (4 bytes, big-endian):
@@ -89,7 +89,7 @@ NBSS header (4 bytes, big-endian):
 - **Framing:** every SMB2 message is `[4-byte NBSS header][SMB2 payload]`. Reads must accumulate a stream buffer and dispatch exactly one frame per length prefix — the ftp.js `createReplyState` incremental-parse idiom (ftp.js:112-116) translates directly, but on byte counts instead of CRLF.
 - **Large-Multi-Protocol-Reply negotiation is NOT needed for 2.1-only:** the NBSS "extend" dance (0x83-with-error-0x80/0x84 continuation, RFC 1002) exists for >64KB sessions — SMB2.1 messages fit the 17-bit field; note WRITE replies are tiny (only the 64-byte header + fixed struct). Do not implement MPR; assert length ≤ 0x1FFFF and throw `unreachable`/`generic` on overflow (protocol violation, mirrors ftp.js:295 keyedError on violation).
 
-### 2. SMB2 header codec — [CITED: MS-SMB2 §2.2.1.1/§2.2.1.2]
+### 2. RESOLVED: no-KEY_EXCH path — session-base-key as signing key input, test-pinned. Original: SMB2 header codec — [CITED: MS-SMB2 §2.2.1.1/§2.2.1.2]
 
 64 bytes, **little-endian** (contrast NBSS big-endian — encode/decode accordingly):
 
@@ -115,7 +115,7 @@ Codec rules the planner should turn into tasks:
 - **reply vs request direction:** dispatch decisions key on `Flags & 0x00000001` — everything inbound from the server has it set.
 - **signed flag on replies:** server sets `SIGNED` (0x00000008) per message; signature verification (below) applies iff set — but the client still *sends* everything after NEGOTIATE signed unconditionally (SC-2).
 
-### 3. NEGOTIATE — [CITED: MS-SMB2 §2.2.3/§2.2.4] (MEDIUM fleet-dependent behavior)
+### 3. RESOLVED: dialect-mismatch → generic/smbDialectUnsupported; signing-refusal → signingRequired. Original: NEGOTIATE — [CITED: MS-SMB2 §2.2.3/§2.2.4] (MEDIUM fleet-dependent behavior)
 
 - Request: StructureSize 36, Dialects array: offer `0x0210` (SMB 2.1) **and** `0x0202` (SMB 2.0.2) as fallback — the count is 2, byte array of u16 dialects. Client capabilities: 0x00000001 (DFS) optional — send 0. SecurityMode: set `SMB2_NEGOTIATE_SIGNING_ENABLED` (0x00000001); do NOT set SIGNING_REQUIRED on the request (server requirement is what matters), though setting both enabled+required (0x00000003) is also spec-legal; recommend 0x00000003 to advertise the unconditional-signing posture per SC-2.
 - Reply: selected `DialectRevision`. **The trap: the server may select LOWER than requested** — accept 0x0202 per SC-1 (2.0.2 fallback; signing behavior identical for the client's needs). If the reply dialect is **3.x-only server behavior** (server rejects 2.x): modern SMB3 servers still negotiate 2.x down-level; a server that refuses 2.x entirely closes the connection or replies with a dialect ≥ 0x0300 — if 0x0300+ comes back, **abort and map to `signingRequired`** with a distinct message (recommended class: `signingRequired` — it is the "server policy incompatible with this client" class; a dedicated `dialectRejected` class exists in the SUMMARY research table but is NOT in SC-3's enum, so reuse `signingRequired` to stay byte-exact with SC-3; note this decision for the 100 probe-locale work).
@@ -385,7 +385,7 @@ frame.write(sig.subarray(0, 16), 48); // header offset 48, first 16 bytes only
 | A5 | davenport NTLMv2-hash example value is an erratum (not reproduced) | Pitfall 7 | None if fixtures self-pinned; pinning it would fake a pass/fail |
 | A6 | SMB3-refusing-server mapping to `signingRequired` class | Status map | Locale-key wording in 100 may want a dedicated class — SC-3 enum is closed, so this is the compliant choice |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **SMB echo keep-alive interval**
    - What we know: ftp.js uses 60s NOOP (ftp.js:97).
