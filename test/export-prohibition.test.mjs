@@ -122,8 +122,8 @@ test('every module under export/ imports only node builtins, writer subpaths and
     'assert', 'buffer', 'child_process', 'crypto', 'events', 'fs', 'http', 'https',
     'module', 'os', 'path', 'stream', 'string_decoder', 'timers', 'tty', 'url',
     'util', 'zlib', 'node:assert', 'node:buffer', 'node:child_process', 'node:crypto',
-    'node:events', 'node:fs', 'node:http', 'node:https', 'node:module', 'node:os',
-    'node:path', 'node:sqlite', 'node:stream', 'node:stream/promises', 'node:string_decoder', 'node:timers', 'node:tty',
+    'node:events', 'node:fs', 'node:http', 'node:https', 'node:module', 'node:net',
+    'node:os', 'node:path', 'node:sqlite', 'node:stream', 'node:stream/promises', 'node:string_decoder', 'node:timers', 'node:tls', 'node:tty',
     'node:url', 'node:util', 'node:zlib',
   ]);
   for (const file of walk(EXPORT)) {

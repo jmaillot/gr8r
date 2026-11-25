@@ -79,7 +79,7 @@ test('upload slot: ordered registry iteration with the dormant-slot skip contrac
   assert.match(b, /downloadToStaged\(provided\.config, key, sha256/, 'the D-88-8 stream-back verify survives');
 });
 
-test('dormant custody: FTP/SMB boot-frozen consts in server.js; NO client modules created (D-05)', () => {
+test('dormant custody: FTP/SMB boot-frozen consts in server.js; no wiring, smb client still dormant (D-05, 97-updated)', () => {
   const s = serverSrc();
   for (const name of ['FTP_HOST', 'FTP_PORT', 'FTP_USER', 'FTP_PASSWORD', 'FTP_SECURE', 'FTP_PASV_HOST', 'FTP_INSECURE']) {
     assert.match(s, new RegExp(`const ${name} = `), `FTP ${name} boot-frozen const present`);
@@ -92,9 +92,11 @@ test('dormant custody: FTP/SMB boot-frozen consts in server.js; NO client module
   assert.match(s, /enabled: !!\(SMB_HOST && SMB_SHARE && SMB_USER && SMB_PASSWORD\)/, 'smb enabled derives from env (D-05)');
   // warn parity, NOT the S3 hard boot-refuse (SC-4)
   assert.match(s, /partially set — destination disabled/, 'partial FTP/SMB env warns at boot (SC-4)');
-  // NO client modules this phase (D-05 hard rule)
-  assert.ok(!fs.existsSync(path.join(ROOT, 'export', 'ftp.js')), 'export/ftp.js must NOT exist in 96');
-  assert.ok(!fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js must NOT exist in 96');
+  // NO client modules this phase (D-05 hard rule) — Phase 97 unlocked
+  // export/ftp.js (hand-rolled, zero-dep, tested by 97-01); smb.js stays
+  // dormant until its own phase.
+  assert.ok(fs.existsSync(path.join(ROOT, 'export', 'ftp.js')), 'export/ftp.js exists since Phase 97 (zero-dep client)');
+  assert.ok(!fs.existsSync(path.join(ROOT, 'export', 'smb.js')), 'export/smb.js must NOT exist yet');
 });
 
 test('the old setter name is gone from the whole codebase (tests included — OQ-1 knowingly-updated twins)', () => {
