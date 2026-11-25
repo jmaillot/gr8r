@@ -6,7 +6,7 @@
 - **Env-only credential custody (D-88 unchanged)** — `FTP_*`/`SMB_*` boot-frozen consts mirroring `S3_*` (server.js:208-219); never DB rows; secrets never logged (V14; NTLM type-3 + FTP PASS scrubbed).
 - **Dual-engine DDL lockstep** — new columns (`ftp_enabled`, `smb_enabled`) via `adapterEnsureColumn` in SQLite AND Postgres; one SQL shape, no JSON columns.
 - **Audit funnel** — every probe refusal and mutation keyed + audited; all new keys land ×5 locales (en/fr/nl/de/es) in the same commit.
-- **`npm test` baseline** — 2492 tests / 2 documented pre-existing failures; `membershipsOf` byte-gate and existing suites stay green at every phase.
+- **`npm test` baseline** — 2609 tests / 2 documented pre-existing failures; `membershipsOf` byte-gate and existing suites stay green at every phase.
 
 ## Shipped Milestones
 
@@ -39,7 +39,7 @@ Build order per research SUMMARY.md: seam refactor FIRST (unblocks both wirings)
 1. `setBackupS3Destination` (export/backup.js:635-645) is a registry accepting multiple destinations; S3 upload, verify, sidecar, probe and restore behave byte-identically for existing tasks (S3 golden-vector suite green, diff-verified).
 2. `ftp_enabled` and `smb_enabled` flat boolean columns exist beside `s3_enabled` via `adapterEnsureColumn` in both SQLite and Postgres (dual-engine lockstep proven by test); existing DBs migrate additively, second boot is a no-op.
 3. Run truth is per-destination integer flags and the run status stays the single terminal `upload_failed`, whose error text names the failed destination(s); local publish stays valid; alerts ride the `handleBackupTaskOutcome` transition gate verbatim.
-4. `FTP_*`/`SMB_*` env custody is boot-frozen mirroring `S3_*` (server.js:208-219) with enabled-derivation and invalid-token warn parity; `membershipsOf` byte-gate and the full suite stay at baseline (2492 tests / 2 documented failures).
+4. `FTP_*`/`SMB_*` env custody is boot-frozen mirroring `S3_*` (server.js:208-219) with enabled-derivation and invalid-token warn parity; `membershipsOf` byte-gate and the full suite stay at baseline (2609 tests / 2 documented failures).
 5. Restore location-badge seam (`RESTORE_LOCATION_KEYS` + server flag derivation) generalized so a new destination is a one-line extension.
 
 **Plans**: 2/2 plans executed

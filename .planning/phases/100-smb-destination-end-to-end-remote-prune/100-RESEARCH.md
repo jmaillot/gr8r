@@ -243,9 +243,9 @@ export async function probeSmb(config) {
 | A3 | SMB CREATE of a nonexistent path (rm target) returns STATUS_OBJECT_NAME_NOT_FOUND 0xc0000034 → currently generic class | Pitfall 1 | Idempotency mapping keys on wrong code → spurious prune_failed |
 | A4 | Widening the rotation delete-set SELECT is pin-neutral | Rotation | backup-rotation.test.mjs pins break → adjust pins |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **DEPLOY §21/§22 split** — §21 is already FTP (98). Recommend: §22 = SMB destination + prune (e2e commit), FTPS hardening notes ride as a §21 sub-section or §23 (CONTEXT wording suggests §22 carries them; reconcile at plan time).
+1. **RESOLVED: §21-append SMB + new §22 FTPS (plan 05, OQ-1 locked). Original: DEPLOY §21/§22 split** — §21 is already FTP (98). Recommend: §22 = SMB destination + prune (e2e commit), FTPS hardening notes ride as a §21 sub-section or §23 (CONTEXT wording suggests §22 carries them; reconcile at plan time).
 2. **Prune audit detail content** — recommend key-only (`key`/`code`), never the error text; confirm whether the D-03 tokens should carry the destination inline (`backup_prune_ok:ftp`) per the D-03 verbatim spelling (recommended: yes, exactly as D-03 writes them, plus `:soleCopy` suffix variant or a separate token — D-03 names `backup_prune_skipped:soleCopy` without a dest; recommend appending `:<dest>` for operator grep-ability, flagged as discretion).
 3. **`pruned` badge vs location badge interaction** — recommend independent additive badge (`remote_pruned === 1 && status === 'deleted'`), leaving the location ternary (:214-216) untouched; confirm whether ftp/smb locations should ALSO gain history-list badges in this phase (currently only local|s3 render — arguably out of scope).
 
