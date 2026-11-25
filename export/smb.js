@@ -46,7 +46,9 @@
    ===================================================================== */
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 
 /* ---- UTF-16LE helper (no BOM — MS-NLMP §3.3.2 identity encoding) ---- */
 export function utf16le(s) {
@@ -1111,4 +1113,77 @@ export function connectSmb(config, opts = {}) {
     },
   };
   return smb;
+}
+
+/* =====================================================================
+    PROBE + STAGED FETCH (Phase 100 plan 01 — mirrors ftp.js
+    probeFtp/fetchToStaged posture; keyed results, V14 scrub parity)
+    =====================================================================
+    probeSmb contract (R-3: SMB has no TLS variant — no TLS-warning
+    field exists anywhere in this module):
+    { ok: true,  key: 'success', warning: false, guest? }
+    { ok: false, key: 'deleteFailed', warning: false }   — HARD refuse
+      (no ftp's D-88-15 accept-with-warning analog: a share that
+      accepts writes but refuses deletes must not pass the probe)
+    { ok: false, key: <smbClass> | 'unreachable' }       — keyed classes
+    Keys only — never config, credentials, or raw error text (T-100-01).
+    ===================================================================== */
+export async function probeSmb(config, opts = {}) {
+  const base = { ok: false, key: null, warning: false };
+  const smb = connectSmb(config, opts);
+  const finish = async (result) => {
+    await smb.close().catch(() => { /* best-effort, ftp quit parity */ });
+    return result;
+  };
+  try {
+    await smb.connect();
+    await smb.echo();
+    const marker = `backup-smb/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
+    try {
+      await smb.write(marker, Buffer.from('gr8r probe'));
+    } catch (e) {
+      return finish({ ...base, key: e?.smbClass || 'unreachable' });
+    }
+    try {
+      await smb.rm(marker);
+    } catch {
+      return finish({ ...base, key: 'deleteFailed' }); // HARD refuse — warning stays false
+    }
+    const result = { ...base, ok: true, key: 'success' };
+    /* SC-2: surface guest sessions informationally (D-23 doctrine —
+       server passes the flag through verbatim). */
+    const debug = await smb.__debug().catch(() => null);
+    if (debug?.guestSession) result.guest = true;
+    return finish(result);
+  } catch (e) {
+    return finish({ ...base, key: e?.smbClass || 'unreachable' });
+  }
+}
+
+/* Restore seam (100-05 twins): read the whole remote archive, verify
+   sha256 BEFORE any staging file exists (T-100-02 — mismatch writes
+   nothing), then write staging bytes. Return shape mirrors ftp's
+   fetchToStaged ({ tmpPath, sha256 }). Mismatch refuses keyed. */
+export async function fetchSmbToStaged(config, remoteKey, expectedSha256, stagingDir, opts = {}) {
+  const smb = connectSmb(config, opts);
+  let data;
+  try {
+    await smb.connect();
+    data = await smb.read(remoteKey);
+  } catch (e) {
+    await smb.close().catch(() => { /* best-effort */ });
+    throw e;
+  }
+  await smb.close().catch(() => { /* best-effort */ });
+  const sha256 = crypto.createHash('sha256').update(data).digest('hex');
+  if (sha256 !== expectedSha256) {
+    const err = new Error(`smb download: sha256 mismatch for ${remoteKey} — the staged file was not written`);
+    err.code = 'smbSha256Mismatch';
+    err.smbClass = 'generic';
+    throw err;
+  }
+  fs.mkdirSync(stagingDir, { recursive: true });
+  const tmpPath = path.join(stagingDir, `smb-download-${process.pid}-${crypto.randomUUID().slice(0, 8)}.tmp`);
+  fs.writeFileSync(tmpPath, data);
+  return { tmpPath, sha256 };
 }
