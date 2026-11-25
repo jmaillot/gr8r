@@ -51,11 +51,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEST-01 | TBD by roadmap | Pending |
-| DEST-02 | TBD by roadmap | Pending |
-| DEST-03 | TBD by roadmap | Pending |
-| FTP-01 | TBD by roadmap | Pending |
-| FTP-02 | TBD by roadmap | Pending |
-| SMB-01 | TBD by roadmap | Pending |
-| SMB-02 | TBD by roadmap | Pending |
-| TEST-01 | TBD by roadmap | Pending |
+| DEST-01 | Phase 96 | Pending |
+| DEST-02 | Phase 100 | Pending |
+| DEST-03 | Phase 98 (FTP classes + pattern), Phase 100 (SMB classes) | Pending |
+| FTP-01 | Phase 97 | Pending |
+| FTP-02 | Phase 98 | Pending |
+| SMB-01 | Phase 99 | Pending |
+| SMB-02 | Phase 100 | Pending |
+| TEST-01 | Distributed — byte-gate pin Phase 96; golden vectors Phases 97/99; e2e recipes Phases 98/100 | Pending |
