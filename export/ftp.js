@@ -62,6 +62,7 @@
    ===================================================================== */
 
 import net from 'node:net';
+import tls from 'node:tls';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -221,29 +222,42 @@ function attachControl(socket, config, opts) {
     dataSocks: new Set(),
     closed: false,
     fatal: null,
-    session: undefined, // TLS session captured once (P8, Task 3)
+    session: undefined, // TLS session captured once (P8)
+    noopTimer: null,    // D-03 keep-alive (armed post-connect)
   };
+  bindControl(ctl, socket);
+  return ctl;
+}
 
-  socket.on('data', (chunk) => {
+/* (Re)bind the control handlers to `sock` — the explicit-TLS upgrade
+   swaps the transport mid-session (RFC 4217) and all state carries over
+   (buf empty at that point, pending null). Handlers read ctl.socket
+   dynamically so the swap is a rebind, not a rewrite. */
+function bindControl(ctl, sock) {
+  ctl.socket = sock;
+  sock.on('data', (chunk) => {
     ctl.buf += chunk.toString('utf8');
     drainReplies(ctl);
   });
-  socket.on('timeout', () => {
+  sock.on('timeout', () => {
     /* Node does NOT destroy on 'timeout' — we own the destroy (P1). */
     const p = ctl.pending;
-    socket.destroy();
+    ctl.socket.destroy();
     destroyDataSocks(ctl);
-    failPending(ctl, p, keyedError(421, `timed out waiting for a reply${p?.line ? ` after ${scrubFtpLine(p.line)}` : ''}`));
+    const err = keyedError(421, `timed out waiting for a reply${p?.line ? ` after ${scrubFtpLine(p.line)}` : ''}`);
+    err.code = p?.line?.startsWith('RETR ') ? 'ftpTransferAborted' : 'ftpUnreachable';
+    failPending(ctl, p, err);
   });
-  socket.on('error', (err) => {
+  sock.on('error', (err) => {
     ctl.fatal = ctl.fatal || keyedError(421, `control channel error: ${sliceError(err)}`);
     const p = ctl.pending;
     destroyDataSocks(ctl);
     failPending(ctl, p, ctl.fatal);
-    socket.destroy();
+    ctl.socket.destroy();
   });
-  socket.on('close', () => {
+  sock.on('close', () => {
     ctl.closed = true;
+    if (ctl.noopTimer) clearInterval(ctl.noopTimer);
     const wasTransfer = ctl.transferDepth > 0;
     destroyDataSocks(ctl);
     const err = keyedError(
@@ -253,7 +267,6 @@ function attachControl(socket, config, opts) {
     err.code = wasTransfer ? 'ftpTransferAborted' : 'ftpUnreachable'; // P5
     failPending(ctl, ctl.pending, err);
   });
-  return ctl;
 }
 
 function destroyDataSocks(ctl) {
@@ -351,42 +364,93 @@ function awaitReply(ctl, context = '') {
 
 /* =====================================================================
    DATA CHANNEL (passive mode; control-host rule, T-97-02)
-   ===================================================================== */
+   =====================================================================
+   secure !== 'none' → tls.connect with the P8 session-reuse pair:
+   the control socket's session is passed as the `session` option of
+   EVERY data-channel connect (pure-ftpd/FileZilla/hardened vsftpd
+   abort data handshakes without it). servername stays the honest
+   dial host even under a pasvHost override. minVersion TLSv1.2;
+   rejectUnauthorized from `insecure`. Never PROT C. */
 
-function dialData(host, port, { secure, insecure, session, servername }) {
-  /* Task 3 adds the TLS branch (session reuse, servername honesty). */
-  return new Promise((resolve, reject) => {
-    const sock = net.connect(port, host);
-    sock.once('connect', () => resolve(sock));
-    sock.once('error', (err) => {
-      const e = keyedError(421, `data channel connect failed: ${sliceError(err)}`);
-      e.code = 'ftpPassiveFailed';
-      reject(e);
+function dataTlsFailed(err) {
+  const e = new Error(sliceError(new Error(`ftp data-channel TLS failed: ${sliceError(err)}`)));
+  e.code = 'ftpTlsFailed';
+  e.ftpCode = null;
+  e.ftpTransient = false;
+  return e;
+}
+
+function dialData(ctl, dialHost, port) {
+  const cfg = ctl.config;
+  if (cfg.secure === 'none') {
+    return new Promise((resolve, reject) => {
+      const sock = net.connect(port, dialHost);
+      sock.once('connect', () => resolve(sock));
+      sock.once('error', (err) => {
+        const e = keyedError(421, `data channel connect failed: ${sliceError(err)}`);
+        e.code = 'ftpPassiveFailed';
+        reject(e);
+      });
     });
+  }
+  return new Promise((resolve, reject) => {
+    const sock = tls.connect({
+      host: dialHost,
+      port,
+      session: ctl.session,          // P8: session reuse on EVERY data connect
+      servername: dialHost,          // honest SNI even under pasvHost override
+      rejectUnauthorized: !cfg.insecure,
+      minVersion: 'TLSv1.2',
+    });
+    sock.once('secureConnect', () => resolve(sock));
+    sock.once('error', (err) => reject(dataTlsFailed(err)));
   });
 }
 
-async function openDataChannel(ctl) {
-  const res = await sendCommand(ctl, 'EPSV', { context: 'passive' });
-  if (res.code !== 229) {
-    /* Task 3: EPSV → PASV fallback (once, per transfer). */
-    throw ftpErrorFrom(res.code, res.lines.join(' '), 'EPSV');
-  }
-  const port = parseEpsvPort(`229 ${res.lines.join(' ')}`);
-  if (port === null) {
-    throw keyedError(500, 'unparsable EPSV reply', 'passive'); // → ftpGeneric via table miss? keep keyed
-  }
-  /* Control-host rule: NEVER dial the server-announced address. */
+function passiveFailed(res) {
+  const err = ftpErrorFrom(
+    res?.code ?? 500,
+    res?.lines?.join(' ') ?? '',
+    'passive mode (EPSV and PASV both failed — check the server PASV port range / firewall)',
+  );
+  err.code = 'ftpPassiveFailed';
+  return err;
+}
+
+async function connectData(ctl, port) {
+  /* Control-host rule: NEVER dial the server-announced address (P3). */
   const dialHost = ctl.config.pasvHost || ctl.config.host;
-  const sock = await dialData(dialHost, port, {
-    secure: ctl.config.secure !== 'none',
-    insecure: ctl.config.insecure,
-    session: ctl.session,
-    servername: dialHost,
-  });
+  const sock = await dialData(ctl, dialHost, port);
   ctl.dataSocks.add(sock);
   sock.once('close', () => ctl.dataSocks.delete(sock));
   return sock;
+}
+
+async function openDataChannel(ctl) {
+  /* EPSV first; NEVER EPSV ALL (P7). A 5xx to EPSV (pre-RFC 2428
+     servers) falls back to PASV once per transfer; both failing →
+     keyed ftpPassiveFailed. sendCommand rejects on 4xx/5xx finals,
+     so each attempt is caught and classified here. */
+  try {
+    const res = await sendCommand(ctl, 'EPSV', { context: 'passive' });
+    if (res.code === 229) {
+      const port = parseEpsvPort(`229 ${res.lines.join(' ')}`);
+      if (port !== null) return connectData(ctl, port);
+    }
+  } catch { /* EPSV unsupported/failed — PASV fallback below */ }
+  let pasvRes = null;
+  try {
+    pasvRes = await sendCommand(ctl, 'PASV', { context: 'passive' });
+    if (pasvRes.code === 227) {
+      const port = parsePasvPort(`227 ${pasvRes.lines.join(' ')}`);
+      if (port !== null) return connectData(ctl, port);
+      throw passiveFailed({ code: pasvRes.code, lines: [`unparsable PASV reply: ${pasvRes.lines.join(' ')}`] });
+    }
+  } catch (e) {
+    if (e?.code === 'ftpPassiveFailed') throw e;
+    throw passiveFailed(e?.ftpCode ? { code: e.ftpCode, lines: [e.message] } : pasvRes);
+  }
+  throw passiveFailed(pasvRes);
 }
 
 /* =====================================================================
@@ -516,15 +580,46 @@ function cmdExpect(ctl, line, okCodes, context = '') {
   });
 }
 
+function tlsHandshakeFailed(stage, err) {
+  const e = new Error(sliceError(new Error(`ftp TLS ${stage} failed: ${sliceError(err)}`)));
+  e.code = 'ftpTlsFailed';
+  e.ftpCode = null;
+  e.ftpTransient = false;
+  return e;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function establish(config, opts) {
   const secure = config.secure ?? 'explicit';
   const port = config.port ?? (secure === 'implicit' ? 990 : 21);
-  /* Task 3: implicit mode = tls.connect from byte 0 (P9). */
-  const socket = net.connect(port, config.host);
-  await new Promise((resolve, reject) => {
-    socket.once('connect', resolve);
-    socket.once('error', (err) => reject(keyedError(421, `connect failed: ${sliceError(err)}`)));
-  });
+  let socket;
+  if (secure === 'implicit') {
+    /* P9: implicit = TLS from byte 0 on port ?? 990 — NO AUTH/PBSZ/PROT
+       exchange; the transport swap is the constructor choice. */
+    socket = tls.connect({
+      host: config.host,
+      port,
+      servername: config.host,
+      rejectUnauthorized: !config.insecure,
+      minVersion: 'TLSv1.2',
+    });
+    try {
+      await new Promise((resolve, reject) => {
+        socket.once('secureConnect', resolve);
+        socket.once('error', reject);
+      });
+    } catch (err) {
+      try { socket.destroy(); } catch { /* gone */ }
+      throw tlsHandshakeFailed('implicit connect', err);
+    }
+  } else {
+    socket = net.connect(port, config.host);
+    await new Promise((resolve, reject) => {
+      socket.once('connect', resolve);
+      socket.once('error', (err) => reject(keyedError(421, `connect failed: ${sliceError(err)}`)));
+    });
+  }
   const ctl = attachControl(socket, config, opts);
   const greet = await awaitReply(ctl, 'greeting');
   if (greet.code !== 220) {
@@ -532,22 +627,67 @@ async function establish(config, opts) {
     throw ftpErrorFrom(greet.code, greet.lines.join(' '), 'greeting');
   }
   if (secure === 'explicit') {
-    /* Task 3: AUTH TLS → tls.connect({ socket }) upgrade → PBSZ 0 →
-       PROT P → then credentials (RFC 4217 order). Task 1: slot only. */
+    /* RFC 4217 order is FIXED: AUTH TLS before credentials, PBSZ
+       strictly before PROT. Never EPSV ALL here either. */
+    const auth = await sendCommand(ctl, 'AUTH TLS', { context: 'auth-tls' });
+    if (auth.code !== 234) {
+      ctl.socket.destroy();
+      throw tlsHandshakeFailed('upgrade', ftpErrorFrom(auth.code, auth.lines.join(' '), 'AUTH TLS refused'));
+    }
+    let tlsSock;
+    try {
+      tlsSock = tls.connect({
+        socket, // same-socket upgrade (A2)
+        servername: config.host,
+        rejectUnauthorized: !config.insecure,
+        minVersion: 'TLSv1.2',
+      });
+      await new Promise((resolve, reject) => {
+        tlsSock.once('secureConnect', resolve);
+        tlsSock.once('error', reject);
+      });
+    } catch (err) {
+      try { socket.destroy(); } catch { /* gone */ }
+      throw tlsHandshakeFailed('upgrade', err);
+    }
+    /* Swap the transport: plaintext handlers off, TLS handlers on —
+       all parser/pending state carries over (buf empty here). */
+    socket.removeAllListeners();
+    bindControl(ctl, tlsSock);
+    /* P8: capture the session ONCE — every data-channel tls.connect
+       gets it as its `session` option (incl. retry attempts). */
+    ctl.session = tlsSock.getSession();
+    await cmdExpect(ctl, 'PBSZ 0', 200, 'pbsz');
+    await cmdExpect(ctl, 'PROT P', 200, 'prot');
+  } else if (secure === 'implicit') {
+    ctl.session = ctl.socket.getSession?.();
   }
   const u = await sendCommand(ctl, `USER ${config.user}`, { context: 'login' });
   if (u.code === 331) {
     /* 331 is a per-command reply (A5): proceed to PASS. */
     const p = await sendCommand(ctl, `PASS ${config.password}`, { context: 'login' });
     if (p.code !== 230) {
-      socket.destroy();
+      ctl.socket.destroy();
       throw ftpErrorFrom(p.code, p.lines.join(' '), 'login');
     }
   } else if (u.code !== 230) {
-    socket.destroy();
+    ctl.socket.destroy();
     throw ftpErrorFrom(u.code, u.lines.join(' '), 'login');
   }
   await cmdExpect(ctl, 'TYPE I', 200, 'binary mode');
+
+  /* D-03: NOOP keep-alive — 60s const, fires ONLY while a data transfer
+     is in flight (control idle awaiting the final reply). Never sent
+     while a non-transfer control command is pending. Stray 2xx echoes
+     are swallowed + counted by handleReply (P4/OQ-2). unref'd so the
+     timer never keeps the process alive (P1 sanity). */
+  const noopIntervalMs = (opts.noopIntervalS ?? FTP_NOOP_INTERVAL_S) * 1000;
+  ctl.noopTimer = setInterval(() => {
+    if (ctl.transferDepth > 0 && !ctl.closed && ctl.socket.writable) {
+      ctl.socket.write('NOOP\r\n');
+    }
+  }, noopIntervalMs);
+  ctl.noopTimer.unref?.();
   return ctl;
 }
 
@@ -555,20 +695,46 @@ export function connectFtp(config, opts = {}) {
   /* Async factory: connects immediately, returns the D-01 client.
      `connect()` stays available and idempotent (await ftp.connect()). */
   const ctlP = establish(config, opts);
-  let connected = false;
-  ctlP.then(() => { connected = true; }, () => { /* error surfaces via await */ });
-
   const ensure = () => ctlP;
+
+  /* ---- STOR retry helper (P6 ruling, s3.js uploadSinglePut idiom) ----
+     Each attempt opens a FRESH passive channel and re-sends the WHOLE
+     file from byte 0 of the immutable staged source. REST is NEVER
+     sent on the upload path (RFC 3659 defines REST for RETR restart
+     points only) — T10 pins zero `REST ` lines on the upload transcript.
+     A string `source` is a staged file path → a fresh read stream per
+     attempt (the D-88-16 whole-file re-read idiom); a stream source
+     gets exactly one attempt (no re-read source). Only transient
+     errors (4xx / ftpTransferAborted) are retried. */
+  async function storWithRetry(ctl, targetPath, source, storOpts) {
+    const attempts = storOpts.attempts ?? opts.attempts ?? 3;
+    const backoffMs = storOpts.backoffMs ?? opts.backoffMs ?? (attempt => 500 * 2 ** (attempt - 1));
+    let lastErr = null;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const stream = typeof source === 'string'
+          ? fs.createReadStream(source, { highWaterMark: 1024 * 1024 })
+          : source;
+        await storOnce(ctl, targetPath, stream);
+        return true;
+      } catch (err) {
+        lastErr = err;
+        const transient = err?.ftpTransient === true || err?.code === 'ftpTransferAborted';
+        if (attempt < attempts && transient) await sleep(backoffMs(attempt));
+        else throw err;
+      }
+    }
+    throw lastErr;
+  }
 
   const ftp = {
     connect: async () => { await ctlP; },
     stor: async (targetPath, source, storOpts = {}) => {
       const ctl = await ensure();
-      /* Retry support lands with the Task 3 full-restart helper (P6). */
       const stream = source && typeof source !== 'string' && !(source instanceof Readable) && typeof source.read !== 'function'
         ? Readable.from(source)
         : source;
-      await storOnce(ctl, targetPath, stream);
+      await storWithRetry(ctl, targetPath, stream, storOpts);
       return true;
     },
     dele: async (targetPath) => {
@@ -599,12 +765,20 @@ export function connectFtp(config, opts = {}) {
     quit: async () => {
       const ctl = await ensure().catch(() => null);
       if (!ctl) return;
+      if (ctl.noopTimer) clearInterval(ctl.noopTimer);
       try {
         await sendCommand(ctl, 'QUIT', { context: 'quit' });
       } catch { /* best-effort — the socket goes either way */ }
       try { ctl.socket.destroy(); } catch { /* gone */ }
     },
     end: async () => ftp.quit(),
+    /* Test/debug surface (not a user API): the OQ-2 swallow counter and
+       the P8 session-capture flag. Phase 98 maps the keyed codes; this
+       accessor never carries credentials. */
+    __debug: async () => {
+      const ctl = await ensure().catch(() => null);
+      return { noopSwallowed: ctl?.noopSwallowed ?? 0, sessionCaptured: !!ctl?.session };
+    },
   };
   return ftp;
 }
