@@ -349,7 +349,7 @@ test('smb-probe route: path exists with the ftp-probe guard chain order VERBATIM
     ['tooMany', block.indexOf("tooMany(`backupprobe|")],
     ['CAP.BACKUP_MANAGE', block.indexOf('CAP.BACKUP_MANAGE')],
     ['SMB.enabled', block.indexOf('if (!SMB.enabled)')],
-    ['probeSmb', block.indexOf('await probeSmb(SMB.config())')],
+    ['probeSmb', block.indexOf('await probeSmb(SMB.config(),')],
   ];
   for (const [name, pos] of order) assert.ok(pos !== -1, `guard present: ${name}`);
   for (let k = 1; k < order.length; k++) {
