@@ -798,12 +798,12 @@ function buildCreateRequest(name, { access, disposition, createOptions = 0 }) {
   body.writeUInt16LE(57, 0);                      // StructureSize
   body.writeUInt8(0, 2);                          // SecurityFlags
   body.writeUInt8(0, 3);                          // RequestedOplockLevel
-  body.writeUInt32LE(0, 4);                       // ImpersonationLevel
+  body.writeUInt32LE(2, 4);                       // ImpersonationLevel (2 = Impersonation — 0 = Anonymous, Samba's ACL path resolves Anonymous against the share root and answers OBJECT_NAME_NOT_FOUND, owner NAS UAT round 3; smbclient sends 2)
   body.writeBigUInt64LE(0n, 8);                   // SmbCreateFlags
   body.writeBigUInt64LE(0n, 16);                  // Reserved
-  body.writeUInt32LE(access, 24);                 // DesiredAccess
+  body.writeUInt32LE(access, 24);                 // DesiredAccess (SPECIFIC rights — smbclient's working frame carries 0x12019f; GENERIC_* masks rely on server-side mapping that this Samba build does not apply to CREATE)
   body.writeUInt32LE(0, 28);                      // FileAttributes
-  body.writeUInt32LE(0, 32);                      // ShareAccess
+  body.writeUInt32LE(0x3, 32);                    // ShareAccess (FILE_SHARE_READ|WRITE — smbclient parity; 0 = FILE_SHARE_NONE which DSM Samba refuses on CREATE)
   body.writeUInt32LE(disposition, 36);            // CreateDisposition
   body.writeUInt32LE(createOptions, 40);          // CreateOptions
   body.writeUInt16LE(64 + 56, 44);                // NameOffset
@@ -817,23 +817,36 @@ function buildCreateRequest(name, { access, disposition, createOptions = 0 }) {
 /* WRITE (§2.2.21): 44-byte struct + data at frame offset 108
    (64 + 44). */
 function buildWriteRequest(fileId, chunk, offset) {
-  const body = Buffer.alloc(44 + chunk.length);
+  /* §2.2.21 field order (pinned against the Microsoft spec AND a
+     captured smbclient frame on the owner NAS): StructureSize,
+     DataOffset, Length, Offset, FileId, Channel, RemainingBytes,
+     WriteChannelInfoOffset, WriteChannelInfoLength, Flags. The
+     phase-99 layout put FileId @20 (i.e. 4 bytes late) so a real
+     server parsed a null handle and answered STATUS_FILE_CLOSED
+     (0xc0000128) to every WRITE while CREATE/CLOSE looked healthy.
+     Buffer starts at body 48 => DataOffset 112 (8-aligned). */
+  const body = Buffer.alloc(48 + chunk.length);
   body.writeUInt16LE(49, 0);                      // StructureSize
-  body.writeUInt16LE(64 + 44, 2);                 // DataOffset
+  body.writeUInt16LE(64 + 48, 2);                 // DataOffset (8-aligned)
   body.writeUInt32LE(chunk.length, 4);            // Length
   body.writeBigUInt64LE(BigInt(offset), 8);       // Offset (u64)
-  body.writeUInt32LE(0, 16);                      // Channel
-  fileId.copy(body, 20);                          // FileId (16)
-  body.writeUInt16LE(0, 36);                      // ChannelInfoOffset
-  body.writeUInt16LE(0, 38);                      // ChannelInfoLength
-  body.writeUInt32LE(0, 40);                      // Flags
-  chunk.copy(body, 44);
+  fileId.copy(body, 16);                          // FileId (16)
+  body.writeUInt32LE(0, 32);                      // Channel (reserved 2.x)
+  body.writeUInt32LE(0, 36);                      // RemainingBytes
+  body.writeUInt16LE(0, 40);                      // WriteChannelInfoOffset
+  body.writeUInt16LE(0, 42);                      // WriteChannelInfoLength
+  body.writeUInt32LE(0, 44);                      // Flags
+  chunk.copy(body, 48);
   return body;
 }
 
 /* READ (§2.2.19): 48-byte struct, no inline data. */
 function buildReadRequest(fileId, length, offset) {
-  const body = Buffer.alloc(48);
+  /* Fixed struct is 48 bytes but StructureSize=49 declares 1 byte of
+     variable buffer; Samba's smbd_smb2_request_verify_sizes(req, 0x31)
+     rejects a 48-byte body with STATUS_INVALID_PARAMETER (0xc000000d)
+     — owner-NAS UAT round 3: WRITE/CLOSE fine, READ-only failure. */
+  const body = Buffer.alloc(49);
   body.writeUInt16LE(49, 0);                      // StructureSize
   body.writeUInt8(0, 2);                          // Padding
   body.writeUInt8(0, 3);                          // Reserved
@@ -870,11 +883,20 @@ function ntTimestamp() {
 }
 
 /* CREATE access masks / dispositions / options (MS-SMB2 §2.2.13 /
-   §2.2.94). GENERIC masks are the safest against Samba ACL checks. */
-const GENERIC_READ = 0x80000000;
-const GENERIC_WRITE = 0x40000000;
-const DELETE_ACCESS = 0x00010000;
+   §2.2.94). SPECIFIC rights, smbclient parity: the owner's Samba
+   (DSM) answered OBJECT_NAME_NOT_FOUND to every CREATE carrying
+   GENERIC_* masks — the generic-to-specific mapping is not applied
+   on this build (UAT round 3, captured working frame = 0x12019f).
+   FILE_*_* rights: read data 0x1, write data 0x2, append 0x4,
+   read attrs 0x80, write attrs 0x100, DELETE 0x10000, READ_CONTROL
+   0x20000, traverse 0x20, list dir 0x1 (dir context), add file 0x2,
+   add subdir 0x4. */
+const FILE_RIGHTS_RW = 0x0012019f;  // exact smbclient working mask
+const FILE_RIGHTS_R = 0x00120089;   // read-data/attrs + traverse + READ_CONTROL
+const FILE_RIGHTS_RW_DELETE = 0x0013019f;
 const FILE_OPEN_IF = 0x00000001;
+const FILE_CREATE = 0x00000002;
+const FILE_OVERWRITE_IF = 0x00000005;
 const FILE_DELETE_ON_CLOSE = 0x00001000;
 const FILE_DIRECTORY_FILE = 0x00000001;
 const FILE_NON_DIRECTORY_FILE = 0x00000040;
@@ -883,18 +905,27 @@ const FILE_NON_DIRECTORY_FILE = 0x00000040;
    OPEN_IF — idempotent (an existing dir answers STATUS_OK, a FILE
    occupying the name answers STATUS_OBJECT_NAME_COLLISION → keyed). */
 async function mkdirSegment(s, segment) {
-  const fileId = await createFile(s, segment, {
-    access: GENERIC_WRITE,
-    disposition: FILE_OPEN_IF,
-    createOptions: FILE_DIRECTORY_FILE,
-  });
-  await closeFile(s, fileId, `mkdir ${segment}`);
+  /* SMB 2.x CREATE-for-dirs quirk discovered live on the owner NAS:
+     FILE_OPEN_IF (1) on a DIRECTORY answers OBJECT_NAME_NOT_FOUND
+     (0xc0000034) while FILE_CREATE (2) works — but collides
+     (0xc0000035) when the dir already exists. MKD parity is
+     idempotent, so a collision IS the success path here. */
+  try {
+    const fileId = await createFile(s, segment, {
+      access: FILE_RIGHTS_RW,
+      disposition: FILE_CREATE,
+      createOptions: FILE_DIRECTORY_FILE,
+    });
+    await closeFile(s, fileId, `mkdir ${segment}`);
+  } catch (e) {
+    if (e?.smbStatus !== 0xc0000035) throw e;
+  }
 }
 
 /* MKD-chain parity with FTP (owner NAS UAT round 3): SMB2 CREATE does
    NOT create missing parents — a marker under backup-smb/ on a bare
    share answers STATUS_OBJECT_PATH_NOT_FOUND. Walk the parent chain
-   segment by segment (idempotent OPEN_IF; collisions on FILE entries
+   segment by segment (idempotent: FILE_CREATE per segment; NAME_COLLISION = already exists
    surface keyed through the normal error path). */
 async function mkdirParents(s, path) {
   const segments = String(path).split('/').slice(0, -1).filter(Boolean);
@@ -907,9 +938,15 @@ async function mkdirParents(s, path) {
 }
 
 /* Reply-body parsers (spec structs; see provenance in the engine
-   header). CREATE: FileId (16 bytes) at body offset 64 (§2.2.14.2).
-   WRITE: Count u32 at body offset 4 (§2.2.22). READ: DataOffset u16@2,
-   DataLength u32@4 (§2.2.20) — data at frame offset DataOffset. */
+   header). CREATE: FileId (16 bytes) at body offset 64 (§2.2.14.2 as
+   the owner NAS answers it — byte-verified against a captured
+   smbclient round-trip: the handle the client echoes in WRITE
+   (FileId @ body 16 per §2.2.21) matches the CREATE reply at body
+   64; the interim @68/@72 readings were 8-byte zero-shift
+   false-positives and real Samba answered STATUS_FILE_CLOSED
+   (0xc0000128) to the WRITE on the bogus handle). WRITE: Count u32
+   at body offset 4 (§2.2.22). READ: DataOffset u16@2, DataLength
+   u32@4 (§2.2.20) — data at frame offset DataOffset. */
 function fileIdFromCreateReply(body) {
   return Buffer.from(body.subarray(64, 80));
 }
@@ -1189,9 +1226,16 @@ async function runWithExpiry(s, runOnce, context) {
    --------------------------------------------------------------------- */
 
 async function createFile(s, name, { access, disposition, createOptions = 0 }) {
+  /* SMB2 path separator is BACKSLASH (MS-SMB2 §2.2.13) — the engine's
+     API is FTP-parity slash-form; smbclient translates before the wire
+     and we must too. A slash-form name reaches Samba as ONE literal
+     (invalid) name and answers OBJECT_NAME_NOT_FOUND — the last live
+     blocker found on the owner NAS (UAT round 3: root-level creates
+     passed, every nested create failed until this translation). */
+  const wireName = String(name).replace(/\//g, '\\');
   const res = await runWithExpiry(
     s,
-    () => sendRequest(s, SMB2_COM.CREATE, buildCreateRequest(name, { access, disposition, createOptions }), { context: `create ${name}` }),
+    () => sendRequest(s, SMB2_COM.CREATE, buildCreateRequest(wireName, { access, disposition, createOptions }), { context: `create ${name}` }),
     `create ${name}`,
   );
   expectOk(res, `create ${name}`);
@@ -1343,7 +1387,7 @@ export function connectSmb(config, opts = {}) {
       const s = await ensure();
       const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
       await mkdirParents(s, path); // MKD-chain parity — CREATE never makes parents
-      const fileId = await createFile(s, path, { access: GENERIC_WRITE, disposition: FILE_OPEN_IF, createOptions: FILE_NON_DIRECTORY_FILE });
+      const fileId = await createFile(s, path, { access: FILE_RIGHTS_RW, disposition: FILE_OVERWRITE_IF, createOptions: FILE_NON_DIRECTORY_FILE });
       try {
         await writeFile(s, fileId, buf);
       } finally {
@@ -1353,7 +1397,7 @@ export function connectSmb(config, opts = {}) {
     },
     read: async (path) => {
       const s = await ensure();
-      const fileId = await createFile(s, path, { access: GENERIC_READ, disposition: FILE_OPEN_IF });
+      const fileId = await createFile(s, path, { access: FILE_RIGHTS_R, disposition: FILE_OPEN_IF });
       try {
         return await readFile(s, fileId);
       } finally {
@@ -1365,7 +1409,7 @@ export function connectSmb(config, opts = {}) {
       /* Delete-on-close: CREATE with FILE_DELETE_ON_CLOSE + DELETE
          access; the CLOSE executes the delete server-side. */
       const fileId = await createFile(s, path, {
-        access: GENERIC_WRITE | DELETE_ACCESS,
+        access: FILE_RIGHTS_RW_DELETE,
         disposition: FILE_OPEN_IF,
         createOptions: FILE_DELETE_ON_CLOSE,
       });
@@ -1393,6 +1437,17 @@ export function connectSmb(config, opts = {}) {
         expectOk(res1, 'tree disconnect');
         const res2 = await sendRequest(s, SMB2_COM.LOGOFF, buildLogoffRequest(), { context: 'logoff' });
         expectOk(res2, 'logoff');
+        /* Graceful FIN after LOGOFF (smbclient parity): a bare RST
+           leaves the server-side session table dirty for ~the session
+           timeout, and DSM's per-user connection cap then refuses the
+           NEXT session's TREE_CONNECT with BAD_NETWORK_NAME (owner
+           NAS UAT round 3 — clean close lifted the throttle). */
+        await new Promise((resolve) => {
+          s.socket.once('close', resolve);
+          s.socket.end();
+          setTimeout(resolve, 500);
+        });
+        return;
       } catch { /* best-effort — destroy below regardless */ }
       try { s.socket.destroy(); } catch { /* gone */ }
     },

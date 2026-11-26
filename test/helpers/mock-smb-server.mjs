@@ -181,7 +181,9 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
           if (scenario.createStatus) { send(frame, { status: scenario.createStatus }); return; }
           const nameLen = body.readUInt16LE(46);
           const nameOff = body.readUInt16LE(44);
-          const name = frame.subarray(nameOff, nameOff + nameLen).toString('utf16le');
+          /* The client translates `/` → `\` on the wire (SMB2
+             separator); normalize back so file keys stay slash-keyed. */
+          const name = frame.subarray(nameOff, nameOff + nameLen).toString('utf16le').replace(/\\/g, '/');
           const fileId = Buffer.alloc(16);
           fileId.writeUInt32LE(++fileIdCounter, 0);
           if (!files.has(name)) files.set(name, Buffer.alloc(0));
@@ -194,7 +196,7 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
           const dataOff = body.readUInt16LE(2);
           const len = body.readUInt32LE(4);
           const offset = Number(body.readBigUInt64LE(8));
-          const fidHex = body.subarray(20, 36).toString('hex');
+          const fidHex = body.subarray(16, 32).toString('hex');
           const data = frame.subarray(dataOff, dataOff + len);
           const stored = files.get(fidName(fidHex)) ?? Buffer.alloc(0);
           const end = Math.max(stored.length, offset + len);
