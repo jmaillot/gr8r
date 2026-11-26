@@ -876,6 +876,35 @@ const GENERIC_WRITE = 0x40000000;
 const DELETE_ACCESS = 0x00010000;
 const FILE_OPEN_IF = 0x00000001;
 const FILE_DELETE_ON_CLOSE = 0x00001000;
+const FILE_DIRECTORY_FILE = 0x00000001;
+const FILE_NON_DIRECTORY_FILE = 0x00000040;
+
+/* One SMB2 directory creation: CREATE with FILE_DIRECTORY_FILE +
+   OPEN_IF — idempotent (an existing dir answers STATUS_OK, a FILE
+   occupying the name answers STATUS_OBJECT_NAME_COLLISION → keyed). */
+async function mkdirSegment(s, segment) {
+  const fileId = await createFile(s, segment, {
+    access: GENERIC_WRITE,
+    disposition: FILE_OPEN_IF,
+    createOptions: FILE_DIRECTORY_FILE,
+  });
+  await closeFile(s, fileId, `mkdir ${segment}`);
+}
+
+/* MKD-chain parity with FTP (owner NAS UAT round 3): SMB2 CREATE does
+   NOT create missing parents — a marker under backup-smb/ on a bare
+   share answers STATUS_OBJECT_PATH_NOT_FOUND. Walk the parent chain
+   segment by segment (idempotent OPEN_IF; collisions on FILE entries
+   surface keyed through the normal error path). */
+async function mkdirParents(s, path) {
+  const segments = String(path).split('/').slice(0, -1).filter(Boolean);
+  let prefix = '';
+  for (const segment of segments) {
+    prefix += segment;
+    await mkdirSegment(s, prefix);
+    prefix += '/';
+  }
+}
 
 /* Reply-body parsers (spec structs; see provenance in the engine
    header). CREATE: FileId (16 bytes) at body offset 64 (§2.2.14.2).
@@ -1313,7 +1342,8 @@ export function connectSmb(config, opts = {}) {
     write: async (path, buffer) => {
       const s = await ensure();
       const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
-      const fileId = await createFile(s, path, { access: GENERIC_WRITE, disposition: FILE_OPEN_IF });
+      await mkdirParents(s, path); // MKD-chain parity — CREATE never makes parents
+      const fileId = await createFile(s, path, { access: GENERIC_WRITE, disposition: FILE_OPEN_IF, createOptions: FILE_NON_DIRECTORY_FILE });
       try {
         await writeFile(s, fileId, buf);
       } finally {

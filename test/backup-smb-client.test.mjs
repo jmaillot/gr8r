@@ -342,7 +342,14 @@ function fakeSmb(scenario = {}) {
           return;
         }
         case SMB2_COM.CLOSE: {
-          if (scenario.closeStatus) { send(frame, { status: scenario.closeStatus }); return; }
+          /* closeStatus arms after the first CLOSE (mkdirParents
+             infrastructure CLOSEs succeed; the marker-rm DELETE-on-close
+             CLOSE fails) — keeps the rm-failure arm exercisable with the
+             mkdir chain now preceding every write. */
+          if (scenario.closeStatus && (scenario._closeCount = (scenario._closeCount ?? 0) + 1) > (scenario._closeOk ?? 0)) {
+            send(frame, { status: scenario.closeStatus });
+            return;
+          }
           send(frame, { body: closeBody(body.subarray(8, 24)) });
           return;
         }
@@ -923,7 +930,7 @@ test('probeSmb happy path → keyed { ok: true, key: "success" }, no httpWarning
 
 test('probeSmb marker rm failure → HARD refuse { ok: false, key: "deleteFailed" }, warning stays false', async () => {
   const { probeSmb } = await import('../export/smb.js');
-  const server = fakeSmb({ closeStatus: 0xc0000022 }); // every CLOSE fails → marker rm fails
+  const server = fakeSmb({ closeStatus: 0xc0000022, _closeOk: 1 }); // mkdir CLOSE ok → marker rm's CLOSE fails
   await server.listen();
   try {
     const result = await probeSmb(smbProbeConfig(server.port()));
