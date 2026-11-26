@@ -965,8 +965,12 @@ function bindTransport(s) {
   s.socket.on('timeout', () => {
     /* Node does NOT destroy on 'timeout' — we own the destroy (P1 parity). */
     const p = s.pending;
+    /* UAT 2026-11-26: name the phase — operator logs must say WHICH
+       command got no reply (negotiate? auth? write?), never a bare
+       timeout. */
+    const what = p ? `no ${p.context || `SMB2 command 0x${p.command.toString(16)}`} reply` : 'idle timeout';
     try { s.socket.destroy(); } catch { /* gone */ }
-    failPending(s, p ? smbErrorFrom('ETIMEDOUT', 'timed out waiting for an SMB2 reply') : undefined);
+    failPending(s, p ? smbErrorFrom('ETIMEDOUT', `timed out waiting for an SMB2 reply — ${what}`) : undefined);
   });
   s.socket.on('error', (err) => {
     s.fatal = s.fatal || smbErrorFrom(err?.code || 'ECONNREFUSED', `transport error: ${String(err?.code ?? '')}`);
@@ -1004,7 +1008,7 @@ function sendRequest(s, command, body, { signed = true, context = '' } = {}) {
       frame.writeUInt32LE(frame.readUInt32LE(16) | SMB2_HDR_FLAGS_SIGNED, 16);
       signFrame(s.signingKey, frame);
     }
-    s.pending = { messageId, resolve, reject };
+    s.pending = { messageId, resolve, reject, command, context };
     s.socket.setTimeout(s.opts.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS);
     if (!s.raw) s.socket.write(encodeNbssHeader(0x00, frame.length)); // NBSS prefix — 139-style only
     s.socket.write(frame);
