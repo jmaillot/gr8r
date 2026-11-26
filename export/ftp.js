@@ -772,8 +772,23 @@ export function connectFtp(config, opts = {}) {
 
   const ftp = {
     connect: async () => { await ctlP; },
+    /* UAT 2026-11-26 (owner NAS report: probe AND uploads would 553 because
+       STOR never creates parent directories — the per-task prefix
+       `backup-task-<id>/` and the probe prefix are not pre-provisioned on
+       strict servers): best-effort MKD chain over every path segment
+       before the transfer. Every MKD failure is swallowed (already-exists
+       5xx variants vary per server) — the final STOR remains the sole
+       judge of real writability, so a genuinely read-only root still
+       refuses honestly with its own 553. */
     stor: async (targetPath, source, storOpts = {}) => {
       const ctl = await ensure();
+      const segments = String(targetPath).split('/').slice(0, -1);
+      let prefix = '';
+      for (const segment of segments) {
+        if (!segment) continue;
+        prefix = prefix ? `${prefix}/${segment}` : segment;
+        await sendCommand(ctl, `MKD ${prefix}`, { context: targetPath }).catch(() => {});
+      }
       const stream = source && typeof source !== 'string' && !(source instanceof Readable) && typeof source.read !== 'function'
         ? Readable.from(source)
         : source;

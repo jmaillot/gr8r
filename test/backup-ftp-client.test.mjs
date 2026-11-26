@@ -369,6 +369,30 @@ test('tracer: STOR/DELE round-trip over the mock server (plain FTP, end-to-end)'
   }
 });
 
+test('UAT 2026-11-26: stor issues best-effort MKD for every parent segment before the transfer (strict-server 553 fix)', async () => {
+  const server = fakeFtp();
+  await server.listen();
+  try {
+    const ftp = await connectFtp({
+      host: '127.0.0.1',
+      port: server.port(),
+      user: 'projects-studio',
+      password: 'projects-studio-secret',
+      secure: 'none',
+    });
+    await ftp.stor('backup-task-abc/nested/dir/file.tar.gz', Readable.from([Buffer.from('x')]));
+    await ftp.quit();
+    const cmds = server.commands;
+    assert.ok(cmds.some((c) => c.startsWith('MKD backup-task-abc')), 'MKD root prefix');
+    assert.ok(cmds.some((c) => c.startsWith('MKD backup-task-abc/nested')), 'MKD cumulative nested prefix');
+    assert.ok(cmds.some((c) => c.startsWith('MKD backup-task-abc/nested/dir')), 'MKD full parent prefix');
+    assert.ok(cmds.findIndex((c) => c.startsWith('MKD ')) < cmds.findIndex((c) => c.startsWith('STOR ')), 'all MKD before the STOR');
+    assert.ok(!cmds.some((c) => c.startsWith('MKD backup-task-abc/nested/dir/file.tar.gz')), 'never MKD the file itself');
+  } finally {
+    await server.close();
+  }
+});
+
 /* ------------------- T8: fetchToStaged (D-02, OQ-1) ------------------- */
 
 test('fetchToStaged happy path: staged file with exact bytes + matching sha256 (T8)', async () => {
