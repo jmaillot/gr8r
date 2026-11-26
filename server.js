@@ -9410,7 +9410,7 @@ async function handleApi(req, res, url) {
        refuse (98-02 precedent: SMB has no accept-with-warning analog). */
     let smbProbe = null;
     if (body?.smbEnabled === true && SMB.enabled) {
-      smbProbe = await probeSmb(SMB.config());
+      smbProbe = await probeSmb(SMB.config(), { onError: e => logWarn(`smb probe raw error: ${e?.message || e}`) });
       if (!smbProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:smbProbe:${smbProbe.key}`);
         logProbeFailure('smb', smbProbe);
@@ -9634,7 +9634,7 @@ async function handleApi(req, res, url) {
        is live. NO deleteFailed exemption — HARD refuse (Pitfall 7). */
     let smbProbe = null;
     if (smbEnabled && SMB.enabled) {
-      smbProbe = await probeSmb(SMB.config());
+      smbProbe = await probeSmb(SMB.config(), { onError: e => logWarn(`smb probe raw error: ${e?.message || e}`) });
       if (!smbProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:smbProbe:${smbProbe.key}`, id);
         logProbeFailure('smb', smbProbe, id);
@@ -9784,7 +9784,7 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_probe_refused:smbNotConfigured');
       return fail(res, 400, 'smbNotConfigured', 'SMB destination is not configured on this instance');
     }
-    const result = await probeSmb(SMB.config());
+    const result = await probeSmb(SMB.config(), { onError: e => logWarn(`smb probe raw error: ${e?.message || e}`) });
     await auditBackupTask(user, result.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', user.id, result.key);
     if (!result.ok) logProbeFailure('smb', result);
     logInfo(`smb probe: ${result.key}${result.guest ? ' (guest session)' : ''}`);

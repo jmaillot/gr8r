@@ -1156,6 +1156,10 @@ export function connectSmb(config, opts = {}) {
     Keys only — never config, credentials, or raw error text (T-100-01).
     ===================================================================== */
 export async function probeSmb(config, opts = {}) {
+  /* UAT 2026-11-26: opts.onError(rawError) lets the CALLER log the raw
+     transport error while the returned result stays keys-only (T-100-01
+     scrub doctrine governs the API-riding RESULT, not operator logs). */
+  const onError = (e) => { try { opts.onError?.(e); } catch { /* logging never breaks the probe */ } };
   const base = { ok: false, key: null, warning: false };
   const smb = connectSmb(config, opts);
   const finish = async (result) => {
@@ -1164,13 +1168,23 @@ export async function probeSmb(config, opts = {}) {
   };
   try {
     await smb.connect();
+  } catch (e) {
+    onError(e);
+    return finish({ ...base, key: e?.smbClass || 'unreachable' });
+  }
+  try {
     await smb.echo();
-    const marker = `backup-smb/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
-    try {
-      await smb.write(marker, Buffer.from('projects-studio probe'));
-    } catch (e) {
-      return finish({ ...base, key: e?.smbClass || 'unreachable' });
-    }
+  } catch (e) {
+    onError(e);
+    return finish({ ...base, key: e?.smbClass || 'unreachable' });
+  }
+  const marker = `backup-smb/probe-${Date.now()}-${crypto.randomUUID().slice(0, 8)}.probe`;
+  try {
+    await smb.write(marker, Buffer.from('projects-studio probe'));
+  } catch (e) {
+    onError(e);
+    return finish({ ...base, key: e?.smbClass || 'unreachable' });
+  }
     try {
       await smb.rm(marker);
     } catch {
@@ -1182,9 +1196,6 @@ export async function probeSmb(config, opts = {}) {
     const debug = await smb.__debug().catch(() => null);
     if (debug?.guestSession) result.guest = true;
     return finish(result);
-  } catch (e) {
-    return finish({ ...base, key: e?.smbClass || 'unreachable' });
-  }
 }
 
 /* Restore seam (100-05 twins): read the whole remote archive, verify
