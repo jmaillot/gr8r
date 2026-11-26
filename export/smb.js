@@ -298,33 +298,205 @@ export function encodeNbssHeader(type, length) {
 
 /* Pure feed-accumulating frame parser (ftp.js createReplyState idiom,
    translated to byte counts). buffer-in → {frames, consumed}-out;
-   never crashes on partial input; one frame per length prefix. */
-export function createFrameParser() {
+   never crashes on partial input; one frame per length prefix.
+
+   UAT 2026-11-26 raw mode ({ raw: true }): direct-445 SMB carries NO
+   NBSS length prefix — inbound replies are naked SMB2 frames, so the
+   cut comes from the SMB2 header itself (NextCommand chain, or the
+   per-command reply-body table below; an error status short-circuits
+   everything to the 8+ByteCount error body per MS-SMB2 2.2.2). An
+   unknown command throws a keyed framing violation instead of hanging. */
+export function createFrameParser({ raw = false, requestSide = false } = {}) {
   let buf = Buffer.alloc(0);
   let consumedTotal = 0;
+  const feedNbss = () => {
+    const frames = [];
+    let consumed = 0;
+    while (buf.length - consumed >= 4) {
+      const type = buf[consumed];
+      const flags = buf[consumed + 1];
+      const length = ((flags & 0x01) << 16) | buf.readUInt16BE(consumed + 2);
+      if (length > NBSS_MAX_LENGTH) throw nbssViolation('NBSS length exceeds the 17-bit maximum');
+      if (buf.length - consumed < 4 + length) break; // partial frame — keep accumulating
+      frames.push({
+        type,
+        flags,
+        payload: Buffer.from(buf.subarray(consumed + 4, consumed + 4 + length)),
+      });
+      consumed += 4 + length;
+    }
+    return { frames, consumed };
+  };
+  const feedRaw = () => {
+    const frames = [];
+    let consumed = 0;
+    while (buf.length - consumed >= 64) {
+      if (buf[consumed] !== 0xfe || buf[consumed + 1] !== 0x53 || buf[consumed + 2] !== 0x4d || buf[consumed + 3] !== 0x42) {
+        throw nbssViolation('raw mode: not an SMB2 frame (missing FE S M B magic)');
+      }
+      const head = buf.subarray(consumed);
+      const status = head.readUInt32LE(8);
+      const command = head.readUInt16LE(12);
+      const next = head.readUInt32LE(20);
+      let len;
+      if (next !== 0) {
+        len = next; // chained frames — NextCommand IS the current frame length
+      } else {
+        /* Per-command cut FIRST for successful replies (2026-11-26): a
+           non-zero status does NOT always mean a naked 8-byte error body —
+           SESSION_SETUP round-1 rides STATUS_MORE_PROCESSING_REQUIRED
+           with a FULL type-2 body (real Samba behavior; the mock replays
+           it, so does the NAS). For OTHER non-zero statuses the reply IS
+           the bare-error form (MS-SMB2 §2.2.2): StructureSize 9 +
+           ByteCount, ByteCount=0 on every simple error. */
+        const shaped = (requestSide ? smb2RequestFrameLen : smb2ReplyFrameLen)(head, command);
+        const byteCount = head.length >= 72 ? head.readUInt32LE(68) : 0;
+        const errLen = 64 + 8 + byteCount;
+        if (status !== 0 && byteCount === 0 && errLen <= buf.length - consumed && command !== 0x01) {
+          len = errLen; // simple error: bare body, never the shaped form
+        } else if (shaped != null && buf.length - consumed >= shaped) {
+          len = shaped;
+        } else if (errLen <= buf.length - consumed) {
+          len = errLen; // shaped overruns → the reply is a bare error
+        } else {
+          break; // partial frame — neither form fits yet, keep accumulating
+        }
+      }
+      if (len == null) throw nbssViolation(`raw mode: unknown reply command 0x${command.toString(16).padStart(4, '0')} — cannot frame`);
+      if (buf.length - consumed < len) break; // partial frame — keep accumulating
+      frames.push({ type: 0, flags: 0, payload: Buffer.from(head.subarray(0, len)) });
+      consumed += len;
+    }
+    return { frames, consumed };
+  };
   return {
     feed(chunk) {
       buf = Buffer.concat([buf, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
-      const frames = [];
-      let consumed = 0;
-      while (buf.length - consumed >= 4) {
-        const type = buf[consumed];
-        const flags = buf[consumed + 1];
-        const length = ((flags & 0x01) << 16) | buf.readUInt16BE(consumed + 2);
-        if (length > NBSS_MAX_LENGTH) throw nbssViolation('NBSS length exceeds the 17-bit maximum');
-        if (buf.length - consumed < 4 + length) break; // partial frame — keep accumulating
-        frames.push({
-          type,
-          flags,
-          payload: Buffer.from(buf.subarray(consumed + 4, consumed + 4 + length)),
-        });
-        consumed += 4 + length;
-      }
+      const { frames, consumed } = raw ? feedRaw() : feedNbss();
       consumedTotal += consumed;
       buf = buf.subarray(consumed);
       return { frames, consumed: consumedTotal };
     },
   };
+}
+
+/* Total SMB2 frame length (header included) for the LAST reply frame of
+   a message, per command. Buffer-carrying replies use the absolute
+   Offset+Length fields; fixed-structure replies use their spec size.
+   Unknown or over-running frames fall back to the bare-error form. */
+function smb2ReplyFrameLen(head, command) {
+  const u16 = (off) => (off + 2 <= head.length ? head.readUInt16LE(off) : 0);
+  const u32 = (off) => (off + 4 <= head.length ? head.readUInt32LE(off) : 0);
+  const b = 64; // body starts here
+  switch (command) {
+    case 0x00: { // NEGOTIATE — security buffer offsets are ABSOLUTE frame offsets (0 = absent)
+      const sbo = u16(b + 56);
+      const sbl = u16(b + 58);
+      let len = sbo > 0 && sbl > 0 ? sbo + sbl : b + 66; // no buffer → the 0x41 fixed body (66 bytes)
+      const dialect = u16(b + 4);
+      if (dialect === 0x0311 && u16(b + 6) > 0) { // negotiate contexts trail the security buffer
+        let off = u32(b + 60);
+        for (let i = 0, n = u16(b + 6); i < n; i++) off += 8 + Math.ceil(u16(off + 2) / 8) * 8;
+        len = Math.max(len, off);
+      }
+      return len;
+    }
+    case 0x01: { // SESSION_SETUP — same absolute-offset semantics (0 = absent → fixed 8-byte body)
+      const sbo = u16(b + 4);
+      const sbl = u16(b + 6);
+      return sbo > 0 && sbl > 0 ? sbo + sbl : b + 8;
+    }
+    case 0x02: return b + 4;   // LOGOFF
+    case 0x03: return b + 16;  // TREE_CONNECT
+    case 0x04: return b + 4;   // TREE_DISCONNECT
+    case 0x05: return b + 88;  // CREATE
+    case 0x06: return b + 60;  // CLOSE
+    case 0x07: return b + 4;   // FLUSH
+    case 0x08: return u16(b + 2) + u32(b + 4); // READ: DataOffset+DataLength (absolute)
+    case 0x09: return b + 16 + u16(b + 12) + u16(b + 14); // WRITE (+ channel info)
+    case 0x0a: return b + 8;   // LOCK
+    case 0x0b: return Math.max(u32(b + 4) + u32(b + 8), u32(b + 12) + u32(b + 16)); // IOCTL in/out
+    case 0x0d: return b + 4;   // ECHO
+    case 0x0e: // QUERY_DIRECTORY: OutputBufferOffset+Length
+    case 0x0f: return u16(b + 2) + u32(b + 4); // CHANGE_NOTIFY
+    case 0x10: return u16(b + 2) + u32(b + 4); // QUERY_INFO
+    case 0x11: return b + 2;   // SET_INFO
+    case 0x12: return b + 24;  // OPLOCK_BREAK
+    default: return null;      // unknown → keyed framing violation, never a hang
+  }
+}
+
+/* REQUEST-side mirror (mock servers parse CLIENT requests): same
+   absolute-offset idiom, per-command request shapes (MS-SMB2 §2.2.3).
+   Used by tests only — the wire client never parses requests. */
+export function smb2RequestFrameLen(head, command) {
+  const u16 = (off) => (off + 2 <= head.length ? head.readUInt16LE(off) : 0);
+  const u32 = (off) => (off + 4 <= head.length ? head.readUInt32LE(off) : 0);
+  const b = 64;
+  switch (command) {
+    case 0x00: { // NEGOTIATE: 36 fixed + DialectCount u16s (2 reserved bytes before the dialect array)
+      const count = u16(b + 32);
+      return b + 36 + 2 + count * 2;
+    }
+    case 0x01: { // SESSION_SETUP: SecurityBufferOffset+Length (absolute, 0 = absent)
+      const sbo = u16(b + 12);
+      const sbl = u16(b + 14);
+      return sbo > 0 && sbl > 0 ? sbo + sbl : b + 24;
+    }
+    case 0x02: return b + 4;   // LOGOFF
+    case 0x03: { // TREE_CONNECT: PathOffset@body+4 / PathLength@body+6 (absolute)
+      const o = u16(b + 4);
+      const l = u16(b + 6);
+      return o > 0 && l > 0 ? o + l : b + 8;
+    }
+    case 0x04: return b + 4;   // TREE_DISCONNECT
+    case 0x05: { // CREATE: NameOffset/Length at body 44/46, ContextsOffset/Length at body 48/52 (absolute)
+      const o = u16(b + 44);
+      const l = u16(b + 46);
+      let len = o > 0 && l > 0 ? o + l : b + 56;
+      const cxtOff = u32(b + 48), cxtLen = u32(b + 52);
+      if (cxtOff > 0 && cxtLen > 0) len = Math.max(len, cxtOff + cxtLen);
+      return len;
+    }
+    case 0x06: return b + 24;  // CLOSE
+    case 0x07: return b + 4;   // FLUSH
+    case 0x08: { // READ: BufferOffset/Length at body 12/16
+      const o = u16(b + 12);
+      return o > 0 ? o : b + 48;
+    }
+    case 0x09: { // WRITE: DataOffset@body+2 / Length@body+4 (absolute)
+      const o = u16(b + 2);
+      const l = u32(b + 4);
+      return o > 0 && l > 0 ? o + l : b + 48;
+    }
+    case 0x0a: return b + 32;  // LOCK (1 entry)
+    case 0x0b: { // IOCTL: InputOffset/Count then OutputOffset/Count
+      const i = u32(b + 4), il = u32(b + 8), o = u32(b + 12), ol = u32(b + 16);
+      let len = b + 56;
+      if (i > 0 && il > 0) len = Math.max(len, i + il);
+      if (o > 0 && ol > 0) len = Math.max(len, o + ol);
+      return len;
+    }
+    case 0x0c: return b + 32;  // CANCEL
+    case 0x0d: return b + 4;   // ECHO
+    case 0x0e: { // QUERY_DIRECTORY: BufferOffset/Length at body 16/18 (absolute)
+      const o = u16(b + 16);
+      const l = u16(b + 18);
+      return o > 0 && l > 0 ? o + l : b + 32;
+    }
+    case 0x0f: return b + 8;   // CHANGE_NOTIFY
+    case 0x10: { // QUERY_INFO: InputOffset/Count at body 2/4 (absolute)
+      const o = u16(b + 2);
+      const l = u16(b + 4);
+      return o > 0 && l > 0 ? o + l : b + 32;
+    }
+    case 0x11: { // SET_INFO: BufferOffset/Length at body 2/4 (absolute)
+      const o = u16(b + 2);
+      const l = u16(b + 4);
+      return o > 0 && l > 0 ? o + l : b + 32;
+    }
+    default: return null;
+  }
 }
 
 /* NBSS session request (type 0x81): 1-byte length prefix + 32-byte
@@ -493,16 +665,30 @@ export const SMB_DIALECTS_OFFERED = [0x0210, 0x0202];
 
 /* SMB2 command codes (MS-SMB2 §2.2.1.2 Command). */
 export const SMB2_COM = {
+  /* MS-SMB2 §2.2.12 command codes — wire-fixed by the spec (the pre-fix
+     table carried the phase-99-spike values off by a few codes; the mock
+     shared them so tests never falsified — the owner's real NAS did).
+     UAT 2026-11-26: real Samba closed the connection on the first ECHO
+     (0x0b = IOCTL on the wire). */
   NEGOTIATE: 0x0000,
   SESSION_SETUP: 0x0001,
   LOGOFF: 0x0002,
   TREE_CONNECT: 0x0003,
   TREE_DISCONNECT: 0x0004,
-  CREATE: 0x0006,
+  CREATE: 0x0005,
+  CLOSE: 0x0006,
+  FLUSH: 0x0007,
   READ: 0x0008,
   WRITE: 0x0009,
-  ECHO: 0x000b,
-  CLOSE: 0x000c,
+  LOCK: 0x000a,
+  IOCTL: 0x000b,
+  CANCEL: 0x000c,
+  ECHO: 0x000d,
+  QUERY_DIRECTORY: 0x000e,
+  CHANGE_NOTIFY: 0x000f,
+  QUERY_INFO: 0x0010,
+  SET_INFO: 0x0011,
+  OPLOCK_BREAK: 0x0012,
 };
 
 const STATUS_MORE_PROCESSING_REQUIRED = 0xc0000016;
@@ -656,10 +842,11 @@ function buildCloseRequest(fileId) {
   return body;
 }
 
-/* ECHO / TREE_DISCONNECT / LOGOFF: bare StructureSize bodies. */
-const buildEchoRequest = () => Buffer.from([0x04, 0x00]);
-const buildTreeDisconnectRequest = () => Buffer.from([0x04, 0x00]);
-const buildLogoffRequest = () => Buffer.from([0x04, 0x00]);
+/* ECHO / TREE_DISCONNECT / LOGOFF: StructureSize-4 bodies (4 bytes —
+   the spec value counts half-words, the fixed part is 4 bytes on the wire). */
+const buildEchoRequest = () => Buffer.from([0x04, 0x00, 0x00, 0x00]);
+const buildTreeDisconnectRequest = () => Buffer.from([0x04, 0x00, 0x00, 0x00]);
+const buildLogoffRequest = () => Buffer.from([0x04, 0x00, 0x00, 0x00]);
 
 /* 100ns-ticks since 1601-01-01 (LE u64) for the NTLMv2 blob. */
 function ntTimestamp() {
@@ -697,9 +884,14 @@ function dataFromReadReply(res) {
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
 function createSession(socket, config, opts) {
+  /* UAT 2026-11-26: raw mode — direct-445 SMB carries NO NBSS framing
+     in either direction (port 139 / opts.nbss keeps the 0x81 handshake
+     AND the 4-byte length prefix). */
+  const raw = (config.port ?? 445) !== 139 && opts.nbss !== true;
   const s = {
     socket,
-    parser: createFrameParser(),
+    raw,
+    parser: createFrameParser({ raw }),
     config,
     opts,
     pending: null,          // { messageId, resolve, reject }
@@ -814,7 +1006,7 @@ function sendRequest(s, command, body, { signed = true, context = '' } = {}) {
     }
     s.pending = { messageId, resolve, reject };
     s.socket.setTimeout(s.opts.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS);
-    s.socket.write(encodeNbssHeader(0x00, frame.length));
+    if (!s.raw) s.socket.write(encodeNbssHeader(0x00, frame.length)); // NBSS prefix — 139-style only
     s.socket.write(frame);
   });
 }

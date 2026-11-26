@@ -60,7 +60,10 @@ function negotiateBody(dialect, securityMode) {
 }
 
 function createBody(fileId) {
-  const b = Buffer.alloc(64 + 16);
+  /* MS-SMB2 §2.2.14.2 reply body = 88-byte fixed struct; FileId rides at
+     body offset 64 (NOT a fake-header copy — the raw client frames the
+     reply at header+88, so the body must be exactly 88 bytes). */
+  const b = Buffer.alloc(88);
   b.writeUInt16LE(34, 0);
   fileId.copy(b, 64);
   return b;
@@ -74,9 +77,12 @@ function writeReplyBody(count) {
 }
 
 function closeBody(fileId) {
-  const b = Buffer.alloc(24 + 16);
+  /* MS-SMB2 §2.2.15.2 reply body = 60-byte fixed struct; FileId at body
+     offset 8 (the request carried it at body offset 8, the reply echoes
+     it at 8 — NOT body offset 24). */
+  const b = Buffer.alloc(60);
   b.writeUInt16LE(60, 0);
-  fileId.copy(b, 24);
+  fileId.copy(b, 8);
   return b;
 }
 
@@ -105,7 +111,11 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
     /* 2026-11-26: no unconditional NBSS accept — the client only sends
        the 0x81 session request on the 139-style path (opts.nbss / port
        139); on direct 445 the first byte is the SMB2 NEGOTIATE. */
-    const parser = createFrameParser();
+    const getParser = () => {
+      if (!getParser.p) getParser.p = createFrameParser({ raw: !nbssMode, requestSide: true });
+      return getParser.p;
+    };
+    const parser = { feed: (c) => getParser().feed(c) };
     const sessionId = 0x1234n;
     const treeId = 0x5678;
     let signingKey = null;
@@ -121,9 +131,16 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
         treeId: tid ?? hdr.treeId,
         sessionId: sid ?? (hdr.sessionId !== 0n ? hdr.sessionId : sessionId),
       });
-      const frame = Buffer.concat([h, body]);
+      /* A non-zero status MUST carry the 8-byte error body (StructureSize
+         9 + ByteCount, MS-SMB2 §2.2.2) — the raw-mode client frames error
+         replies at 64+8+ByteCount and hangs if only the 64-byte header
+         arrives (2026-11-26). */
+      const errBody = status !== 0 && body.length === 0
+        ? Buffer.concat([Buffer.from([0x09, 0x00, 0x00, 0x00]), Buffer.alloc(4)])
+        : body;
+      const frame = Buffer.concat([h, errBody]);
       if (useSign) signFrameWith(signingKey, frame);
-      socket.write(encodeNbssHeader(0x00, frame.length));
+      if (nbssMode) socket.write(encodeNbssHeader(0x00, frame.length));
       socket.write(frame);
     };
     const fidName = (hex) => fidMap.get(hex);
@@ -150,7 +167,13 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
           send(frame, { status: scenario.sessionSetupStatus ?? 0, sign: !scenario.sessionSetupStatus, body: sessionSetupBody(Buffer.alloc(0), 0) });
           return;
         }
-        case SMB2_COM.TREE_CONNECT: { send(frame, { treeId }); return; }
+        case SMB2_COM.TREE_CONNECT: {
+          const tc = Buffer.alloc(16);
+          tc.writeUInt16LE(16, 0);
+          tc.writeUInt8(1, 8); // ShareType DISK
+          send(frame, { treeId, body: tc });
+          return;
+        }
         case SMB2_COM.CREATE: {
           if (scenario.createStatus) { send(frame, { status: scenario.createStatus }); return; }
           const nameLen = body.readUInt16LE(46);
@@ -180,22 +203,26 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
           return;
         }
         case SMB2_COM.CLOSE: send(frame, { body: closeBody(body.subarray(8, 24)) }); return;
-        case SMB2_COM.ECHO: send(frame, { body: Buffer.from([0x04, 0x00]) }); return;
-        case SMB2_COM.TREE_DISCONNECT: send(frame, { body: Buffer.from([0x04, 0x00]) }); return;
-        case SMB2_COM.LOGOFF: send(frame, { body: Buffer.from([0x04, 0x00]) }); return;
+        case SMB2_COM.ECHO: send(frame, { body: Buffer.from([0x04, 0x00, 0x00, 0x00]) }); return;
+        case SMB2_COM.TREE_DISCONNECT: send(frame, { body: Buffer.from([0x04, 0x00, 0x00, 0x00]) }); return;
+        case SMB2_COM.LOGOFF: send(frame, { body: Buffer.from([0x04, 0x00, 0x00, 0x00]) }); return;
         default: send(frame, { status: 0xc0000003 });
       }
     };
     let nbssConsumed = 0;
     let nbssDetected = false; // 2026-11-26: first byte discriminates NBSS vs direct-445 SMB
+    let nbssMode = false; // replies carry the 4-byte NBSS prefix on the 139-style path only
     socket.on('data', (chunk) => {
       let c = chunk;
       if (!nbssDetected && c.length > 0) {
         nbssDetected = true;
+        nbssMode = c[0] === 0x81;
         if (c[0] === 0x81) socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00]));
-        else nbssConsumed = 66; // direct 445 — nothing to strip
+        else nbssConsumed = 66; // direct 445 — nothing to strip (consumed flag, never strips SMB frames)
       }
-      if (nbssConsumed < 66) {
+      if (nbssDetected && !nbssMode && nbssConsumed === 66) {
+        nbssConsumed = 67; // one-shot sentinel: nothing to strip ever (raw mode)
+      } else if (nbssConsumed < 66) {
         const need = 66 - nbssConsumed;
         const take = Math.min(need, c.length);
         nbssConsumed += take;
