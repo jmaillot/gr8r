@@ -155,12 +155,14 @@ function fakeSmb(scenario = {}) {
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
-    /* NBSS session accept — pre-baked 0x82, zero payload. */
+    /* NBSS session accept — the 0x82 is sent ONLY on the port-139 path
+       (client's first byte is the 0x81 request); on direct 445 the first
+       byte is the SMB2 NEGOTIATE and a stray 0x82 would corrupt the
+       frame parser (2026-11-26 parity fix). */
     if (scenario.nbssRefuse) {
       socket.write(Buffer.from([0x83, 0x00, 0x00, 0x01]));
       return;
     }
-    socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00]));
 
     const parser = createFrameParser();
     const sessionId = 0x1234n;
@@ -338,8 +340,17 @@ function fakeSmb(scenario = {}) {
     };
     const fidName = (hex) => fidMap.get(hex);
     let nbssConsumed = 0; // the 0x81 session request (66 bytes) precedes SMB2 frames
+    let nbssDetected = false; // 2026-11-26: first byte discriminates 139-style NBSS vs direct-445 SMB
     socket.on('data', (chunk) => {
       let c = chunk;
+      if (!nbssDetected && c.length > 0) {
+        nbssDetected = true;
+        if (c[0] === 0x81) {
+          socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00])); // NBSS accept, 139 path only
+        } else {
+          nbssConsumed = 66; // direct 445 — nothing to strip
+        }
+      }
       if (nbssConsumed < 66) {
         const need = 66 - nbssConsumed;
         const take = Math.min(need, c.length);
@@ -458,11 +469,11 @@ test('transport-refused connection → keyed unreachable', async () => {
   );
 });
 
-test('NBSS session request refused (0x83) → keyed generic', async () => {
+test('NBSS session request refused (0x83) → keyed generic (139-style path, opts.nbss)', async () => {
   const server = fakeSmb({ nbssRefuse: true });
   await server.listen();
   try {
-    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'u', domain: 'D', password: 'p', share: '\\\\h\\s' });
+    const smb = connectSmb({ host: '127.0.0.1', port: server.port(), user: 'u', domain: 'D', password: 'p', share: '\\\\h\\s' }, { nbss: true });
     await assert.rejects(smb.connect(), (err) => err.smbClass === 'generic');
   } finally {
     await server.close();
@@ -746,7 +757,7 @@ test('D-04 scrub: no type-3 / NT-response / password material in ANY surfaced er
         host: '127.0.0.1', port: server.port(),
         user: 'projects-studio', domain: 'DOMAIN', password: password ?? 'projects-studio-secret',
         share: '\\\\h\\s',
-      });
+      }, /* nbssRefuse tests the 139-style path (2026-11-26 direct-445 fix) */ knob.nbssRefuse ? { nbss: true } : {});
       try {
         await smb.connect();
         await smb.echo().catch((e) => errors.push(e));

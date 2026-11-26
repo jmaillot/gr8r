@@ -1016,23 +1016,33 @@ async function establish(config, opts) {
     socket.once('connect', resolve);
     socket.once('error', (err) => reject(smbErrorFrom(err?.code || 'ECONNREFUSED', `connect failed (${String(err?.code ?? 'error')})`)));
   }), `TCP connect to ${config.host}:${port}`);
-  /* NBSS session request (0x81) → expect 0x82 positive response. */
-  await withTimeout(new Promise((resolve, reject) => {
-    const onData = (chunk) => {
-      socket.removeListener('data', onData);
-      socket.removeListener('error', onErr);
-      if (chunk[0] === 0x82) resolve();
-      else if (chunk[0] === 0x83) reject(genericError('NBSS session request refused (0x83)'));
-      else reject(genericError('not an NBSS session accept'));
-    };
-    const onErr = (err) => {
-      socket.removeListener('data', onData);
-      reject(smbErrorFrom(err?.code || 'ECONNREFUSED', 'NBSS session request failed'));
-    };
-    socket.on('data', onData);
-    socket.once('error', onErr);
-    socket.write(encodeNbssSessionRequest());
-  }), 'NBSS session request');
+  /* NBSS session request (0x81) → expect 0x82 positive response.
+     UAT 2026-11-26 (owner report: TCP 445 OK but the probe still keyed
+     unreachable): NBSS is the PORT 139 session protocol — a real server
+     on 445 speaks SMB directly (the first packet it expects is the
+     NEGOTIATE) and RESETS the connection when it receives an 0x81
+     instead, which our socket-error path keyed unreachable. The mock
+     tolerated the 0x81, which is why this never surfaced until a real
+     NAS. The handshake now runs on 139 only (or opts.nbss === true). */
+  const wantsNbss = (config.port ?? 445) === 139 || opts.nbss === true;
+  if (wantsNbss) {
+    await withTimeout(new Promise((resolve, reject) => {
+      const onData = (chunk) => {
+        socket.removeListener('data', onData);
+        socket.removeListener('error', onErr);
+        if (chunk[0] === 0x82) resolve();
+        else if (chunk[0] === 0x83) reject(genericError('NBSS session request refused (0x83)'));
+        else reject(genericError('not an NBSS session accept'));
+      };
+      const onErr = (err) => {
+        socket.removeListener('data', onData);
+        reject(smbErrorFrom(err?.code || 'ECONNREFUSED', 'NBSS session request failed'));
+      };
+      socket.on('data', onData);
+      socket.once('error', onErr);
+      socket.write(encodeNbssSessionRequest());
+    }), 'NBSS session request');
+  }
   const s = createSession(socket, config, opts);
   bindTransport(s);
   await negotiate(s);

@@ -102,7 +102,9 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
   const server = net.createServer((socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
-    socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00]));
+    /* 2026-11-26: no unconditional NBSS accept — the client only sends
+       the 0x81 session request on the 139-style path (opts.nbss / port
+       139); on direct 445 the first byte is the SMB2 NEGOTIATE. */
     const parser = createFrameParser();
     const sessionId = 0x1234n;
     const treeId = 0x5678;
@@ -185,8 +187,14 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
       }
     };
     let nbssConsumed = 0;
+    let nbssDetected = false; // 2026-11-26: first byte discriminates NBSS vs direct-445 SMB
     socket.on('data', (chunk) => {
       let c = chunk;
+      if (!nbssDetected && c.length > 0) {
+        nbssDetected = true;
+        if (c[0] === 0x81) socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00]));
+        else nbssConsumed = 66; // direct 445 — nothing to strip
+      }
       if (nbssConsumed < 66) {
         const need = 66 - nbssConsumed;
         const take = Math.min(need, c.length);
