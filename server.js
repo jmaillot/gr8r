@@ -9301,7 +9301,10 @@ async function handleApi(req, res, url) {
     if (!user) return;
     // D-21 shape: operator-keyed throttle AFTER sameOrigin+requireUser and
     // BEFORE the gate checks — a refused attempt consumes a try (T-86-08).
-    if (tooMany(`backuptask|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // UAT 2026-11-26 (owner editing several tasks in a row hit the 10-cap):
+    // task create/edit is an authenticated BACKUP_MANAGE flow, not an
+    // untrusted surface — the cap rises to 40/15min (still a spam guard).
+    if (tooMany(`backuptask|${user.id}`, 40, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     // D-19: task editing is BACKUP_MANAGE-only — a Restore Operator reaches
     // the endpoint and gets the keyed localized refusal, audited (D-20).
     if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
@@ -9479,7 +9482,10 @@ async function handleApi(req, res, url) {
     if (!user) return;
     // D-21 shape: operator-keyed throttle AFTER sameOrigin+requireUser and
     // BEFORE the gate checks — a refused attempt consumes a try (T-86-08).
-    if (tooMany(`backuptask|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    // UAT 2026-11-26 (owner editing several tasks in a row hit the 10-cap):
+    // task create/edit is an authenticated BACKUP_MANAGE flow, not an
+    // untrusted surface — the cap rises to 40/15min (still a spam guard).
+    if (tooMany(`backuptask|${user.id}`, 40, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
     if (!(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
       await auditBackupTask(user, 'backup_task_refused:backupManageRequired');
       return fail(res, 403, 'backupManageRequired', 'Only a Backup Operator can edit backup tasks');
