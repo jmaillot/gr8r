@@ -239,7 +239,13 @@ const historyTr = run => {
           : '')
   ) + `</span>`;
   const actionsCell =
-    run.location === 'local' || run.location === 's3'
+    /* 2026-11-26 UAT (owner: the Restore button vanished once the local
+       archive rotated away — location 'smb'/'ftp' rows lost every CTA):
+       the server funnel has fetched ftp/smb archives since 98-04/100-05,
+       the action set is identical (restore is destination-agnostic from
+       the button's seat) — the gate now admits every RESOLVED location;
+       only 'missing' (no local, no mirror flag) stays button-less. */
+    run.location !== 'missing'
       ? `<span class="row" style="gap:6px;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap">
           <button class="btn btn-secondary btn-sm" data-a="restorePreview" data-id="${esc(run.id)}">${ic('archive', 13)}${t('page.restore.restoreAction')}</button>
           <button class="btn btn-secondary btn-sm" data-a="backupDownload" data-id="${esc(run.id)}">${ic('download', 13)}${t('page.backup.downloadAction')}</button>

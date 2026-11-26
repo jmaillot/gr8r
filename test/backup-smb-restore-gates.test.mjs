@@ -96,7 +96,11 @@ test('server.js: both restore triggers pass smbConfig next to ftpConfig, sourced
 
 test('server.js: both restore-trigger selects carry smb_uploaded', () => {
   const s = serverSrc();
-  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = \?/g) || []).length, 2, 'import_new + DR selects read smb_uploaded (the overwrite trigger has no read-back seam — untouched)');
+  /* 2026-11-26 UAT: count grew from 2 to 4 — preview/download joined the
+     triggers with the smb mirror leg (owner report: an smb-located run
+     answered restoreArchiveMissing). The overwrite trigger still has no
+     read-back seam — untouched. */
+  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = \?/g) || []).length, 3, 'import_new + DR + download selects read smb_uploaded (verify carries a lighter select — same flags minus scope/status)');
 });
 
 test('server.js: backupRun carries smb_uploaded into both units', () => {

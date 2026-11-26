@@ -294,14 +294,18 @@ test('Phase 88 SC-1 wiring: a successful save carrying s3Probe toasts the keyed 
    payload verbatim and never derives location or authority itself (D-89-21
    payload-flag chrome, D-23 doctrine).
    ===================================================================== */
-test('90-02: the download CTA renders ONLY for payload location local|s3 — the location badge rides the payload', () => {
+test('90-02: the download CTA renders ONLY for resolved locations — the location badge rides the payload (UAT 2026-11-26: ftp|smb joined local|s3)', () => {
   /* The CTA is payload-flag chrome: a missing run renders ZERO download CTAs,
-     never a disabled/dead button (D-90-9). */
+     never a disabled/dead button (D-90-9). UAT 2026-11-26 (owner: the CTA
+     set vanished for ftp/smb rows once the local archive rotated away):
+     the server fetches ftp/smb archives since 98-04/100-05 — the gate now
+     admits every resolved location (`!== 'missing'`). */
   assert.match(
     pagesSrc,
-    /run\.location === 'local' \|\| run\.location === 's3'\s*\?\s*`<span class="row"[^>]*>\s*<button class="btn btn-secondary btn-sm" data-a="restorePreview"/,
-    'the download CTA renders only for local|s3 from the payload flag (actions cell, UAT round-4 table)',
+    /run\.location !== 'missing'\s*\?\s*`<span class="row"[^>]*>\s*<button class="btn btn-secondary btn-sm" data-a="restorePreview"/,
+    'the CTA set renders for every resolved location (actions cell; only missing stays button-less)',
   );
+  assert.ok(!/run\.location === 'local' \|\| run\.location === 's3'\s*\?\s*`<span class="row"/.test(pagesSrc), 'the old local|s3-only CTA gate is gone');
   /* The badge reuses the restore location vocabulary (locLocal/locS3/
      locMissing) — neutral badge, accent only for s3, never green/red. */
   assert.match(pagesSrc, /t\(RESTORE_LOCATION_KEYS\[run\.location\]\)/, 'the badge reuses the restore location keys (table status cell renders known locations only; missing runs have no CTAs)');
