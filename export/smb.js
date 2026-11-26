@@ -994,13 +994,30 @@ async function closeFile(s, fileId, context = 'close') {
 
 async function establish(config, opts) {
   const port = config.port ?? 445;
+  /* UAT 2026-11-26 (owner report: SMB save did "nothing at all"): the
+     TCP connect AND the NBSS session-request wait were unbounded — a
+     firewall that silently DROPs (vs rejects) leaves net.connect pending
+     at OS-level for minutes, so probeSmb never returns and the save hangs
+     with no toast. 10s caps on both establishment phases; the per-command
+     30s timeout (DEFAULT_COMMAND_TIMEOUT_MS) only arms after establish. */
+  const establishTimeoutMs = opts.connectTimeoutMs ?? 10_000;
+  const withTimeout = (promise, what) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(smbErrorFrom('ETIMEDOUT', `${what} timed out (${establishTimeoutMs}ms)`));
+    }, establishTimeoutMs);
+    promise.then(
+      v => { clearTimeout(timer); resolve(v); },
+      e => { clearTimeout(timer); reject(e); },
+    );
+  });
   const socket = net.connect(port, config.host);
-  await new Promise((resolve, reject) => {
+  await withTimeout(new Promise((resolve, reject) => {
     socket.once('connect', resolve);
     socket.once('error', (err) => reject(smbErrorFrom(err?.code || 'ECONNREFUSED', `connect failed (${String(err?.code ?? 'error')})`)));
-  });
+  }), `TCP connect to ${config.host}:${port}`);
   /* NBSS session request (0x81) → expect 0x82 positive response. */
-  await new Promise((resolve, reject) => {
+  await withTimeout(new Promise((resolve, reject) => {
     const onData = (chunk) => {
       socket.removeListener('data', onData);
       socket.removeListener('error', onErr);
@@ -1015,7 +1032,7 @@ async function establish(config, opts) {
     socket.on('data', onData);
     socket.once('error', onErr);
     socket.write(encodeNbssSessionRequest());
-  });
+  }), 'NBSS session request');
   const s = createSession(socket, config, opts);
   bindTransport(s);
   await negotiate(s);

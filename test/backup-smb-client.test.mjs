@@ -846,6 +846,23 @@ test('export/smb.js imports only node: builtins (zero new dependencies)', () => 
 
 const smbProbeConfig = (port) => ({ host: '127.0.0.1', port, user: 'projects-studio', domain: 'DOMAIN', password: 'projects-studio-secret', share: '\\\\127.0.0.1\\projects-studio' });
 
+test('UAT 2026-11-26: a silent host (TCP accepts, NBSS never answers) no longer hangs forever — bounded establish timeout rejects keyed unreachable', async () => {
+  const { connectSmb } = await import('../export/smb.js');
+  const net = await import('node:net');
+  const silent = net.createServer(() => { /* accept, never respond */ });
+  await new Promise((r) => silent.listen(0, '127.0.0.1', r));
+  try {
+    const smb = connectSmb(smbProbeConfig(silent.address().port), { connectTimeoutMs: 150 });
+    await assert.rejects(
+      smb.connect(),
+      (err) => err.smbClass === 'unreachable',
+      'the establish timeout maps onto the keyed unreachable class',
+    );
+  } finally {
+    silent.close();
+  }
+});
+
 test('probeSmb happy path → keyed { ok: true, key: "success" }, no httpWarning key, marker written then removed', async () => {
   const { probeSmb } = await import('../export/smb.js');
   const server = fakeSmb();
