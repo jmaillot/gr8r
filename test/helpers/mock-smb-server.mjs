@@ -87,14 +87,17 @@ function closeBody(fileId) {
 }
 
 function signingKeyFromType3(type3Buf, creds) {
-  const ntLen = type3Buf.readUInt16LE(24);
-  const ntOff = type3Buf.readUInt32LE(28);
+  /* MS-NLMP 2.2.1.3 AUTHENTICATE layout: NT len @20, NT offset @24. */
+  const ntLen = type3Buf.readUInt16LE(20);
+  const ntOff = type3Buf.readUInt32LE(24);
   const ntResponse = type3Buf.subarray(ntOff, ntOff + ntLen);
   const ntProof = ntResponse.subarray(0, 16);
   const v2hash = crypto.createHmac('md5', ntlmHash(creds.password))
     .update(utf16le(String(creds.user).toUpperCase() + String(creds.domain)))
     .digest();
-  return deriveSigningKey(crypto.createHmac('md5', v2hash).update(ntProof).digest());
+  /* SMB 2.x signing key = sessionBaseKey RAW (no SMB3 AES KDF) —
+     mirrors the client's dialect-dependent derivation (2026-11-26). */
+  return crypto.createHmac('md5', v2hash).update(ntProof).digest();
 }
 
 /* Scripted NBSS frame server with file-storage capture (99 idiom). */
@@ -210,19 +213,19 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
       }
     };
     let nbssConsumed = 0;
-    let nbssDetected = false; // 2026-11-26: first byte discriminates NBSS vs direct-445 SMB
-    let nbssMode = false; // replies carry the 4-byte NBSS prefix on the 139-style path only
+    let nbssDetected = false; // 2026-11-26 round 3: framing is NBSS everywhere — the first byte discriminates only the 0x81 handshake
+    let nbssMode = false; // replies carry the 4-byte NBSS prefix (always true since the NBSS-everywhere fix)
     socket.on('data', (chunk) => {
       let c = chunk;
       if (!nbssDetected && c.length > 0) {
         nbssDetected = true;
-        nbssMode = c[0] === 0x81;
-        if (c[0] === 0x81) socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00]));
-        else nbssConsumed = 66; // direct 445 — nothing to strip (consumed flag, never strips SMB frames)
+        nbssMode = c[0] !== 0xfe; // NBSS length prefix or 0x81 — anything but a naked SMB2 magic
+        if (c[0] === 0x81) {
+          socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00]));
+          nbssConsumed = 66;
+        }
       }
-      if (nbssDetected && !nbssMode && nbssConsumed === 66) {
-        nbssConsumed = 67; // one-shot sentinel: nothing to strip ever (raw mode)
-      } else if (nbssConsumed < 66) {
+      if (nbssConsumed > 0 && nbssConsumed < 66) { // 0x81 handshake path only — NBSS frames carry their own prefix through the parser
         const need = 66 - nbssConsumed;
         const take = Math.min(need, c.length);
         nbssConsumed += take;

@@ -125,14 +125,16 @@ function closeBody(fileId) {
    security buffer (the one legitimately client-derived datum — same
    math MS-NLMP mandates the server run). */
 function signingKeyFromType3(type3Buf, creds) {
-  const ntLen = type3Buf.readUInt16LE(24);
-  const ntOff = type3Buf.readUInt32LE(28);
+  /* MS-NLMP 2.2.1.3 AUTHENTICATE layout: NT len @20, NT offset @24. */
+  const ntLen = type3Buf.readUInt16LE(20);
+  const ntOff = type3Buf.readUInt32LE(24);
   const ntResponse = type3Buf.subarray(ntOff, ntOff + ntLen);
   const ntProof = ntResponse.subarray(0, 16);
   const v2hash = crypto.createHmac('md5', ntlmHash(creds.password))
     .update(utf16le(String(creds.user).toUpperCase() + String(creds.domain)))
     .digest();
-  return deriveSigningKey(crypto.createHmac('md5', v2hash).update(ntProof).digest());
+  /* SMB 2.x signing key = sessionBaseKey RAW (no SMB3 AES KDF). */
+  return crypto.createHmac('md5', v2hash).update(ntProof).digest();
 }
 
 /* ------------------------------- fakeSmb -------------------------------
@@ -362,22 +364,19 @@ function fakeSmb(scenario = {}) {
     };
     const fidName = (hex) => fidMap.get(hex);
     let nbssConsumed = 0; // the 0x81 session request (66 bytes) precedes SMB2 frames
-    let nbssDetected = false; // 2026-11-26: first byte discriminates 139-style NBSS vs direct-445 SMB
-    let nbssMode = false; // replies carry the 4-byte NBSS prefix on the 139-style path only
+    let nbssDetected = false; // 2026-11-26 round 3: framing is NBSS everywhere now — the first byte discriminates only the 0x81 handshake
+    let nbssMode = false; // replies carry the 4-byte NBSS prefix (always true since the NBSS-everywhere fix)
     socket.on('data', (chunk) => {
       let c = chunk;
       if (!nbssDetected && c.length > 0) {
         nbssDetected = true;
-        nbssMode = c[0] === 0x81;
+        nbssMode = c[0] !== 0xfe; // NBSS length prefix (0x00…) or 0x81 session request — anything but a naked SMB2 magic
         if (c[0] === 0x81) {
           socket.write(Buffer.from([0x82, 0x00, 0x00, 0x00])); // NBSS accept, 139 path only
-        } else {
-          nbssConsumed = 66; // direct 445 — nothing to strip (consumed flag, never strips SMB frames)
+          nbssConsumed = 66;
         }
       }
-      if (nbssDetected && !nbssMode && nbssConsumed === 66) {
-        nbssConsumed = 67; // one-shot sentinel: nothing to strip ever (raw mode)
-      } else if (nbssConsumed < 66) {
+      if (nbssConsumed > 0 && nbssConsumed < 66) { // 0x81 handshake path only — NBSS frames carry their own prefix through the parser
         const need = 66 - nbssConsumed;
         const take = Math.min(need, c.length);
         nbssConsumed += take;
@@ -436,11 +435,15 @@ test('tracer: full handshake (NEGOTIATE → SESSION_SETUP×2 → TREE_CONNECT �
        server-granted ids. */
     assert.equal(cmds[4].sessionId, 0x1234n, 'SessionId adopted from the first SESSION_SETUP reply');
     assert.equal(cmds[4].treeId, 0x5678, 'TreeId adopted from the TREE_CONNECT reply');
-    /* Signing (SC-2): everything after the type-1 SESSION_SETUP is
-       signed AND the server-side recomputation agrees. The type-1
-       itself is unsigned (the session key does not exist yet). */
+    /* Signing (SC-2): everything from TREE_CONNECT on is signed AND
+       the server-side recomputation agrees. The type-1 is unsigned (no
+       session key yet) and the type-3 is unsigned too — the server
+       installs the signing key only after the session setup completes,
+       so a signed round-2 is unverifiable server-side and real Samba
+       closes instead of answering (owner NAS UAT round 3). */
     assert.equal(cmds[1].sigValid, null, 'SESSION_SETUP type-1 is unsigned (no session key yet)');
-    for (let i = 2; i < cmds.length; i++) {
+    assert.equal(cmds[2].sigValid, null, 'SESSION_SETUP type-3 is unsigned (server has no key until the session completes)');
+    for (let i = 3; i < cmds.length; i++) {
       assert.equal(cmds[i].sigValid, true, `command #${i} (cmd=${cmds[i].command}) carries a valid signature`);
     }
     assert.equal(cmds[0].sigValid, null, 'NEGOTIATE is unsigned');

@@ -219,36 +219,47 @@ export function buildNtlmType3(type2, user, domain, password, clientChallenge, t
   const sbk = sessionBaseKey(v2hash, ntProofStr);
 
   const workstation = Buffer.alloc(0);
+  const domainName = utf16le(domain ?? '');
   const userName = utf16le(user);
+  const sessionKey = Buffer.alloc(0); // no KeyExchange flag → signing key = sessionBaseKey
   const lmOff = 64;
   const ntOff = lmOff + lmv2.length;
-  const userOff = ntOff + ntResponse.length;
+  const domOff = ntOff + ntResponse.length;
+  const userOff = domOff + domainName.length;
   const wsOff = userOff + userName.length;
-  const dataLen = lmv2.length + ntResponse.length + userName.length + workstation.length;
+  const skOff = wsOff + workstation.length;
+  const dataLen = lmv2.length + ntResponse.length + domainName.length + userName.length + workstation.length + sessionKey.length;
 
   const msg = Buffer.alloc(64 + dataLen);
   msg.write('NTLMSSP\0', 0, 'latin1');
   msg.writeUInt32LE(3, 8);
-  /* security buffer descriptors: len(2) alloc(2) offset(4);
-     LM @12, NT @24, user @36, workstation @48, flags @60 → data @64 */
+  /* MS-NLMP 2.2.1.3 AUTHENTICATE layout — 8-byte descriptors (len 2,
+     max 2, offset 4) in spec order: LM@12, NT@20, Domain@28, User@36,
+     Workstation@44, SessionKey@52, flags@60, payload@64. The phase-99
+     layout skipped Domain and SessionKey and put NT @24 — a real
+     server parses shifted fields and CLOSES the connection (owner NAS
+     UAT round 3). */
   msg.writeUInt16LE(lmv2.length, 12); msg.writeUInt16LE(lmv2.length, 14); msg.writeUInt32LE(lmOff, 16);
-  msg.writeUInt16LE(ntResponse.length, 24); msg.writeUInt16LE(ntResponse.length, 26); msg.writeUInt32LE(ntOff, 28);
+  msg.writeUInt16LE(ntResponse.length, 20); msg.writeUInt16LE(ntResponse.length, 22); msg.writeUInt32LE(ntOff, 24);
+  msg.writeUInt16LE(domainName.length, 28); msg.writeUInt16LE(domainName.length, 30); msg.writeUInt32LE(domOff, 32);
   msg.writeUInt16LE(userName.length, 36); msg.writeUInt16LE(userName.length, 38); msg.writeUInt32LE(userOff, 40);
-  msg.writeUInt16LE(workstation.length, 48); msg.writeUInt16LE(workstation.length, 50); msg.writeUInt32LE(wsOff, 52);
+  msg.writeUInt16LE(workstation.length, 44); msg.writeUInt16LE(workstation.length, 46); msg.writeUInt32LE(wsOff, 48);
+  msg.writeUInt16LE(sessionKey.length, 52); msg.writeUInt16LE(sessionKey.length, 54); msg.writeUInt32LE(skOff, 56);
   msg.writeUInt32LE(
-    0x00000001 | // Negotiate Unicode (mirrors the negotiated bit)
-    0x00000002 |
-    0x00000200 |
-    0x00008000 |
-    0x00080000 |
-    0x20000000,
+    0x00000001 | // Negotiate Unicode
+    0x00000200 | // Request Target
+    0x00008000 | // Negotiate Always Sign
+    0x00080000 | // Negotiate NTLM2 Key (v2 session security)
+    0x20000000,  // Negotiate 128
     60,
   );
   let off = 64;
   lmv2.copy(msg, off); off += lmv2.length;
   ntResponse.copy(msg, off); off += ntResponse.length;
+  domainName.copy(msg, off); off += domainName.length;
   userName.copy(msg, off); off += userName.length;
-  workstation.copy(msg, off);
+  workstation.copy(msg, off); off += workstation.length;
+  sessionKey.copy(msg, off); off += sessionKey.length;
 
   return { message: msg, ntlmv2Hash: v2hash, blob, ntProofStr, lmv2, sessionBaseKey: sbk };
 }
@@ -731,17 +742,22 @@ function genericError(context) {
 
 /* NEGOTIATE (§2.2.3): offer {0x0210, 0x0202}, SecurityMode 0x00000003
    (SIGNING_ENABLED | SIGNING_REQUIRED — SC-2 posture advertisement). */
-function buildNegotiateRequest() {
-  const body = Buffer.alloc(36 + 2 + SMB_DIALECTS_OFFERED.length * 2);
+export function buildNegotiateRequest() {
+  /* MS-SMB2 §2.2.3 offsets: StructureSize@0, SecurityMode@2,
+     Reserved@4 (FOUR bytes — the phase-99-spike layout reserved only
+     2, shifting Capabilities/Guid/StartTime/DialectCount/dialects 4
+     bytes early; a real server read DialectCount=0 and silently
+     ignored the request — owner NAS UAT round 3). */
+  const body = Buffer.alloc(38 + SMB_DIALECTS_OFFERED.length * 2);
   body.writeUInt16LE(36, 0);                      // StructureSize
-  body.writeUInt16LE(0x0003, 2);                  // SecurityMode
-  body.writeUInt16LE(0, 4);                       // Reserved
-  body.writeUInt32LE(0, 6);                       // Capabilities
+  body.writeUInt16LE(0x0003, 2);                  // SecurityMode (signing enabled+required)
+  body.writeUInt32LE(0, 4);                       // Reserved (4 bytes)
+  body.writeUInt32LE(0, 8);                       // Capabilities
   const guid = Buffer.from(crypto.randomUUID().replace(/-/g, ''), 'hex');
-  guid.copy(body, 8);                             // ClientGuid @8 (16 bytes)
-  body.writeBigUInt64LE(0n, 24);                  // ClientStartTime
-  body.writeUInt16LE(SMB_DIALECTS_OFFERED.length, 32); // DialectCount
-  SMB_DIALECTS_OFFERED.forEach((d, i) => body.writeUInt16LE(d, 34 + i * 2));
+  guid.copy(body, 12);                            // ClientGuid (16)
+  body.writeBigUInt64LE(0n, 28);                  // ClientStartTime
+  body.writeUInt16LE(SMB_DIALECTS_OFFERED.length, 36); // DialectCount
+  SMB_DIALECTS_OFFERED.forEach((d, i) => body.writeUInt16LE(d, 38 + i * 2));
   return body;
 }
 
@@ -884,10 +900,15 @@ function dataFromReadReply(res) {
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 
 function createSession(socket, config, opts) {
-  /* UAT 2026-11-26: raw mode — direct-445 SMB carries NO NBSS framing
-     in either direction (port 139 / opts.nbss keeps the 0x81 handshake
-     AND the 4-byte length prefix). */
-  const raw = (config.port ?? 445) !== 139 && opts.nbss !== true;
+  /* UAT 2026-11-26 round 3 (owner NAS falsification): the framing model
+     is NBSS EVERYWHERE — every SMB2 frame rides the 4-byte NetBIOS
+     length prefix, on 445 as well as 139. What is port-139-only is the
+     0x81 SESSION REQUEST handshake (a real Synology RESETs an incoming
+     0x81 on 445, but answers NBSS-prefixed SMB2 immediately). The
+     earlier "raw mode" (naked frames on 445) was the inverse of the
+     truth: the NAS silently ignored naked NEGOTIATEs and only closed
+     later, which keyed unreachable. */
+  const raw = false;
   const s = {
     socket,
     raw,
@@ -1043,6 +1064,13 @@ async function negotiate(s) {
     throw smbErrorFrom('SMB_SIGNING_REFUSED', 'server did not negotiate SMB2 signing');
   }
   if ((res.header.credits ?? 0) < 1) throw genericError('server granted zero credits at negotiate');
+  /* UAT 2026-11-26 round 3: the signing-key derivation is dialect-
+     dependent — SMB 2.x uses the sessionBaseKey RAW; the "SMB2AESKey"
+     KDF is the SMB 3.0 derivation. The client always offered 2.0.2/2.1,
+     so a KDF-derived key produced signatures the server computed
+     differently and Samba closed the connection on the first signed
+     frame (the type-3) without answering. */
+  s.dialect = dialect;
   return dialect;
 }
 
@@ -1068,10 +1096,20 @@ async function sessionAuthRound(s) {
     crypto.randomBytes(8),
     (() => { const b = Buffer.alloc(8); b.writeBigUInt64LE(ntTimestamp()); return b; })(),
   );
-  /* Derive the signing key BEFORE the type-3 goes out — the round-2
-     SESSION_SETUP is the first signed request on the wire. */
-  s.signingKey = deriveSigningKey(type3.sessionBaseKey);
-  const res2 = await sendRequest(s, SMB2_COM.SESSION_SETUP, buildSessionSetupRequest(type3.message), { signed: true, context: 'session setup (type-3)' });
+  /* Derive the signing key BEFORE the type-3 goes out. SMB 2.x signs
+     with the sessionBaseKey raw; SMB 3.0+ applies the "SMB2AESKey" KDF
+     (the client offers only 2.0.2/2.1 today, but the branch keeps the
+     3.x path honest if dialects widen). */
+  s.signingKey = s.dialect >= 0x0300
+    ? deriveSigningKey(type3.sessionBaseKey)
+    : type3.sessionBaseKey;
+  /* The type-3 itself goes UNSIGNED: the server only installs the
+     signing key once the session setup COMPLETES — a signed round-2 is
+     unverifiable server-side and real Samba closes the connection
+     instead of answering (owner NAS UAT round 3: signed type-3 →
+     silent close; unsigned type-3 + signed tree-connect → accepted).
+     Signing is in force from TREE_CONNECT on. */
+  const res2 = await sendRequest(s, SMB2_COM.SESSION_SETUP, buildSessionSetupRequest(type3.message), { signed: false, context: 'session setup (type-3)' });
   if (res2.header.status !== 0) throw smbErrorFrom(res2.header.status, 'session setup (type-3)');
   s.sessionId = res2.header.sessionId;
   /* SessionFlags u16 at reply-body offset 2 (MS-SMB2 §2.2.5); bit

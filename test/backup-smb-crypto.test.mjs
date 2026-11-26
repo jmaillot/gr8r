@@ -154,7 +154,8 @@ test('buildNtlmType3: byte-exact chain — NTProofStr++blob, LMv2, SessionBaseKe
   assert.equal(msg.subarray(0, 8).toString('latin1'), 'NTLMSSP\0');
   assert.equal(msg.readUInt32LE(8), 3);
 
-  // LMv2 @12 (24 bytes), NT response @24 (NTProofStr ++ blob), user @36, ws @48.
+  // MS-NLMP 2.2.1.3 layout: LMv2 @12 (24 bytes), NT response @20
+  // (NTProofStr ++ blob), domain @28, user @36, ws @44, sessionKey @52.
   assert.equal(out.lmv2.toString('hex'), '11bbd1cda2bb5500be5add319f97d630ffffff0011223344');
   assert.equal(out.ntProofStr.toString('hex'), '46ed51d932c09ed336c2bd76f87a39f9');
   assert.equal(out.sessionBaseKey.toString('hex'), '022354a8c45e2ea979b0b6bb3fab2e24');
@@ -163,12 +164,12 @@ test('buildNtlmType3: byte-exact chain — NTProofStr++blob, LMv2, SessionBaseKe
     crypto.createHmac('md5', Buffer.from('cd06ca7c7e10c99b1d33b7485a2ed808', 'hex'))
       .update(Buffer.from('USERDOMAIN', 'utf16le')).digest().toString('hex'));
 
-  assert.equal(msg.readUInt16LE(24), 16 + out.blob.length, 'NT response length = proof(16)+blob');
+  assert.equal(msg.readUInt16LE(20), 16 + out.blob.length, 'NT response length = proof(16)+blob');
   assert.equal(out.lmv2.length, 24, 'LMv2 is exactly 24 bytes');
 
   // NT response field = NTProofStr ++ blob, byte-exact.
-  const ntLen = msg.readUInt16LE(24);
-  const ntOff = msg.readUInt32LE(28);
+  const ntLen = msg.readUInt16LE(20);
+  const ntOff = msg.readUInt32LE(24);
   const ntResp = msg.subarray(ntOff, ntOff + ntLen);
   assert.equal(ntResp.subarray(0, 16).toString('hex'), out.ntProofStr.toString('hex'));
   assert.equal(ntResp.subarray(16).toString('hex'), out.blob.toString('hex'));
