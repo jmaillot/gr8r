@@ -389,8 +389,8 @@ test('89-03 list: honest dual-location rows newest-first — real local run, del
     assert.equal(local.trigger, 'manual');
     assert.deepEqual(
       Object.keys(local).sort(),
-      ['createdAt', 'filename', 'finishedAt', 'location', 'runId', 'sha256', 'sizeBytes', 'startedAt', 'status', 'taskId', 'trigger'].sort(),
-      'render-only payload shape — server-derived, client renders verbatim',
+      ['createdAt', 'filename', 'finishedAt', 'ftp_uploaded', 'location', 'runId', 'sha256', 'sizeBytes', 'smb_uploaded', 'startedAt', 'status', 'taskId', 'trigger', 'uploaded'].sort(),
+      'render-only payload shape — server-derived, client renders verbatim (2026-11-26: mirror flags revealed for the secondary badges)',
     );
 
     /* D-89-15 S3-survival: deleted row WITH uploaded=1 stays listable, badged s3 */

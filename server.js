@@ -4047,6 +4047,16 @@ function destLocation(r) {
   return 'missing';
 }
 
+/* UAT 2026-11-25 (owner report: FTP activation failure undiagnosable from
+   docker logs): every probe refusal logs the keyed class AND the raw
+   transport error the client never sees (ftp/s3 carry `error` on their
+   keyed results; smb returns keys only per T-100-01 — its result rides
+   the API response, so no raw text is attached there). Server logs are
+   operator-owned; nothing user-facing changes. */
+function logProbeFailure(dest, probe, id) {
+  logWarn(`backup probe refused (${dest}${id ? `, task ${id}` : ''}): key=${probe.key}${probe.error ? ` — ${probe.error}` : ''}`);
+}
+
 export async function runBackupSchedulerPass({ now: at } = {}) {
   const nowMs = at instanceof Date ? at.getTime() : Number(at ?? Date.now());
   const due = await db.all(
@@ -9376,6 +9386,7 @@ async function handleApi(req, res, url) {
       s3Probe = await probeS3(S3.config());
       if (!s3Probe.ok && s3Probe.key !== 'deleteFailed') {
         await auditBackupTask(user, `backup_task_refused:s3Probe:${s3Probe.key}`);
+        logProbeFailure('s3', s3Probe);
         return fail(res, 400, s3Probe.key, 'S3 destination probe failed — the task was not saved');
       }
     }
@@ -9389,6 +9400,7 @@ async function handleApi(req, res, url) {
       ftpProbe = await probeFtp(FTP.config());
       if (!ftpProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:ftpProbe:${ftpProbe.key}`);
+        logProbeFailure('ftp', ftpProbe);
         return fail(res, 400, ftpProbe.key, 'FTP destination probe failed — the task was not saved');
       }
     }
@@ -9401,6 +9413,7 @@ async function handleApi(req, res, url) {
       smbProbe = await probeSmb(SMB.config());
       if (!smbProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:smbProbe:${smbProbe.key}`);
+        logProbeFailure('smb', smbProbe);
         return fail(res, 400, smbProbe.key, 'SMB destination probe failed — the task was not saved');
       }
     }
@@ -9440,12 +9453,15 @@ async function handleApi(req, res, url) {
        already audited above; deleteFailed is a warning, keyed in the detail). */
     if (s3Probe) {
       await auditBackupTask(user, s3Probe.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', task.id, s3Probe.key);
+    if (!s3Probe.ok) logProbeFailure('s3', s3Probe, task.id);
     }
     if (ftpProbe) {
       await auditBackupTask(user, ftpProbe.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', task.id, ftpProbe.key);
+    if (!ftpProbe.ok) logProbeFailure('ftp', ftpProbe, task.id);
     }
     if (smbProbe) {
       await auditBackupTask(user, smbProbe.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', task.id, smbProbe.key);
+    if (!smbProbe.ok) logProbeFailure('smb', smbProbe, task.id);
     }
     logInfo(`backup task created: ${task.name} (${task.id}) cron="${task.cron}" tz=${task.tz}`);
     /* s3Probe rides the response so the client can toast the keyed outcome
@@ -9596,6 +9612,7 @@ async function handleApi(req, res, url) {
       s3Probe = await probeS3(S3.config());
       if (!s3Probe.ok && s3Probe.key !== 'deleteFailed') {
         await auditBackupTask(user, `backup_task_refused:s3Probe:${s3Probe.key}`, id);
+        logProbeFailure('s3', s3Probe, id);
         return fail(res, 400, s3Probe.key, 'S3 destination probe failed — the task was not saved');
       }
     }
@@ -9608,6 +9625,7 @@ async function handleApi(req, res, url) {
       ftpProbe = await probeFtp(FTP.config());
       if (!ftpProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:ftpProbe:${ftpProbe.key}`, id);
+        logProbeFailure('ftp', ftpProbe, id);
         return fail(res, 400, ftpProbe.key, 'FTP destination probe failed — the task was not saved');
       }
     }
@@ -9619,6 +9637,7 @@ async function handleApi(req, res, url) {
       smbProbe = await probeSmb(SMB.config());
       if (!smbProbe.ok) {
         await auditBackupTask(user, `backup_task_refused:smbProbe:${smbProbe.key}`, id);
+        logProbeFailure('smb', smbProbe, id);
         return fail(res, 400, smbProbe.key, 'SMB destination probe failed — the task was not saved');
       }
     }
@@ -9662,12 +9681,15 @@ async function handleApi(req, res, url) {
     /* MIN-07: probe outcome audit on edit — same symmetry as the create path. */
     if (s3Probe) {
       await auditBackupTask(user, s3Probe.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', id, s3Probe.key);
+    if (!s3Probe.ok) logProbeFailure('s3', s3Probe, id);
     }
     if (ftpProbe) {
       await auditBackupTask(user, ftpProbe.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', id, ftpProbe.key);
+    if (!ftpProbe.ok) logProbeFailure('ftp', ftpProbe, id);
     }
     if (smbProbe) {
       await auditBackupTask(user, smbProbe.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', id, smbProbe.key);
+    if (!smbProbe.ok) logProbeFailure('smb', smbProbe, id);
     }
     logInfo(`backup task updated: ${updated.name} (${id}) enabled=${updated.enabled}`);
     return json(res, 200, s3Probe || ftpProbe || smbProbe
@@ -9699,6 +9721,7 @@ async function handleApi(req, res, url) {
     }
     const result = await probeS3(S3.config());
     await auditBackupTask(user, result.ok ? 'backup_s3_probe_ok' : 'backup_s3_probe_failed', user.id, result.key);
+    if (!result.ok) logProbeFailure('s3', result);
     logInfo(`s3 probe: ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
     return json(res, 200, result);
   }
@@ -9733,6 +9756,7 @@ async function handleApi(req, res, url) {
     }
     const result = await probeFtp(FTP.config());
     await auditBackupTask(user, result.ok ? 'backup_ftp_probe_ok' : 'backup_ftp_probe_failed', user.id, result.key);
+    if (!result.ok) logProbeFailure('ftp', result);
     logInfo(`ftp probe: ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
     return json(res, 200, result);
   }
@@ -9762,6 +9786,7 @@ async function handleApi(req, res, url) {
     }
     const result = await probeSmb(SMB.config());
     await auditBackupTask(user, result.ok ? 'backup_smb_probe_ok' : 'backup_smb_probe_failed', user.id, result.key);
+    if (!result.ok) logProbeFailure('smb', result);
     logInfo(`smb probe: ${result.key}${result.guest ? ' (guest session)' : ''}`);
     return json(res, 200, result);
   }
@@ -9997,11 +10022,14 @@ async function handleApi(req, res, url) {
         let scope = null;
         try { scope = JSON.parse(r.scope); } catch { scope = null; }
         const name = await scopeLabel(scope);
-        /* Phase 96 (96-02, D-05 byte-identity): ftp_uploaded/smb_uploaded ride
-           the row ONLY as destLocation inputs — never published; phases 98/100
-           own their payload reveal. */
-        const { scope: _internal, ftp_uploaded: _ftp, smb_uploaded: _smb, ...pub } = r;
-        void _internal; void _ftp; void _smb;
+        /* 96-02 byte-identity REVEALED 2026-11-26 (owner UAT report: the
+           single-valued destLocation badge masked the S3/FTP/SMB mirrors
+           whenever the local file existed): the mirror flags now ride the
+           payload so the client renders honest secondary badges beside the
+           primary location badge. The 96 ordered-scan semantics are
+           untouched — destLocation still derives the PRIMARY badge. */
+        const { scope: _internal, ...pub } = r;
+        void _internal;
         out.push({
           ...pub,
           location: destLocation(r),
@@ -10026,10 +10054,10 @@ async function handleApi(req, res, url) {
        as the honest tier input, checksum fields arrive with task 3. */
     const historyChrome = rows =>
       rows.map(r => {
-        /* Phase 96 (96-02, D-05 byte-identity): ftp_uploaded/smb_uploaded are
-           destLocation inputs only — never published (see the ?all=1 site). */
-        const { ftp_uploaded: _ftp, smb_uploaded: _smb, ...pub } = r;
-        void _ftp; void _smb;
+        /* 2026-11-26 reveal (see the list site): mirror flags ride pub —
+           the 96-02 never-published ruling superseded by the owner UAT
+           report (single-value badge masked the mirrors). */
+        const { ...pub } = r;
         return {
           ...pub,
           location: destLocation(r),
@@ -10180,6 +10208,11 @@ async function handleApi(req, res, url) {
         /* filename can be null (a failed run never produced an archive) —
            fs membership only applies when there is a name to check. */
         location: destLocation(r),
+        /* 2026-11-26 reveal: mirror flags for the secondary badges (same
+           owner UAT fix as the list/all=1 sites). */
+        uploaded: r.uploaded,
+        ftp_uploaded: r.ftp_uploaded,
+        smb_uploaded: r.smb_uploaded,
         filename: r.filename,
         sizeBytes: r.size_bytes,
         sha256: r.sha256,

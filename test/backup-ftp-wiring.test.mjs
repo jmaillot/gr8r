@@ -183,7 +183,10 @@ test('probe-at-save: BOTH twins exist (create AND edit — Pitfall 6) with audit
   assert.ok(createIdx > -1 && editIdx > createIdx, 'both write paths located');
   const create = s.slice(0, createIdx);
   const edit = s.slice(createIdx, editIdx);
-  const twin = /let ftpProbe = null;\n    if \((body\?\.ftpEnabled === true|ftpEnabled) && FTP\.enabled\) \{\n      ftpProbe = await probeFtp\(FTP\.config\(\)\);\n      if \(!ftpProbe\.ok\) \{\n        await auditBackupTask\(user, `backup_task_refused:ftpProbe:\$\{ftpProbe\.key\}`(, id)?\);\n        return fail\(res, 400, ftpProbe\.key, 'FTP destination probe failed — the task was not saved'\);/;
+  /* 2026-11-26: the logProbeFailure diagnostic line (owner UAT: FTP
+     refusal undiagnosable from docker logs) sits between the audit and
+     the fail — the regex tolerates it additively. */
+  const twin = /let ftpProbe = null;\n    if \((body\?\.ftpEnabled === true|ftpEnabled) && FTP\.enabled\) \{\n      ftpProbe = await probeFtp\(FTP\.config\(\)\);\n      if \(!ftpProbe\.ok\) \{\n        await auditBackupTask\(user, `backup_task_refused:ftpProbe:\$\{ftpProbe\.key\}`(, id)?\);\n        (?:logProbeFailure\('ftp', ftpProbe(, id)?\);\n        )?return fail\(res, 400, ftpProbe\.key, 'FTP destination probe failed — the task was not saved'\);/;
   assert.match(create, twin, 'CREATE twin: hard refusal on !ok');
   assert.match(edit, twin, 'EDIT twin: hard refusal on !ok (Pitfall 6)');
   assert.equal((s.match(/backup_task_refused:ftpProbe:/g) || []).length, 2, 'exactly two twin refusal sites');

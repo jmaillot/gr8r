@@ -214,6 +214,19 @@ const historyTr = run => {
         (run.location === 'local' || run.location === 's3'
           ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
           : '') +
+        /* UAT 2026-11-26 (owner report: a local+S3 run showed only "Local"):
+           the mirror flags ride the payload — render honest SECONDARY
+           badges beside the primary location badge. The 96 ordered scan
+           stays the source of the PRIMARY badge only. */
+        (run.uploaded === 1 && run.location !== 's3'
+          ? ` <span class="badge accent">${t(RESTORE_LOCATION_KEYS.s3)}</span>`
+          : '') +
+        (run.ftp_uploaded === 1 && run.location !== 'ftp'
+          ? ` <span class="badge">${t(RESTORE_LOCATION_KEYS.ftp)}</span>`
+          : '') +
+        (run.smb_uploaded === 1 && run.location !== 'smb'
+          ? ` <span class="badge">${t(RESTORE_LOCATION_KEYS.smb)}</span>`
+          : '') +
         /* Phase 100 (100-04, D-03): the pruned badge — remote mirrors were
            pruned after rotation. Two-condition gate: only a rotated-out
            (deleted) row with remote_pruned = 1 renders it; live runs can
