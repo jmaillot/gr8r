@@ -5302,7 +5302,7 @@ A.backupTaskSave = async () => {
        server raw message (same misattribution family as the err.unreachable
        S3-wording fix). The err.smb* family is catalogued client-only in the
        error-codes allowlist (100-03). Non-SMB codes pass through unchanged. */
-    const SMB_CLASS_CODES = { authFailed: 'smbAuthFailed', shareNotFound: 'smbShareNotFound', treeConnectFailed: 'smbTreeConnectFailed', signingRequired: 'smbSigningRequired', noSpace: 'smbNoSpace', nameConflict: 'smbNameConflict', sessionExpired: 'smbSessionExpired', generic: 'smbGeneric' };
+    const SMB_CLASS_CODES = { unreachable: 'smbUnreachable', authFailed: 'smbAuthFailed', shareNotFound: 'smbShareNotFound', treeConnectFailed: 'smbTreeConnectFailed', signingRequired: 'smbSigningRequired', noSpace: 'smbNoSpace', nameConflict: 'smbNameConflict', sessionExpired: 'smbSessionExpired', generic: 'smbGeneric' };
     return toast(tErr(SMB_CLASS_CODES[res.data?.code] || res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
   }
   S.ui.backupTaskForm = null;
