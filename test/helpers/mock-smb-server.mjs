@@ -208,6 +208,27 @@ function fakeSmb(scenario = {}, credsOverride = {}) {
           return;
         }
         case SMB2_COM.CLOSE: send(frame, { body: closeBody(body.subarray(8, 24)) }); return;
+        /* UAT 2026-11-27: READ — the smb upload arm's R-4 read-back
+           verify re-reads the written object (the ftp SIZE-check analog);
+           the mock serves the captured file bytes per §2.2.16.2. */
+        case SMB2_COM.READ: {
+          if (scenario.readStatus) { send(frame, { status: scenario.readStatus }); return; }
+          const length = body.readUInt32LE(4);
+          const offset = Number(body.readBigUInt64LE(8));
+          const fidHex = body.subarray(16, 32).toString('hex');
+          const stored = files.get(fidName(fidHex)) ?? Buffer.alloc(0);
+          const data = stored.subarray(offset, offset + length);
+          /* §2.2.16.2: 17-byte prefix (StructureSize u16, DataOffset u16
+             = 64 header + 17, DataLength u32, reserved) then the bytes —
+             the client's dataFromReadReply slices at DataOffset absolute. */
+          const b = Buffer.alloc(17 + data.length);
+          b.writeUInt16LE(17, 0);
+          b.writeUInt16LE(81, 2);
+          b.writeUInt32LE(data.length, 4);
+          data.copy(b, 17);
+          send(frame, { body: b });
+          return;
+        }
         case SMB2_COM.ECHO: send(frame, { body: Buffer.from([0x04, 0x00, 0x00, 0x00]) }); return;
         case SMB2_COM.TREE_DISCONNECT: send(frame, { body: Buffer.from([0x04, 0x00, 0x00, 0x00]) }); return;
         case SMB2_COM.LOGOFF: send(frame, { body: Buffer.from([0x04, 0x00, 0x00, 0x00]) }); return;

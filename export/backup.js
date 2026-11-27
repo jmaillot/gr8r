@@ -994,8 +994,26 @@ export async function runExport(scope, meta = {}) {
             await smb.connect();
             /* Whole-archive WRITE under the task prefix (Pitfall 6:
                SAME key shape as the ftp arm). Client-owned retry/expiry
-               posture (P6) — zero pipeline-level session logic here. */
-            await smb.write(smbKey, destination);
+               posture (P6) — zero pipeline-level session logic here.
+               UAT 2026-11-27 (owner: EVERY restore from SMB answered
+               smbSha256Mismatch): smb.write takes a BUFFER — passing
+               `destination` (the local file PATH) made the client write
+               Buffer.from(path) (the ftp.stor path-argument idiom does
+               not transfer). The NAS stored ~50 bytes of path text
+               while the sidecar carried the real archive's sha256 —
+               every smb_written archive was garbage by construction.
+               The archive is READ into a buffer here. */
+            await smb.write(smbKey, fs.readFileSync(destination));
+            /* R-4 read-back verify (the ftp arm's SIZE-check analog —
+               SMB2 exposes no size query): re-read the written object
+               and compare its sha256 against the published archive's —
+               an upload that doesn't round-trip refuses HERE as
+               upload_failed, never as a restore-time mismatch. */
+            const written = await smb.read(smbKey);
+            const writtenSha = crypto.createHash('sha256').update(written).digest('hex');
+            if (writtenSha !== sha256) {
+              throw new Error(`smb upload: read-back sha256 mismatch for ${smbKey} (expected ${sha256.slice(0, 16)}…, got ${writtenSha.slice(0, 16)}…)`);
+            }
             /* Sidecar sha256 (R-4) — same "<hash>  <name>\n" shape the
                local + ftp + s3 sidecars carry, so every consumer splits
                identically. */

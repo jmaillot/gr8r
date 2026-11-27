@@ -102,7 +102,8 @@ test('upload loop: smb arm per R-4 — client write + sidecar write, NO SIZE ver
   const arm = b.slice(i, b.indexOf('update backup_runs set smb_uploaded = 1'));
   assert.match(arm, /connectSmb\(provided\.config\)/, 'the arm builds the 99 client from the descriptor config');
   assert.match(arm, /smb\.connect\(\)/, 'the session is established before the writes');
-  assert.match(arm, /smb\.write\(smbKey, destination\)/, 'the published archive is written under the task prefix');
+  assert.match(arm, /smb\.write\(smbKey, fs\.readFileSync\(destination\)\)/, 'the published archive is READ into a buffer and written under the task prefix (UAT 2026-11-27: smb.write takes a BUFFER — the path argument wrote Buffer.from(path), corrupting every smb archive)');
+  assert.match(arm, /writtenSha !== sha256/, 'the R-4 read-back verify re-hashes the written object against the archive sha256 (the ftp SIZE-check analog — a non-round-tripping upload refuses as upload_failed, never at restore time)');
   assert.match(arm, /smb\.write\(`\$\{smbKey\}\.sha256`/, 'the sidecar rides write as ${key}.sha256');
   assert.match(arm, /backup-task-\$\{runMeta\.taskId\}\/\$\{filename\}/, 'task runs upload under the D-88-6 task prefix (SAME key shape as ftp)');
   assert.match(arm, /sha256\}  \$\{filename\}\\n/, 'the sidecar carries the exact "<hash>  <name>\\n" byte format');
