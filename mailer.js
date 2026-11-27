@@ -692,7 +692,7 @@ function buildRestoreAlertMessage(config, msg) {
   };
   const subjectKey = failed
     ? 'restore.alert.failed.subject'
-    : msg.scopeKind === 'project'
+    : msg.scopeKind === 'project' || (msg.scopeKind === 'overwrite' && text(msg.projectName))
       ? 'restore.alert.done.project.subject'
       : 'restore.alert.done.subject';
   /* UAT 2026-11-27 (owner: a project restore email read as if the workspace
@@ -700,21 +700,26 @@ function buildRestoreAlertMessage(config, msg) {
      restore lands in a NEW workspace holding the project; an overwrite
      replaces in place. The SUBJECT names the project too (the workspace
      name alone read as if the workspace was restored). */
-  const subjectVars = msg.scopeKind === 'project' && text(msg.projectName) ? { name: text(msg.projectName) } : { name: finalName || runId };
+  const subjectVars = msg.scopeKind === 'project' || (msg.scopeKind === 'overwrite' && text(msg.projectName)) ? { name: text(msg.projectName) } : { name: finalName || runId };
   /* UAT 2026-11-27 (owner: a project restore email read as if the workspace
      itself was restored): the copy matches the real scope — a project
      restore lands in a NEW workspace holding the project; an overwrite
      replaces in place. */
   const bodyKey = failed
     ? 'restore.alert.failed.body'
-    : msg.scopeKind === 'project'
-      ? 'restore.alert.done.project.body'
-      : msg.scopeKind === 'overwrite'
-        ? 'restore.alert.done.overwrite.body'
-        : 'restore.alert.done.body';
-  const bodyVars = msg.scopeKind === 'project'
-    ? { name: text(msg.projectName) || finalName || runId, ws: finalName || runId }
-    : { name: finalName || runId };
+    : msg.scopeKind === 'overwrite' && text(msg.projectName)
+      ? 'restore.alert.done.overwriteProject.body'
+      : msg.scopeKind === 'project'
+        ? 'restore.alert.done.project.body'
+        : msg.scopeKind === 'overwrite'
+          ? 'restore.alert.done.overwrite.body'
+          : 'restore.alert.done.body';
+  const bodyVars =
+    msg.scopeKind === 'project'
+      ? { name: text(msg.projectName) || finalName || runId, ws: finalName || runId }
+      : msg.scopeKind === 'overwrite' && text(msg.projectName)
+        ? { name: text(msg.projectName), ws: finalName || runId }
+        : { name: finalName || runId };
   const frame = {
     greeting: tr('notif.email.greeting'),
     subject: tr(subjectKey, subjectVars),
@@ -725,14 +730,16 @@ function buildRestoreAlertMessage(config, msg) {
     /* EN fallback literals — the interim copy until plan 06's locale commit */
     const subjectName = subjectVars.name;
     frame.greeting = 'Hi,';
-    frame.subject = failed ? `Restore failed: ${finalName || runId}` : msg.scopeKind === 'project' ? `Restore completed: project ${subjectName}` : `Restore completed: ${subjectName}`;
+    frame.subject = failed ? `Restore failed: ${finalName || runId}` : subjectKey === 'restore.alert.done.project.subject' ? `Restore completed: project ${subjectName}` : `Restore completed: ${subjectName}`;
     frame.sentence = failed
       ? `The restore run${finalName ? ` for "${finalName}"` : ''} failed. Check the restore history for details.`
-      : msg.scopeKind === 'project'
-        ? `The restore of project "${text(msg.projectName) || finalName || runId}" completed — the restored copy is live in the new workspace "${finalName || runId}".`
-        : msg.scopeKind === 'overwrite'
-          ? `The overwrite restore of "${finalName || runId}" completed — the target content was replaced in place.`
-          : `The restore run${finalName ? ` for "${finalName}"` : ''} completed — the restored copy is live under its new name.`;
+      : bodyKey === 'restore.alert.done.overwriteProject.body'
+        ? `The overwrite restore of project "${text(msg.projectName)}" in workspace "${finalName || runId}" completed — the project's content was replaced in place.`
+        : msg.scopeKind === 'project'
+          ? `The restore of project "${text(msg.projectName) || finalName || runId}" completed — the restored copy is live in the new workspace "${finalName || runId}".`
+          : msg.scopeKind === 'overwrite'
+            ? `The overwrite restore of "${finalName || runId}" completed — the target content was replaced in place.`
+            : `The restore run${finalName ? ` for "${finalName}"` : ''} completed — the restored copy is live under its new name.`;
     frame.footer = 'You receive this message because you are a backup operator of this instance.';
   }
 

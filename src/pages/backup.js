@@ -750,7 +750,15 @@ const restoreRunTr = run => {
   } catch {
     skipped = [];
   }
-  const runCell = `<span class="faint trunc" style="display:inline-block;max-width:280px" title="${esc(String(run.final_name || ''))}">${esc(String(run.final_name || ''))}</span>${
+  /* UAT 2026-11-27 (owner: the Run cell showed only the workspace name —
+     "Prod" — never WHICH archive was restored): the source archive
+     filename leads when it exists (pre-column rows fall back to the
+     final_name alone); the resulting name stays as the secondary hint. */
+  const archiveName = String(run.archive_name || '');
+  const finalName = String(run.final_name || '');
+  const runCell = `<span class="mono trunc" style="display:inline-block;max-width:280px" title="${esc(archiveName || finalName)}">${esc(archiveName || finalName)}</span>${
+    archiveName && finalName && finalName !== archiveName ? `<div class="faint" style="margin-top:2px;font-size:12px">${esc(finalName)}</div>` : ''
+  }${
     skipped.length
       ? `<div class="faint" style="margin-top:2px;font-size:12px;max-width:420px;white-space:normal;line-height:1.5">${t('page.restore.skipReportLabel')}: ${esc(skipped.map(s => String(s?.table || '')).filter(Boolean).join(', '))}</div>`
       : ''

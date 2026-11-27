@@ -1803,7 +1803,7 @@
   "err.backupInvalidScope": "Cette portée de sauvegarde n’existe pas",
   "err.invalidRetention": "La rétention doit être de petits entiers positifs",
   "err.backupRunInProgress": "Une sauvegarde est déjà en cours",
-  "err.restoreArchiveMissing": "Cette archive de sauvegarde a disparu des deux destinations",
+  "err.restoreArchiveMissing": "Cette archive de sauvegarde a disparu de toutes les destinations",
   "err.restoreNoWorkspace": "Vous n’êtes membre d’aucun espace de travail. Rejoignez-en un ou créez-en un d’abord.",
   "err.backupRestoreInProgress": "Une sauvegarde ou une restauration est déjà en cours. Attendez qu’elle se termine.",
   "err.restoreEntryRejected": "Cette archive contient des entrées qui ne peuvent pas être restaurées",
@@ -2428,5 +2428,6 @@
   "err.restoreUploadName": "Fournis une archive de sauvegarde .tar.gz",
   "err.restoreUploadInvalid": "Ce fichier n'est pas une archive de sauvegarde projects-studio valide",
   "err.restoreUploadFailed": "L'envoi de l'archive a échoué",
-  "restore.alert.done.project.subject": "Restauration terminée : projet « {name} »"
+  "restore.alert.done.project.subject": "Restauration terminée : projet « {name} »",
+  "restore.alert.done.overwriteProject.body": "La restauration par écrasement du projet « {name} » dans l’espace « {ws} » est terminée — le contenu du projet a été remplacé sur place."
 }

@@ -1803,7 +1803,7 @@
   "err.backupInvalidScope": "Dat back-upbereik bestaat niet",
   "err.invalidRetention": "Retentie moet kleine niet-negatieve gehele getallen zijn",
   "err.backupRunInProgress": "Er loopt al een back-up",
-  "err.restoreArchiveMissing": "Dat back-uparchief is uit beide bestemmingen verdwenen",
+  "err.restoreArchiveMissing": "Dat back-uparchief is van alle bestemmingen verdwenen",
   "err.restoreNoWorkspace": "Je bent lid van geen enkele werkruimte. Word eerst lid van een werkruimte of maak er een aan.",
   "err.backupRestoreInProgress": "Er wordt al een back-up of herstel uitgevoerd. Wacht tot die klaar is.",
   "err.restoreEntryRejected": "Dat archief bevat items die niet hersteld kunnen worden",
@@ -2388,5 +2388,6 @@
   "err.restoreUploadName": "Geef een .tar.gz back-uparchief op",
   "err.restoreUploadInvalid": "Dit is geen geldig projects-studio back-uparchief",
   "err.restoreUploadFailed": "Het uploaden van het archief is mislukt",
-  "restore.alert.done.project.subject": "Herstel voltooi: project „{name}”"
+  "restore.alert.done.project.subject": "Herstel voltooi: project „{name}”",
+  "restore.alert.done.overwriteProject.body": "De overschrijdende herstel van project „{name}” in workspace „{ws}” is voltooid — de inhoud van het project is ter plaatse vervangen."
 }

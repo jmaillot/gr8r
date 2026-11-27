@@ -1803,7 +1803,7 @@
   "err.backupInvalidScope": "That backup scope does not exist",
   "err.invalidRetention": "Retention must be small non-negative integers",
   "err.backupRunInProgress": "A backup is already running",
-  "err.restoreArchiveMissing": "That backup archive is gone from both destinations",
+  "err.restoreArchiveMissing": "That backup archive is gone from all destinations",
   "err.restoreNoWorkspace": "You are not a member of any workspace. Join or create one first.",
   "err.backupRestoreInProgress": "A backup or restore is already running. Wait for it to finish.",
   "err.restoreEntryRejected": "That archive contains entries that cannot be restored",
@@ -2388,5 +2388,6 @@
   "err.restoreUploadName": "Provide a .tar.gz backup archive",
   "err.restoreUploadInvalid": "Not a valid projects-studio backup archive",
   "err.restoreUploadFailed": "The archive upload failed",
-  "restore.alert.done.project.subject": "Restore completed: project “{name}”"
+  "restore.alert.done.project.subject": "Restore completed: project “{name}”",
+  "restore.alert.done.overwriteProject.body": "The overwrite restore of project “{name}” in workspace “{ws}” completed — the project’s content was replaced in place."
 }

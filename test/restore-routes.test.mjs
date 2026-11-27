@@ -48,6 +48,7 @@ const RESTORE_RUN_COLUMNS = [
   'started_at',
   'finished_at',
   'created_at',
+  'archive_name', // UAT 2026-11-27: the source archive filename rides the history (adapterEnsureColumn appends)
 ];
 const RESTORE_LOCK_COLUMNS = ['id', 'claimed_by', 'claimed_at'];
 const RESTORE_TRIGGERS = ['import_new', 'overwrite', 'instance'];
@@ -447,6 +448,11 @@ test('89-04 trigger+poll: POST returns a fresh uuid immediately; the pipeline wa
     const top = history.data.runs[0];
     assert.equal(top.id, res.data.runId, 'history is newest-first');
     assert.equal(top.final_name, 'Acme-restored', 'D-89-13: first import is -restored');
+    /* UAT 2026-11-27 (owner: the Run cell showed only the workspace name):
+       the history carries the SOURCE archive filename — the run names
+       WHICH archive was restored. */
+    assert.equal(typeof top.archive_name, 'string', `archive_name rides the history payload: ${JSON.stringify(top)}`);
+    assert.ok(top.archive_name.endsWith('.tar.gz'), 'the archive filename is the .tar.gz the run restored');
     assert.equal(top.status, 'done');
 
     /* second restore of the SAME archive: the counter walks to -restored-2 */

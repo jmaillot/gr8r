@@ -120,6 +120,13 @@ test('restore empty/loading/history states mirror the backup card discipline', (
   assert.match(pagesSrc, /t\('page\.restore\.skipReportLabel'\)/, 'the skipped-tables report is keyed (D-89-7: report-only, never hidden)');
   assert.match(pagesSrc, /t\('page\.restore\.errorToggle'\)/, 'the expandable error toggle is keyed');
   assert.match(pagesSrc, /restoreRuns\.map\(r => \(\{ at: Number\(r\.started_at\) \|\| 0, row: restoreRunTr\(r\)\s*\}\)\)/, 'restore rows enter the merged date-ordered stream — no client cap');
+  /* UAT 2026-11-27 (owner: the Run cell showed only the workspace name):
+     the Run cell leads with the SOURCE archive filename (archive_name
+     rides the runs payload + the server select); the final workspace
+     name stays as the secondary hint. */
+  const runTrSlice = pagesSrc.slice(pagesSrc.indexOf('const restoreRunTr ='), pagesSrc.indexOf('const restoreRunTr =') + 1800);
+  assert.match(runTrSlice, /run\.archive_name/, 'the Run cell renders the restored archive filename');
+  assert.ok(read('server.js').includes('snapshot_tag, archive_name, error, started_at'), 'the runs select carries archive_name');
   assert.ok(!/\.slice\(0, 50\)/.test(pagesSrc), 'no client-side 50 cap');
   assert.match(pagesSrc, /esc\(run\.error\)/, 'restore errors render through esc()');
   assert.match(pagesSrc, /restorePollKickAllowed\(\)/, 'the restore kick honors the WR-02 failure cooldown');
@@ -318,7 +325,10 @@ test('backstop: long-text render sites truncate with title attrs and the counter
   /* UAT round-9: the list filename trunc span is retired — the filename
      rides the history run cell's tooltip (runTip, esc'd). */
   assert.match(pagesSrc, /const runTip = \[run\.label, run\.filename\]/, 'the archive filename rides the history tooltip');
-  assert.match(pagesSrc, /<span class="faint trunc" style="display:inline-block;max-width:\d+px" title="\$\{esc\(String\(run\.final_name \|\| ''\)\)\}">/, 'the history final name truncates with the full value in title');
+  /* UAT 2026-11-27: the Run cell leads with the archive filename (mono,
+     title carries it); the final workspace name stays as the faint
+     secondary hint — same truncation + esc discipline. */
+  assert.match(pagesSrc, /<span class="mono trunc" style="display:inline-block;max-width:\d+px" title="\$\{esc\(archiveName \|\| finalName\)\}">/, 'the history archive filename truncates with the full value in title');
   /* The sha256 12-char slice idiom (backup.js history tooltip round-6) —
      the list sha trunc span is retired with the list. */
   assert.match(pagesSrc, /const runTip = \[run\.label, run\.filename\]/, 'the archive filename rides the history tooltip');

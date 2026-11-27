@@ -1594,7 +1594,7 @@ async function overwriteProjectFragment(env) {
     project: { replaced: targetProjectId, name: project?.name ?? null, tasks: tasks.length, comments: comments.length, files: files.length, deadTasks: deadTasks.size },
     files: { swapped: blobPlan.length, removed: removedIds.length },
   };
-  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName: targetRow.name, finishedAt: Date.now(), scopeKind: 'overwrite' });
+  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName: targetRow.name, finishedAt: Date.now(), scopeKind: 'overwrite', /* UAT 2026-11-27: a project overwrite names the PROJECT in the email, not the workspace alone */ projectName: targetProjectId ? (summary.project?.name || '') : '' });
   return {
     ok: true,
     runId,

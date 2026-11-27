@@ -1803,7 +1803,7 @@
   "err.backupInvalidScope": "Ese ámbito de copia de seguridad no existe",
   "err.invalidRetention": "La retención debe ser enteros pequeños no negativos",
   "err.backupRunInProgress": "Ya se está ejecutando una copia de seguridad",
-  "err.restoreArchiveMissing": "Esa copia de seguridad desapareció de ambos destinos",
+  "err.restoreArchiveMissing": "Ese archivo de copia de seguridad ha desaparecido de todos los destinos",
   "err.restoreNoWorkspace": "No eres miembro de ningún espacio de trabajo. Únete a uno o crea uno primero.",
   "err.backupRestoreInProgress": "Ya se está ejecutando una copia de seguridad o una restauración. Espera a que termine.",
   "err.restoreEntryRejected": "Ese archivo contiene entradas que no se pueden restaurar",
@@ -2388,5 +2388,6 @@
   "err.restoreUploadName": "Indica un archivo de copia de seguridad .tar.gz",
   "err.restoreUploadInvalid": "No es un archivo de copia de seguridad projects-studio válido",
   "err.restoreUploadFailed": "La subida del archivo falló",
-  "restore.alert.done.project.subject": "Restauración completada: proyecto «{name}»"
+  "restore.alert.done.project.subject": "Restauración completada: proyecto «{name}»",
+  "restore.alert.done.overwriteProject.body": "La restauración por sobrescritura del proyecto «{name}» en el espacio de trabajo «{ws}» se completó — el contenido del proyecto se reemplazó en su lugar."
 }

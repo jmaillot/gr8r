@@ -1803,7 +1803,7 @@
   "err.backupInvalidScope": "Dieser Backup-Bereich existiert nicht",
   "err.invalidRetention": "Aufbewahrung muss kleine nicht-negative ganze Zahlen sein",
   "err.backupRunInProgress": "Es läuft bereits eine Sicherung",
-  "err.restoreArchiveMissing": "Dieses Backup-Archiv ist aus beiden Zielen verschwunden",
+  "err.restoreArchiveMissing": "Dieses Backup-Archiv ist von allen Zielen verschwunden",
   "err.restoreNoWorkspace": "Sie sind Mitglied keines Arbeitsbereichs. Treten Sie zuerst einem bei oder erstellen Sie einen.",
   "err.backupRestoreInProgress": "Es läuft bereits eine Sicherung oder Wiederherstellung. Warten Sie, bis sie abgeschlossen ist.",
   "err.restoreEntryRejected": "Dieses Archiv enthält Einträge, die nicht wiederhergestellt werden können",
@@ -2388,5 +2388,6 @@
   "err.restoreUploadName": "Bitte ein .tar.gz-Backup-Archiv angeben",
   "err.restoreUploadInvalid": "Dies ist kein gültiges projects-studio-Backup-Archiv",
   "err.restoreUploadFailed": "Das Hochladen des Archivs ist fehlgeschlagen",
-  "restore.alert.done.project.subject": "Wiederherstellung abgeschlossen: Projekt „{name}“"
+  "restore.alert.done.project.subject": "Wiederherstellung abgeschlossen: Projekt „{name}“",
+  "restore.alert.done.overwriteProject.body": "Die Überschreibungs-Wiederherstellung des Projekts „{name}“ im Workspace „{ws}“ ist abgeschlossen — der Inhalt des Projekts wurde an Ort und Stelle ersetzt."
 }
