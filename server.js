@@ -9885,6 +9885,7 @@ async function handleApi(req, res, url) {
        S3-only posture is untouched. The id must exist; a bogus one refuses
        keyed BEFORE the run claim (a refused attempt consumes a try). */
     let runTaskId = null;
+    let runTaskName = null;
     if (body?.taskId !== undefined) {
       if (typeof body.taskId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(body.taskId)) {
         await db.run(
@@ -9902,6 +9903,7 @@ async function handleApi(req, res, url) {
         return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
       }
       runTaskId = body.taskId;
+      runTaskName = taskRow.name;
     }
     /* D-10: one export at a time. The check sits immediately before the claim
        with NO await between — the claim inside runExport is synchronous before
@@ -9920,7 +9922,7 @@ async function handleApi(req, res, url) {
        runTaskId (option B, UAT 2026-11-26) routes the per-task opt-in gates —
        trigger stays 'manual' (the history row and rotation semantics keep
        their manual truth; only the destination opt-ins follow the task). */
-    const started = runExport(scope, runTaskId ? { taskId: runTaskId, trigger: 'manual', taskName: taskRow?.name } : undefined);
+    const started = runExport(scope, runTaskId ? { taskId: runTaskId, trigger: 'manual', taskName: runTaskName } : undefined);
     const runId = getRunState()?.runId;
     if (!started || !runId) {
       await db.run(

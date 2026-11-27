@@ -514,22 +514,32 @@ const todayUtc = () => {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 };
 
-test('92 naming: PROJECTS_STUDIO_INSTANCE_NAME respected; scheduled run carries the GFS marker; manual run omits it (D-01/D-03)', () => {
+test('92 naming: PROJECTS_STUDIO_INSTANCE_NAME respected; task runs lead with the task name + minute tail; manual run omits the GFS marker (D-01/D-03, UAT 2026-11-27 rename)', () => {
   return (async () => {
     process.env.PROJECTS_STUDIO_INSTANCE_NAME = 'PjStudio!';
     backup.setBackupGfsBucketProvider(async () => 'daily');
     const created = [];
+    const at = Date.UTC(2026, 10, 23, 14, 35);
     try {
-      const scheduled = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { taskId: 't-naming', trigger: 'scheduled' });
+      /* UAT 2026-11-27 (owner rename): task runs carry the TASK NAME —
+         `<task>-<scope-label>-<gfs>-<date>-<hh>-<mm>`; the injectable now
+         keeps the minute tail deterministic. */
+      const scheduled = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { taskId: 't-naming', trigger: 'scheduled', taskName: 'Nightly DB', now: at });
       assert.equal(scheduled.ok, true, scheduled.error);
       created.push(scheduled.filename);
-      /* scope ws1 name "WS ws1" → slug ws-ws1; ws token; marker; UTC date */
-      assert.equal(scheduled.filename, `pjstudio-ws-ws-ws1-daily-${todayUtc()}.tar.gz`, 'five-segment scheduled shape');
+      /* task slug; scope ws1 name "WS ws1" → slug ws-ws1; marker; UTC stamp */
+      assert.equal(scheduled.filename, `nightly-db-ws-ws1-daily-2026-11-23-14-35.tar.gz`, 'task-name scheduled shape');
 
-      const manual = await backup.runExport({ kind: 'instance' });
+      /* Unresolvable task name degrades to the Phase-92 shape (fail-safe) */
+      const unnamed = await backup.runExport({ kind: 'workspace', id: 'ws1' }, { taskId: 't-naming', trigger: 'scheduled', now: at + 60_000 });
+      assert.equal(unnamed.ok, true, unnamed.error);
+      created.push(unnamed.filename);
+      assert.equal(unnamed.filename, `pjstudio-ws-ws-ws1-daily-2026-11-23-14-36.tar.gz`, 'missing task name degrades to the 92 shape');
+
+      const manual = await backup.runExport({ kind: 'instance' }, { now: Date.UTC(2026, 10, 23, 9, 5) });
       assert.equal(manual.ok, true, manual.error);
       created.push(manual.filename);
-      assert.equal(manual.filename, `pjstudio-instance-${todayUtc()}.tar.gz`, 'manual run: NO GFS marker');
+      assert.equal(manual.filename, `pjstudio-instance-2026-11-23-09-05.tar.gz`, 'manual run: NO GFS marker, minute tail');
     } finally {
       delete process.env.PROJECTS_STUDIO_INSTANCE_NAME;
       backup.setBackupGfsBucketProvider(null);
@@ -557,13 +567,17 @@ test('92 naming: collision suffix -2 lands BEFORE .tar.gz and the sidecar carrie
   return (async () => {
     process.env.PROJECTS_STUDIO_INSTANCE_NAME = 'collide';
     try {
+      /* Injected clock pinned to TODAY's UTC calendar day at a fixed 10:30 —
+         the seed becomes the run's exact base name deterministically. */
+      const d = new Date();
       const date = todayUtc();
-      /* Seed the exact target the run will pick: collide-instance-<today>.tar.gz */
-      const preExisting = path.join(BACKUPS_DIR, `collide-instance-${date}.tar.gz`);
+      const at = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 10, 30);
+      const seeded = `collide-instance-${date}-10-30.tar.gz`;
+      const preExisting = path.join(BACKUPS_DIR, seeded);
       fs.writeFileSync(preExisting, 'earlier archive');
-      const run = await backup.runExport({ kind: 'instance' });
+      const run = await backup.runExport({ kind: 'instance' }, { now: at });
       assert.equal(run.ok, true, run.error);
-      assert.equal(run.filename, `collide-instance-${date}-2.tar.gz`, 'suffix inserted before .tar.gz, never a rename');
+      assert.equal(run.filename, `collide-instance-${date}-10-30-2.tar.gz`, 'suffix inserted before .tar.gz, never a rename');
       assert.ok(fs.existsSync(path.join(BACKUPS_DIR, run.filename)), 'final archive exists');
       const sidecar = fs.readFileSync(path.join(BACKUPS_DIR, `${run.filename}.sha256`), 'utf8');
       assert.ok(sidecar.includes(`${run.filename}\n`), 'the sha256 sidecar names the FINAL uniquified filename');
@@ -578,8 +592,11 @@ test('92 naming: collision suffix -2 lands BEFORE .tar.gz and the sidecar carrie
 });
 
 test('92 naming: runLabel mirrors the filename structure for the UI payload (Phase 94 renders without deriving)', () => {
-  const label = backup.runLabel({ instance: 'pjstudio', scope: 'workspace', label: 'Marketing', gfsBucket: 'weekly', createdAt: Date.UTC(2026, 10, 23, 12) });
-  assert.equal(label, 'pjstudio-ws-marketing-weekly-2026-11-23');
-  const manual = backup.runLabel({ instance: 'pjstudio', scope: 'instance', label: '', gfsBucket: null, createdAt: Date.UTC(2026, 10, 23, 12) });
-  assert.equal(manual, 'pjstudio-instance-2026-11-23', 'manual label carries no GFS segment');
+  /* UAT 2026-11-27 rename: task rows lead with the task-name slug */
+  const task = backup.runLabel({ instance: 'pjstudio', scope: 'workspace', label: 'Marketing', gfsBucket: 'weekly', createdAt: Date.UTC(2026, 10, 23, 12, 5), taskId: 't1', taskName: 'DB Dump' });
+  assert.equal(task, 'db-dump-marketing-weekly-2026-11-23-12-05');
+  const label = backup.runLabel({ instance: 'pjstudio', scope: 'workspace', label: 'Marketing', gfsBucket: 'weekly', createdAt: Date.UTC(2026, 10, 23, 12, 5) });
+  assert.equal(label, 'pjstudio-ws-marketing-weekly-2026-11-23-12-05');
+  const manual = backup.runLabel({ instance: 'pjstudio', scope: 'instance', label: '', gfsBucket: null, createdAt: Date.UTC(2026, 10, 23, 12, 5) });
+  assert.equal(manual, 'pjstudio-instance-2026-11-23-12-05', 'manual label carries no GFS segment');
 });

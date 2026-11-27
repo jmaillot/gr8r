@@ -89,7 +89,7 @@ test('holder POST returns a UUID immediately; polling reaches done with filename
     assert.equal(payload.stage, 'done', `expected done, got: ${JSON.stringify(payload)}`);
     assert.deepEqual(payload.scope, { kind: 'instance', id: null });
     assert.ok(typeof payload.startedAt === 'string' && !Number.isNaN(Date.parse(payload.startedAt)), 'startedAt is an ISO timestamp');
-    assert.match(payload.filename, /^[a-z0-9-]+-instance-\d{4}-\d{2}-\d{2}\.tar\.gz$/, 'the Phase 92 filename shape (instance segment + UTC date, manual = no GFS marker)');
+    assert.match(payload.filename, /^[a-z0-9-]+-instance-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\.tar\.gz$/, 'the Phase 92 filename shape + minute tail (instance segment + UTC date, manual = no GFS marker)');
     assert.match(payload.sha256, /^[0-9a-f]{64}$/, 'the whole-archive sha256');
 
     /* the archive really landed, and the .sha256 sidecar matches the final bytes */
@@ -417,9 +417,11 @@ test('?all=1 returns cross-task rows with gfs_bucket and a server-resolved label
     assert.deepEqual(res.data.runs.map(r => r.id), ['all-manual-1', 'all-t2-ws', 'all-t1-b', 'all-t1-a']);
     assert.ok(res.data.runs.every(r => 'gfs_bucket' in r), 'rows carry gfs_bucket');
     const labeled = res.data.runs.find(r => r.id === 'all-t1-a');
-    assert.equal(labeled.label, 'alltest-instance-daily-2026-06-01', 'instance-scope label has no slug segment');
+    /* UAT 2026-11-27 rename: task rows lead with the task-name slug ('All One' → all-one),
+       then the scope segment (instance-scope → the instance name), gfs, stamp */
+    assert.equal(labeled.label, 'all-one-alltest-daily-2026-06-01-02-00', 'task-name + instance segment + gfs + minute stamp');
     const wsRun = res.data.runs.find(r => r.id === 'all-t2-ws');
-    assert.equal(wsRun.label, 'alltest-ws-acme-daily-2026-06-03', 'server-resolved label from the WORKSPACE name (scopeLabel), not the task name');
+    assert.equal(wsRun.label, 'all-two-acme-daily-2026-06-03-02-00', 'server-resolved label: task name + WORKSPACE name (scopeLabel) + minute stamp');
     assert.ok(!('scope' in labeled), 'the raw scope JSON stays internal');
     assert.ok(res.data.runs.every(r => !('keptPosition' in r)), 'history variant carries no keptPosition (Phase 94 renders history)');
     assert.ok(res.data.runs.some(r => r.task_id === t1));

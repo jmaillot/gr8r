@@ -104,7 +104,7 @@ test('a due task fires through the sweep → persisted scheduled run row; next_r
     /* Phase 92 (BKNAME-01): the scheduled archive carries the instance name,
        scope token and stored GFS marker (id-based rotation needs no taskId
        in the name). PROJECTS_STUDIO_INSTANCE_NAME pinned in this server's env. */
-    assert.match(row.filename, /^testsuite-instance-[a-z]+-\d{4}-\d{2}-\d{2}\.tar\.gz$/, 'scheduled shape: instance-scope-gfs-date');
+    assert.match(row.filename, /^nightly-testsuite-[a-z]+-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\.tar\.gz$/, 'scheduled shape: task-name + instance + gfs + minute stamp (UAT 2026-11-27 rename)');
     assert.ok(row.sha256 && row.sha256.length === 64, 'whole-archive sha256 persisted');
     assert.ok(row.duration_ms >= 0, 'duration persisted');
     const archivePath = path.join(server.dataDir, 'backups', row.filename);
@@ -135,7 +135,7 @@ test('a manual POST /api/backup/runs run persists a backup_runs row (writer seam
     assert.equal(row.trigger, 'manual');
     assert.equal(row.task_id, null, 'D-11: manual archives carry task_id NULL');
     assert.equal(row.status, 'succeeded');
-    assert.match(row.filename, /^testsuite-instance-\d{4}-\d{2}-\d{2}\.tar\.gz$/, 'Phase 92 manual shape: instance segment + UTC date, NO GFS marker (D-01/BKNAME-01)');
+    assert.match(row.filename, /^testsuite-instance-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\.tar\.gz$/, 'Phase 92 manual shape + minute tail: instance segment + UTC date, NO GFS marker (D-01/BKNAME-01)');
     assert.ok(row.sha256 && row.sha256.length === 64);
     assert.ok(Number.isInteger(row.size_bytes) && row.size_bytes > 0, 'size persisted');
     assert.ok(Number.isInteger(row.duration_ms), 'duration persisted');

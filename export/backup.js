@@ -593,27 +593,54 @@ function archiveName(scope, now, meta = {}) {
   const d = new Date(now);
   const p = n => String(n).padStart(2, '0');
   const date = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+  /* UAT 2026-11-27 (owner rename): minute tail — ':' is deliberately
+     excluded (illegal in Windows/SMB filenames); '-' keeps every remote
+     key, sidecar and restore path filesystem-safe. */
+  const stamp = `${date}-${p(d.getUTCHours())}-${p(d.getUTCMinutes())}`;
+  /* Owner rename: task runs lead with the TASK NAME (never the id —
+     best-effort friendly slug) — `<task>-<project|instance>-<gfs>-<date>-<hh>-<mm>`.
+     The second segment is the friendly scope label (workspace/project name),
+     falling back to the instance name (PROJECTS_STUDIO_INSTANCE_NAME) for
+     instance-scope tasks. An unresolvable task name degrades to the Phase-92
+     shape (fail-safe filename nicety — archives are never renamed). */
+  const taskSlug = slugify(meta.taskName);
+  if (meta.taskId && taskSlug) {
+    const parts = [taskSlug, slugify(meta.label) || (meta.instance || instanceSlug())];
+    /* D-01: the GFS marker rides task runs only — manual generic runs omit
+       it entirely. */
+    if (meta.gfsBucket) parts.push(meta.gfsBucket);
+    parts.push(stamp);
+    return `${parts.join('-')}.tar.gz`;
+  }
   const parts = [meta.instance || instanceSlug(), scopeTokenFor(scope.kind)];
   const label = slugify(meta.label);
   if (label) parts.push(label);
-  /* D-01: only scheduled runs (meta.taskId set) carry the GFS marker —
-     manual runs omit the <gfs> segment entirely. */
   if (meta.taskId && meta.gfsBucket) parts.push(meta.gfsBucket);
-  parts.push(date);
+  parts.push(stamp);
   return `${parts.join('-')}.tar.gz`;
 }
 
 /* Phase 92 (BKNAME-01, run labels): the UI-facing label for a run row — the
    SAME instance-scope-gfs structure as the archive filename, so Phase 94
    renders identical strings without deriving anything client-side. */
-export function runLabel({ instance, scope, label = '', gfsBucket = null, createdAt }) {
+export function runLabel({ instance, scope, label = '', gfsBucket = null, createdAt, taskId = null, taskName = '' }) {
   const d = new Date(createdAt);
   const p = n => String(n).padStart(2, '0');
+  const stamp = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}-${p(d.getUTCHours())}-${p(d.getUTCMinutes())}`;
+  /* Owner rename mirror (archiveName): task runs lead with the task-name
+     slug; unresolvable name degrades to the Phase-92 shape. */
+  const taskSlug = slugify(taskName);
+  if (taskId && taskSlug) {
+    const parts = [taskSlug, slugify(label) || (instance || instanceSlug())];
+    if (gfsBucket) parts.push(gfsBucket);
+    parts.push(stamp);
+    return parts.join('-');
+  }
   const parts = [instance || instanceSlug(), scopeTokenFor(scope)];
   const slug = slugify(label);
   if (slug) parts.push(slug);
   if (gfsBucket) parts.push(gfsBucket);
-  parts.push(`${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`);
+  parts.push(stamp);
   return parts.join('-');
 }
 
@@ -679,6 +706,8 @@ export async function runExport(scope, meta = {}) {
     label: '', // UAT 2026-11-22: friendly slug for the filename — resolved below, best-effort
     instance: '', // Phase 92 (D-03): instance-name segment, resolved ONCE below (Pitfall 5)
     gfsBucket: null, // Phase 92 (D-01): scheduled runs only — resolved ONCE below
+    taskName: typeof meta.taskName === 'string' ? meta.taskName : '', // UAT 2026-11-27 owner rename: filename leads with the task name
+    now: Number.isFinite(meta.now) ? meta.now : null, // injectable clock — test-only; production passes nothing
   };
   const runId = claimRun(scope);
   if (!runId) return { ok: false, code: 'backupRunInProgress' };
@@ -820,7 +849,7 @@ export async function runExport(scope, meta = {}) {
        final name, and the sidecar below is written from this FINAL
        uniquified filename (Pitfall 3: the sha256 sidecar carries the
        authoritative name; archives are never renamed post-creation). */
-    const baseName = archiveName(scope, Date.now(), runMeta);
+    const baseName = archiveName(scope, runMeta.now ?? Date.now(), runMeta);
     let filename = baseName;
     let uniquifier = 1;
     while (fs.existsSync(path.join(dirs.backupsDir, filename)) && uniquifier < 100) {
