@@ -272,7 +272,10 @@ A.mapCreate = async () => {
 | A3 | No distinct label-empty refusal key exists server-side → one new pre-check key may be needed | i18n inventory | If server silently trims empty labels, the new key is unnecessary (harmless) |
 | A4 | `workspaceId` (not `workspace_id`) is the POST body field name | API additions | Phase 101 test imports confirm `groupGuid` casing (:39, :99); `workspaceId` casing not read verbatim in the POST body region — planner verifies against server.js:8962 POST handler or test/group-mappings-api.test.mjs fixtures |
 
-## Open Questions
+## Open Questions (RESOLVED — decided in plans, commit eb0a2506)
+
+1. POST body field casing — RESOLVED: camelCase `groupGuid`/`workspaceId`/`role`/`label`, read verbatim from server.js:8962 POST handler (102-01/102-02 plans).
+2. Moved-key namespace — RESOLVED: rename to `page.mappings.dead*` (card code moves wholesale; 4 old keys deleted, 4 new added per locale in the same commit — 102-01 Task 3).
 
 1. **POST body field casing** — `groupGuid` is confirmed (groups-config test :39); `workspaceId`/`role`/`label` casing highly likely camelCase but not read verbatim from the POST handler this session. Recommendation: planner reads server.js:8962-8990 before writing the api method (2-minute check, no user input needed).
 2. **Moved-key namespace** — CONTEXT allows either reuse (`page.governance.dead*`) or rename (`page.mappings.dead*`). Recommendation: rename, since the card code physically moves and governance.js keeps no dead references.
