@@ -2,7 +2,7 @@
 gsd_state_version: "1.0"
 milestone: v3.6
 milestone_name: Entra ID Mappings & Restore Sources
-status: unknown
+status: phase_complete
 stopped_at: Completed 101-01-PLAN.md
 last_updated: "2026-11-27T18:22:53.526Z"
 state_head: 3734e3d02506732917fbd08fb5b3d74afac05624

@@ -28,7 +28,7 @@
 
 ## Phases
 
-- [ ] **Phase 101: Mappings Backend — Routes & Funnels** - Operator GET list + DELETE routes for group_mappings riding the existing guard ladder and GUID/role funnels, with dead-mapping hint data surfaced server-side
+- [x] **Phase 101: Mappings Backend — Routes & Funnels** - Operator GET list + DELETE routes for group_mappings riding the existing guard ladder and GUID/role funnels, with dead-mapping hint data surfaced server-side
 - [ ] **Phase 102: Mappings SPA — Entra ID Mappings Page** - New lazy Instance nav page for mappings CRUD with honest delete semantics and the relocated dead-mappings warning card
 - [ ] **Phase 103: Restore-Source Refactor — Extract the Shared Ladder** - The ×3 duplicated staged-fetch ladders collapse into ONE `resolveRestoreSource(row, source)` helper, byte-identical and golden-pinned — no `source` param yet (R-5)
 - [ ] **Phase 104: Restore-Source Backend — `source` Param & Probe Route** - Restore routes accept an explicit source validated against mirror flags; `sources[]` server-derived; dedicated throttled availability-check POST
@@ -37,6 +37,7 @@
 ## Phase Details
 
 ### Phase 101: Mappings Backend — Routes & Funnels
+
 **Goal**: Operators can list and delete Entra group→workspace mappings through server routes that are funnel-clean, audited, and dialect-parity safe — before any UI exists to bypass them.
 **Depends on**: Nothing (first phase; rides the v3.2 `group_mappings` table and groups.js funnels — NO schema change)
 **Requirements**: MAP-01, MAP-02, MAP-03, MAP-04
@@ -46,12 +47,14 @@
   3. Pasting `{braced}`, no-hyphen or uppercase GUID variants through create/delete collapses to one canonical key via `canonicalizeGuid`/`guidRefusal`; a viewer-role mapping refuses at save; a (group_guid, workspace_id) duplicate maps to the keyed `groupMappingDuplicate` refusal in BOTH SQLite and Postgres — never a raw 500.
   4. The mappings list flags rows pointing at archived/deleted workspaces inline and surfaces label/GUID mismatches from stored provenance where derivable, so dead mappings are visible before they bite.
   5. Every new refusal key exists in all 5 locale catalogues in the same commit as the first emitting gate.
-**Plans**: 1 plan
+
+**Plans**: 1/1 plans executed
 
 Plans:
-- [ ] 101-01-PLAN.md — GET list + DELETE routes, dialect-parity duplicate backstop, full test matrix
+- [x] 101-01-PLAN.md — GET list + DELETE routes, dialect-parity duplicate backstop, full test matrix
 
 ### Phase 102: Mappings SPA — Entra ID Mappings Page
+
 **Goal**: Operators manage Entra group mappings end-to-end from a dedicated page in the app, with honest delete semantics and the dead-mapping problem made visible where mappings live.
 **Depends on**: Phase 101
 **Requirements**: MAPUI-01, MAPUI-02, MAPUI-03, MAPUI-04
@@ -60,10 +63,12 @@ Plans:
   2. An operator can create a mapping from the page: GUID paste (canonicalizing), label (≤200 chars, esc()d at every render), workspace picker fed by the operator workspaces listing, role picker owner/admin/member — with a keyed localized error toast for every server refusal.
   3. An operator can delete a mapping through an inline-confirm whose copy states the lazy revocation semantics verbatim ("members will lose access at their next Microsoft sign-in"); success shows a toast and refreshes the list; the archived-workspaces audit funnel stays untouched.
   4. The dead-mappings warning card (orphans + guard-refused trail, display-only) renders below the mappings list on the new page and no longer appears on the Governance tab.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 103: Restore-Source Refactor — Extract the Shared Ladder
+
 **Goal**: The three duplicated staged-fetch ladders (preview, overwrite, instance restore) become ONE `resolveRestoreSource(row, source)` helper with byte-identical behavior, golden-pinned — so Phase 104 edits one place instead of three (R-5: refactor strictly precedes extension; the ladder already drifted once).
 **Depends on**: Nothing (independent of Phases 101–102; MUST precede Phase 104)
 **Requirements**: RSRC-01
@@ -71,9 +76,11 @@ Plans:
   1. Golden tests pin the extraction's behavior over the full s3 > ftp > smb ordering + local fallback, and they pass against the helper exactly as they passed against the three ladders (byte-identical: no `source` param, no behavior change).
   2. All three restore routes (preview server.js:10826/:10842/:10857, overwrite :11004-11032, instance :11134-11168) call the single helper — zero duplicated ladder logic remains.
   3. The full test suite stays at its documented baseline (2672 tests / 2 documented pre-existing failures) — the refactor introduces no regression and no new dependency.
+
 **Plans**: TBD
 
 ### Phase 104: Restore-Source Backend — `source` Param & Probe Route
+
 **Goal**: Operators can restore from an explicitly chosen mirror source (s3/ftp/smb/local), with the choice validated against run mirror flags and an on-demand availability probe — server-side truth, no live probing in the list GET.
 **Depends on**: Phase 103 (extraction-before-extension, R-5)
 **Requirements**: RSRC-02, RSRC-03
@@ -82,9 +89,11 @@ Plans:
   2. An invalid or not-mirrored source yields a keyed refusal (`restoreSourceNotMirrored`/`restoreSourceUnavailable` classes) in all 5 locales; no new stage enums — detail lives in error text + audit.
   3. The restore payload surfaces `sources[]` derived server-side from the run's mirror flags, restricted to enabled destinations per the dormant-slot contract.
   4. A dedicated throttled availability-check POST probes the chosen destination via the existing probeS3/probeFtp/probeSmb seams — the backups list GET never probes (D-89-14), and probing never mutates run state.
+
 **Plans**: TBD
 
 ### Phase 105: Restore-Source SPA + OIDC Linking Docs
+
 **Goal**: Operators pick a restore source in the dialog with honest per-source availability feedback, and the OIDC linking documentation tells the truth about `OIDC_TRUST_TENANT_EMAIL` and the Azure group-claim setup that feeds the mappings page.
 **Depends on**: Phase 104 (restore UI), Phase 102 (docs' "copy the group Object-ID" step pairs with the mappings paste form)
 **Requirements**: RSRC-04, OIDCDOC-01, OIDCDOC-02, OIDCDOC-03
@@ -94,6 +103,7 @@ Plans:
   3. DEPLOY.md's "Linking policy" section leads with `OIDC_TRUST_TENANT_EMAIL=true` for Azure AD work/school tenants, pins the guest carve-out (acct=1 / external idp still requires the literal claim), and includes a symptom→cause table — every claim verified against server.js:6673-6715, not memory.
   4. DEPLOY.md Azure setup steps document `groupMembershipClaims: "ApplicationGroup"` (assigned-groups-only semantics), assigning the Entra group to the Enterprise Application, and where to copy the group Object-ID GUID for the mappings page.
   5. .env.example's `OIDC_TRUST_TENANT_EMAIL` comment states the why (Azure AD work/school tokens omit the claim), the guest carve-out, and points to the DEPLOY.md section.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -110,7 +120,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 101. Mappings Backend — Routes & Funnels | 0/? | Not started | - |
+| 101. Mappings Backend — Routes & Funnels | 1/1 | In Progress|  |
 | 102. Mappings SPA — Entra ID Mappings Page | 0/? | Not started | - |
 | 103. Restore-Source Refactor — Shared Ladder | 0/? | Not started | - |
 | 104. Restore-Source Backend — Source & Probe | 0/? | Not started | - |
