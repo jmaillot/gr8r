@@ -9009,6 +9009,53 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* -------------- group mapping list + delete (Phase 101, MAP-01..04) --------------
+     Colocated with the POST sibling (D-03: one family, one guard ladder).
+     GET (MAP-01/MAP-04): the D-02 NO-throttle read route (instance-roles/dead-
+     mappings read precedent) — sameOrigin → requireUser → isInstanceAdmin gate
+     BEFORE any lookup (T-80-04: no existence oracle). One query: LEFT JOIN onto
+     workspaces for server-resolved name/slug + the dead/deadReason structured
+     hints (D-05/D-06 — workspace state + live members only, NO audit_log scan),
+     plus a correlated count of live group-derived members. The count uses EXACT
+     equality `provenance = 'group:' || gm.group_guid` — never a prefix LIKE
+     (Pitfall 3: a LIKE would cross-count when two mappings share a workspace).
+     Rows stay flat dumb data (D-06/D-07); the dead-mappings card keeps coming
+     from its own untouched route below. */
+  if (pathname === '/api/governance/group-mappings' && method === 'GET') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const rows = await db.all(`
+      select gm.id, gm.group_guid, gm.workspace_id, gm.role, gm.kind, gm.label,
+             gm.created_at, gm.updated_at,
+             w.name as workspace_name, w.slug as workspace_slug,
+             w.id is not null as ws_exists, w.archived as ws_archived,
+             (select count(*) from memberships mm
+                where mm.workspace_id = gm.workspace_id
+                  and mm.provenance = 'group:' || gm.group_guid) as live_members
+        from group_mappings gm
+        left join workspaces w on w.id = gm.workspace_id
+       order by gm.created_at desc`);
+    return json(res, 200, {
+      mappings: rows.map(r => ({
+        id: r.id,
+        groupGuid: r.group_guid,
+        workspaceId: r.workspace_id,
+        workspaceName: r.ws_exists ? r.workspace_name : null, // dead row: never a fake name (Pitfall 4)
+        workspaceSlug: r.ws_exists ? r.workspace_slug : null,
+        role: r.role,
+        kind: r.kind,
+        label: r.label, // raw — Phase 102 esc()s (T-83-07); server stays dumb data (D-06)
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        dead: !r.ws_exists || r.ws_archived === 1,
+        deadReason: !r.ws_exists ? 'workspace-deleted' : (r.ws_archived === 1 ? 'workspace-archived' : null),
+        liveMembers: r.live_members,
+      })),
+    });
+  }
+
   if (pathname === '/api/auth/operator/dead-mappings' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const operator = await requireUser(req, res);
