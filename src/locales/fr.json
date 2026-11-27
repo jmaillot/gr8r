@@ -2427,5 +2427,6 @@
   "page.backup.uploadedRestore": "Archive envoyée — vérifie-la avant de restaurer",
   "err.restoreUploadName": "Fournis une archive de sauvegarde .tar.gz",
   "err.restoreUploadInvalid": "Ce fichier n'est pas une archive de sauvegarde projects-studio valide",
-  "err.restoreUploadFailed": "L'envoi de l'archive a échoué"
+  "err.restoreUploadFailed": "L'envoi de l'archive a échoué",
+  "restore.alert.done.project.subject": "Restauration terminée : projet « {name} »"
 }

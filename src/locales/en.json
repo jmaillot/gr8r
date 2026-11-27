@@ -2387,5 +2387,6 @@
   "page.backup.uploadedRestore": "Archive uploaded — review it before restoring",
   "err.restoreUploadName": "Provide a .tar.gz backup archive",
   "err.restoreUploadInvalid": "Not a valid projects-studio backup archive",
-  "err.restoreUploadFailed": "The archive upload failed"
+  "err.restoreUploadFailed": "The archive upload failed",
+  "restore.alert.done.project.subject": "Restore completed: project “{name}”"
 }

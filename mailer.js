@@ -690,7 +690,17 @@ function buildRestoreAlertMessage(config, msg) {
     const v = tFor(locale, key, vars);
     return v === key ? null : v;
   };
-  const subjectKey = failed ? 'restore.alert.failed.subject' : 'restore.alert.done.subject';
+  const subjectKey = failed
+    ? 'restore.alert.failed.subject'
+    : msg.scopeKind === 'project'
+      ? 'restore.alert.done.project.subject'
+      : 'restore.alert.done.subject';
+  /* UAT 2026-11-27 (owner: a project restore email read as if the workspace
+     itself was restored): the copy matches the real scope — a project
+     restore lands in a NEW workspace holding the project; an overwrite
+     replaces in place. The SUBJECT names the project too (the workspace
+     name alone read as if the workspace was restored). */
+  const subjectVars = msg.scopeKind === 'project' && text(msg.projectName) ? { name: text(msg.projectName) } : { name: finalName || runId };
   /* UAT 2026-11-27 (owner: a project restore email read as if the workspace
      itself was restored): the copy matches the real scope — a project
      restore lands in a NEW workspace holding the project; an overwrite
@@ -707,14 +717,15 @@ function buildRestoreAlertMessage(config, msg) {
     : { name: finalName || runId };
   const frame = {
     greeting: tr('notif.email.greeting'),
-    subject: tr(subjectKey, { name: finalName || runId }),
+    subject: tr(subjectKey, subjectVars),
     sentence: tr(bodyKey, bodyVars),
     footer: tr('notif.email.body.footer'),
   };
   if (!frame.greeting || !frame.subject || !frame.sentence || !frame.footer) {
     /* EN fallback literals — the interim copy until plan 06's locale commit */
+    const subjectName = subjectVars.name;
     frame.greeting = 'Hi,';
-    frame.subject = failed ? `Restore failed: ${finalName || runId}` : `Restore completed: ${finalName || runId}`;
+    frame.subject = failed ? `Restore failed: ${finalName || runId}` : msg.scopeKind === 'project' ? `Restore completed: project ${subjectName}` : `Restore completed: ${subjectName}`;
     frame.sentence = failed
       ? `The restore run${finalName ? ` for "${finalName}"` : ''} failed. Check the restore history for details.`
       : msg.scopeKind === 'project'

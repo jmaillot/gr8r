@@ -10392,9 +10392,16 @@ async function handleApi(req, res, url) {
       return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
     }
     const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?', [backupRunId]);
-    if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
+    /* UAT 2026-11-27 (owner): a ROTATED row (status 'deleted' — the local
+       archive was pruned) is still restorable when a remote mirror survives
+       (smb/ftp/s3 flag). The gate admits succeeded + deleted; the REAL
+       authority is the archive resolution in runRestore (local fs → the
+       surviving flag's staged fetch, D-89-14 run-row truth). A deleted row
+       with NO surviving mirror still refuses keyed here — the honest
+       restoreArchiveMissing. */
+    if (!row || !['succeeded', 'deleted'].includes(row.status) || !row.sha256 || !row.filename) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
     }
     let scope = null;
     try {
@@ -10506,9 +10513,16 @@ async function handleApi(req, res, url) {
       return fail(res, 400, 'confirmPhraseMismatch', 'Confirmation phrase does not match');
     }
     const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?', [backupRunId]);
-    if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
+    /* UAT 2026-11-27 (owner): a ROTATED row (status 'deleted' — the local
+       archive was pruned) is still restorable when a remote mirror survives
+       (smb/ftp/s3 flag). The gate admits succeeded + deleted; the REAL
+       authority is the archive resolution in runRestore (local fs → the
+       surviving flag's staged fetch, D-89-14 run-row truth). A deleted row
+       with NO surviving mirror still refuses keyed here — the honest
+       restoreArchiveMissing. */
+    if (!row || !['succeeded', 'deleted'].includes(row.status) || !row.sha256 || !row.filename) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
     }
     let scope = null;
     try {
@@ -10627,9 +10641,16 @@ async function handleApi(req, res, url) {
       return fail(res, 400, 'confirmPhraseMismatch', targetProjectId ? 'The typed name does not match the target project' : 'The typed name does not match the target workspace');
     }
     const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?', [backupRunId]);
-    if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
+    /* UAT 2026-11-27 (owner): a ROTATED row (status 'deleted' — the local
+       archive was pruned) is still restorable when a remote mirror survives
+       (smb/ftp/s3 flag). The gate admits succeeded + deleted; the REAL
+       authority is the archive resolution in runRestore (local fs → the
+       surviving flag's staged fetch, D-89-14 run-row truth). A deleted row
+       with NO surviving mirror still refuses keyed here — the honest
+       restoreArchiveMissing. */
+    if (!row || !['succeeded', 'deleted'].includes(row.status) || !row.sha256 || !row.filename) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
     }
     let scope = null;
     try {

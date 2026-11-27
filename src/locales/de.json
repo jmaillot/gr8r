@@ -2387,5 +2387,6 @@
   "page.backup.uploadedRestore": "Archiv hochgeladen — vor der Wiederherstellung prüfen",
   "err.restoreUploadName": "Bitte ein .tar.gz-Backup-Archiv angeben",
   "err.restoreUploadInvalid": "Dies ist kein gültiges projects-studio-Backup-Archiv",
-  "err.restoreUploadFailed": "Das Hochladen des Archivs ist fehlgeschlagen"
+  "err.restoreUploadFailed": "Das Hochladen des Archivs ist fehlgeschlagen",
+  "restore.alert.done.project.subject": "Wiederherstellung abgeschlossen: Projekt „{name}“"
 }

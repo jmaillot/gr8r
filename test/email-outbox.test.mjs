@@ -543,4 +543,26 @@ test('89-06: the restore.alert.* catalogue copy renders — the plan-06 locale h
        since 87-04), not the builder's interim EN fallback literal. */
     assert.ok(body.includes('notification settings'), 'the generic catalogue footer renders');
   }
+  /* UAT 2026-11-27 (owner): a project restore's SUBJECT names the project —
+     "Restore completed: project Exchange", not the workspace alone. */
+  const proj = buildRestoreAlertMessage(config, {
+    to: 'op@test.local',
+    outcome: 'done',
+    runId: 'run-proj-copy',
+    finalName: 'Prod',
+    scopeKind: 'project',
+    projectName: 'Exchange',
+    locale: null,
+  });
+  /* RFC 2047 decode — a non-ASCII subject (the typographic quotes) travels
+     as encoded-words; the assertion reads the DECODED subject. */
+  const subjectOf = m =>
+    m.data.match(/^Subject: (.*)$/m)[1]
+      .split(/(?==\?UTF-8\?B\?)/)
+      .map(part => (/^=\?UTF-8\?B\?/.test(part) ? Buffer.from(part.match(/\?B\?([^?]*)\?=/)[1], 'base64').toString('utf8') : part))
+      .join('')
+      .trim();
+  assert.ok(subjectOf(proj).includes('project “Exchange”'), 'the project subject names the PROJECT');
+  const projBody = decoded(proj);
+  assert.ok(projBody.includes('live in the new workspace “Prod”'), 'the body still names the receiving workspace');
 });

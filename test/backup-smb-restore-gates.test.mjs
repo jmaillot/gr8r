@@ -108,6 +108,16 @@ test('server.js: backupRun carries smb_uploaded into both units', () => {
   assert.equal((s.match(/smb_uploaded: row\.smb_uploaded/g) || []).length, 3, 'all three triggers forward the flag');
 });
 
+test('server.js: the restore archive gates admit ROTATED rows (status deleted) — the surviving smb/ftp/s3 mirror is restorable after local rotation (UAT 2026-11-27)', () => {
+  const s = serverSrc();
+  /* The three archive-resolution gates (preview counted separately) read
+     `!['succeeded','deleted'].includes(row.status)` — a rotated row with a
+     surviving mirror flag flows into runRestore's staged-fetch legs; a
+     rotated row with NO surviving mirror still refuses keyed. */
+  assert.equal((s.match(/!\['succeeded', 'deleted'\]\.includes\(row\.status\)/g) || []).length, 3, 'import_new + overwrite + preview admit rotated rows');
+  assert.ok(!s.includes("row.status !== 'succeeded' || !row.sha256"), 'no succeeded-only archive gate remains');
+});
+
 test('zero badge code: destLocation still reads smb_uploaded via the 96-02 ordered scan — nothing new added', () => {
   const s = serverSrc();
   const i = s.indexOf("if (r.smb_uploaded === 1) return 'smb'");

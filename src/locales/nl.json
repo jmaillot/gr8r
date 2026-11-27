@@ -2387,5 +2387,6 @@
   "page.backup.uploadedRestore": "Archief geüpload — controleer het voordat je herstelt",
   "err.restoreUploadName": "Geef een .tar.gz back-uparchief op",
   "err.restoreUploadInvalid": "Dit is geen geldig projects-studio back-uparchief",
-  "err.restoreUploadFailed": "Het uploaden van het archief is mislukt"
+  "err.restoreUploadFailed": "Het uploaden van het archief is mislukt",
+  "restore.alert.done.project.subject": "Herstel voltooi: project „{name}”"
 }
