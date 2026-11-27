@@ -23,10 +23,10 @@
 
 ### Mappings UI (MAPUI)
 
-- [ ] **MAPUI-01**: Instance nav gains an "Entra ID Mappings" entry visible only when `/api/config` reports `oidcEnabled: true` (D-10 server ground truth); the page is a lazy SPA route whose real gate is the server 403 (non-operator deep-link gets the governance-style fullstate — nav gate is cosmetic, D-11).
-- [ ] **MAPUI-02**: The page lists mappings (group label + GUID mono, workspace name, role badge, timestamps) and offers a create form: GUID paste field (canonicalizing), label field (≤200 chars, esc()d at every render), workspace picker fed by the operator workspaces listing, role picker owner/admin/member — with keyed err toasts for every refusal code.
-- [ ] **MAPUI-03**: Delete rides an inline-confirm (D-90 pattern) whose copy states the lazy revocation semantics verbatim ("members will lose access at their next Microsoft sign-in"); success toast + list refresh; the archived workspaces audit funnel stays untouched.
-- [ ] **MAPUI-04**: The dead-mappings warning card (orphans + guard-refused trail) moves from the Governance tab to the Entra ID Mappings page (same data source, same display-only discipline, no data-a in the card) — Governance loses the card, the new page gains it below the mappings list.
+- [x] **MAPUI-01**: Instance nav gains an "Entra ID Mappings" entry visible only when `/api/config` reports `oidcEnabled: true` (D-10 server ground truth); the page is a lazy SPA route whose real gate is the server 403 (non-operator deep-link gets the governance-style fullstate — nav gate is cosmetic, D-11).
+- [x] **MAPUI-02**: The page lists mappings (group label + GUID mono, workspace name, role badge, timestamps) and offers a create form: GUID paste field (canonicalizing), label field (≤200 chars, esc()d at every render), workspace picker fed by the operator workspaces listing, role picker owner/admin/member — with keyed err toasts for every refusal code.
+- [x] **MAPUI-03**: Delete rides an inline-confirm (D-90 pattern) whose copy states the lazy revocation semantics verbatim ("members will lose access at their next Microsoft sign-in"); success toast + list refresh; the archived workspaces audit funnel stays untouched.
+- [x] **MAPUI-04**: The dead-mappings warning card (orphans + guard-refused trail) moves from the Governance tab to the Entra ID Mappings page (same data source, same display-only discipline, no data-a in the card) — Governance loses the card, the new page gains it below the mappings list.
 
 ### Restore-source selection (RSRC)
 

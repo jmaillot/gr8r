@@ -29,7 +29,7 @@
 ## Phases
 
 - [x] **Phase 101: Mappings Backend — Routes & Funnels** - Operator GET list + DELETE routes for group_mappings riding the existing guard ladder and GUID/role funnels, with dead-mapping hint data surfaced server-side
-- [ ] **Phase 102: Mappings SPA — Entra ID Mappings Page** - New lazy Instance nav page for mappings CRUD with honest delete semantics and the relocated dead-mappings warning card
+- [x] **Phase 102: Mappings SPA — Entra ID Mappings Page** - New lazy Instance nav page for mappings CRUD with honest delete semantics and the relocated dead-mappings warning card
 - [ ] **Phase 103: Restore-Source Refactor — Extract the Shared Ladder** - The ×3 duplicated staged-fetch ladders collapse into ONE `resolveRestoreSource(row, source)` helper, byte-identical and golden-pinned — no `source` param yet (R-5)
 - [ ] **Phase 104: Restore-Source Backend — `source` Param & Probe Route** - Restore routes accept an explicit source validated against mirror flags; `sources[]` server-derived; dedicated throttled availability-check POST
 - [ ] **Phase 105: Restore-Source SPA + OIDC Linking Docs** - Restore dialog source picker with on-demand availability UI, plus the DEPLOY.md/.env.example OIDC linking-policy rewrite
