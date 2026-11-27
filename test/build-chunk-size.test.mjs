@@ -123,3 +123,10 @@ test('the build emits a lazy template-ui chunk', () => {
   const chunks = chunksByPrefix('template-ui');
   assert.ok(chunks.length > 0, `no template-ui-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
 });
+
+/* 102-01 (MAPUI-01): the Entra ID Mappings surface lazy-loads its own chunk
+   (layout.js P.mappings dynamic import) — the entry chunk never carries it. */
+test('the build emits a lazy mappings chunk', () => {
+  const chunks = chunksByPrefix('mappings');
+  assert.ok(chunks.length > 0, `no mappings-*.js chunk in assets:\n${jsChunks().map(c => c.name).join('\n')}`);
+});

@@ -4727,11 +4727,9 @@ export async function refreshGovernanceWorkspaces() {
   if (res.ok) {
     S.ui.govWs = res.data.workspaces || [];
     S.ui.govWsErr = null;
-    /* 83-02 (D-09/D-10): the dead-mapping payload rides the same fill —
-       advisory only, so a refusal simply hides the warning card, never an
-       error state. Re-checked against the sequence after the await. */
-    const dead = await api.operatorDeadMappings();
-    if (my === govFillSeq) S.ui.govDead = dead.ok ? { orphans: dead.data.orphans || [], trail: dead.data.trail || [] } : null;
+    /* 102-01 (D-06): the dead-mappings fetch MOVED into refreshMappings —
+       the card renders only on the Mappings page now; this refresh keeps
+       only workspaces (Pitfall 2: the fetch and the card moved together). */
   } else {
     /* D-28: the central intercept owns the 401 teardown. Any other refusal
        surfaces through the page's honest fullstate — never a blank table. */
@@ -4781,6 +4779,11 @@ export async function refreshMappings() {
      error state. Re-checked against the sequence after the await. */
   const ws = await api.operatorWorkspaces();
   if (my === mapFillSeq) S.ui.mapWs = ws.ok ? ws.data.workspaces || [] : null;
+  /* 102-01 (D-06): the dead-mappings payload rides this fill — advisory
+     only, so a refusal simply hides the warning card, never an error
+     state. Re-checked against the sequence after the await. */
+  const dead = await api.operatorDeadMappings();
+  if (my === mapFillSeq) S.ui.govDead = dead.ok ? { orphans: dead.data.orphans || [], trail: dead.data.trail || [] } : null;
   render();
   return S.ui.mapRows;
 }
@@ -6175,7 +6178,8 @@ A.govEditSave = async () => {
     S.ui.govEditSuggest = null;
     closeModal();
     /* WR-83-01: reconcile the operator's own client workspace state BEFORE the
-       governance refresh — the listing refresh writes only S.ui.govWs/govDead;
+       governance refresh — the listing refresh writes only S.ui.govWs (the
+       dead-mappings fetch moved to refreshMappings, 102-01 D-06);
        without this the loaded workspace keeps the dead slug and the next
        workspace-scoped call 404s. */
     api.renameWorkspaceLocal(ws.id, { name, slug });

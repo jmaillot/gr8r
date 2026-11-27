@@ -136,3 +136,47 @@ test('pageMappings renders the quiet empty state and the in-render kick', () => 
   assert.match(p, /empty\('link', t\('page\.mappings\.emptyTitle'\), t\('page\.mappings\.emptyBody'\)/, 'the empty-state hint is missing');
   assert.match(p, /if \(!S\.ui\.mapRows && !S\.ui\.mapErr\) refreshMappings\(\);/, 'the in-render kick is missing');
 });
+
+/* =====================================================================
+   102-01 Task 3: the STRICT dead-mappings card move (D-06/D-07).
+   ===================================================================== */
+
+/* (a) governance loses the card and the dead-mappings fetch entirely */
+test('governance.js keeps zero dead-card/dead-fetch references (strict move, D-06)', () => {
+  const g = src('src/pages/governance.js');
+  assert.doesNotMatch(g, /govDeadCard/, 'governance.js still references govDeadCard');
+  assert.doesNotMatch(g, /operatorDeadMappings|dead-mappings['"]/, 'governance.js still references the dead-mappings fetch');
+  const a = src('src/actions/actions.js');
+  const govRefresh = a.match(/export async function refreshGovernanceWorkspaces\(\) \{[\s\S]*?\n\}/);
+  assert.ok(govRefresh, 'refreshGovernanceWorkspaces moved');
+  assert.doesNotMatch(govRefresh[0], /operatorDeadMappings/, 'the dead fetch is still entangled with the governance refresh (Pitfall 2)');
+  /* the fetch moved INTO refreshMappings */
+  const mapRefresh = a.match(/export async function refreshMappings\(\) \{[\s\S]*?\n\}/);
+  assert.ok(mapRefresh, 'refreshMappings moved');
+  assert.match(mapRefresh[0], /operatorDeadMappings/, 'the dead fetch did not move into refreshMappings');
+  assert.match(mapRefresh[0], /S\.ui\.govDead = /, 'the dead payload is not staged in S.ui.govDead');
+});
+
+/* (b) the moved card is display-only — no data-a in the card region (D-06/D-07) */
+test('the moved dead card carries no data-a attributes (display-only)', () => {
+  const p = src('src/pages/mappings.js');
+  const card = p.match(/83-02 DEAD-MAPPING WARNING CARD[\s\S]*?^};/m);
+  assert.ok(card, 'the moved govDeadCard block is missing from mappings.js');
+  assert.doesNotMatch(card[0], /data-a=/, 'the dead card carries interactive controls');
+  /* FIRST-colon split logic moved intact */
+  assert.match(card[0], /splitFirst/, 'the FIRST-colon split logic did not move intact');
+  /* rendered BELOW the list */
+  assert.match(p, /pageMappings\(\)[\s\S]*govDeadCard\(\)/, 'the card is not rendered from the page body');
+});
+
+/* (c) the renamed keys: page.mappings.dead* ×5, page.governance.dead* nowhere */
+test('page.mappings.dead* keys exist ×5 and page.governance.dead* keys exist in NO catalogue', () => {
+  const keys = ['page.mappings.deadTitle', 'page.mappings.deadLead', 'page.mappings.deadOrphans', 'page.mappings.deadTrail'];
+  for (const k of keys) {
+    assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+  const deadPrefix = /^page\.governance\.dead/;
+  for (const [name, cat] of [['en', en], ['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
+    assert.ok(!Object.keys(cat).some(k => deadPrefix.test(k)), `${name} still carries a page.governance.dead* key`);
+  }
+});

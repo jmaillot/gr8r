@@ -106,7 +106,6 @@ export function pageGovernance() {
 
   return `<div class="page wide" style="max-width:1200px">
     <div class="ph"><div><h1>${t('nav.route.governance')}</h1><p>${t('page.governance.subtitle')}</p></div></div>
-    ${api.user?.isInstanceAdmin ? govDeadCard() : ''}
     <div class="sblock">
       <h2>${t('page.governance.wsTitle')}</h2>
       <p class="hint">${t('page.governance.lead')}</p>
@@ -295,7 +294,8 @@ export function roleTabView(role) {
 /* D-32: the recent-activity trail — rendered ONLY from the server-supplied
    `recent` payload (the append-only audit_log, newest first, capped at 8),
    never reconstructed client-side. Bounded like the dead-mappings trail
-   (govDeadCard): 8 entries max, no pagination. A missing trail renders
+   (now the Mappings page's card, 102-01 D-06): 8 entries max, no
+   pagination. A missing trail renders
    nothing — no skeleton, no fake rows (honest nulls, D-34 doctrine). */
 const roleVerb = a => t(a === 'instance_role_granted' ? 'page.governance.rolesVerbGranted' : 'page.governance.rolesVerbRevoked');
 function recentHtml() {
@@ -368,39 +368,12 @@ export function govRoleBody() {
 }
 
 /* =====================================================================
-   83-02 DEAD-MAPPING WARNING CARD (D-08/D-10/D-11, T-83-07)
-   Operator-gated, DISPLAY-ONLY: lists orphaned group_mappings rows and
-   the Phase 82 refused-guard audit trail. Rendered ONLY when the
-   dead-mappings payload carries at least one item — zero dead items →
-   the markup is absent entirely, no off-line shell (D-10). Every value
-   is esc()d at FIRST render — group_mappings.label is an opaque carried
-   value (the Phase 80 XSS watch-item) and the trail action string is
-   split on the FIRST colon only (D-08). No data-a anywhere in the card
-   (D-11: cleanup stays deferred with the mapping editor).
+   83-02 DEAD-MAPPING WARNING CARD — MOVED (102-01, D-06/D-07): the card
+   renders ONLY on the Mappings page now (src/pages/mappings.js, below
+   the list); Governance keeps zero dead-card/dead-fetch references and
+   refreshGovernanceWorkspaces sheds the dead-mappings fetch (Pitfall 2:
+   the fetch and the card moved together).
    ===================================================================== */
-const govDeadCard = () => {
-  const dead = S.ui.govDead;
-  if (!dead) return '';
-  const orphans = dead.orphans || [];
-  const trail = dead.trail || [];
-  if (!orphans.length && !trail.length) return '';
-  /* FIRST-colon-only split (D-08/Pitfall 7): `group_<delta>:group:<guid>:<reason>`
-     → delta | group | guid | reason. A second first-colon split peels guid
-     from reason — a colon inside a reason never corrupts the split. */
-  const splitFirst = s => {
-    const [head, tail] = String(s ?? '').split(/:(.*)/s);
-    return [head || '', tail || ''];
-  };
-  const orphanRow = o =>
-    `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge amber">${esc(o.kind || '')}</span><span class="t trunc">${esc(o.label || '')}</span><span class="faint mono trunc">${esc(o.group_guid || '')} → ${esc(o.workspace_id || '')}</span></div></div></div>`;
-  const trailRow = r => {
-    const [delta, rest] = splitFirst(r.action);
-    const [ns, tail2] = splitFirst(rest);
-    const [guid, reason] = splitFirst(tail2);
-    return `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(delta)}</span><span class="faint">${esc(ns)}</span><span class="mono trunc">${esc(guid)}</span><span class="faint trunc">${esc(reason)}</span><span class="faint">${esc(ago(r.created_at))}</span></div></div></div>`;
-  };
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.governance.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.governance.deadLead')}</p><div class="panel"><div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.deadOrphans')}</div>${orphans.map(orphanRow).join('')}</div><div><div class="label" style="margin-bottom:6px">${t('page.governance.deadTrail')}</div>${trail.map(trailRow).join('')}</div></div></div>`;
-};
 
 /* =====================================================================
    83-02 RENAME MODAL (D-01/D-02/D-07, T-83-07) — mirrors govOrphanBody:

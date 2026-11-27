@@ -65,8 +65,48 @@ export function pageMappings() {
     <div class="sblock">
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
+    ${api.user?.isInstanceAdmin ? govDeadCard() : ''}
   </div>`;
 }
+
+/* =====================================================================
+   83-02 DEAD-MAPPING WARNING CARD (D-06/D-07/D-08/D-10/D-11, T-83-07)
+   MOVED WHOLESALE from governance.js (102-01): renders ONLY on the
+   Mappings page, BELOW the list. Operator-gated, DISPLAY-ONLY: lists
+   orphaned group_mappings rows and the Phase 82 refused-guard audit
+   trail. Rendered ONLY when the dead-mappings payload carries at least
+   one item — zero dead items → the markup is absent entirely, no
+   off-line shell (D-10). Every value is esc()d at FIRST render —
+   group_mappings.label is an opaque carried value (the Phase 80 XSS
+   watch-item) and the trail action string is split on the FIRST colon
+   only (D-08). No data-a anywhere in the card (D-11: cleanup stays
+   deferred with the mapping editor). Content keys unchanged apart from
+   the namespace rename page.governance.dead* → page.mappings.dead*
+   (D-07: zero new card content keys).
+   ===================================================================== */
+const govDeadCard = () => {
+  const dead = S.ui.govDead;
+  if (!dead) return '';
+  const orphans = dead.orphans || [];
+  const trail = dead.trail || [];
+  if (!orphans.length && !trail.length) return '';
+  /* FIRST-colon-only split (D-08/Pitfall 7): `group_<delta>:group:<guid>:<reason>`
+     → delta | group | guid | reason. A second first-colon split peels guid
+     from reason — a colon inside a reason never corrupts the split. */
+  const splitFirst = s => {
+    const [head, tail] = String(s ?? '').split(/:(.*)/s);
+    return [head || '', tail || ''];
+  };
+  const orphanRow = o =>
+    `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge amber">${esc(o.kind || '')}</span><span class="t trunc">${esc(o.label || '')}</span><span class="faint mono trunc">${esc(o.group_guid || '')} → ${esc(o.workspace_id || '')}</span></div></div></div>`;
+  const trailRow = r => {
+    const [delta, rest] = splitFirst(r.action);
+    const [ns, tail2] = splitFirst(rest);
+    const [guid, reason] = splitFirst(tail2);
+    return `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(delta)}</span><span class="faint">${esc(ns)}</span><span class="mono trunc">${esc(guid)}</span><span class="faint trunc">${esc(reason)}</span><span class="faint">${esc(ago(r.created_at))}</span></div></div></div>`;
+  };
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.mappings.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.mappings.deadLead')}</p><div class="panel"><div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.mappings.deadOrphans')}</div>${orphans.map(orphanRow).join('')}</div><div><div class="label" style="margin-bottom:6px">${t('page.mappings.deadTrail')}</div>${trail.map(trailRow).join('')}</div></div></div>`;
+};
 
 /* Phase 60 (D-05): teardown registry pattern — the skeleton's stub; plan 02
    fills this with the staged inline-confirm/form state cleanup (the
