@@ -5401,7 +5401,13 @@ A.backupTaskDelete = el => {
 A.backupTaskRunNow = async el => {
   const task = (S.ui.backupTasks?.tasks || []).find(x => x?.id === el.dataset.id);
   if (!task || !task.scope) return;
-  const res = await api.backupRun(task.scope);
+  /* UAT 2026-11-26 (owner: a task's Run-now uploaded to S3 although only
+     SMB was opted in): the taskId rides the trigger wire so the destination
+     registry's per-task opt-in closures gate ALL THREE destinations —
+     R-2 parity with the scheduled arm. Without it the S3 closure treats
+     a taskId-less run as the D-88-4 manual default and uploads whenever
+     S3 is configured, ignoring the task's opt-ins. */
+  const res = await api.backupRun(task.scope, { taskId: task.id });
   if (!res.ok) {
     if (res.status === 401) return;
     return toast(tErr(res.data?.code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });

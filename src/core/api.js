@@ -463,8 +463,8 @@ export const api = {
      UUID immediately, current polls the D-19 status payload. Every refusal
      (backupManageRequired / backupRunInProgress / scopeNotFound / 429) flows
      through call()'s central handling — no bespoke error parsing here. */
-  async backupRun(scope, { signal } = {}) {
-    return call('POST', '/api/backup/runs', { scope }, { signal });
+  async backupRun(scope, extra = undefined, { signal } = {}) {
+    return call('POST', '/api/backup/runs', extra ? { scope, ...extra } : { scope }, { signal });
   },
   async backupRunCurrent({ signal } = {}) {
     return call('GET', '/api/backup/runs/current', undefined, { signal });

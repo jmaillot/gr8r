@@ -294,7 +294,11 @@ test86('the poll loop rides the seq + AbortController anti-stale pattern and sto
 
 test86('the run api methods keep the frozen call() shapes (D-16)', () => {
   const api = src86('src/core/api.js');
-  assert.match(api, /async backupRun\(scope, \{ signal \} = \{\}\) \{\s*return call\('POST', '\/api\/backup\/runs', \{ scope \}, \{ signal \}\);/, 'backupRun drifted off the frozen shape');
+  /* D-16: the trigger shape stayed frozen at { scope } — the extra param is
+     backwards-compatible: a bare call sends { scope } only; the per-task
+     Run-now (UAT 2026-11-26) sends { scope, taskId } so the destination
+     registry's per-task opt-in closures gate all three destinations. */
+  assert.match(api, /async backupRun\(scope, extra = undefined, \{ signal \} = \{\}\) \{\s*return call\('POST', '\/api\/backup\/runs', extra \? \{ scope, \.\.\.extra \} : \{ scope \}, \{ signal \}\);/, 'backupRun drifted off the frozen shape');
   assert.match(api, /async backupRunCurrent\(\{ signal \} = \{\}\) \{\s*return call\('GET', '\/api\/backup\/runs\/current', undefined, \{ signal \}\);/, 'backupRunCurrent drifted off the frozen shape');
 });
 

@@ -9876,6 +9876,33 @@ async function handleApi(req, res, url) {
       );
       return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
     }
+    /* UAT 2026-11-26 (owner: a task's Run-now uploaded to S3 although only
+       SMB was opted in): an OPTIONAL taskId rides the body — when present,
+       runExport receives it so the destination registry's per-task opt-in
+       closures (s3_enabled / ftp_enabled / smb_enabled) gate ALL THREE
+       destinations exactly like a scheduled run (98-04/100-02 R-2 parity).
+       Absent taskId = the D-88-4 manual Run backup (instance default) — its
+       S3-only posture is untouched. The id must exist; a bogus one refuses
+       keyed BEFORE the run claim (a refused attempt consumes a try). */
+    let runTaskId = null;
+    if (body?.taskId !== undefined) {
+      if (typeof body.taskId !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(body.taskId)) {
+        await db.run(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [uid(), user.id, user.id, 'backup_run_refused:scopeNotFound', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+        );
+        return fail(res, 400, 'taskNotFound', 'That backup task does not exist');
+      }
+      const taskRow = await db.get('select id, scope from backup_tasks where id = ?', [body.taskId]);
+      if (!taskRow) {
+        await db.run(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [uid(), user.id, user.id, 'backup_run_refused:scopeNotFound', 0, clientIp(req), null, user.name, user.email, user.name, user.email, now()],
+        );
+        return fail(res, 404, 'taskNotFound', 'That backup task does not exist');
+      }
+      runTaskId = body.taskId;
+    }
     /* D-10: one export at a time. The check sits immediately before the claim
        with NO await between — the claim inside runExport is synchronous before
        its first await (Pitfall 5), so the check→claim segment is atomic on the
@@ -9889,8 +9916,11 @@ async function handleApi(req, res, url) {
       return fail(res, 409, 'backupRunInProgress', 'A backup is already running');
     }
     /* Fire-and-forget: runExport claims SYNCHRONOUSLY on the call itself, so
-       the run id is readable from the state holder before the response leaves. */
-    const started = runExport(scope);
+       the run id is readable from the state holder before the response leaves.
+       runTaskId (option B, UAT 2026-11-26) routes the per-task opt-in gates —
+       trigger stays 'manual' (the history row and rotation semantics keep
+       their manual truth; only the destination opt-ins follow the task). */
+    const started = runExport(scope, runTaskId ? { taskId: runTaskId, trigger: 'manual' } : undefined);
     const runId = getRunState()?.runId;
     if (!started || !runId) {
       await db.run(
@@ -10515,7 +10545,7 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:confirmPhraseMismatch');
       return fail(res, 400, 'confirmPhraseMismatch', targetProjectId ? 'The typed name does not match the target project' : 'The typed name does not match the target workspace');
     }
-    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded from backup_runs where id = ?', [backupRunId]);
+    const row = await db.get('select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?', [backupRunId]);
     if (!row || row.status !== 'succeeded' || !row.sha256 || !row.filename) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
@@ -10559,11 +10589,18 @@ async function handleApi(req, res, url) {
     await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: projectScope ? scope.id : targetId }, trigger: 'overwrite', startedAt: now() });
     restoreOverwriteUnit({
       runId: restoreRunId,
-      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, taskId: row.task_id },
+      /* 2026-11-26 UAT (owner: overwrite restore of an smb-located run
+         answered restoreArchiveMissing): the mirror flags ride into the
+         unit and the ftp/smb configs join the seam set — the overwrite
+         pipeline now resolves rotated-away archives like import_new/DR
+         do (98-04/100-05 parity). */
+      backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, ftp_uploaded: row.ftp_uploaded, smb_uploaded: row.smb_uploaded, taskId: row.task_id },
       scope: projectScope ? { kind: 'project', id: scope.id } : { kind: 'workspace', id: targetId },
       operator: { id: user.id, email: user.email },
       targetWorkspaceId: targetId,
       targetProjectId: projectScope ? targetProjectId : undefined,
+      ftpConfig: FTP.enabled ? FTP.config() : null,
+      smbConfig: SMB.enabled ? SMB.config() : null,
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`overwrite restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:overwrite', null, projectScope ? 'project' : 'workspace');

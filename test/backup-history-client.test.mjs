@@ -85,7 +85,7 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
   }
   assert.match(actionsSrc, /api\.backupTaskToggle\(/, 'toggle rides the partial-PUT api method');
   assert.match(actionsSrc, /api\.backupTaskDelete\(/, 'delete rides the DELETE api method');
-  assert.match(actionsSrc, /api\.backupRun\(task\.scope\)/, 'per-task Run now reuses the existing Phase 86 run endpoint with the task scope');
+  assert.match(actionsSrc, /api\.backupRun\(task\.scope, \{ taskId: task\.id \}\)/, 'per-task Run now reuses the Phase 86 run endpoint with the task scope + the taskId (UAT 2026-11-26: the registry opt-in closures gate all three destinations)');
   const toggleBody = actionsSrc.slice(actionsSrc.indexOf('A.backupTaskToggle ='));
   assert.ok(toggleBody.slice(0, 700).includes('refreshBackupTasks'), 'toggle refills via refreshBackupTasks (server owns next_run_at)');
 });

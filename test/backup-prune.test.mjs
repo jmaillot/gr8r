@@ -170,15 +170,15 @@ test('remote_pruned DDL: SCHEMA declaration, pg mirror, boot ensureColumn — de
 test('remote_pruned rides all three runs SELECTs (all=1 / manual / task) — restore publishes nothing new (100-05: restore-trigger selects read the flag but never publish it)', () => {
   const s = serverSrc();
   const selects = s.split('\n').filter(l => /uploaded, ftp_uploaded, smb_uploaded/.test(l));
-  /* 2026-11-26 UAT: 7 → 10 — preview/download/verify joined the trigger
-     family with their own mirror-leg SELECTs (same flag set, still no
-     remote_pruned — restore never publishes it). */
-  assert.equal(selects.length, 10, `three runs SELECTs + delete-set + restore-list + two 100-05 restore-trigger SELECTs + three UAT mirror-leg SELECTs (${selects.length})`);
+  /* 2026-11-26 UAT: 7 → 10, then the overwrite-restore fix joined a
+     4th restore SELECT (overwrite of a local-deleted run answered
+     restoreArchiveMissing). Restore still never publishes the flag. */
+  assert.equal(selects.length, 11, `three runs SELECTs + delete-set + restore-list + two 100-05 restore-trigger SELECTs + three UAT mirror-leg SELECTs + the overwrite SELECT (${selects.length})`);
   const runsSelects = selects.filter(l => l.includes('checksum_ok'));
   assert.equal(runsSelects.length, 3, 'three runs SELECT lines carry the full history chrome');
   for (const q of runsSelects) assert.ok(q.includes('remote_pruned'), 'each runs SELECT carries remote_pruned');
   const untouched = selects.filter(l => !l.includes('checksum_ok'));
-  assert.equal(untouched.length, 7, 'the delete-set SELECT + the restore-list SELECT + the two 100-05 restore-trigger SELECTs + the three UAT mirror-leg SELECTs remain');
+  assert.equal(untouched.length, 8, 'the delete-set SELECT + the restore-list SELECT + the two 100-05 restore-trigger SELECTs + the three UAT mirror-leg SELECTs + the overwrite SELECT remain');
   assert.ok(untouched.every(l => !l.includes('remote_pruned')), 'delete-set + restore SELECTs stay free of remote_pruned (restore never publishes it)');
 });
 

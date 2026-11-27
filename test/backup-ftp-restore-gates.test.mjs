@@ -83,7 +83,7 @@ test('server.js: both restore triggers pass ftpConfig next to s3Config, sourced 
   const first = s.indexOf('ftpConfig: FTP.enabled ? FTP.config() : null');
   assert.ok(first !== -1, 'import_new trigger passes ftpConfig');
   assert.equal(s.indexOf('ftpConfig: FTP.enabled ? FTP.config() : null', first + 1) !== -1, true, 'DR trigger passes ftpConfig too');
-  assert.equal((s.match(/ftpConfig: FTP\.enabled \? FTP\.config\(\) : null/g) || []).length, 2, 'exactly two ftpConfig plumbing sites');
+  assert.equal((s.match(/ftpConfig: FTP\.enabled \? FTP\.config\(\) : null/g) || []).length, 3, 'exactly three ftpConfig plumbing sites (import_new + DR + overwrite)');
   const s1 = s.indexOf('s3Config: S3.enabled ? S3.config() : null');
   assert.ok(s.indexOf('ftpConfig', s1) !== -1, 'ftpConfig rides the same call site as s3Config');
 });
@@ -92,14 +92,15 @@ test('server.js: both restore-trigger selects carry ftp_uploaded', () => {
   const s = serverSrc();
   /* 2026-11-26 UAT: the count grew from 2 to 4 — the preview/download
      routes gained the same ftp mirror leg as the triggers (owner report:
-     an ftp-located row had no restore path at all). The overwrite
-     trigger still has no read-back seam — untouched. */
-  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded(, smb_uploaded)? from backup_runs where id = \?/g) || []).length, 3, 'import_new + DR + download selects read ftp_uploaded (verify carries a lighter select — same flags minus scope/status)');
+     an ftp-located row had no restore path at all). The overwrite-restore
+     fix joined a 4th select (owner report: overwrite of a local-deleted
+     run answered restoreArchiveMissing). */
+  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded(, smb_uploaded)? from backup_runs where id = \?/g) || []).length, 4, 'import_new + DR + download + overwrite selects read ftp_uploaded (verify carries a lighter select — same flags minus scope/status)');
 });
 
 test('server.js: backupRun carries ftp_uploaded into both units', () => {
   const s = serverSrc();
-  assert.equal((s.match(/ftp_uploaded: row\.ftp_uploaded/g) || []).length, 2, 'both triggers forward the flag');
+  assert.equal((s.match(/ftp_uploaded: row\.ftp_uploaded/g) || []).length, 3, 'all three triggers forward the flag');
 });
 
 test('zero badge code: destLocation still reads ftp_uploaded via the 96-02 ordered scan — nothing new added', () => {
@@ -107,7 +108,7 @@ test('zero badge code: destLocation still reads ftp_uploaded via the 96-02 order
   const i = s.indexOf("if (r.ftp_uploaded === 1) return 'ftp'");
   assert.ok(i !== -1, 'the ordered scan arm is the badge source');
   const r = restoreSrc();
-  assert.equal((r.match(/ftp_uploaded/g) || []).length, 4, 'restore.js mentions ftp_uploaded only at the gates (2 gate conditions + 2 doc comments)');
+  assert.equal((r.match(/ftp_uploaded/g) || []).length, 5, 'restore.js mentions ftp_uploaded only at the gates (3 gate conditions + 2 doc comments)');
 });
 
 test('the 97 client fetchToStaged enforces sha256 (T-98-06 — no unverified bytes reach restore)', () => {

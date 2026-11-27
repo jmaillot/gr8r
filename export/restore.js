@@ -1614,8 +1614,37 @@ export async function restoreOverwriteUnit(opts = {}) {
      a kind mismatch still refuses restoreTargetMismatch first). */
 
   /* fetching: local archive resolution (the route's start row already sits
-     at stage 'fetching'; the unit refuses keyed when the archive is gone). */
-  const archivePath = opts.archivePath ?? (backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null);
+     at stage 'fetching'; the unit refuses keyed when the archive is gone).
+     2026-11-26 UAT (owner: overwrite restore of an smb-located run answered
+     restoreArchiveMissing): the ftp/smb read-back twins join the overwrite
+     pipeline — GUARDED like the DR twins (the seam throw routes through
+     failWith so the funnel releases the restore_lock), sha256 enforced
+     inside each staged fetch (T-98-06/T-100-10). Key derivation mirrors
+     the upload arms (task-prefix + filename). Local-first ordering
+     preserved — these legs are additive below it. */
+  let archivePath = opts.archivePath ?? (backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null);
+  let stagedTmp = null;
+  const dropStagedTmp = () => { if (stagedTmp) { try { fs.rmSync(stagedTmp, { force: true }); } catch { /* best-effort */ } stagedTmp = null; } };
+  if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
+    try {
+      const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    } catch (err) {
+      dropStagedTmp();
+      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
+    }
+  }
+  if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
+    try {
+      const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    } catch (err) {
+      dropStagedTmp();
+      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`));
+    }
+  }
   if (!archivePath || !fs.existsSync(archivePath)) {
     return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
   }
@@ -1651,6 +1680,7 @@ export async function restoreOverwriteUnit(opts = {}) {
   const cleanup = () => {
     if (stagingDir) rmStaging(stagingDir);
     if (swapDir) rmStaging(swapDir);
+    dropStagedTmp(); // D-89-16 parity: a fetched staged archive never outlives the run
   };
 
   /* Engine-side scope-kind re-check — AFTER the snapshot (the net is

@@ -89,7 +89,7 @@ test('server.js: both restore triggers pass smbConfig next to ftpConfig, sourced
   const first = s.indexOf('smbConfig: SMB.enabled ? SMB.config() : null');
   assert.ok(first !== -1, 'import_new trigger passes smbConfig');
   assert.equal(s.indexOf('smbConfig: SMB.enabled ? SMB.config() : null', first + 1) !== -1, true, 'DR trigger passes smbConfig too');
-  assert.equal((s.match(/smbConfig: SMB\.enabled \? SMB\.config\(\) : null/g) || []).length, 2, 'exactly two smbConfig plumbing sites');
+  assert.equal((s.match(/smbConfig: SMB\.enabled \? SMB\.config\(\) : null/g) || []).length, 3, 'exactly three smbConfig plumbing sites (import_new + DR + overwrite)');
   const f1 = s.indexOf('ftpConfig: FTP.enabled ? FTP.config() : null');
   assert.ok(s.indexOf('smbConfig', f1) !== -1, 'smbConfig rides the same call site as ftpConfig');
 });
@@ -98,14 +98,14 @@ test('server.js: both restore-trigger selects carry smb_uploaded', () => {
   const s = serverSrc();
   /* 2026-11-26 UAT: count grew from 2 to 4 — preview/download joined the
      triggers with the smb mirror leg (owner report: an smb-located run
-     answered restoreArchiveMissing). The overwrite trigger still has no
-     read-back seam — untouched. */
-  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = \?/g) || []).length, 3, 'import_new + DR + download selects read smb_uploaded (verify carries a lighter select — same flags minus scope/status)');
+     answered restoreArchiveMissing). The overwrite-restore fix joined a
+     4th select (overwrite of a local-deleted run). */
+  assert.equal((s.match(/select id, task_id, scope, status, sha256, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = \?/g) || []).length, 4, 'import_new + DR + download + overwrite selects read smb_uploaded (verify carries a lighter select — same flags minus scope/status)');
 });
 
 test('server.js: backupRun carries smb_uploaded into both units', () => {
   const s = serverSrc();
-  assert.equal((s.match(/smb_uploaded: row\.smb_uploaded/g) || []).length, 2, 'both triggers forward the flag');
+  assert.equal((s.match(/smb_uploaded: row\.smb_uploaded/g) || []).length, 3, 'all three triggers forward the flag');
 });
 
 test('zero badge code: destLocation still reads smb_uploaded via the 96-02 ordered scan — nothing new added', () => {
@@ -113,7 +113,7 @@ test('zero badge code: destLocation still reads smb_uploaded via the 96-02 order
   const i = s.indexOf("if (r.smb_uploaded === 1) return 'smb'");
   assert.ok(i !== -1, 'the ordered scan arm is the badge source');
   const r = restoreSrc();
-  assert.equal((r.match(/smb_uploaded/g) || []).length, 4, 'restore.js mentions smb_uploaded only at the gates (2 gate conditions + 2 doc comments)');
+  assert.equal((r.match(/smb_uploaded/g) || []).length, 5, 'restore.js mentions smb_uploaded only at the gates (3 gate conditions + 2 doc comments)');
 });
 
 test('the 99 client fetchSmbToStaged enforces sha256 (T-100-10 — no unverified bytes reach restore)', () => {
@@ -127,7 +127,7 @@ test('the 99 client fetchSmbToStaged enforces sha256 (T-100-10 — no unverified
 
 test('the ftp twins are byte-identical to their 98-04 posture (no behavior change from this plan)', () => {
   const s = restoreSrc();
-  assert.equal((s.match(/await fetchToStaged\(opts\.ftpConfig, `backup-task-\$\{backupRun\.taskId\}\/\$\{backupRun\.filename\}`, backupRun\.sha256, restoreStagingDir\(\)\)/g) || []).length, 2, 'both ftp twins call fetchToStaged with the exact 98-04 shape');
+  assert.equal((s.match(/await fetchToStaged\(opts\.ftpConfig, `backup-task-\$\{backupRun\.taskId\}\/\$\{backupRun\.filename\}`, backupRun\.sha256, restoreStagingDir\(\)\)/g) || []).length, 3, 'all three ftp twins call fetchToStaged with the exact 98-04 shape');
   const drStart = s.indexOf('export async function restoreInstanceUnit(');
   const slice = s.slice(drStart);
   const ftpGate = slice.indexOf('backupRun.ftp_uploaded === 1 && opts.ftpConfig');
