@@ -331,3 +331,17 @@ test('the staged delete row template keeps esc() coverage on every value-bearing
   assert.match(row[0], /page\.mappings\.viaGroup'\)\.replace\('\{n\}'/, 'the count chip does not use the {n} placeholder convention');
   assert.match(row[0], /S\.ui\.mapStage === m\.id/, 'the staged branch is missing');
 });
+
+/* =====================================================================
+   102-02 Task 3: the D-06/D-07 display-only regression pin — the dead
+   card region still carries NO data-a attributes now that interactive
+   controls (the create form + the delete trio) surround it in the same
+   file: every data-a in mappings.js must sit BEFORE the card block.
+   ===================================================================== */
+test('all data-a attributes in mappings.js live outside the dead-card region (D-06/D-07 regression pin)', () => {
+  const p = src('src/pages/mappings.js');
+  const cardStart = p.indexOf('83-02 DEAD-MAPPING WARNING CARD');
+  assert.ok(cardStart >= 0, 'the dead-card block marker is missing');
+  assert.doesNotMatch(p.slice(cardStart), /data-a=/, 'a data-a attribute leaked into the dead-card region');
+  assert.ok(p.slice(0, cardStart).includes('data-a="mapDeleteAsk"') && p.slice(0, cardStart).includes('data-a="mapCreate"'), 'the interactive controls are missing from the page region above the card');
+});
