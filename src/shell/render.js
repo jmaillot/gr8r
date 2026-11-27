@@ -42,6 +42,9 @@ export const ROUTE_IDS = [
   'archive',
   'governance',
   'backup',
+  /* 102-01 (MAPUI-01): the Entra ID Mappings surface — lazy route, urlForView
+     catch-all picks the /w/:slug/mappings address up for free. */
+  'mappings',
 ];
 export const routeName = id => t('nav.route.' + id);
 export const ROUTE_ICONS = {
@@ -66,6 +69,7 @@ export const ROUTE_ICONS = {
   archive: 'archive',
   governance: 'scale',
   backup: 'hard-drive',
+  mappings: 'link',
 };
 
 /* Phase 60 (D-05): per-route teardown registry. A lazy page with a running

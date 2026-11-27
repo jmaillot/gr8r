@@ -454,6 +454,13 @@ export const api = {
   async operatorDeadMappings() {
     return call('GET', '/api/auth/operator/dead-mappings');
   },
+  /* 102-01 (Phase 101 routes): the Entra ID group-mappings listing — flat rows
+     (id/groupGuid/workspaceId/workspaceName/role/label/createdAt/updatedAt/
+     dead/deadReason/liveMembers). Operator-only server-side; refusals surface
+     through the page's fullstate / keyed toasts (D-09). */
+  async groupMappings({ signal } = {}) {
+    return call('GET', '/api/governance/group-mappings', undefined, { signal });
+  },
   /* 85-02 (D-19/D-24): the Backup page's ground truth — the stub payload
      carries the capability flags beside the (Phase 86/87) task list. */
   async backupTasks({ signal } = {}) {

@@ -72,6 +72,10 @@ const P = {
      operator roles + Super Admins) — lazy-loaded like governance so the
      entry chunk never carries it (chunk-size discipline). */
   backup: lazy(() => import('../pages/backup.js'), 'pageBackup'),
+  /* 102-01 (MAPUI-01): the Entra ID Mappings surface is instance-scoped and
+     operator-only — lazy-loaded like governance so the entry chunk never
+     carries it (chunk-size discipline). */
+  mappings: lazy(() => import('../pages/mappings.js'), 'pageMappings'),
   system: lazy(() => import('../pages/design-system.js'), 'pageSystem'),
   states: lazy(() => import('../pages/design-system.js'), 'pageStates'),
   archive: lazy(() => import('../features/archive.js'), 'pageArchive'),
@@ -198,6 +202,9 @@ export function renderSidebar() {
         ${/* 79-02 (D-11): UX gate only — the server 403 is the control (the
            layout.js:175 doctrine applies verbatim to the instance scope). */ ''}
         ${api.user?.isInstanceAdmin ? sItem('governance', routeName('governance'), 'scale') : ''}
+        ${/* 102-01 (MAPUI-01/D-11): cosmetic gate — the server 403 fullstate on
+           deep-link is the control. The page fetches regardless of oidcEnabled. */ ''}
+        ${api.user?.isInstanceAdmin && api.oidcEnabled ? sItem('mappings', routeName('mappings'), 'link') : ''}
       </div>
       <div class="sgroup" id="side-projects">
         <div class="sgroup-h"><span>${routeName('projects')}</span><span class="sp"></span><button class="ibtn ibtn-xs" data-a="newProject" data-tip="${t('a11y.newProjectTip')}" aria-label="${t('a11y.newProject')}">${ic('plus', 14)}</button></div>

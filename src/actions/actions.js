@@ -4748,6 +4748,49 @@ A.govRetry = () => {
 };
 
 /* =====================================================================
+   102-01 MAPPINGS (MAPUI-01 client half) — the Entra ID Mappings page's
+   ground truth: GET /api/governance/group-mappings rows into S.ui.mapRows
+   plus the operator workspaces listing into S.ui.mapWs (the picker pool
+   plan 02's create form feeds from; advisory, a refusal simply stages
+   null). One fill loop with a monotonic sequence + in-flight abort (the
+   governance pattern above); NO auto-poll. D-28: the central intercept
+   owns the 401 teardown; any other refusal lands in S.ui.mapErr and the
+   page surfaces the honest fullstate — never a blank page. The fetch is
+   NEVER gated on api.oidcEnabled (Pitfall 5): the server 403 decides.
+   ===================================================================== */
+let mapFillSeq = 0;
+let mapInflight = null;
+export async function refreshMappings() {
+  if (!api.enabled || !api.user?.isInstanceAdmin) return null;
+  const my = ++mapFillSeq;
+  mapInflight?.abort();
+  mapInflight = new AbortController();
+  const res = await api.groupMappings({ signal: mapInflight.signal });
+  if (my !== mapFillSeq) return null;
+  if (res.ok) {
+    S.ui.mapRows = res.data.mappings || [];
+    S.ui.mapErr = null;
+  } else {
+    /* D-28: the central intercept owns the 401 teardown. Any other refusal
+       surfaces through the page's honest fullstate — never a blank list. */
+    if (res.status !== 401) S.ui.mapErr = { status: res.status };
+    return null;
+  }
+  /* The workspace picker pool (plan 02's create form) — advisory fetch: a
+     refusal stages null and the picker renders honest dashes, never an
+     error state. Re-checked against the sequence after the await. */
+  const ws = await api.operatorWorkspaces();
+  if (my === mapFillSeq) S.ui.mapWs = ws.ok ? ws.data.workspaces || [] : null;
+  render();
+  return S.ui.mapRows;
+}
+A.mapRetry = () => {
+  S.ui.mapErr = null; // CR-01: recovery goes through the explicit retry action, never an auto re-kick
+  render();
+  refreshMappings();
+};
+
+/* =====================================================================
    85-02 BACKUP (D-20/D-24/D-26) — the gated top-level surface's ground
    truth. Render-only from the GET /api/backup/tasks payload and its
    capability flags (D-23: the client never derives roles). One fill
