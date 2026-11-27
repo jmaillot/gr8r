@@ -1,8 +1,19 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-27 — Milestone v3.5 Backup Destinations — SMB & FTP shipped (phases 96–100; owner UAT validated on the real NAS; see MILESTONES.md).*
+*Last updated: 2026-11-27 — Milestone v3.6 Entra ID Mappings & Restore Sources started.*
 
-## Current Milestone: v3.5 Backup Destinations — SMB & FTP — SHIPPED (2026-11-27)
+## Current Milestone: v3.6 Entra ID Mappings & Restore Sources
+
+**Goal:** Operator UI for Entra group → workspace mappings (manual GUID + manual label, no Graph), honest OIDC linking docs, and the deferred restore-source selection.
+
+**Target features:**
+- **Entra ID Mappings page** — new Instance nav section gated on `oidcEnabled` + operator 403; list/create/delete `group_mappings` rows (manual GUID paste canonicalized + manual group label, workspace picker, role owner/admin/member — no viewer, no instance-role mappings, `kind: 'workspace'` only); delete cleans up members at next SSO login (removal sync, existing guards); no Graph/API permissions/consent
+- **OIDC linking docs** — DEPLOY.md "Linking policy" rewrite for `OIDC_TRUST_TENANT_EMAIL` (pinned-tenant member substitutes for `email_verified`; guests still require the literal claim), + the missing Azure setup steps (`groupMembershipClaims: "ApplicationGroup"` manifest, group assignment to the Enterprise Application); .env.example comment expansion
+- **Restore-source selection + availability check** — operator chooses which mirror source (s3/ftp/smb/local) a restore reads from, with per-source availability check (v3.5 carry-over)
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+
+## Milestone v3.5 Backup Destinations — SMB & FTP — SHIPPED (2026-11-27)
 
 **Phases 96–100, 14 plans.** Cross-destination seam generalization (destination registry replacing the S3 single-slot seam, dormant-slot contract, Wave-0 static gate); hand-rolled FTP/FTPS client (export/ftp.js, node:net/node:tls, golden-vector parser contract); FTP destination end-to-end (toggle, staged upload + SIZE verify, badges, restore read-back, probe ×5); hand-rolled SMB2.1 client (export/smb.js, node:crypto, RFC 1320 MD4 vectors, unconditional signing, NTLM scrub); SMB destination end-to-end (same seams + guest-session semantics); follow-local remote prune (remote_pruned additive, rotation-integrated). Owner UAT validated all four destinations (local/S3/FTP/SMB) against the real Synology NAS: backup → mirror → restore → overwrite, scheduled badges, out-of-band deletion badge clearing, SMB e2e 5/5 vs real samba. Zero new npm dependencies.
 

@@ -1,21 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: none
-milestone_name: (none — awaiting v3.6)
-current_phase: null
-status: idle
-stopped_at: Completed 100-05-PLAN.md
-last_updated: "2026-11-25T19:58:27.192Z"
-last_activity: 2026-11-25
-last_activity_desc: Phase 100 marked complete
-state_head: 3819cb83820f64656357355f78b3e1eaa94eb4f6
+milestone: v3.6
+milestone_name: Entra ID Mappings & Restore Sources
+status: planning
+last_updated: "2026-11-27T17:16:15.696Z"
+last_activity: 2026-11-27
 progress:
-  total_phases: 5
-  completed_phases: 1
-  total_plans: 14
-  completed_plans: 14
-  percent: 20
-current_phase_name: SMB Destination End-to-End + Remote Prune
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Projects Studio — State
@@ -28,10 +23,10 @@ current_phase_name: SMB Destination End-to-End + Remote Prune
 
 ## Current Position
 
-Phase: 100 — COMPLETE
-Plan: 5 of 5
-Status: Phase 100 complete
-Last activity: 2026-11-25 — Phase 100 marked complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-11-27 — Milestone v3.6 started
 
 ## Performance Metrics
 
