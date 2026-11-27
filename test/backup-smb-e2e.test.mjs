@@ -16,10 +16,18 @@
      # grants guest yes + users all so the guest session can write AND
      # delete the probe marker; `map to guest = Bad User` maps a
      # wrong-password connect onto the guest session (SC-2 guest pin).
+     # UAT 2026-11-27 (e2e falsified twice on this image): the share
+     # spec's 4th field is READONLY — 'yes' made the share read-only and
+     # every write answered ACCESS_DENIED (smbclient too). 'no' is the
+     # writable share the pin needs. Guest: `map to guest = Bad User`
+     # maps an UNKNOWN USER to guest — a known user with a WRONG
+     # password still answers LOGON_FAILURE (Samba 4.12 behavior,
+     # falsified live); the guest pin drives an unknown user instead.
      docker run -d --name projects-studio-samba-e2e \
        -p 1445:445 \
+       --tmpfs /backups:rw,uid=1000 \
        dperson/samba \
-       -s "backups;/backups;yes;yes;yes;all;none" \
+       -s "backups;/backups;yes;no;yes;all;none" \
        -u "projects-studiotest;projects-studiotest-password" \
        -g "server min protocol = SMB2" \
        -g "map to guest = Bad User"
@@ -30,8 +38,9 @@
      # error at a specific command, never ambiguity (99-SPIKE §3).
      docker run -d --name projects-studio-samba-smb3-e2e \
        -p 1446:445 \
+       --tmpfs /backups:rw,uid=1000 \
        dperson/samba \
-       -s "backups;/backups;yes;yes;yes;all;none" \
+       -s "backups;/backups;yes;no;yes;all;none" \
        -u "projects-studiotest;projects-studiotest-password" \
        -g "server min protocol = SMB3"
 
@@ -152,9 +161,13 @@ maybeSamba('e2e: backup analog → SMB → restore full loop (SC-5 — archive-a
   fs.rmSync(stagingDir, { recursive: true, force: true });
 });
 
-maybeSamba('e2e guest pin (A1/A2 falsification): wrong-password connect maps to the guest session — probe carries the informational guest flag', async () => {
-  const guestProbe = await probeSmb({ ...CONFIG, password: 'definitely-not-the-password' });
-  assert.equal(guestProbe.ok, true, `wrong-password connect succeeds AS GUEST (got: ${JSON.stringify(guestProbe)})`);
+maybeSamba('e2e guest pin (A1/A2 falsification): an unknown user maps to the guest session — probe carries the informational guest flag', async () => {
+  /* UAT 2026-11-27 (live falsification on Samba 4.12): `map to guest =
+     Bad User` maps an UNKNOWN USER to guest; a KNOWN user with a wrong
+     password answers LOGON_FAILURE (smbclient confirmed both). The pin
+     drives the unknown-user arm — the actual Bad User semantics. */
+  const guestProbe = await probeSmb({ ...CONFIG, user: 'definitely-not-a-user', password: 'definitely-not-the-password' });
+  assert.equal(guestProbe.ok, true, `unknown-user connect succeeds AS GUEST (got: ${JSON.stringify(guestProbe)})`);
   assert.equal(guestProbe.guest, true, 'the probe surfaces the guest session flag (SC-2 informational semantics)');
 });
 
@@ -172,10 +185,13 @@ maybeSmb3('e2e SMB3-min refusal (A1-A4 falsification point): NEGOTIATE refuses K
     err => err.code === 'smbDialectUnsupported',
     `NEGOTIATE must refuse keyed smbDialectUnsupported (got code: ${SMB3_CONFIG.host})`,
   );
-  /* The probe surfaces the same refusal as a keyed NON-success class. */
+  /* The probe surfaces the same refusal as a keyed NON-success class.
+     UAT 2026-11-27 (live falsification): the wire refusal is
+     STATUS_NOT_SUPPORTED 0xc00000bb — mapped to the dedicated
+     dialectUnsupported class (probe.key), NOT generic. */
   const probe = await probeSmb(SMB3_CONFIG);
   assert.equal(probe.ok, false, 'probe refuses the SMB3-min server');
-  assert.equal(probe.key, 'generic', 'the refusal lands in the generic smbClass (smb.js:437-438 mapping)');
+  assert.equal(probe.key, 'dialectUnsupported', 'the refusal keys the dialectUnsupported class (0xc00000bb mapping)');
 });
 
 /* Always-on gate proof (D-03): without SAMBATEST_URL / SAMBATEST_SMB3_URL

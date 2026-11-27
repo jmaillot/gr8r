@@ -606,6 +606,7 @@ const SMB_CLASS_MESSAGES = {
   unreachable: 'smb server unreachable (transport error)',
   sessionExpired: 'smb session expired',
   signingRequired: 'smb server refused the signing agreement',
+  dialectUnsupported: 'smb dialect unsupported (no common SMB2.x protocol)',
   generic: 'smb protocol error',
   pathNotFound: 'smb object not found',
 };
@@ -631,6 +632,15 @@ export function smbErrorFrom(statusOrErrno, context = '') {
   } else if (statusOrErrno === 'SMB_DIALECT_UNSUPPORTED') {
     smbClass = 'generic';
     code = 'smbDialectUnsupported'; // OQ-3: NOT signingRequired
+  /* UAT 2026-11-27 (e2e falsification, dperson/samba 4.12 SMB3-min): the
+     server answers the client's 2.0.2/2.1 NEGOTIATE with
+     STATUS_NOT_SUPPORTED (0xc00000bb) — the same "no common dialect"
+     refusal the client string-sentinel carries. Keyed identically AND
+     with a dialect-unsupported CLASS so probeSmb's smbClass-keyed
+     result names the refusal (the e2e pin asserts the class). */
+  } else if (statusOrErrno === 0xc00000bb) {
+    smbClass = 'dialectUnsupported';
+    code = 'smbDialectUnsupported'; // OQ-3 parity with the sentinel above
   } else if (['ECONNREFUSED', 'ETIMEDOUT', 'EHOSTUNREACH'].includes(statusOrErrno)) {
     smbClass = 'unreachable';
     code = 'smbUnreachable';
@@ -726,7 +736,7 @@ function signFrame(signingKey, frame) {
   return frame;
 }
 
-function verifyFrameSignature(signingKey, frame) {
+export function verifyFrameSignature(signingKey, frame) {
   const scratch = Buffer.from(frame);
   scratch.fill(0, 48, 64);
   const expected = crypto.createHmac('sha256', signingKey).update(scratch).digest().subarray(0, 16);
@@ -771,7 +781,7 @@ export function buildNegotiateRequest() {
 
 /* SESSION_SETUP (§2.2.5): 24-byte fixed struct + security buffer at
    frame offset 88 (64 header + 24 struct). */
-function buildSessionSetupRequest(securityBuffer) {
+export function buildSessionSetupRequest(securityBuffer) {
   const bufOff = 64 + 24;
   const body = Buffer.alloc(24 + securityBuffer.length);
   body.writeUInt16LE(25, 0);                      // StructureSize
@@ -1010,7 +1020,20 @@ function failPending(s, err) {
   try { p.reject(err); } catch { /* already settled */ }
 }
 
-/* Single dispatch point (T-99-03): verify → correlate → resolve. */
+/* Guest-session signing key fallback (UAT 2026-11-27, live e2e
+   falsification — ASSUMED A1 resolved): `map to guest = Bad User` maps
+   an UNKNOWN USER onto the guest session. The server ACCEPTS the
+   client's type-3 (proof computed with the caller's password) but
+   signs its replies with a session key derived from the GUEST
+   account's own credentials — SMB guest = empty password
+   (HMAC-MD5(ntlmv2Hash(user, MD4('')), clientProof)). The client's
+   primary derivation (keyed on the supplied password) mismatches and
+   the FIRST signed reply fails verify-before-dispatch (T-99-03). The
+   auth round derives the empty-password twin key ONCE (see
+   sessionAuthRound's reserve) and handleFrame consumes it before the
+   hard protocol violation — deterministic (the SessionFlags guest bit
+   corroborates), never a blanket fallback (an authFailed answer still
+   refuses keyed). */
 function handleFrame(s, frame) {
   let hdr;
   try {
@@ -1019,8 +1042,22 @@ function handleFrame(s, frame) {
     protocolViolation(s, 'not an SMB2 frame');
     return;
   }
-  if ((hdr.flags & SMB2_HDR_FLAGS_SIGNED) !== 0) {
+  if ((hdr.flags & SMB2_HDR_FLAGS_SIGNED) !== 0 && !s.guestSession) {
     if (!s.signingKey || !verifyFrameSignature(s.signingKey, frame)) {
+      /* UAT 2026-11-27 guest fallback (see the block comment above) —
+         before the hard protocol violation, try the empty-password
+         twin key once (Bad User mapped guest sessions sign with the
+         guest account's own key). */
+      if (s.sessionAuth && !s.sessionAuth.guestTried && s.sessionAuth.emptyPasswordBaseKey) {
+        s.sessionAuth.guestTried = true;
+        const altKey = s.sessionAuth.emptyPasswordBaseKey;
+        if (verifyFrameSignature(altKey, frame)) {
+          s.signingKey = altKey;
+          s.guestSession = true;
+          handleFrame(s, frame); // re-dispatch with the corrected key
+          return;
+        }
+      }
       protocolViolation(s, 'reply signature verification failed (verify-before-dispatch)');
       return;
     }
@@ -1099,7 +1136,17 @@ function sendRequest(s, command, body, { signed = true, context = '' } = {}) {
       sessionId: s.sessionId,
     });
     const frame = Buffer.concat([header, body]);
-    if (signed && s.signingKey) {
+    /* UAT 2026-11-27 (live falsification, Samba 4.12 guest mapping): a
+       Bad-User-mapped GUEST session must go UNSIGNED in both directions.
+       The guest signing key is the guest account's own secret — not
+       derivable from anything the client holds — so signing a request
+       under ANY client-side candidate key answered ACCESS_DENIED
+       (0xc0000022) on the first signed frame, while the SAME frame
+       unsigned verified clean (probe evidence). Guest = no real auth,
+       hence nothing worth authenticating frames for; real-world clients
+       (smbclient guest sessions) behave the same. SC-2 is untouched: it
+       governs the NEGOTIATE securityMode agreement, checked once above. */
+    if (signed && s.signingKey && !s.guestSession) {
       frame.writeUInt32LE(frame.readUInt32LE(16) | SMB2_HDR_FLAGS_SIGNED, 16);
       signFrame(s.signingKey, frame);
     }
@@ -1177,6 +1224,21 @@ async function sessionAuthRound(s) {
   s.signingKey = s.dialect >= 0x0300
     ? deriveSigningKey(type3.sessionBaseKey)
     : type3.sessionBaseKey;
+  /* UAT 2026-11-27 guest fallback reserve: Bad User sessions sign with
+     the guest account's own key — SessionBaseKey(guest) =
+     HMAC-MD5(ntlmv2Hash(user, MD4('')), NTProofStr_wire). The NTProofStr
+     is the ONE the wire type-3 carries (the server can only key its
+     guest session on what the client sent); only the v2hash swaps to the
+     empty-password derivation. Same derivation shape as the primary
+     (raw on 2.x, AES KDF on 3.x). Computed once per auth round. */
+  {
+    const emptyV2hash = ntlmv2Hash(s.config.user, s.config.domain ?? '', ntlmHash(''));
+    const guestBaseKey = sessionBaseKey(emptyV2hash, type3.ntProofStr);
+    s.sessionAuth = {
+      guestTried: false,
+      emptyPasswordBaseKey: s.dialect >= 0x0300 ? deriveSigningKey(guestBaseKey) : guestBaseKey,
+    };
+  }
   /* The type-3 itself goes UNSIGNED: the server only installs the
      signing key once the session setup COMPLETES — a signed round-2 is
      unverifiable server-side and real Samba closes the connection
@@ -1190,8 +1252,20 @@ async function sessionAuthRound(s) {
      0x0001 = SMB2_SESSION_FLAG_IS_GUEST (100-01, ASSUMED A1 — the
      phase-100 e2e is the live falsification point). Read-only
      observation of an already-received reply: signing, retry and
-     frame-layout behavior are untouched. */
+     frame-layout behavior are untouched.
+     UAT 2026-11-27 (live falsification, A1 RESOLVED): a Bad-User-mapped
+     guest session signs with the GUEST account's own key — the
+     empty-password twin key derived in sessionAuthRound's reserve. The
+     flag read here (deterministic, from the server's own answer)
+     activates the swap BEFORE the first signed frame (the TREE_CONNECT)
+     goes out — signing requests with the caller-password key answered
+     nothing but signature-verify failures. The handleFrame fallback
+     stays as a second-chance for servers that keep signing with the
+     caller-password key after a guest mapping. */
   if (res2.body.length >= 4) s.guestSession = (res2.body.readUInt16LE(2) & 0x0001) !== 0;
+  if (s.guestSession && s.sessionAuth?.emptyPasswordBaseKey) {
+    s.signingKey = s.sessionAuth.emptyPasswordBaseKey;
+  }
 }
 
 async function treeConnect(s) {
