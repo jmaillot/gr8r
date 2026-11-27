@@ -2128,7 +2128,8 @@
   "page.mappings.subtitle": "Correspondances groupe → espace de travail pour la connexion Microsoft Entra ID.",
   "page.mappings.loading": "Chargement des correspondances…",
   "page.mappings.emptyTitle": "Aucune correspondance de groupe",
-  "page.mappings.emptyBody": "Créez une correspondance ci-dessus pour accorder l'accès à un espace via un groupe Entra ID à la connexion.",
+  "page.mappings.emptyBody": "Créez une correspondance ci-dessus pour accorder l’accès à un espace via un groupe Entra ID à la connexion.",
+
   "common.instance": "Instance",
   "page.governance.subtitle": "Chaque espace de travail de cette instance. Vous seul pouvez voir cette page.",
   "page.governance.wsTitle": "Espaces de travail",

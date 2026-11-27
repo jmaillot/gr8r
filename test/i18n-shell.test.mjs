@@ -29,9 +29,9 @@ const ROOT = path.join(HERE, '..');
 
 const SHELL_FILES = ['src/shell/layout.js', 'src/shell/render.js', 'src/shell/skeletons.js'];
 
-/* The twenty-two route ids, byte for byte what the ROUTE_NAMES table carried:
-   the router, the data-r attributes and the URL deep-links match on them,
-   so they are never translated (D-08). */
+/* The twenty-three route ids, byte for byte what the ROUTE_NAMES table carried
+   (plus 'mappings', 102-01 MAPUI-01): the router, the data-r attributes and the
+   URL deep-links match on them, so they are never translated (D-08). */
 const ROUTE_IDS = [
   'home',
   'inbox',
@@ -56,6 +56,7 @@ const ROUTE_IDS = [
   'archive',
   'governance',
   'backup',
+  'mappings',
 ];
 
 /* [route id, the display name the old ROUTE_NAMES table carried] */
@@ -208,7 +209,7 @@ const GONE = {
 
 /* ---------- 1. the route coverage ---------- */
 
-test('ROUTE_IDS survives in src/shell/render.js and lists the twenty-two route ids byte-identically', () => {
+test('ROUTE_IDS survives in src/shell/render.js and lists the twenty-three route ids byte-identically', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/shell/render.js'), 'utf8');
   const m = src.match(/ROUTE_IDS = \[([\s\S]*?)\]/);
   assert.ok(m, 'ROUTE_IDS not found in src/shell/render.js');

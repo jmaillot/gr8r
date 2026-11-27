@@ -251,10 +251,13 @@ test('a 409 slugTaken refusal surfaces the suggestion payload with a one-click a
 
 /* (83-02 e) the dead card is display-only and escapes EVERY carried value at
    first render — group_mappings.label is the Phase 80 XSS watch-item (T-83-07) */
+/* (83-02 f) zero dead items → the card markup is absent entirely (D-10, GV-03/empty)
+   102-01 (D-06): the card MOVED to src/pages/mappings.js — the esc() pins ride
+   the moved card in its new home; governance keeps zero dead references. */
 test('the dead-mapping card escapes orphan label and trail segments and carries zero mutation controls (D-11/T-83-07)', () => {
-  const p = page();
+  const p = src('src/pages/mappings.js');
   const card = p.match(/const govDeadCard = \(\) => \{[\s\S]*?\n\};/);
-  assert.ok(card, 'govDeadCard not found');
+  assert.ok(card, 'the moved govDeadCard not found in mappings.js');
   assert.match(card[0], /esc\(o\.label \|\| ''\)/, 'the orphan label is not esc()d at first render');
   assert.match(card[0], /esc\(o\.kind \|\| ''\)/, 'the orphan kind is not esc()d');
   assert.match(card[0], /esc\(o\.group_guid \|\| ''\)/, 'the orphan group_guid is not esc()d');
@@ -263,22 +266,35 @@ test('the dead-mapping card escapes orphan label and trail segments and carries 
   assert.doesNotMatch(card[0], /data-a=/, 'the warning card carries a mutation control (D-11 forbids them)');
 });
 
-/* (83-02 f) zero dead items → the card markup is absent entirely (D-10, GV-03/empty) */
+/* (83-02 f) zero dead items → the card markup is absent entirely (D-10, GV-03/empty)
+   102-01 (D-06): the card MOVED to src/pages/mappings.js (rendered below the
+   list, operator-gated there) — governance keeps zero dead references. The
+   pins ride the moved card in its new home (test/mappings-client.test.mjs
+   carries the display-only and null-payload pins). */
 test('the dead-mapping card renders nothing when the payload is empty or absent (D-10 zero-rows hiding)', () => {
-  const p = page();
-  assert.match(p, /const dead = S\.ui\.govDead;\s*if \(!dead\) return '';/, 'a null payload must hide the card entirely');
-  assert.match(p, /if \(!orphans\.length && !trail\.length\) return '';/, 'zero dead items must hide the card entirely (no off-line markup)');
+  const p = src('src/pages/mappings.js');
+  const card = p.match(/const govDeadCard = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(card, 'the moved govDeadCard not found in mappings.js');
+  assert.match(card[0], /const dead = S\.ui\.govDead;\s*if \(!dead\) return '';/, 'a null payload must hide the card entirely');
+  assert.match(card[0], /if \(!orphans\.length && !trail\.length\) return '';/, 'zero dead items must hide the card entirely (no off-line markup)');
   assert.match(p, /api\.user\?\.isInstanceAdmin \? govDeadCard\(\) : ''/, 'the card is not operator-gated at the mount point');
 });
 
-/* (83-02 g) the dead payload rides the operator workspaces fill loop */
-test('refreshGovernanceWorkspaces fetches operatorDeadMappings alongside the listing and stages a normalized payload', () => {
+/* (83-02 g) the dead payload rides the fill loop — MOVED (102-01 D-06): the
+   read now rides refreshMappings (the Mappings page's fill), the same
+   normalized-honest staging shape. */
+test('refreshMappings fetches operatorDeadMappings alongside its fills and stages a normalized payload', () => {
   const a = actions();
-  assert.match(a, /const dead = await api\.operatorDeadMappings\(\);/, 'the dead-mappings read does not ride the governance fill');
-  assert.match(a, /S\.ui\.govDead = dead\.ok \? \{ orphans: dead\.data\.orphans \|\| \[\], trail: dead\.data\.trail \|\| \[\] \} : null;/, 'the payload is not normalized/honest on refusal');
+  const mapRefresh = a.match(/export async function refreshMappings\(\) \{[\s\S]*?\n\}/);
+  assert.ok(mapRefresh, 'refreshMappings moved');
+  assert.match(mapRefresh[0], /const dead = await api\.operatorDeadMappings\(\);/, 'the dead-mappings read does not ride the mappings fill');
+  assert.match(mapRefresh[0], /S\.ui\.govDead = dead\.ok \? \{ orphans: dead\.data\.orphans \|\| \[\], trail: dead\.data\.trail \|\| \[\] \} : null;/, 'the payload is not normalized/honest on refusal');
 });
 
-/* (83-02 h) the new vocabulary exists with parity across all 5 catalogues */
+/* (83-02 h) the rename + dead-card keys exist with parity across all 5 catalogues.
+   102-01 (D-06/D-07): the 4 dead-card keys RENAMED page.governance.dead* →
+   page.mappings.dead* (the card physically moved; 4 old keys deleted, 4 new
+   added per locale in the same commit). */
 test('the rename + dead-card keys exist with parity in all 5 locales (D-12)', () => {
   const KEYS = [
     'page.governance.edit',
@@ -290,10 +306,11 @@ test('the rename + dead-card keys exist with parity in all 5 locales (D-12)', ()
     'page.governance.confirmRenameTitle',
     'page.governance.confirmRenameBody',
     'page.governance.okRename',
-    'page.governance.deadTitle',
-    'page.governance.deadLead',
-    'page.governance.deadOrphans',
-    'page.governance.deadTrail',
+    // the moved dead-card keys (102-01 D-06/D-07 rename, ×5)
+    'page.mappings.deadTitle',
+    'page.mappings.deadLead',
+    'page.mappings.deadOrphans',
+    'page.mappings.deadTrail',
     'toast.governanceRenamed',
   ];
   for (const [lang, cat] of Object.entries({ en, fr, nl, de, es })) {
