@@ -1,179 +1,336 @@
-# Pitfalls Research — v3.4 "UX Polish & Backup Console Refinement"
+# Pitfalls Research
 
-**Domain:** Refinement milestone on an existing, discipline-heavy codebase (frozen archive format D-86, exactly-once outbox claims, ×5-locale i18n gate, db-adapter dual-engine, audit funnel for every mutation).
-**Researched:** 2026-11-23
-**Confidence:** HIGH (every pitfall below is grounded in read code: `export/backup.js`, `export/cron.js`, `server.js:2815-2925` digest loop, `server.js:3844-4028` GFS rotation, `server.js:5813` `hasInstanceRole`, `server.js:7662-7747` api-keys, `src/pages/backup.js` GFS_SCALE_KEYS)
+**Domain:** Adding v3.6 features to Projects Studio (zero-dep Node stack): Entra ID Mappings page, OIDC linking docs, restore-source selection
+**Researched:** 2026-11-27
+**Confidence:** HIGH (codebase-grounded: groups.js, server.js SSO callback, export/restore.js, DEPLOY.md read directly)
 
 ## Critical Pitfalls
 
-### Pitfall 1: GFS marker drift — creation-time predicted bucket ≠ rotation-time actual bucket
+### Pitfall 1: Raw GUID paste stored without the canonicalizeGuid funnel — duplicate/dead mappings resurrection
 
-**What goes wrong:** The owner ruling puts the GFS marker (daily/weekly/monthly/yearly) in the archive filename AT CREATION, using the same pure function as rotation. Rotation today derives the bucket lazily from the run's UTC calendar position at rotation time (`server.js:3844-3850`, D-10) — a run created just before a week/month boundary could be named `daily` but rotated into (or counted against) the `weekly` bucket. Worse, two implementation paths (naming at `export/backup.js:573/749` vs. `gfsKeptPositions` at `server.js:3931`) can silently diverge into two bucket definitions.
+**What goes wrong:**
+The new Mappings page UI validates a pasted GUID client-side and posts it verbatim. Entra admin portal copies come in `{braced}`, uppercase, or no-hyphen variants. `canonicalizeGuid` (groups.js:34) collapses all variants to the canonical lowercase hyphenated form precisely so `{A-…}` and `a-…` become the same key against the `UNIQUE(group_guid, workspace_id)` index (db-adapter.mjs:405). If any write path skips the funnel (a new route, an MCP mirror, a bulk import), you get either a 500 from the unique-index violation (unhandled constraint error) or a second row for the same real group that then reads as a *different* mapping — the dead-mappings orphan problem the milestone explicitly wants to avoid, created by the new UI.
 
-**Why it happens:** The filename is written once and never renamed (frozen format, manifest-hash dependency); the bucket is *re-derived* at rotation. Two call sites of "which bucket is this run?" is the classic duplication trap.
+**Why it happens:**
+The canonicalization lives in `groups.js`, but "adding a page" tempts developers to write fresh validation in the route handler instead of routing every input through the one existing funnel (the domains.js/Phase-75 lesson: one door, one rule).
 
 **How to avoid:**
-- Extract ONE pure function, e.g. `gfsBucketFor(task, runStartedAtUtc) -> 'daily'|'weekly'|'monthly'|'yearly'`, unit-pinned, imported by BOTH `archiveName` (creation, `export/backup.js:573`) and the rotation pass (`server.js:3944`). No second implementation, ever.
-- Store the bucket ON THE RUN ROW at creation (additive column — mirrored SQLite+Postgres DDL in the same commit) and have rotation read the stored bucket instead of re-deriving. The stored value is truth; re-derivation is the drift vector.
-- Never post-hoc rename: the filename recorded in `backup_runs` is authoritative and restore depends on the manifest hash (format frozen since 86).
-- The filename marker is the machine token (`daily`), NOT the localized UI label — UI labels come from the existing `GFS_SCALE_KEYS` (`src/pages/backup.js:141`). Localized text in filenames would break grep-based rotation matching and the frozen format.
-- Keep the collision-guard suffix (`-N.tar.gz`, `backup.js:756-761`) applied AFTER the GFS segment in the final name, and write the sidecar (`${sha256}  ${filename}`, `backup.js:765`) from the FINAL filename — including the uniquifier. A sidecar written before uniquification is checksum-name drift.
+Every write path — UI save API, future MCP mirror, migration script — calls `guidRefusal(raw)` before touching the table, and stores ONLY `canonicalizeGuid(raw)`. The client may pre-validate for UX, but the server is the sole authority. Add a regression test asserting `{X}`, uppercase, and no-hyphen pastes collapse to one row (second save → keyed refusal, not 500).
 
-**Warning signs:** A run named `weekly` counted against the daily keep-7 count; `grep daily backupsDir` returns files rotation treats as weekly; a sha256 sidecar whose embedded filename ≠ actual filename after a same-second collision.
-**Phase to address:** Backup naming phase (the phase that touches `archiveName`) — the pure-function extraction and stored-bucket DDL are its first task, before any UI label work.
+**Warning signs:**
+A grep for `group_guid` showing any INSERT whose value isn't the return of `canonicalizeGuid`; a test fixture with a non-canonical GUID stored as-is; "why does this mapping show twice?" bug reports.
+
+**Phase to address:**
+Mappings-page backend phase (server routes + save funnel) — before any UI exists to bypass it.
 
 ---
 
-### Pitfall 2: Digest aggregation breaks exactly-once — changing the claim key instead of the delivery layer
+### Pitfall 2: Label rendered unescaped on a re-render path (the esc()-at-first-render-only trap)
 
-**What goes wrong:** Today the digest claims per (workspace, user, localDate) (`reminders_sent` key `${ws.id}:${user}:digest:${localDate}`, server.js:2863) and enqueues one outbox row per claim (`digest:${ws.id}:${user}:${localDate}`, :2890). Aggregating to 1 email/day/user across workspaces tempts you to move the claim to `${user}:digest:${date}` — that silently destroys per-workspace exactly-once, the D-11/D-12 tz-change re-window semantics, and the D-12 "empty digest claims nothing" ledger honesty per workspace (a workspace with an empty section must still NOT claim — but the aggregated email still has other sections).
+**What goes wrong:**
+The manual group label is opaque operator-entered text — the milestone's named XSS watch-item. Hand-rolled ES-module UI typically escapes correctly at first render (`esc()` in the list template), but this table will re-render through the app's existing mechanisms: 30s polling refresh, revision-merge hydration, i18n locale switch re-render, and the delete-then-repaint flow. If any of those re-render paths interpolates `row.label` raw (e.g., a helper that rebuilds one row instead of reusing the escaping template), a label like `<img src=x onerror=…>` fires — injected by an *operator*, but the surface is also fed by whoever typed the label originally, and stored XSS persists across sessions and users.
 
-**Why it happens:** The claim and the email are currently 1:1; the ruling makes them N:1 and the path of least resistance is to reshape the claim.
+**Why it happens:**
+Zero-dep hand-rolled rendering means escaping is a convention, not a framework guarantee. New string sinks (an inline `title="…"` attribute, a `data-label` attribute, a confirm-dialog message) are each a fresh injection point; the "it's display-only, never edited" mental model hides that display IS the sink.
 
 **How to avoid:**
-- KEEP the per-(workspace, user, localDate) semantic claim untouched — it is the WHAT-to-send history (POL-02).
-- Aggregate at the TRANSPORT layer: after the per-workspace pass, a per-user coalescing step builds one email/day/user with one section per claimed workspace; the outbox dedup key becomes `digest:daily:${userId}:${date}` with `insert or ignore` exactly-once, and the multi-workspace ctx is written inside the SAME `db.tx` as the last claim (shared-connection tx discipline: never a module-level db call inside the pg tx).
-- Locale: the aggregate email uses the USER's locale (users.locale), not the per-membership row locale currently read at :2896 — per-workspace rows can disagree.
-- This is the root-cause fix for the reported "digest received 4×" bug — pin the 4× reproduction as a failing test first.
-- ×5 locales: any new section header/unsubscribe wording lands in en/fr/nl/de/es in the same commit (i18n gate will fail otherwise).
+One escaping helper applied in ONE place — the row-render template — and every state change (create, delete, i18n switch, poll) routes through a full-table repaint using that template, never a bespoke partial-DOM patch that re-types the label. Audit every attribute context: `esc()` for text nodes is not sufficient for attribute interpolation (quotes) — use the existing house `esc()` everywhere it's already used for names, and add an e2e/unit test rendering a hostile label and asserting zero script/img sink.
 
-**Warning signs:** A user gets N emails again after the fix ships; a workspace whose only content is an empty section appears as a blank heading in the aggregate; duplicate-key errors on `email_outbox.dedup_key` during restarts.
-**Phase to address:** Notifications digest-fix phase (the owner's "investigation + fix" item) — it is standalone and should land before/parallel to backup console work since it touches `email_outbox`.
+**Warning signs:**
+A re-render code path that string-concatenates `label` directly; a confirm dialog built with template literals around the label; any new `.innerHTML` assignment in the mappings view not going through the shared template.
+
+**Phase to address:**
+Mappings-page UI phase — pinned by a test in the same phase, not deferred to a security pass.
 
 ---
 
-### Pitfall 3: Cron humanization drifting from the scheduler's interpretation
+### Pitfall 3: Delete-copy promises instant member removal — delete semantics confusion
 
-**What goes wrong:** The console will display "Every Monday at 00:00" style labels. If the label is generated by a second, UI-side cron interpretation (string split, naive weekday mapping), the label can disagree with `nextRunAt` — especially around DST, where the scheduler deliberately measures wall time through `Intl.DateTimeFormat` per candidate in UTC-millis (`export/cron.js:83/135/160/178`, 18-test DST matrix). A label like "Every day at 00:00" is a lie twice a year if the scheduler keeps 00:00 *wall* time via formatter measurement and the label author assumed fixed offsets.
+**What goes wrong:**
+Deleting a `group_mappings` row does NOT remove any member today. Removal happens at the members' **next SSO login** through the removal sync with the last-owner/last-operator guards (v3.2 design, groups.js). If the new UI's confirm dialog says "Delete mapping and remove 12 members", operators will delete the mapping and expect immediate emptying of the workspace, then file "it didn't work" bugs — or worse, expect the mapping delete to be undoable because no access changed. Conversely, if the copy says nothing, an operator deleting a mapping to *revoke* access will not realize the revocation is lazy and a user retains access until they next log in.
 
-**Why it happens:** Humanization feels like a display concern, so it gets implemented in the client far from the parser.
+**Why it happens:**
+CRUD UIs conflate "delete row" with "delete effect". The deferred-revocation model is correct (it's how the existing guard funnel works) but invisible unless the UI states it.
 
 **How to avoid:**
-- Humanize from the SAME `parseCron(expr)` output (server computes the label or the client imports the shared parser module — no second parse). The builder presets (daily/weekly/monthly/custom) map 1:1 to expressions; only those get humanized sentences.
-- Custom expressions outside the supported 5-field subset get an HONEST fallback: show the raw expression, never a guessed sentence ("Every 7 days" for `*/1002 * * * *` is a lie).
-- New humanization keys land ×5 locales in the same commit; weekday names must come from locale-aware `Intl` formatting, not hardcoded English arrays.
-- Reuse the DST test matrix: add assertions that the humanized label for a `0 0 * * *` task matches what `nextRunAt` actually fires across the existing DST fixtures.
+Confirm copy must say exactly: deleting the mapping stops *future* SSO logins from granting this membership/role; current members keep access until their next SSO login, where the removal sync applies (guards still protect the last owner/operator). No "members affected: N now" promise. Delete the row only; never touch `memberships` in the delete handler — the login-time sync is the sole removal mechanism.
 
-**Warning signs:** A label/schedule mismatch reported on a DST-boundary day; e2e asserting on label text that broke after a locale change; a custom-cron task showing a confident "every N days" sentence.
-**Phase to address:** Backup tasks console phase — schedule humanization is one of its deliverables; the shared-parser rule belongs in its plan constraints.
+**Warning signs:**
+Any code in the DELETE route that touches `memberships` or calls `stripMember`; confirm-dialog copy containing "removes members" without "at next login".
+
+**Phase to address:**
+Mappings-page UI phase (copy + route scope), verified by a test that deleting a mapping leaves memberships untouched and the login sync still demotes.
 
 ---
 
-### Pitfall 4: Unified run history leaking runs beyond viewer rights (task-scope vs instance-scope)
+### Pitfall 4: Unique-index collision surfaces as raw 500 instead of keyed refusal
 
-**What goes wrong:** The unified multi-task history merges runs across tasks of different scopes (project / workspace / instance). A Restore Operator with `hasInstanceRole(userId, RESTORE_USE)` (:9171) may view instance-scope runs but has NO workspace membership on a project-scoped task's workspace — a naive "list all runs for these task ids" endpoint shows workspace/project names (and filenames) the viewer has no right to see. The v3.3 restore-list already needed invalidation keyed on run identity for a cousin of this problem.
+**What goes wrong:**
+`UNIQUE(group_guid, workspace_id)` (db-adapter.mjs:405, server.js SCHEMA mirror) throws `SQLITE_CONSTRAINT_UNIQUE` on duplicate save; pg dialect throws its own error code. A naive save route that only runs `guidRefusal` will let the constraint error escape as an unhandled 500 — violating the house contract that every operator refusal is a `{code,message}` key rendered in 5 locales (the domains.js / groupMappingBadGuid pattern). Worse, both dialects must behave identically (pg-parity suite is a standing gate).
 
-**Why it happens:** Cross-workspace visibility for operators is new in v3.4 and it is easy to conflate "can see the Backup/Restore surfaces" with "can see every workspace's data on them".
+**Why it happens:**
+The canonicalization pitfall prevents most duplicates, but a race (two operators pasting the same GUID in different tabs) or a pg-vs-sqlite error-shape difference still reaches the constraint. Developers treat the index as "the DB will handle it" and skip the catch.
 
 **How to avoid:**
-- Server-side per-row authorization in the unified-history endpoint: for each run, resolve its task's scope and check the matching authority — instance-scope → `hasInstanceRole(BACKUP_MANAGE/RESTORE_USE)`; workspace/project-scope → live workspace role (or the operator's surface-level right only sees rows, redacted of workspace names the caller lacks rights to). Never filter client-side.
-- Do NOT widen `workspacesForUser` to make this easy (see Pitfall 7) — compute the visible-set inside the history endpoint only.
-- Run rows already record workspace identity; redact name/label fields rather than dropping rows only if the product ruling says so — default fail-closed: drop rows the viewer has no right to, never send redacted ghosts.
-- Pin an e2e: Restore-Op (no workspace membership) requesting unified history sees exactly the instance-scope runs and zero workspace names.
+The save route pre-checks existence (SELECT on canonical pair) for a friendly `groupMappingDuplicate` refusal AND wraps the INSERT in a try/catch mapping constraint errors to the same keyed refusal — defense in depth. Refusal key lands in all 5 locale catalogues in the same commit (v3.0 rule). Pin parity with one test per dialect asserting identical response shape.
 
-**Warning signs:** A non-member workspace name appears in a Restore Op's history filter dropdown; the endpoint returns rows for task ids the caller never had access to; client code doing `.filter(r => canSee)` over an unfiltered payload.
-**Phase to address:** Backup tasks console phase (unified history deliverable) — its success criteria must include the cross-scope authorization e2e.
+**Warning signs:**
+A save route with no try/catch around INSERT; a new error key missing from fr/nl/de/es at commit time (i18n gate will catch dead keys, but only if the key is actually referenced).
+
+**Phase to address:**
+Mappings-page backend phase, same commit as the refusal keys.
 
 ---
 
-### Pitfall 5: Role tabs enabling last-Super-Admin demotion or hiding implicit membership
+### Pitfall 5: Existence oracle via the mappings list / nav gating
 
-**What goes wrong:** The Instance Roles tab redesign (one row per user, badges, rename, user picker in the Grant dialog) rebuilds the grant/revoke UI. Two traps: (a) a redesigned revoke affordance that bypasses or duplicates the existing last-operator demotion guard — the group-mapping sync already learned this and routes every removal through the shared guard funnel with last-operator/last-owner guards; (b) Super-Admins are AUTO-members of instance roles (implicit membership) — if the tab hides that, an operator sees themselves as revocable, clicks revoke, gets an opaque 403, and the UI looks broken.
+**What goes wrong:**
+The page is gated on `oidcEnabled` + operator role ("operator 403"). If the nav shows the section to non-operators based on a config read, or the API answers 403 only when the caller can't see mappings but 200-with-empty for a workspace id that doesn't exist, non-operators can probe workspace/GUID existence. House doctrine since v1.1: unknown-or-unauthorized answers 404, no existence oracle. Also: the delete endpoint must not confirm "mapping X exists but you may not delete it" (403) vs "no such mapping" (404) in a way that leaks GUIDs to non-operators.
 
-**Why it happens:** UI redesign re-implements affordances instead of riding the existing server funnel.
+**Why it happens:**
+"Operator 403" feels natural for a governance page, but the mappings list is tenant-wide data; mixing 403/404 inconsistently creates the oracle.
 
 **How to avoid:**
-- All mutations go through the existing audited endpoints (`instance_role_granted`/`instance_role_revoked`, server.js:8513/8615) — the tabs are render-only re-skins; zero new mutation path.
-- Render implicit (auto) membership with a distinct honest badge and a disabled/tooltip'd revoke for the last Super Admin; the refusal key for last-operator demotion must exist ×5 locales.
-- The broken Grant-dialog search is a picker bug — fix the picker, do not build a second search; reuse the Edit-team selectable picker pattern per the milestone goal.
-- Audit funnel for every mutation is already in place — do not add a parallel audit write.
+Server routes: non-operator → same response as if the section doesn't exist (consistent with `requireWorkspace`'s 404 discipline for unauthorized slugs); client nav gate reads `/api/config`'s already-published flags (`oidcEnabled`-style) rather than a new endpoint that reveals more. Never echo the requested GUID back in the refusal.
 
-**Warning signs:** A revoke button that always 403s in UAT; a Super Admin row without any indication of auto-membership; two different audit actions for the same demotion.
-**Phase to address:** Instance Roles governance phase (first phase of the milestone) — include "last-Super-Admin revoke shows disabled + localized reason" in its UAT.
+**Warning signs:**
+A route returning 403 with `{ guid }` echoed; nav gating reading an endpoint non-operators can also hit with richer data.
+
+**Phase to address:**
+Mappings-page backend phase (route matrix written down before UI).
 
 ---
 
-### Pitfall 6: Revoked-key purge deleting the audit trail
+### Pitfall 6: Viewer-role mappings accepted by UI but refused nowhere — the locked decision leaking through a new write path
 
-**What goes wrong:** "Purge des clés révoquées" naively means `delete from api_keys where revoked_at is not null`. But key lifecycle is audited (`api_key_revoked` logSecurity + audit_log row at server.js:7741-7744, MCP `psk_live_` history, keys list rendering `revokedAt` at :7684) and the transparency/audit surfaces reference key ids. Deleting rows orphans audit entries pointing at nothing, erases the revocation history from the keys list, and can break forensic questions ("who had access in March?").
+**What goes wrong:**
+Locked decision: mapping roles are owner|admin|member only — no viewer, no instance-role mappings, `kind: 'workspace'` only. groups.js:58 already encodes the strict token list. The new page's workspace picker + role picker must not offer viewer; but the real risk is a write path (API POST with hand-crafted body, future MCP mirror) posting `role: 'viewer'` — if the server funnel only validates shape loosely (or the UI picker omission is treated as "the validation"), a viewer mapping grants view rights to an entire Entra group at next login, silently widening access beyond the locked decision.
 
-**Why it happens:** "Purge" is read as "delete rows" when the product intent is "clean up the list".
+**Why it happens:**
+UI omission ≠ validation; each new route re-derives validation, and the strict-token funnel exists but is one import away.
 
 **How to avoid:**
-- Decide and ratify the semantics FIRST: purge = delete revoked ROWS but audit_log entries are append-only and must survive untouched (audit rows do not FK to api_keys — verify, and if any view joins key rows for label/prefix, snapshot label+prefix into the audit ctx at purge time before deletion).
-- Purge only `revoked_at IS NOT NULL`; never expired-but-unrevoked, never active. Scoped strictly to the caller's `user_id` (P-F pattern at :7919) if it's a self-service action.
-- If the audit entry for the purge itself is desired (`api_keys_purged`, count only), route it through `logSecurity`/audit funnel like every mutation — but never per-key audit re-writes.
-- Zero DDL expected here — if any column is added (e.g. a `purged_at`), mirror it SQLite+Postgres in the same commit.
+Reuse the groups.js role-token funnel (`guidRefusal` pattern) in every write path; server rejects any role outside owner|admin|member and any `kind !== 'workspace'` with a keyed refusal. Unit test: POST with role=viewer, kind=instance → refused, 5-locale keys present.
 
-**Warning signs:** Audit-log entries whose target key no longer resolves; a transparency view that renders blank rows; a purge endpoint that deletes rows still referenced by active MCP key-caches.
-**Phase to address:** Settings phase (API Keys purge deliverable) — semantics ratification belongs in its discuss-phase questions.
+**Warning signs:**
+A role picker including viewer "for completeness"; a write path validating roles with `['owner','admin','member','viewer'].includes(...)`.
+
+**Phase to address:**
+Mappings-page backend phase; re-pinned when the MCP mirror (if any) is added.
 
 ---
 
-### Pitfall 7: Cross-workspace listing implemented by widening `workspacesForUser`
+### Pitfall 7: DEPLOY.md "Operator note" sends debuggers down the wrong path (wrong-docs risk)
 
-**What goes wrong:** The ruling: operators see ALL workspaces in the Backup/Restore pickers ONLY. The lazy implementation adds operator workspaces into `workspacesForUser` — and every other consumer (sidebar switcher, search, digest loop `server.js:2815`, notif fan-out, invite pickers, MCP tools) immediately inherits the widened authority. That is a full-isolation regression: a Backup Op would appear as a member of every workspace in the UI switcher and could receive digests for workspaces they can't read.
+**What goes wrong:**
+The current DEPLOY.md:336 operator note tells operators that Entra sets `email_verified` for tenant-member accounts — i.e., debug first by checking tenant email verification. That was true-ish for the old pinned-tenant-member path; the actual reality is Azure AD work/school tokens **routinely omit** `email_verified` entirely, which is why `OIDC_TRUST_TENANT_EMAIL` exists (server.js:6691–6699). An operator whose SSO fails with "tokens without a verified email fail closed" will follow the note, verify tenant email settings (a dead end — there's nothing to fix there), and give up. The new docs must make `OIDC_TRUST_TENANT_EMAIL` the FIRST diagnostic step for Entra, not tenant email verification.
 
-**Why it happens:** `workspacesForUser` is the obvious "list the user's workspaces" seam, and modifying it is one line.
+**Why it happens:**
+Docs accrete: the v3.6 code added the opt-in flag, but the prose paragraph written in an earlier milestone still dominates the "operator note" slot readers actually read.
 
 **How to avoid:**
-- Explicit ruling out: `workspacesForUser` is FROZEN for this milestone. Compute the picker list inside the Backup/Restore endpoints from task scope + `hasInstanceRole` (a separate pure helper, e.g. `backupScopeWorkspaces(user)`), returning only the fields pickers need (id/slug/name) — never full workspace objects.
-- Verify by grep after implementation: no new caller passes the operator role into `workspacesForUser`; the sidebar/switcher payload is unchanged for operators.
-- e2e pin: log in as Backup Op → switcher lists only real memberships; Backup page pickers list all workspaces; digest loop skips non-member workspaces.
-- The digest loop already iterates real memberships — confirm the aggregated digest (Pitfall 2) cannot be fed workspace sections from the widened list.
+Rewrite the Linking policy section as a decision tree: (1) are you on pinned tenant with work/school accounts → set `OIDC_TRUST_TENANT_EMAIL=true`; (2) guest accounts (`acct=1` or external `idp` claim — server.js:6689 guestShape) → the flag does NOT apply, they still require literal `email_verified: true`, so guests need the email claim issued+verified by the IdP; (3) only after that, check issuer/tenant pinning. Also expand the `.env.example` comment with the exact strict-token list (`true/1/yes/on`) and the guest carve-out, so the comment can't drift from server.js parsing.
 
-**Warning signs:** An operator sees extra workspaces in the workspace switcher after this milestone; search results include non-member workspaces; `workspacesForUser` diff touches its signature or return shape.
-**Phase to address:** Cross-workspace pickers phase — "workspacesForUser untouched" is a hard success criterion to write into REQUIREMENTS out-of-scope notes.
+**Warning signs:**
+Docs describing `email_verified` as "Entra sets it for members" without mentioning omission; any sentence implying the flag covers guests; `.env.example` comment saying "uncomment to trust Entra emails" without the guest caveat.
+
+**Phase to address:**
+OIDC docs phase — the rewrite must be verified by re-reading server.js:6673–6715, not by memory; a test asserting the docs contain the guest carve-out is cheap insurance.
+
+---
+
+### Pitfall 8: Azure setup steps missing — operators have the flag but no `ApplicationGroup` claim
+
+**What goes wrong:**
+The group-mappings feature is useless if the token carries no `groups` claim. The Entra manifest must set `groupMembershipClaims: "ApplicationGroup"` AND groups must be assigned to the Enterprise Application. These steps are absent from DEPLOY.md today (milestone names them explicitly). Operators will set up mappings, see "UNMAPPED" at every login (>200-overage resolves as UNMAPPED, never empty — indistinguishable from a config failure from the UI), and debug the app instead of the tenant.
+
+**Why it happens:**
+Docs written app-side; Entra portal steps are someone else's problem — except for a self-hosted product, the operator IS the admin and has no one else.
+
+**How to avoid:**
+The docs phase adds a numbered Azure checklist: manifest edit, Enterprise Application group assignment, where to find the Object-ID GUID (the value operators paste into the new mappings page), and the "UNMAPPED at login means claim absent OR no mapping" diagnostic. Mention the >200-group overage behavior so UNMAPPED isn't misread.
+
+**Warning signs:**
+Docs referencing `groups` claim without ever mentioning the manifest key; no GUID "where to copy it from" instruction for the new page's paste field.
+
+**Phase to address:**
+OIDC docs phase (same phase as Pitfall 7 — one docs pass).
+
+---
+
+### Pitfall 9: Availability check on page load becomes a network probe per destination — the restore list freezes
+
+**What goes wrong:**
+The restore-source picker wants to show which mirrors (s3/ftp/smb/local) hold each archive. The natural implementation calls `probeS3/probeFtp/probeSmb` per row (or per destination) when the restore list page loads. Probes are TCP/TLS/auth round-trips to a NAS or object store: seconds each, serially fatal, and a down SMB host turns the whole restore console into a hanging page — for data the run table already knows.
+
+**Why it happens:**
+"Availability" suggests connectivity testing; the mirror-flag doctrine (the milestone's named truth) is overlooked: `uploaded` / `ftp_uploaded` / `smb_uploaded` columns (restore.js:1322) ARE the record of where the archive lives — a run with `ftp_uploaded = 1` is FTP-available by definition, no probe needed to say the *source exists*.
+
+**How to avoid:**
+Render source options synchronously from the run-row flags (RESTORE_LOCATION_KEYS derived from those columns — flag is truth). Offer an explicit, user-initiated "check availability" action (button per source) that runs one probe on demand and reports; never probe during list render or during the restore-list hydration. A failed on-demand probe does NOT clear the mirror flag (only the restore-time `mirrorMissing` path does — restore.js:1663+).
+
+**Warning signs:**
+An `await probeX` in the list/page-load code path; availability shown as part of row render; page-load timing correlated with destination reachability.
+
+**Phase to address:**
+Restore-source UI phase — write the "flags render, probes on demand" contract into the phase spec before code.
+
+---
+
+### Pitfall 10: Restore-source selection breaks local-first ordering and the read-back twin guard contract
+
+**What goes wrong:**
+Today the restore pipeline is hardcoded: local archive first, then S3 → FTP → SMB read-back twins in registry order, each guarded by its flag AND config presence, each cleaning its staged tmp on failure (`dropStagedTmp`, restore.js:1650–1691). Adding an operator-selected source naively (e.g., "operator picked SMB, go fetch") skips the local-first ordering, or — worse — reuses `stagedTmp` from a failed earlier fetch, or fetches from a source whose flag is 0 (no sha256 guard on the wrong leg). The sha256 enforcement lives *inside* each staged fetch; bypassing the twin seam for the "chosen" source reintroduces the unverified-archive restore vector the twins were built to close.
+
+**Why it happens:**
+Selection UI feels like a routing feature, but the correct seam is "candidate-order filter over the existing guarded legs", not a new fetch path.
+
+**How to avoid:**
+Selection reorders/filters the EXISTING twin sequence (still local-first unless local is explicitly excluded, still guarded by flag+config, still `dropStagedTmp` on each failure, still `mirrorMissing → clearMirrorFlag` on seam throw so the funnel releases `restore_lock`). No new download call sites outside the twin pattern. Tests: chosen source unavailable → falls through to next guarded leg (or fails keyed `restoreArchiveMissing`), mirror flag cleared only via the existing path, staged tmp swept.
+
+**Warning signs:**
+A new `fetch*ToStaged` call outside restore.js's twin blocks; a selection branch that checks the operator's choice but not the run's mirror flag; `stagedTmp` leaked on the fall-through path.
+
+**Phase to address:**
+Restore-source backend phase, before the picker UI ships.
+
+---
+
+### Pitfall 11: Staging-area source switching mid-restore corrupts the run
+
+**What goes wrong:**
+The restore staging area (`BACKUPS_DIR/restore-staging/restore-<runId>`, D-89-32) is spent-by-design: extracted once, swept on success/failure. If the source picker allows switching the source after the restore run has begun staging (or if a "retry from different mirror" re-enters the run without re-extracting), the run's archivePath and staged tree diverge — sha256 was verified against the first source's bytes but tables/blobs come from a second, or the staging sweep deletes a tmp the retry expected. The global restore lock makes this worse to reason about: a wedged run holds the lock.
+
+**Why it happens:**
+"Pick a source" and "retry" look like the same UI affordance, but a source switch is semantically a NEW restore attempt with a new runId, new staging dir, fresh extraction + sha256.
+
+**How to avoid:**
+Source selection is a pre-run decision only: once `restore_lock` is held and staging begins, the source is frozen for that run. "Restore from a different mirror" = cancel/fail the current attempt (which sweeps staging and releases the lock through the existing funnel) and start a fresh run. Never swap `archivePath`/`stagedTmp` on a live run.
+
+**Warning signs:**
+UI showing a source dropdown during a running restore; any code path assigning `archivePath` after `extractArchive` has run for the runId.
+
+**Phase to address:**
+Restore-source backend phase (run-state machine), surfaced in UI phase as disabled-while-running.
+
+---
+
+### Pitfall 12: New run stage/status values invented — breaking the single upload_failed / restore status semantics
+
+**What goes wrong:**
+The run status vocabulary is deliberately narrow: uploads that fail land at stage `upload_failed` — NEVER a generic catch, never a per-destination variant (backup.js:914, 1073 — "the run never lies"); restore failures use the keyed `restoreArchiveMissing` funnel and the existing stage machine. Adding source selection tempts per-source statuses (`ftp_upload_failed`, `restore_source_unreachable`) or a new "checking availability" persisted state. Each new stage value breaks: the badge renderer, the transition-based failure emails, the run-history filters (`?all=1` unified runs), and the mirror-flag clearing logic keyed on specific stages.
+
+**Why it happens:**
+Per-destination granularity feels informative; the existing design chose coarse-but-honest on purpose (v3.5 doctrine).
+
+**How to avoid:**
+All source-selection detail lives in the ERROR TEXT and the audit trail (`mirror_flag_cleared:<dest>` events already exist, restore.js:1327), not in new stage enums. Failure routes through the existing `failWith(keyed(...))` funnel. If a new state seems needed, first check whether the existing stage + error-text + badge combination can express it.
+
+**Warning signs:**
+A new string literal in the stage enum; a migration adding a run-status column; badge code with a new branch.
+
+**Phase to address:**
+Restore-source backend phase — stage vocabulary listed as frozen in the plan.
+
+---
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Second GFS bucket implementation in the naming path | Fast UI label work | Silent retention drift, wrong archives deleted | Never |
-| Collapsing the digest per-workspace claim into a per-user claim | Shorter code | Destroys D-11/D-12 semantics + ledger honesty | Never |
-| Client-side cron humanization | No server round-trip | Label lies at DST, dual parser forever | Never |
-| Filtering unified history on the client | One simple endpoint | Authorization leak (server sent everything) | Never |
-| Widening `workspacesForUser` for pickers | One-line change | Isolation regression across every consumer | Never (explicitly ruled out) |
-| Redesigning role tabs with new mutation endpoints | Fresher UX | Duplicated guards, split audit trail | Never — re-skin existing endpoints |
+| Client-side-only GUID validation | Faster save UX | Dead mappings, unique-index 500s, MCP-mirror drift | Never — server funnel is one import away |
+| Per-row bespoke render for the mappings table | Quicker delete repaint | Escaping drift → stored XSS | Never — one template, full repaints |
+| Probing all destinations on list load | "Complete" availability column | Restore console hangs when a NAS is down | Never — on-demand probe |
+| New per-source run stages | Granular history | Breaks badges/emails/filters | Never — error text carries detail |
+| Docs patch appended to the old Operator note | Small diff | Two contradictory paragraphs; wrong first step persists | Never — rewrite the section |
+| Skipping pg-parity tests for the new routes | Faster phase | Dialect-specific constraint error shapes diverge | Never — parity suite is a standing gate |
+
+## Integration Gotchas
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Entra manifest | Assuming `groups` claim appears by default | `groupMembershipClaims: "ApplicationGroup"` + group assignment to the Enterprise App; document both |
+| Entra guest tokens | Treating `OIDC_TRUST_TENANT_EMAIL` as covering guests (`acct=1` / external `idp`) | Guests always require literal `email_verified: true` (server.js:6689–6699); docs and tests must pin this |
+| Azure AD email claims | Assuming `email_verified` is present on work/school tokens | It's routinely omitted; that omission is why the flag exists — docs must lead with the flag |
+| S3/FTP/SMB seams during restore | Calling the client directly for the "chosen" source | Only through the guarded read-back twin pattern (flag + config + sha256 + dropStagedTmp + mirrorMissing clearing) |
+| node:sqlite vs pg | Assuming constraint errors have the same shape | Catch both, map to one keyed refusal; parity test per dialect |
+
+## Performance Traps
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Probe-per-row availability | Restore list takes seconds; hangs when a host is down | Flags render synchronously; probe on explicit user action | Immediately with any unreachable destination |
+| N+1 label/mapping lookups in the list route | Slow mappings page as rows grow | One JOIN / one query for mappings + workspace names | ~hundreds of mappings |
+| Serial probes in the on-demand check | Checking 3 sources takes 3× the slowest | Parallelize the three probes (Promise.all) with per-source timeout | First use against a slow NAS |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Unified history returns unfiltered rows | Cross-workspace data leak to Restore Ops | Server-side per-run scope check (Pitfall 4) + e2e pin |
-| Widening `workspacesForUser` | Global authority widening beyond Backup/Restore | Frozen seam; separate picker helper |
-| Purge deleting audit rows | Forensic trail loss | Append-only audit_log; snapshot label/prefix into audit ctx before key-row deletion |
-| Existence oracle in pickers | Non-operator learns workspace names/slugs | Operators-only endpoints answer the full list; others keep 404/fail-closed |
+| Label interpolated raw in any re-render | Stored XSS by/persistent across operator sessions | `esc()` in the single shared template; hostile-label test |
+| 403/404 mixing on mapping routes | Existence oracle for GUIDs/workspaces | Uniform 404 discipline for non-operators; never echo requested GUID |
+| Viewer/instance-role accepted in a hand-crafted POST | Silent access widening at next SSO login | Strict token funnel in every write path; locked-decision unit tests |
+| Mirror flag cleared by a UI availability probe | Restore loses its truthful source record; future restores skip a good mirror | Only the restore-time `mirrorMissing` seam clears flags (restore.js:1663+) |
+| Trusting `email_verified` presence on Entra member tokens | Lockout (fail-closed) misdiagnosed as tenant misconfig | `OIDC_TRUST_TENANT_EMAIL` documented as the first step, guest carve-out explicit |
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Delete copy promising instant member removal | Operators distrust the feature ("nothing happened") | Copy states lazy revocation at next SSO login, guards intact |
+| UNMAPPED-at-login with no diagnostic | Operators debug the app, not the tenant | Docs diagnostic: claim absent vs >200 overage vs missing mapping row |
+| Source picker with no availability feedback | Operator picks a dead mirror, restore fails late | On-demand per-source check with clear pass/fail; failure does NOT auto-switch silently without saying so |
+| GUID paste field rejecting valid variants | "Microsoft gave me this ID and your form calls it invalid" | Accept braces/uppercase/no-hyphen; canonicalize client-side for preview, server-side for truth |
+| Dead mappings left visible with no warning | Orphaned rows accumulate; operators map to deleted workspaces | Surface the existing dead-mapping warning pattern (v3.2 governance card) on the new page |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **GFS naming:** pure function shared by `archiveName` AND rotation; bucket stored on run row; sidecar filename = final uniquified name
-- [ ] **GFS labels:** UI uses `GFS_SCALE_KEYS` ×5 locales; filename uses machine tokens — no localized text in filenames
-- [ ] **Digest:** per-workspace claim intact; one outbox row per user/day; restart + MAILER-disabled paths don't double-send; empty sections don't claim
-- [ ] **Cron labels:** generated from `parseCron`; custom subset falls back to raw expr; ×5 locales; DST matrix extended to labels
-- [ ] **Unified history:** server-side scope filter; non-member workspaces absent even as redacted ghosts; e2e for Restore-Op visibility
-- [ ] **Role tabs:** implicit membership badge; last-Super-Admin revoke disabled with localized reason; zero new mutation endpoints
-- [ ] **Key purge:** audit trail survives; only `revoked_at` rows deleted; caller-scoped
-- [ ] **Cross-workspace:** `workspacesForUser` byte-unchanged; e2e switcher-vs-picker differential
-- [ ] **Milestone-wide:** every new i18n key lands ×5 in the same commit; any DDL mirrored SQLite+Postgres; every mutation audited
+- [ ] **Mappings save:** duplicate save returns keyed `groupMappingDuplicate`, not 500 — verify in BOTH dialects
+- [ ] **Mappings save:** `{braced}` / uppercase / no-hyphen paste collapses to the canonical row — verify a second save refuses
+- [ ] **Mappings delete:** memberships untouched; login-time removal sync still demotes with last-owner guard — verify by simulation
+- [ ] **Mappings render:** hostile label through poll refresh + locale switch + delete repaint produces zero unescaped sinks
+- [ ] **Mappings gates:** non-operator route responses are oracle-free (404-discipline), nav gate reads only published config flags
+- [ ] **OIDC docs:** guest carve-out sentence present; Operator note no longer leads with tenant email verification; .env.example lists strict tokens + guest caveat
+- [ ] **OIDC docs:** `ApplicationGroup` manifest step + Enterprise App group assignment + GUID location all present
+- [ ] **Restore source:** zero probes during page load; flags (`uploaded`/`ftp_uploaded`/`smb_uploaded`) are the only render-time truth
+- [ ] **Restore source:** selected source goes through the guarded twin seam (sha256, dropStagedTmp, mirrorMissing → clearMirrorFlag, lock released)
+- [ ] **Restore source:** no new stage enums; failures carry detail in error text + audit; restore list run-history filters unbroken
+
+## Recovery Strategies
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Duplicate/dead GUID rows | LOW | SELECT duplicates by canonical form, delete extras, audit login matches during the window |
+| Stored XSS via label | MEDIUM | Fix template, purge hostile labels, check audit/notifications for render-time side effects, rotate if sessions were hijacked |
+| Docs mislead operator | LOW | Rewrite section; no code impact |
+| Probe-on-load hang | LOW | Move probe to on-demand; no data damage |
+| Mirror flag cleared erroneously | MEDIUM | Re-verify the archive exists at that source, restore flag + audit row (pattern exists: `mirror_flag_cleared`) |
+| New stage enum shipped | HIGH | Migration back to coarse stages + badge/email/filter regression sweep — avoid by freezing vocabulary |
+| Staging/source mid-run swap | HIGH | Cancel run, sweep staging, full re-run from the chosen source; verify lock released |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| 1 GFS drift | Backup naming phase | Unit pin on shared pure function; rotation-preview e2e; sidecar hash/filename match test |
-| 2 Digest aggregation | Notifications digest-fix phase | 4×-repro regression test; claim-intact unit tests; per-user/day outbox pin |
-| 3 Cron humanization | Backup tasks console phase | Label↔`nextRunAt` DST matrix extension; ×5 locale gate |
-| 4 History leak | Backup tasks console phase | Restore-Op-no-membership e2e (0 workspace names) |
-| 5 Role tabs | Instance Roles governance phase | Last-Super-Admin disabled revoke UAT; audit single-source check |
-| 6 Key purge | Settings phase | Audit-entry survival test post-purge; revoked-only assertion |
-| 7 Scope widening | Cross-workspace pickers phase | `workspacesForUser` untouched grep gate + switcher/picker differential e2e |
+| 1. Raw GUID storage | Mappings backend | Canonical-variant collapse test; grep: all INSERTs through `canonicalizeGuid` |
+| 2. Label XSS | Mappings UI | Hostile-label render test across re-render paths |
+| 3. Delete semantics | Mappings UI | Delete leaves memberships untouched; login sync test green |
+| 4. Unique-index 500 | Mappings backend | Duplicate-save keyed refusal, sqlite + pg parity |
+| 5. Existence oracle | Mappings backend | 404-matrix test for non-operator route access |
+| 6. Viewer-role leak | Mappings backend | POST role=viewer / kind=instance refused, 5-locale keys |
+| 7. Wrong-docs Operator note | OIDC docs phase | Docs-vs-server.js:6673–6715 re-read; guest carve-out pinned |
+| 8. Missing Azure steps | OIDC docs phase | Checklist present: manifest, app assignment, GUID source |
+| 9. Probe-on-load | Restore source UI | Page-load path contains zero `probe*` calls (grep/test) |
+| 10. Twin-seam bypass | Restore source backend | New source leg matches twin guard contract; fall-through + sweep tests |
+| 11. Mid-run source swap | Restore source backend | Source frozen at staging start; switch = new runId test |
+| 12. Stage-enum inflation | Restore source backend | Stage vocabulary diff empty; failure text + audit carry detail |
 
 ## Sources
 
-- Code read directly (HIGH confidence): `server.js:2815-2925` (digest claim/outbox), `server.js:3844-4028` (GFS rotation, `gfsKeptPositions`), `server.js:9203-9310` (rotation projection), `server.js:5813` + capability gates, `server.js:7662-7747` (api keys), `export/backup.js:536-575, 707-846` (naming, sidecar, S3), `export/cron.js:83-178` (parser + DST walk), `src/pages/backup.js:136-380` (GFS_SCALE_KEYS, retention form)
-- `.planning/PROJECT.md` v3.3 shipped record + owner rulings for v3.4 (D-86 frozen format, D-10/D-11/D-12/D-13, POL-02, D-88-6/8/9, D-90-12/15/16)
+- Codebase (HIGH confidence, read directly): `groups.js` (canonicalizeGuid:34, guidRefusal:54, role tokens:58), `server.js` (SSO callback email_verified logic:6673–6715, guestShape:6689, boot-frozen destination capabilities:386–441), `export/restore.js` (staging doctrine:23–59, read-back twins:1641–1691, mirrorMissing/clearMirrorFlag:1317–1327, upload arms 2151–2182, 2419–2451), `export/backup.js` (upload_failed semantics:914–1075), `db-adapter.mjs` (group_mappings schema + unique index:390–415), `docs/DEPLOY.md` (current Operator note:332–336, mirror docs:1731–1931), `test/groups-sso.test.mjs` (mock-IdP test patterns).
+- Milestone doctrine: PROJECT.md v3.6 goals; v3.2 removal-sync design; v3.5 destination registry / dormant-slot contract; Phase 89 D-89-32 staging rules.
+- Community wisdom (MEDIUM, general): hand-rolled-UI escaping conventions; Postgres/SQLite constraint-error shape divergence; Azure AD email claim omission documented widely (corroborates server.js comment).
 
 ---
-*Pitfalls research for: gr8r v3.4 UX Polish & Backup Console Refinement*
-*Researched: 2026-11-23*
+*Pitfalls research for: Entra ID Mappings page, OIDC linking docs, restore-source selection on the Projects Studio zero-dep stack*
+*Researched: 2026-11-27*
