@@ -211,7 +211,10 @@ const historyTr = run => {
       ? `<span class="badge red">${t(run.status === 'failed' ? 'page.backup.statusFailed' : 'page.backup.statusUploadFailed')}</span>`
       : `<span class="badge ${run.status === 'succeeded' ? 'green' : ''}">${t(RUN_STATUS_KEYS[run.status] || 'page.backup.statusUnknown')}</span>` +
         (warn ? ` <span class="badge amber" title="${esc(t('page.backup.missingBlobWarn', { n: Number(run.missing_blob_count) }))}">${t('page.backup.statusWarning')}</span>` : '') +
-        (run.location === 'local' || run.location === 's3'
+        /* 2026-11-27 UAT (owner: a local-deleted ftp/smb run showed NO
+           badge at all): the PRIMARY badge renders for every resolvable
+           location — the mirror flags below stay the SECONDARY badges. */
+        (run.location && run.location !== 'missing'
           ? ` <span class="badge${run.location === 's3' ? ' accent' : ''}">${t(RESTORE_LOCATION_KEYS[run.location])}</span>`
           : '') +
         /* UAT 2026-11-26 (owner report: a local+S3 run showed only "Local"):

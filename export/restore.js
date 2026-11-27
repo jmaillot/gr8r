@@ -1625,6 +1625,19 @@ export async function restoreOverwriteUnit(opts = {}) {
   let archivePath = opts.archivePath ?? (backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null);
   let stagedTmp = null;
   const dropStagedTmp = () => { if (stagedTmp) { try { fs.rmSync(stagedTmp, { force: true }); } catch { /* best-effort */ } stagedTmp = null; } };
+  /* 2026-11-27 UAT (owner: overwrite of an s3-located run answered
+     restoreArchiveMissing): the s3 read-back twin joins FIRST (registry
+     order s3 > ftp > smb, D-04) — GUARDED like the ftp/smb twins. */
+  if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object' && backupRun.filename) {
+    try {
+      const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
+      archivePath = back.tmpPath;
+      stagedTmp = back.tmpPath;
+    } catch (err) {
+      dropStagedTmp();
+      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
+    }
+  }
   if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
     try {
       const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());

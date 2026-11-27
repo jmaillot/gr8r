@@ -4099,7 +4099,7 @@ export async function runBackupSchedulerPass({ now: at } = {}) {
          chosen over a pre-claim getRunState() probe). A refused fire records
          a skipped_overlap history row (D-06 — never silent) and never starts
          a second export. */
-      const result = await runExport(scope, { taskId: task.id, trigger: 'scheduled' });
+      const result = await runExport(scope, { taskId: task.id, trigger: 'scheduled', taskName: task.name });
       if (!result.ok && result.code === 'backupRunInProgress') {
         await db.run(
           'insert into backup_runs (id, task_id, scope, trigger, status, started_at, created_at) values (?,?,?,?,?,?,?)',
@@ -9893,7 +9893,7 @@ async function handleApi(req, res, url) {
         );
         return fail(res, 400, 'taskNotFound', 'That backup task does not exist');
       }
-      const taskRow = await db.get('select id, scope from backup_tasks where id = ?', [body.taskId]);
+      const taskRow = await db.get('select id, name, scope from backup_tasks where id = ?', [body.taskId]);
       if (!taskRow) {
         await db.run(
           'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -9920,7 +9920,7 @@ async function handleApi(req, res, url) {
        runTaskId (option B, UAT 2026-11-26) routes the per-task opt-in gates —
        trigger stays 'manual' (the history row and rotation semantics keep
        their manual truth; only the destination opt-ins follow the task). */
-    const started = runExport(scope, runTaskId ? { taskId: runTaskId, trigger: 'manual' } : undefined);
+    const started = runExport(scope, runTaskId ? { taskId: runTaskId, trigger: 'manual', taskName: taskRow?.name } : undefined);
     const runId = getRunState()?.runId;
     if (!started || !runId) {
       await db.run(
@@ -10052,6 +10052,11 @@ async function handleApi(req, res, url) {
         }
         return false;
       };
+      /* UAT 2026-11-27 owner rename: the run label leads with the TASK NAME
+         for task-scoped rows — one batched name lookup (fail-open: a task
+         deleted after the run degrades to the Phase-92 instance-scope shape,
+         same posture as the filename fallback). */
+      const taskNames = new Map((await db.all('select id, name from backup_tasks')).map(t => [t.id, t.name]));
       const out = [];
       for (const r of rows) {
         if (!(await visible(r))) continue; // dropped, never error'd
@@ -10069,9 +10074,10 @@ async function handleApi(req, res, url) {
         out.push({
           ...pub,
           location: destLocation(r),
-          /* Phase 94 renders this verbatim — the instance-scope-gfs run label,
-             resolved server-side (BKNAME-01: the client derives nothing). */
-          label: runLabel({ instance: instanceSlug(), scope: scope?.kind ?? 'instance', label: name, gfsBucket: r.gfs_bucket, createdAt: r.created_at }),
+          /* Phase 94 renders this verbatim — the run label mirrors the
+             archive filename exactly (BKNAME-01: the client derives
+             nothing; UAT 2026-11-27: task rows lead with the task name). */
+          label: runLabel({ instance: instanceSlug(), scope: scope?.kind ?? 'instance', label: name, gfsBucket: r.gfs_bucket, createdAt: r.created_at, taskId: r.task_id, taskName: taskNames.get(r.task_id) || '' }),
         });
       }
       return json(res, 200, { runs: out });
@@ -10601,6 +10607,7 @@ async function handleApi(req, res, url) {
       targetProjectId: projectScope ? targetProjectId : undefined,
       ftpConfig: FTP.enabled ? FTP.config() : null,
       smbConfig: SMB.enabled ? SMB.config() : null,
+      s3Config: S3.enabled ? S3.config() : null, // 2026-11-27 UAT: the overwrite s3 twin needs the 88-01 seam like import_new/DR
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`overwrite restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:overwrite', null, projectScope ? 'project' : 'workspace');
@@ -10702,13 +10709,24 @@ async function handleApi(req, res, url) {
            smb_uploaded row fetches through its own client's staged seam
            — the key derivation mirrors the upload arms (task-prefix +
            filename). The registry order (s3 > ftp > smb, D-04) picks the
-           seam when several flags are set. */
+           seam when several flags are set.
+           2026-11-27 UAT (owner: the Restore dialog answered a bare
+           "Internal server error" on an smb-located run): a TRANSPORT
+           failure inside a staged fetch (DSM throttle, connection reset,
+           fid churn) is a keyed 404 — never a bare throw → 500. The
+           owner-visible detail rides the fail message. */
         if (row.uploaded === 1) {
           if (!S3.enabled) {
             await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
           }
-          const back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+          let back = null;
+          try {
+            back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+          } catch (err) {
+            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
+          }
           stagedPath = back.tmpPath;
           archivePath = back.tmpPath;
         } else if (row.ftp_uploaded === 1) {
@@ -10716,7 +10734,13 @@ async function handleApi(req, res, url) {
             await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in FTP but no FTP destination is configured');
           }
-          const back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          let back = null;
+          try {
+            back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          } catch (err) {
+            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
+          }
           stagedPath = back.tmpPath;
           archivePath = back.tmpPath;
         } else {
@@ -10724,7 +10748,13 @@ async function handleApi(req, res, url) {
             await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in SMB but no SMB destination is configured');
           }
-          const back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          let back = null;
+          try {
+            back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          } catch (err) {
+            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
+          }
           stagedPath = back.tmpPath;
           archivePath = back.tmpPath;
         }
