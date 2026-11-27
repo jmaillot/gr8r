@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 
 import en from '../src/locales/en.json' with { type: 'json' };
 import fr from '../src/locales/fr.json' with { type: 'json' };
@@ -84,6 +85,48 @@ test('the mappings row template renders createdAt/updatedAt timestamps', () => {
   const p = src('src/pages/mappings.js');
   assert.match(p, /ago\(m\.createdAt\)/, 'createdAt timestamp missing from the row template');
   assert.match(p, /ago\(m\.updatedAt\)/, 'updatedAt timestamp missing from the row template');
+});
+
+/* =====================================================================
+   102-01 Task 2 (TDD): src/core/guid.js — the client canonicalizeGuid
+   port of groups.js:27-55. Acceptance contract: {braced}/no-hyphen/
+   uppercase inputs canonicalize identically to the server implementation
+   (D-08 client pre-check and the server funnel never diverge); garbage/
+   null/undefined → ''.
+   ===================================================================== */
+import { canonicalizeGuid } from '../src/core/guid.js';
+
+const GUID = 'd16b5a5b-1234-4abc-9d2e-abcdef012345';
+
+test('canonicalizeGuid: braced + uppercase accepted → hyphenated lowercase', () => {
+  assert.equal(canonicalizeGuid('{D16B5A5B-1234-4ABC-9D2E-ABCDEF012345}'), GUID);
+});
+
+test('canonicalizeGuid: 32-hex accepted → hyphenated lowercase form', () => {
+  assert.equal(canonicalizeGuid('d16b5a5b12344abc9d2eabcdef012345'), GUID);
+  assert.equal(canonicalizeGuid('D16B5A5B12344ABC9D2EABCDEF012345'), GUID);
+});
+
+test('canonicalizeGuid: garbage/null/undefined → empty string', () => {
+  assert.equal(canonicalizeGuid('not-a-guid'), '');
+  assert.equal(canonicalizeGuid(null), '');
+  assert.equal(canonicalizeGuid(undefined), '');
+});
+
+test('canonicalizeGuid: whitespace-padded input → trimmed canonical form', () => {
+  assert.equal(canonicalizeGuid(`  ${GUID.toUpperCase()}  `), GUID);
+});
+
+/* the bundling doctrine: groups.js is a server-root module — no src/ file
+   may import it (research § GUID canonicalization importability verdict) */
+test('no src/ file imports groups.js (server-only module, never bundled)', () => {
+  let out = '';
+  try {
+    out = execFileSync('grep', ['-rlE', `import[^;]*['"].*groups\\.js['"]`, 'src/'], { cwd: ROOT, encoding: 'utf8' });
+  } catch {
+    /* grep exit 1 = no matches = the invariant holds */
+  }
+  assert.equal(out.trim(), '', 'a src/ file imports groups.js');
 });
 
 /* the quiet empty state (D-10) rides the house empty() helper with the

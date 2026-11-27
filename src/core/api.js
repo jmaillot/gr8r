@@ -461,6 +461,17 @@ export const api = {
   async groupMappings({ signal } = {}) {
     return call('GET', '/api/governance/group-mappings', undefined, { signal });
   },
+  /* 102-01 Task 2 (Phase 101 POST/DELETE handlers, server.js:8962/9081):
+     the body fields are camelCase groupGuid/workspaceId/role/label (read
+     verbatim from the server POST handler); the client pre-check (D-08)
+     canonicalizes the GUID before submit — the server re-checks everything.
+     `call('DELETE', …)` is the established verb form (revokeApiKey etc.). */
+  async groupMappingCreate(body) {
+    return call('POST', '/api/governance/group-mappings', body);
+  },
+  async groupMappingDelete(id) {
+    return call('DELETE', `/api/governance/group-mappings/${encodeURIComponent(id)}`);
+  },
   /* 85-02 (D-19/D-24): the Backup page's ground truth — the stub payload
      carries the capability flags beside the (Phase 86/87) task list. */
   async backupTasks({ signal } = {}) {
