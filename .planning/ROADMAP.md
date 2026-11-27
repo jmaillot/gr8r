@@ -64,8 +64,12 @@ Plans:
   3. An operator can delete a mapping through an inline-confirm whose copy states the lazy revocation semantics verbatim ("members will lose access at their next Microsoft sign-in"); success shows a toast and refreshes the list; the archived-workspaces audit funnel stays untouched.
   4. The dead-mappings warning card (orphans + guard-refused trail, display-only) renders below the mappings list on the new page and no longer appears on the Governance tab.
 
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 102-01-PLAN.md — Structural skeleton: lazy route + cosmetic nav gate, API methods, guid.js port, list + empty state, strict dead-mappings card move out of Governance (MAPUI-01, MAPUI-04)
+- [ ] 102-02-PLAN.md — CRUD interactions: always-visible create form with keyed refusal toasts, row hint badges + count chip, staged inline-confirm delete with verbatim lazy-revocation copy (MAPUI-02, MAPUI-03)
 
 ### Phase 103: Restore-Source Refactor — Extract the Shared Ladder
 
