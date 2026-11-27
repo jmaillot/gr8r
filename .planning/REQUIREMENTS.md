@@ -16,10 +16,10 @@
 
 ### Mappings backend (MAP)
 
-- [ ] **MAP-01**: Operator can list all group mappings via `GET /api/governance/group-mappings` — each row carries group_guid, label, role, kind, workspace name resolved server-side (client never names workspaces by bare id), created/updated timestamps; guard ladder identical to dead-mappings GET (sameOrigin → requireUser → operator gate before any lookup → operator-keyed throttle).
-- [ ] **MAP-02**: Operator can delete a mapping via `DELETE` (id-keyed) — sameOrigin + operator gate + keyed throttle; audited (`group_mapping_deleted`); refusal codes ×5 locales (unknown id = same generic 404-or-keyed-refusal posture as the family, no existence oracle); the route NEVER writes to memberships/team_members (lazy revocation is the callback's job).
-- [ ] **MAP-03**: Mapping create (existing POST) and delete funnel every write through `canonicalizeGuid`/`guidRefusal`/`roleTokenRefusal` (groups.js:34/54/64) — paste variants ({braced}, no-hyphen, uppercase) collapse to one key; viewer role refuses at save; (group_guid, workspace_id) unique-index collision maps to the keyed `groupMappingDuplicate` refusal in BOTH SQLite and Postgres dialects (never a raw 500).
-- [ ] **MAP-04**: The mappings list surfaces dead-mapping hints — rows pointing at archived/deleted workspaces flagged inline, and label/GUID mismatches surfaced from stored provenance (`group:<guid>` membership rows) where derivable, so the dead-mapping problem the v3.2 card warns about becomes visible before it happens.
+- [x] **MAP-01**: Operator can list all group mappings via `GET /api/governance/group-mappings` — each row carries group_guid, label, role, kind, workspace name resolved server-side (client never names workspaces by bare id), created/updated timestamps; guard ladder identical to dead-mappings GET (sameOrigin → requireUser → operator gate before any lookup → operator-keyed throttle).
+- [x] **MAP-02**: Operator can delete a mapping via `DELETE` (id-keyed) — sameOrigin + operator gate + keyed throttle; audited (`group_mapping_deleted`); refusal codes ×5 locales (unknown id = same generic 404-or-keyed-refusal posture as the family, no existence oracle); the route NEVER writes to memberships/team_members (lazy revocation is the callback's job).
+- [x] **MAP-03**: Mapping create (existing POST) and delete funnel every write through `canonicalizeGuid`/`guidRefusal`/`roleTokenRefusal` (groups.js:34/54/64) — paste variants ({braced}, no-hyphen, uppercase) collapse to one key; viewer role refuses at save; (group_guid, workspace_id) unique-index collision maps to the keyed `groupMappingDuplicate` refusal in BOTH SQLite and Postgres dialects (never a raw 500).
+- [x] **MAP-04**: The mappings list surfaces dead-mapping hints — rows pointing at archived/deleted workspaces flagged inline, and label/GUID mismatches surfaced from stored provenance (`group:<guid>` membership rows) where derivable, so the dead-mapping problem the v3.2 card warns about becomes visible before it happens.
 
 ### Mappings UI (MAPUI)
 
@@ -60,10 +60,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | Phase 101 | Pending |
-| MAP-02 | Phase 101 | Pending |
-| MAP-03 | Phase 101 | Pending |
-| MAP-04 | Phase 101 | Pending |
+| MAP-01 | Phase 101 | Complete |
+| MAP-02 | Phase 101 | Complete |
+| MAP-03 | Phase 101 | Complete |
+| MAP-04 | Phase 101 | Complete |
 | MAPUI-01 | Phase 102 | Pending |
 | MAPUI-02 | Phase 102 | Pending |
 | MAPUI-03 | Phase 102 | Pending |
