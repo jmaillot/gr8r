@@ -5002,6 +5002,16 @@ const RESTORE_REFUSAL_TOASTS = {
 const restoreToast = (code, raw) =>
   RESTORE_REFUSAL_TOASTS[code] ? t(RESTORE_REFUSAL_TOASTS[code]) : tErr(code, null, raw || t('err.serverUnreachable'));
 
+/* UAT 2026-11-27 (owner): a restoreArchiveMissing refusal carries the SERVER
+   detail (which seam failed and why — smbPathNotFound vs a transport error).
+   The generic locale copy alone read as "gone from both destinations" even
+   when the mirror was present but the fetch failed — the detail rides the
+   toast so a DSM throttle and a true absence are distinguishable. */
+const restoreMissingToast = (code, data) =>
+  code === 'restoreArchiveMissing' && data?.error
+    ? `${t('err.restoreArchiveMissing')} — ${data.error}`
+    : restoreToast(code, data?.error);
+
 /* UAT round-9 (owner ruling): the standalone archive list is retired — the
    Restore action rides the unified history table rows; refreshRestoreBackups
    (the list fill loop) is gone with it. */
@@ -5534,7 +5544,11 @@ A.backupDownload = async el => {
       } catch {
         /* non-JSON error body */
       }
-      return toast(restoreToast(data?.code, data?.error), { kind: 'err' });
+      if (data?.code === 'restoreArchiveMissing') {
+        refreshBackupHistory().catch(() => {});
+        refreshRestoreHistory().catch(() => {});
+      }
+      return toast(restoreMissingToast(data?.code, data), { kind: 'err' });
     }
     const [{ saveBlob, filenameFrom }] = await Promise.all([import('../core/download.js')]);
     saveBlob(await res.blob(), filenameFrom(res.headers.get('Content-Disposition')));
@@ -5565,7 +5579,7 @@ A.backupVerifyChecksum = async el => {
       /* call()'s refusal envelope carries the centrally translated message
          in .error (the raw code is dropped), so restoreToast resolves
          through tErr's raw fallback when the map misses. */
-      return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+      return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
     }
     /* Both outcomes persisted server-side — the owner ruling (UAT round-5):
        the result surfaces as a TOAST at click time, no durable badge.
@@ -5607,7 +5621,7 @@ A.backupPreviewDeletions = async el => {
     S.ui.backupDeletions = null;
     render();
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
-    return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+    return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
   }
   S.ui.backupDeletions = res.data?.noRuns
     ? { noRuns: true }
@@ -5690,7 +5704,14 @@ A.restorePreview = async el => {
     S.ui.restorePreview = null;
     render();
     if (res.status === 401) return;
-    return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+    /* UAT 2026-11-27: a restoreArchiveMissing refusal may have cleared a
+       mirror flag server-side (mirror-truth maintenance) — the history
+       refills so the badge re-resolves honestly without a manual F5. */
+    if (res.data?.code === 'restoreArchiveMissing') {
+      refreshBackupHistory().catch(() => {});
+      refreshRestoreHistory().catch(() => {});
+    }
+    return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
   }
   S.ui.restorePreviewData = { data: res.data };
   render();
@@ -5719,7 +5740,7 @@ A.restoreUploadPick = () => {
     const res = await api.restoreUploadArchive(file);
     if (!res.ok) {
       if (res.status === 401) return;
-      return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+      return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
     }
     toast(t('page.backup.uploadedRestore'), { kind: 'ok' });
     await Promise.all([refreshBackupHistory(), refreshRestoreHistory()]);
@@ -5747,7 +5768,7 @@ A.restoreNew = async el => {
   const res = await api.restoreRun({ runId, targetWorkspaceId: S.ui.restoreTarget || undefined });
   if (!res.ok) {
     if (res.status === 401) return;
-    return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+    return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
   }
   S.ui.restorePreview = null;
   S.ui.restorePreviewData = null;
@@ -5805,7 +5826,7 @@ A.restoreOverwrite = el => {
         const res = await api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name });
         if (!res.ok) {
           if (res.status === 401) return;
-          return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+          return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
         }
         S.ui.restorePreview = null;
         S.ui.restorePreviewData = null;
@@ -5831,7 +5852,7 @@ A.restoreOverwrite = el => {
       const res = await api.restoreOverwrite({ runId, targetId: target.id, confirmName: target.name });
       if (!res.ok) {
         if (res.status === 401) return;
-        return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+        return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
       }
       S.ui.restorePreview = null;
       S.ui.restorePreviewData = null;
@@ -5860,7 +5881,7 @@ A.restoreInstance = el => {
       const res = await api.restoreInstance({ runId, confirmPhrase: DR_CONFIRM_PHRASE });
       if (!res.ok) {
         if (res.status === 401) return;
-        return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+        return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
       }
       S.ui.restorePreview = null;
       S.ui.restorePreviewData = null;

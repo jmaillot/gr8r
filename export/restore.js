@@ -1307,6 +1307,30 @@ export async function restoreImportAsNew(opts = {}) {
    auditBackupTask writes, mirrored here so the pre_restore snapshot trail
    (planner flag 1) exists even when the unit runs engine-only. Call sites
    wrap it — an audit hiccup never fails the safety net. */
+/* ---- UAT 2026-11-27 (owner ruling): mirror-truth maintenance ----
+   A live staged fetch that proves the remote object GONE (ftp 550 /
+   smb STATUS_OBJECT_NAME_NOT_FOUND / s3 404-NoSuchKey) may clear the
+   run's mirror flag — the badge then re-resolves honestly (D-89-14
+   run-row truth, updated BY a verification, never by per-render
+   probing). Best-effort: the flag write and the audit row never mask
+   the seam error that triggered them. */
+export function mirrorMissing(err) {
+  return err?.code === 'ftpPathNotFound' || err?.smbClass === 'pathNotFound' || err?.s3Status === 404 || err?.s3Code === 'NoSuchKey';
+}
+
+export async function clearMirrorFlag(runId, dest) {
+  const col = dest === 's3' ? 'uploaded' : dest === 'ftp' ? 'ftp_uploaded' : 'smb_uploaded';
+  try {
+    await dbRun(`update backup_runs set ${col} = 0 where id = ?`, [runId]);
+    await dbRun(
+      'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [crypto.randomUUID(), null, runId, `mirror_flag_cleared:${dest}`, 0, null, null, 'Backup system', '', '', '', Date.now()],
+    );
+  } catch {
+    /* best-effort — the flag write never masks the seam error */
+  }
+}
+
 async function dbRunAudit(action, operator, runId, targetName, workspaceId) {
   await dbRun(
     'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
@@ -1636,6 +1660,7 @@ export async function restoreOverwriteUnit(opts = {}) {
       stagedTmp = back.tmpPath;
     } catch (err) {
       dropStagedTmp();
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, 's3');
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
@@ -1646,6 +1671,7 @@ export async function restoreOverwriteUnit(opts = {}) {
       stagedTmp = back.tmpPath;
     } catch (err) {
       dropStagedTmp();
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'ftp');
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
@@ -1656,6 +1682,7 @@ export async function restoreOverwriteUnit(opts = {}) {
       stagedTmp = back.tmpPath;
     } catch (err) {
       dropStagedTmp();
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'smb');
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
@@ -2113,9 +2140,17 @@ export async function runRestore(opts = {}) {
     const localPath = backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null;
     if (!archivePath && localPath && fs.existsSync(localPath)) archivePath = localPath;
     if (!archivePath && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object') {
-      const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
+      try {
+        const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
+        archivePath = back.tmpPath;
+        stagedTmp = back.tmpPath;
+      } catch (err) {
+        /* UAT 2026-11-27: mirror-truth maintenance — a live fetch that
+           proves the object gone clears the flag (D-89-14, updated BY a
+           verification); the throw folds into the run row's fail event. */
+        if (mirrorMissing(err)) await clearMirrorFlag(runId, 's3');
+        throw keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`);
+      }
     }
     /* Phase 98 (98-04, D-05): ftp read-back twin — an ftp_uploaded run whose
        local archive rotated away comes home through the 97 client's
@@ -2123,9 +2158,14 @@ export async function runRestore(opts = {}) {
        Key derivation mirrors the 98-01 upload arm: task-prefix + filename.
        Local-first ordering preserved — this gate is additive below it. */
     if (!archivePath && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
-      const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
+      try {
+        const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+        archivePath = back.tmpPath;
+        stagedTmp = back.tmpPath;
+      } catch (err) {
+        if (mirrorMissing(err)) await clearMirrorFlag(runId, 'ftp');
+        throw keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`);
+      }
     }
     /* Phase 100 (100-05): smb read-back twin — an smb_uploaded run whose
        local archive rotated away comes home through the 99 client's
@@ -2134,9 +2174,14 @@ export async function runRestore(opts = {}) {
        Local-first ordering preserved — this gate is additive below it.
        sha256 verification lives in fetchSmbToStaged (100-01) — no re-verify. */
     if (!archivePath && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
-      const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
+      try {
+        const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
+        archivePath = back.tmpPath;
+        stagedTmp = back.tmpPath;
+      } catch (err) {
+        if (mirrorMissing(err)) await clearMirrorFlag(runId, 'smb');
+        throw keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`);
+      }
     }
     if (!archivePath || !fs.existsSync(archivePath)) {
       throw keyed('restoreArchiveMissing', 'restore: archive not found at either destination');
@@ -2371,6 +2416,7 @@ export async function restoreInstanceUnit(opts = {}) {
       stagedTmp = back.tmpPath;
     } catch (err) {
       dropStagedTmp();
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, 's3');
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
@@ -2386,6 +2432,7 @@ export async function restoreInstanceUnit(opts = {}) {
       stagedTmp = back.tmpPath;
     } catch (err) {
       dropStagedTmp();
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'ftp');
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }
@@ -2401,6 +2448,7 @@ export async function restoreInstanceUnit(opts = {}) {
       stagedTmp = back.tmpPath;
     } catch (err) {
       dropStagedTmp();
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'smb');
       return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`));
     }
   }

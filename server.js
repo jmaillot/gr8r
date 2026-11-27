@@ -90,7 +90,7 @@ import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (B
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
 import { connectFtp, probeFtp, fetchToStaged } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03); 2026-11-26 UAT: fetchToStaged in the preview/download/verify routes' ftp mirror leg
 import { probeSmb, connectSmb, fetchSmbToStaged } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity); 100-04: connectSmb for the prune wrappers; 2026-11-26 UAT: fetchSmbToStaged in the preview/download/verify routes' smb mirror leg
-import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter } from './export/restore.js';
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter, mirrorMissing, clearMirrorFlag } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -10820,6 +10820,8 @@ async function handleApi(req, res, url) {
           try {
             back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
           } catch (err) {
+            /* UAT 2026-11-27: a live fetch proving the object gone clears the mirror flag — the badge re-resolves honestly. */
+            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 's3');
             await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
           }
@@ -10834,6 +10836,7 @@ async function handleApi(req, res, url) {
           try {
             back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
           } catch (err) {
+            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'ftp');
             await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
           }
@@ -10848,6 +10851,7 @@ async function handleApi(req, res, url) {
           try {
             back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
           } catch (err) {
+            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'smb');
             await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
           }
@@ -10990,21 +10994,42 @@ async function handleApi(req, res, url) {
           }
           /* The 88-01 seam re-verifies the digest on the stream-back itself —
              a mismatch refuses keyed before any byte reaches the client. */
-          const back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+          let back = null;
+          try {
+            back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
+          } catch (err) {
+            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 's3');
+            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
+          }
           stagedPath = back.tmpPath;
         } else if (row.ftp_uploaded === 1) {
           if (!FTP.enabled) {
             await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in FTP but no FTP destination is configured');
           }
-          const back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          let back = null;
+          try {
+            back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          } catch (err) {
+            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'ftp');
+            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
+          }
           stagedPath = back.tmpPath;
         } else {
           if (!SMB.enabled) {
             await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
             return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in SMB but no SMB destination is configured');
           }
-          const back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          let back = null;
+          try {
+            back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
+          } catch (err) {
+            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'smb');
+            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
+          }
           stagedPath = back.tmpPath;
         }
       }
@@ -11106,7 +11131,11 @@ async function handleApi(req, res, url) {
             ok = back.sha256 === row.sha256; // the seam already refused on any mismatch
           } catch (err) {
             if (err?.s3Class === 'sha256Mismatch') ok = false;
-            else throw err;
+            else if (mirrorMissing(err)) {
+              await clearMirrorFlag(row.id, 's3');
+              await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+              return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
+            } else throw err;
           }
         } else if (row.ftp_uploaded === 1) {
           if (!FTP.enabled) {
@@ -11119,7 +11148,11 @@ async function handleApi(req, res, url) {
             ok = back.sha256 === row.sha256;
           } catch (err) {
             if (err?.code === 'ftpSha256Mismatch') ok = false;
-            else throw err;
+            else if (mirrorMissing(err)) {
+              await clearMirrorFlag(row.id, 'ftp');
+              await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+              return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
+            } else throw err;
           }
         } else {
           if (!SMB.enabled) {
@@ -11132,7 +11165,11 @@ async function handleApi(req, res, url) {
             ok = back.sha256 === row.sha256;
           } catch (err) {
             if (err?.code === 'smbSha256Mismatch') ok = false;
-            else throw err;
+            else if (mirrorMissing(err)) {
+              await clearMirrorFlag(row.id, 'smb');
+              await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+              return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
+            } else throw err;
           }
         }
       }

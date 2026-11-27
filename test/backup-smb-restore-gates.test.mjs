@@ -123,7 +123,7 @@ test('zero badge code: destLocation still reads smb_uploaded via the 96-02 order
   const i = s.indexOf("if (r.smb_uploaded === 1) return 'smb'");
   assert.ok(i !== -1, 'the ordered scan arm is the badge source');
   const r = restoreSrc();
-  assert.equal((r.match(/smb_uploaded/g) || []).length, 5, 'restore.js mentions smb_uploaded only at the gates (3 gate conditions + 2 doc comments)');
+  assert.equal((r.match(/smb_uploaded/g) || []).length, 6, 'restore.js mentions smb_uploaded only at the gates (3 gate conditions + 2 doc comments + clearMirrorFlag column map — UAT 2026-11-27 mirror-truth maintenance)');
 });
 
 test('the 99 client fetchSmbToStaged enforces sha256 (T-100-10 — no unverified bytes reach restore)', () => {

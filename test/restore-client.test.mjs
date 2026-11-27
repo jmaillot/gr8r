@@ -267,7 +267,11 @@ test('restore refusals ride the CLOSED toast map — every route-level code maps
      fallback inside restoreToast itself). */
   for (const a of ['A.restorePreview =', 'A.restoreNew =', 'A.restoreOverwrite =', 'A.restoreInstance =']) {
     const slice = actionsSrc.slice(actionsSrc.indexOf(a), actionsSrc.indexOf(a) + 1600);
-    assert.match(slice, /restoreToast\(/, `${a} surfaces refusals through the closed map`);
+    /* UAT 2026-11-27: restoreMissingToast wraps restoreToast — the
+       restoreArchiveMissing detail (which seam failed, why) rides the toast.
+       Client-side early refusals (restoreTargetMissing) keep restoreToast —
+       there is no server detail to carry. */
+    assert.match(slice, /restore(Missing)?Toast\(/, `${a} surfaces refusals through the closed map`);
   }
 });
 
