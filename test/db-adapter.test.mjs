@@ -338,6 +338,52 @@ test('group_mappings DDL: insert round-trip, 3-token role CHECK, unique (guid, w
   db.close();
 });
 
+/* ---- Phase 101 (MAP-03/D-14): static pg parity for the mappings family ---- */
+
+test('pg parity: group_mappings_pair unique index in the pg variant; GET/DELETE/pre-check SQL is placeholder-complete with zero on-conflict drift', () => {
+  // D-14 static assertion 1 — the pg variant carries the SAME pair index the
+  // SQLite schema does (mirror groups-core.test.mjs SCHEMA pinning).
+  assert.match(adapter.pgSchemaVariant(), /create unique index if not exists group_mappings_pair on group_mappings\(group_guid, workspace_id\)/);
+  assert.match(adapter.SQLITE_SCHEMA, /create unique index if not exists group_mappings_pair on group_mappings\(group_guid, workspace_id\)/);
+
+  // D-14 static assertion 2 — the new route SQL survives pgRewrite intact:
+  // every ? renumbered to $n, no placeholders lost, no `on conflict` injected
+  // for plain SELECT/DELETE (patterns :221-228, :443).
+  const getSql = `
+      select gm.id, gm.group_guid, gm.workspace_id, gm.role, gm.kind, gm.label,
+             gm.created_at, gm.updated_at,
+             w.name as workspace_name, w.slug as workspace_slug,
+             w.id is not null as ws_exists, w.archived as ws_archived,
+             (select count(*) from memberships mm
+                where mm.workspace_id = gm.workspace_id
+                  and mm.provenance = 'group:' || gm.group_guid) as live_members
+        from group_mappings gm
+        left join workspaces w on w.id = gm.workspace_id
+       order by gm.created_at desc`;
+  const pgGet = adapter.toPgSql(getSql);
+  assert.equal(pgGet.includes('?'), false, 'GET SQL must be placeholder-complete under pg');
+  assert.match(pgGet, /order by gm\.created_at desc/, 'pg GET keeps its ordering clause');
+  assert.equal(/\bon conflict\b/i.test(pgGet), false, 'GET is a plain select — no on-conflict drift');
+  assert.match(pgGet, /provenance = 'group:' \|\| gm\.group_guid/, '|| concatenation passes through untouched (both dialects)');
+
+  const preCheck = 'select 1 from group_mappings where group_guid = ? and workspace_id = ?';
+  const pgPre = adapter.toPgSql(preCheck);
+  assert.equal(pgPre.includes('?'), false);
+  assert.match(pgPre, /group_guid = \$1 and workspace_id = \$2/);
+
+  const deleteSql = 'delete from group_mappings where id = ?';
+  const pgDelete = adapter.toPgSql(deleteSql);
+  assert.equal(pgDelete, 'delete from group_mappings where id = $1', 'DELETE is placeholder-complete, no on conflict');
+
+  const insertSql =
+    'insert into group_mappings (id, group_guid, workspace_id, role, kind, label, created_by, created_at, updated_at) values (?,?,?,?,?,?,?,?,?)';
+  const pgInsert = adapter.toPgSql(insertSql);
+  assert.equal(pgInsert.includes('?'), false);
+  assert.match(pgInsert, /values \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9\)/, 'the 9-column POST insert renumbers across every ?');
+  assert.equal(/insert or/i.test(pgInsert), false, 'no SQLite insert-or form survives');
+});
+
+
 /* ---- INSTANCE-ROLES (Phase 85, BKROLE-01, D-01..D-04): in-memory DDL proof ---- */
 
 test('instance_roles DDL: insert round-trip, 2-token role CHECK, unique (user_id, role) pair, user cascade (D-04)', () => {

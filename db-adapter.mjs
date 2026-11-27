@@ -80,6 +80,22 @@ function splitLiterals(sql) {
   return parts;
 }
 
+/* Phase 101 (MAP-03, D-14): dialect-parity unique-violation classifier.
+   true when the error is a unique-constraint violation under EITHER engine:
+   - SQLite (node:sqlite): message `UNIQUE constraint failed: …` (shape proven
+     live at test/db-adapter.test.mjs:327).
+   - Postgres (node-postgres): `code === '23505'` (unique_violation) AND/OR the
+     message "duplicate key value violates unique constraint" — the message is
+     matched too (A1 widening) so the classifier still works if the pg error
+     shape drifts and stops carrying `.code`.
+   Anything else (CHECK violations, missing tables, syntax errors) returns
+   false — callers must rethrow. */
+export function isUniqueViolation(err) {
+  if (!err) return false;
+  if (err.code === '23505') return true;
+  return /UNIQUE constraint failed|duplicate key value violates unique constraint/i.test(String(err.message || ''));
+}
+
 export function toPgSql(sql) {
   const parts = splitLiterals(sql);
   let pgConflict = null; // 'nothing' | { target, sets: [col, ...] }

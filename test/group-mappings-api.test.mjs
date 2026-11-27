@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
+import { isUniqueViolation } from '../db-adapter.mjs';
 
 const GUID_OK = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
 const GUID_BRACED = '{a1b2c3d4-e5f6-7890-abcd-ef1234567890}'; // paste variant of the SAME group
@@ -308,4 +309,16 @@ test('dead-mappings trail returns ONLY encoded guard rows — group_mapping_save
   } finally {
     await server.stop();
   }
+});
+
+/* ---------- T7: the dialect-parity duplicate classifier (D-14, MAP-03) ---------- */
+
+test('isUniqueViolation: true for SQLite and pg unique-violation shapes, false for anything else', () => {
+  assert.equal(isUniqueViolation(new Error('UNIQUE constraint failed: group_mappings.group_guid, group_mappings.workspace_id')), true, 'SQLite shape (node:sqlite, proven db-adapter.test.mjs:327)');
+  assert.equal(isUniqueViolation(Object.assign(new Error('duplicate key value violates unique constraint "group_mappings_pair"'), { code: '23505' })), true, 'pg unique_violation by code');
+  assert.equal(isUniqueViolation(new Error('duplicate key value violates unique constraint "group_mappings_pair"')), true, 'pg message shape matched even without err.code (A1 widening)');
+  assert.equal(isUniqueViolation(null), false, 'null error is not a duplicate');
+  assert.equal(isUniqueViolation(new Error('CHECK constraint failed: role')), false, 'CHECK violations are NOT duplicates — must rethrow');
+  assert.equal(isUniqueViolation(new Error('no such table: group_mappings')), false);
+  assert.equal(isUniqueViolation(Object.assign(new Error('syntax error'), { code: '42601' })), false);
 });

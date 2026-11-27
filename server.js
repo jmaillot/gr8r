@@ -109,6 +109,7 @@ import {
   syncTaskFts,
   searchTasks,
   ftsSweep,
+  isUniqueViolation,
 } from './db-adapter.mjs';
 import { searchTerms, foldForSearch } from './search-terms.mjs';
 /* Phase 80 (GM-01): the group-mapping validators the save route consumes —
@@ -8996,10 +8997,20 @@ async function handleApi(req, res, url) {
       created_at: t,
       updated_at: t,
     };
-    await db.run(
-      'insert into group_mappings (id, group_guid, workspace_id, role, kind, label, created_by, created_at, updated_at) values (?,?,?,?,?,?,?,?,?)',
-      [row.id, row.group_guid, row.workspace_id, row.role, row.kind, row.label, row.created_by, row.created_at, row.updated_at],
-    );
+    // MAP-03/D-14 constraint backstop: a race or any future write path that
+    // bypasses the pre-check surfaces the raw constraint error — never a 500.
+    // The classifier (db-adapter.mjs, unit-tested) recognizes both dialect
+    // shapes; non-duplicate errors rethrow. Keyed refusal reuses the existing
+    // groupMappingDuplicate key verbatim — zero new locale keys.
+    try {
+      await db.run(
+        'insert into group_mappings (id, group_guid, workspace_id, role, kind, label, created_by, created_at, updated_at) values (?,?,?,?,?,?,?,?,?)',
+        [row.id, row.group_guid, row.workspace_id, row.role, row.kind, row.label, row.created_by, row.created_at, row.updated_at],
+      );
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      return fail(res, 400, 'groupMappingDuplicate', 'That group is already mapped to this workspace');
+    }
     // Research Open Question 3: audit the mutation cheaply now, avoid the
     // Phase 83 retrofit (same logSecurity discipline as the operator family).
     await logSecurity(operator.id, 'group_mapping_saved');
