@@ -499,3 +499,77 @@ test('?all=1 gate: unauthenticated 401; non-operator 403 (same chain as the froz
     await server.stop();
   }
 });
+
+/* ---------- restore upload (UAT 2026-11-27, owner) ----------
+   POST /api/backup/restore/upload — an off-instance .tar.gz lands in
+   BACKUPS_DIR under uploaded-<name>, passes the frozen 89-01 structural
+   gate BEFORE publishing, and inserts a succeeded row whose scope rides
+   the ARCHIVE manifest (the standard preview/trigger routes resolve it). */
+test('restore upload: a re-uploaded instance archive publishes as uploaded-<name>, previews like any run; invalid bytes and bad names refuse keyed; no restore role refuses', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-backup-upload-'));
+  plantData(dataDir);
+  const server = await startServer({ dataDir });
+  try {
+    const holder = await makeBackupOp(server, 'op-upload@test.local');
+    /* The upload route rides RESTORE_USE — grant it on top of backup_operator. */
+    const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const grant = await admin.post('/api/auth/operator/instance-roles', { userId: userIdByEmail(server, 'op-upload@test.local'), role: 'restore_operator' });
+    assert.equal(grant.status, 200, `restore grant: ${JSON.stringify(grant.data)}`);
+
+    /* Produce a REAL archive first: the happy path re-uploads it. */
+    const post = await holder.post('/api/backup/runs', { scope: { kind: 'instance' } });
+    assert.equal(post.status, 200);
+    const payload = await pollCurrent(holder, { until: p => p.stage === 'done' || p.stage === 'failed' });
+    assert.equal(payload.stage, 'done');
+    const bytes = fs.readFileSync(path.join(dataDir, 'backups', payload.filename));
+
+    const raw = (pathname, body, who = holder) =>
+      fetch(server.base + pathname, {
+        method: 'POST',
+        headers: { cookie: who.cookie(), 'content-type': 'application/octet-stream', connection: 'close' },
+        body,
+      }).then(async res => ({ status: res.status, data: await res.json().catch(() => null) }));
+
+    const bad = await raw('/api/backup/restore/upload?name=not-an-archive.tar.gz', crypto.randomBytes(512));
+    assert.equal(bad.status, 400, 'invalid bytes refuse keyed');
+    assert.equal(bad.data.code, 'restoreUploadInvalid', `invalid-bytes code: ${JSON.stringify(bad.data)}`);
+
+    const badName = await raw('/api/backup/restore/upload?name=x', bytes);
+    assert.equal(badName.status, 400);
+    assert.equal(badName.data.code, 'restoreUploadName');
+
+    const ok = await raw('/api/backup/restore/upload?name=my-export.tar.gz', bytes);
+    assert.equal(ok.status, 200, `upload: ${JSON.stringify(ok.data)}`);
+    assert.equal(ok.data.filename, 'uploaded-my-export.tar.gz', 'the filename carries the uploaded- prefix');
+    assert.match(ok.data.runId, UUID_RE);
+
+    /* The archive really landed, and the row resolves like any local run. */
+    assert.ok(fs.existsSync(path.join(dataDir, 'backups', 'uploaded-my-export.tar.gz')), 'the uploaded archive sits in BACKUPS_DIR');
+    const list = await holder.get('/api/backup/restore/backups');
+    assert.equal(list.status, 200);
+    const row = list.data.runs.find(r => r.runId === ok.data.runId);
+    assert.ok(row, 'the uploaded run rides the restorable list');
+    assert.equal(row.location, 'local');
+    assert.equal(row.trigger, 'manual', 'the frozen CHECK keeps trigger manual — the prefix is the UI discriminator');
+
+    const preview = await holder.get(`/api/backup/restore/preview?runId=${ok.data.runId}`);
+    assert.equal(preview.status, 200, `preview: ${JSON.stringify(preview.data)}`);
+    assert.equal(preview.data.scope?.kind, 'instance', 'the scope rides the ARCHIVE manifest');
+
+    /* A second upload of the same name uniquifies (D-01 suffix shape). */
+    const again = await raw('/api/backup/restore/upload?name=my-export.tar.gz', bytes);
+    assert.equal(again.status, 200);
+    assert.equal(again.data.filename, 'uploaded-my-export-2.tar.gz', 'the second collision gets -2 before .tar.gz (D-01 suffix shape)');
+
+    /* A logged-in user without RESTORE_USE refuses keyed + audited. */
+    const joined = await signup(server.base, { name: 'No Restore', email: 'no-restore@test.local' });
+    assert.equal(joined.status, 201);
+    const plain = (await login(server.base, 'no-restore@test.local', 'password-1234')).client;
+    const refused = await raw('/api/backup/restore/upload?name=my-export.tar.gz', bytes, plain);
+    assert.equal(refused.status, 403);
+    assert.equal(refused.data.code, 'backupRoleRequired');
+  } finally {
+    await server.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

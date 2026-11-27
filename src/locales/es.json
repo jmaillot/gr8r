@@ -2381,5 +2381,11 @@
   "restore.alert.done.project.body": "La restauración del proyecto «{name}» se completó — la copia restaurada está disponible en el nuevo espacio de trabajo «{ws}».",
   "restore.alert.done.overwrite.body": "La restauración por sobrescritura de «{name}» se completó — el contenido del destino se reemplazó en su lugar.",
   "page.backup.typeSnapshot": "Instantánea",
-  "page.restore.snapshotTip": "Antes de la restauración, se guarda localmente una instantánea del espacio de trabajo de destino (se conserva 30 días) para poder deshacer la operación."
+  "page.restore.snapshotTip": "Antes de la restauración, se guarda localmente una instantánea del espacio de trabajo de destino (se conserva 30 días) para poder deshacer la operación.",
+  "page.backup.uploadRestore": "Restaurar un archivo…",
+  "page.backup.uploadingRestore": "Subiendo el archivo…",
+  "page.backup.uploadedRestore": "Archivo subido — revísalo antes de restaurar",
+  "err.restoreUploadName": "Indica un archivo de copia de seguridad .tar.gz",
+  "err.restoreUploadInvalid": "No es un archivo de copia de seguridad projects-studio válido",
+  "err.restoreUploadFailed": "La subida del archivo falló"
 }

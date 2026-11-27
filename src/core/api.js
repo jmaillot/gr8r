@@ -557,6 +557,32 @@ export const api = {
   async restorePreview(runId, { signal } = {}) {
     return call('GET', `/api/backup/restore/preview?runId=${encodeURIComponent(runId)}`, undefined, { signal });
   },
+  /* UAT 2026-11-27 (owner): an off-instance archive uploads as a RAW body —
+     the same response envelope as call() without the JSON encoding. */
+  async restoreUploadArchive(file, { signal } = {}) {
+    let res;
+    try {
+      res = await fetch(`/api/backup/restore/upload?name=${encodeURIComponent(file.name || 'archive.tar.gz')}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        signal,
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file,
+      });
+    } catch {
+      return { ok: false, status: 0, error: t('err.serverUnreachable') };
+    }
+    let data = null;
+    const text = await res.text();
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        /* non-JSON response */
+      }
+    }
+    return { ok: res.ok, status: res.status, data, error: data?.code ? tErr(data.code, data, data?.error) : data?.error };
+  },
   async restoreRun(body, { signal } = {}) {
     return call('POST', '/api/backup/restore', body, { signal });
   },

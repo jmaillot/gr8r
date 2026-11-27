@@ -119,7 +119,7 @@ test('restore empty/loading/history states mirror the backup card discipline', (
      + the table's Run cell. */
   assert.match(pagesSrc, /t\('page\.restore\.skipReportLabel'\)/, 'the skipped-tables report is keyed (D-89-7: report-only, never hidden)');
   assert.match(pagesSrc, /t\('page\.restore\.errorToggle'\)/, 'the expandable error toggle is keyed');
-  assert.match(pagesSrc, /restoreRuns\.map\(restoreRunTr\)\.join\(''\)/, 'restore rows render verbatim in server order in the unified table — no client re-sort, no client cap');
+  assert.match(pagesSrc, /restoreRuns\.map\(r => \(\{ at: Number\(r\.started_at\) \|\| 0, row: restoreRunTr\(r\)\s*\}\)\)/, 'restore rows enter the merged date-ordered stream — no client cap');
   assert.ok(!/\.slice\(0, 50\)/.test(pagesSrc), 'no client-side 50 cap');
   assert.match(pagesSrc, /esc\(run\.error\)/, 'restore errors render through esc()');
   assert.match(pagesSrc, /restorePollKickAllowed\(\)/, 'the restore kick honors the WR-02 failure cooldown');

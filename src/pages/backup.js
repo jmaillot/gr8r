@@ -269,7 +269,7 @@ const historyTr = run => {
   </tr>`;
 };
 
-const historySblock = () => {
+const historySblock = flags => {
   const f = S.ui.backupHistoryFilter || { task: '', trigger: '', status: '', type: '', limit: 50, offset: 0 };
   const h = S.ui.backupHistoryAll;
   const tasks = Array.isArray(S.ui.backupTasks?.tasks) ? S.ui.backupTasks.tasks : [];
@@ -305,14 +305,19 @@ const historySblock = () => {
   const restoreRuns = !h || h.err ? [] : Array.isArray(S.ui.restoreHistory?.runs) ? S.ui.restoreHistory.runs : [];
   const showBackup = f.type !== 'restore';
   const showRestore = f.type !== 'backup';
-  const backupRows = showBackup ? visibleRuns.map(historyTr).join('') : '';
-  const restoreRows = showRestore ? restoreRuns.map(restoreRunTr).join('') : '';
+  /* UAT round-6 (owner): the unified history interleaves by execution date
+     (newest first) — no more backup-block-then-restore-block grouping. The
+     Type column keeps the rows distinguishable. */
+  const merged = [
+    ...(showBackup ? visibleRuns.map(r => ({ at: Number(r.started_at) || Number(r.created_at) || 0, row: historyTr(r) })) : []),
+    ...(showRestore ? restoreRuns.map(r => ({ at: Number(r.started_at) || 0, row: restoreRunTr(r) })) : []),
+  ].sort((a, b) => b.at - a.at);
   const body = !h
     ? `<div class="faint" style="padding:8px 0" aria-busy="true">${t('page.backup.historyLoading')}</div>`
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
-      : backupRows || restoreRows
-        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t hist-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th>${t('page.backup.colTask')}</th><th>${t('page.backup.filterTrigger')}</th><th>${t('page.backup.scheduleCol')}</th><th>${t('page.backup.filterStatus')}</th><th>${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${backupRows}${restoreRows}</tbody></table></div>`
+      : merged.length
+        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t hist-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th>${t('page.backup.colTask')}</th><th>${t('page.backup.filterTrigger')}</th><th>${t('page.backup.scheduleCol')}</th><th>${t('page.backup.filterStatus')}</th><th>${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${merged.map(m => m.row).join('')}</tbody></table></div>`
         : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:baseline">
@@ -326,6 +331,7 @@ const historySblock = () => {
       <div class="field"><label class="label">${t('page.backup.filterStatus')}</label>${statusSel}</div>
       <button class="btn btn-sm" data-a="backupHistoryPage" data-dir="-1"${Number(f.offset) <= 0 ? ' disabled' : ''}>${t('page.backup.historyPrev')}</button>
       <button class="btn btn-sm" data-a="backupHistoryPage" data-dir="1"${h && h.runs.length && h.hasMore ? '' : ' disabled'}>${t('page.backup.historyNext')}</button>
+      ${flags?.canRestore ? `<button class="btn btn-sm btn-secondary" data-a="restoreUploadPick">${ic('upload', 13)}${t('page.backup.uploadRestore')}</button>` : ''}
     </div>
     ${f.task === 'manual' ? `<div class="hint" style="margin-top:6px">${t('page.backup.historyManualHint')}</div>` : ''}
     <div style="margin-top:8px">${body}</div>
@@ -826,7 +832,7 @@ export function pageBackup() {
       ${flags.canBackup && !S.ui.backupTaskForm ? `<button class="btn btn-primary" data-a="backupTaskNew">${ic('plus', 14)}${t('page.backup.taskNewAction')}</button>` : ''}
     </div>
     ${body}
-    ${historySblock()}
+    ${historySblock(flags)}
     ${flags.canRestore ? restoreProgress() : ''}
     ${flags.canRestore ? restorePreviewDrawer(flags) : ''}
   </div>`;

@@ -2421,5 +2421,11 @@
   "restore.alert.done.project.body": "La restauration du projet « {name} » est terminée — la copie restaurée est en ligne dans le nouvel espace « {ws} ».",
   "restore.alert.done.overwrite.body": "La restauration par écrasement de « {name} » est terminée — le contenu de la cible a été remplacé sur place.",
   "page.backup.typeSnapshot": "Snapshot",
-  "page.restore.snapshotTip": "Avant la restauration, un snapshot de l'espace cible est stocké localement (conservé 30 jours) afin de permettre l'annulation de l'opération."
+  "page.restore.snapshotTip": "Avant la restauration, un snapshot de l'espace cible est stocké localement (conservé 30 jours) afin de permettre l'annulation de l'opération.",
+  "page.backup.uploadRestore": "Restaurer une archive…",
+  "page.backup.uploadingRestore": "Envoi de l'archive…",
+  "page.backup.uploadedRestore": "Archive envoyée — vérifie-la avant de restaurer",
+  "err.restoreUploadName": "Fournis une archive de sauvegarde .tar.gz",
+  "err.restoreUploadInvalid": "Ce fichier n'est pas une archive de sauvegarde projects-studio valide",
+  "err.restoreUploadFailed": "L'envoi de l'archive a échoué"
 }

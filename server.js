@@ -350,6 +350,10 @@ const unsubscribeHmacKey = () => (MASTER_KEY ? crypto.createHash('sha256').updat
 const MAX_BODY = Number(process.env.MAX_BODY_BYTES || 8 * 1024 * 1024);
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 25);
 const MAX_UPLOAD = MAX_UPLOAD_MB * 1024 * 1024;
+/* UAT 2026-11-27 (owner): backup-archive uploads (restore from a downloaded
+   archive) ride their OWN cap — archives dwarf ordinary file uploads. */
+const MAX_BACKUP_UPLOAD_MB = Number(process.env.BACKUP_UPLOAD_MB || 2048);
+const MAX_BACKUP_UPLOAD = MAX_BACKUP_UPLOAD_MB * 1024 * 1024;
 const DEFAULT_WS_ID = 'ws_default';
 const COOKIE = 'projects_session';
 /* D-68: the pending second-factor challenge rides its OWN cookie — never the
@@ -10272,6 +10276,70 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* -------------- restore upload (UAT 2026-11-27, owner) --------------
+     POST /api/backup/restore/upload?name=<archive.tar.gz> — a raw-body
+     tar.gz the operator downloaded elsewhere (off-instance archive).
+     Guard chain VERBATIM from the restore family: sameOrigin → requireUser
+     → operator-keyed throttle → capability gate BEFORE body probing →
+     filename shape gate. The stream lands in a .upload-<uid>.tmp sibling,
+     then sha256AndSize + streamVerifyArchive (the frozen 89-01 structural
+     gate — a refused upload leaves NO backup_runs row and NO archive).
+     Publish renames into BACKUPS_DIR under `uploaded-<name>` (uniquified,
+     D-01 suffix shape) and inserts a succeeded row: trigger stays
+     'manual' (the CHECK constraint is frozen — the filename prefix is the
+     honest UI discriminator), scope rides the ARCHIVE's manifest.scope so
+     the preview/trigger routes resolve it like any local run. Response
+     { runId } — the client opens the standard preview drawer. */
+  if (pathname === '/api/backup/restore/upload' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`restoreupload|${user.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE))) {
+      await auditBackupTask(user, 'restore_refused:restoreRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can upload backup archives');
+    }
+    const rawName = url.searchParams.get('name') || '';
+    const base = path.basename(rawName).replace(/[^\w.\- ]+/g, '_').replace(/^\.+/, '_').trim();
+    if (!base.endsWith('.tar.gz') || base.length < 8 || base.length > 180) {
+      return fail(res, 400, 'restoreUploadName', 'Provide a .tar.gz archive filename');
+    }
+    const tmpPath = path.join(backupsRoot(), `.upload-${uid()}.tmp`);
+    try {
+      const size = await uploadBinary(req, tmpPath, MAX_BACKUP_UPLOAD);
+      const { sha256, size: shaSize } = await sha256AndSize(tmpPath);
+      /* The frozen structural gate — an invalid archive never publishes. */
+      const { manifest } = await streamVerifyArchive(tmpPath, sha256);
+      let filename = `uploaded-${base}`;
+      let uniquifier = 1;
+      while (fs.existsSync(path.join(backupsRoot(), filename)) && uniquifier < 100) {
+        filename = `uploaded-${base}`.replace(/\.tar\.gz$/, `-${uniquifier + 1}.tar.gz`);
+        uniquifier += 1;
+      }
+      fs.renameSync(tmpPath, path.join(backupsRoot(), filename));
+      const runId = uid();
+      const at = Date.now();
+      await db.run(
+        "insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, created_at) values (?,null,?,'manual','succeeded',?,?,0,?,?,?,?)",
+        [runId, JSON.stringify(manifest.scope ?? {}), at, at, shaSize, sha256, filename, at],
+      );
+      await auditBackupTask(user, `restore_upload:${runId}`);
+      logInfo(`restore archive uploaded: ${filename} (${size} bytes) by ${user.email}`);
+      return json(res, 200, { runId, filename });
+    } catch (err) {
+      fs.unlink(tmpPath, () => {});
+      /* Any keyed 89-01 refusal (header, checksum, truncated, entry gate,
+         manifest) is an invalid ARCHIVE for upload purposes — the detail
+         rides the message; only true infrastructure errors stay 500. */
+      if (typeof err?.code === 'string' && err.code.startsWith('restore')) {
+        return fail(res, 400, 'restoreUploadInvalid', `Not a valid projects-studio backup archive: ${err.message}`);
+      }
+      if (err?.httpCode === 413 || err?.status === 413) return fail(res, 413, 'uploadTooLarge', 'Upload too large');
+      logWarn(`restore archive upload failed: ${err?.message || err}`);
+      return fail(res, 500, 'restoreUploadFailed', 'The archive upload failed');
+    }
+  }
+
   /* -------------- restore preview (Phase 89, 89-03, BKRST-01/D-89-16..18) --------------
      GET /api/backup/restore/preview?runId=<id> — what would I be restoring?
      Guard chain copied VERBATIM from the family (never reordered): sameOrigin
@@ -12561,7 +12629,7 @@ function serveStatic(req, res, url) {
    size-capped mid-stream. On overflow we keep draining the socket (WR-05) so
    the client actually receives the 413, then destroy the write stream and
    unlink the partial file. */
-function uploadBinary(req, dest) {
+function uploadBinary(req, dest, cap = MAX_UPLOAD) {
   return new Promise((resolve, reject) => {
     const out = fs.createWriteStream(dest);
     /* A write in flight when we destroy the stream surfaces as an 'error' on
@@ -12573,7 +12641,7 @@ function uploadBinary(req, dest) {
     req.on('data', chunk => {
       if (overflow) return; // keep draining
       size += chunk.length;
-      if (size > MAX_UPLOAD) {
+      if (size > cap) {
         overflow = httpError(413, 'Upload too large', 'uploadTooLarge');
         out.destroy();
         fs.unlink(dest, () => {});

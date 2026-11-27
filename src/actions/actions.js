@@ -4995,6 +4995,9 @@ const RESTORE_REFUSAL_TOASTS = {
   restoreTargetMissing: 'err.restoreTargetMissing',
   restoreNameCollision: 'err.restoreNameCollision',
   restoreManifestCorrupt: 'page.restore.previewCorrupt',
+  restoreUploadName: 'err.restoreUploadName',
+  restoreUploadInvalid: 'err.restoreUploadInvalid',
+  restoreUploadFailed: 'err.restoreUploadFailed',
 };
 const restoreToast = (code, raw) =>
   RESTORE_REFUSAL_TOASTS[code] ? t(RESTORE_REFUSAL_TOASTS[code]) : tErr(code, null, raw || t('err.serverUnreachable'));
@@ -5698,6 +5701,31 @@ A.restorePreviewClose = () => {
   S.ui.restorePreviewData = null;
   S.ui.backupScopes = null;
   render();
+};
+
+/* UAT 2026-11-27 (owner): restore from an OFF-INSTANCE archive — the operator
+   picked a .tar.gz downloaded elsewhere. The upload returns a runId, the
+   history refills, and the STANDARD preview drawer opens on it (the same
+   manifest-gated flow as any local run). */
+A.restoreUploadPick = () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.tar.gz,.tgz';
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!/\.t(?:ar\.)?gz$/.test(file.name)) return toast(t('err.restoreUploadName'), { kind: 'err' });
+    toast(t('page.backup.uploadingRestore'), { kind: 'info', ms: 60000 });
+    const res = await api.restoreUploadArchive(file);
+    if (!res.ok) {
+      if (res.status === 401) return;
+      return toast(restoreToast(res.data?.code, res.error), { kind: 'err' });
+    }
+    toast(t('page.backup.uploadedRestore'), { kind: 'ok' });
+    await Promise.all([refreshBackupHistory(), refreshRestoreHistory()]);
+    await A.restorePreview({ dataset: { id: res.data.runId } });
+  };
+  input.click();
 };
 
 /* Import-as-new trigger (D-33-2: the non-destructive default — single click,

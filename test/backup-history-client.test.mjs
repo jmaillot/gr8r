@@ -92,8 +92,8 @@ test('toggle / delete / Run-now handlers exist and refill through the fill loop'
 
 test('D-04 (Phase 94): the unified history sblock renders the payload verbatim — newest-first, probe pagination, historyCard retired', () => {
   assert.match(pagesSrc, /const historyTr = run =>/, 'the unified run row renderer exists (table row, UAT round-4)');
-  assert.match(pagesSrc, /const historySblock = \(\) =>/, 'the unified sblock exists');
-  assert.match(pagesSrc, /visibleRuns\.map\(historyTr\)\.join\(''\)/, 'runs render verbatim in server order — no client re-sort, no client cap (visibleRuns = 94-03 Rotated default-exclusion)');
+  assert.match(pagesSrc, /const historySblock = flags =>/, 'the unified sblock exists (flags — the upload CTA gate)');
+  assert.match(pagesSrc, /merged\.map\(m => m\.row\)\.join\(''\)/, 'rows interleave by execution date — the merged render (UAT round-6: date-ordered history)');
   /* D-04: run.label (the 5-segment server-resolved runLabel) renders VERBATIM
      through esc() — the payload field renders; the DISPLAY abbreviates (UAT
      round-5: the 12-hex instance prefix is stripped for display, the full
@@ -435,7 +435,7 @@ test('90-03 → UAT round-9: the backup active→terminal stage transition inval
    ===================================================================== */
 test('94-02 UAT-1: the render site no longer wraps taskTable in a second panel; alignment is uniform', () => {
   assert.ok(!/<div class="panel"[^>]*>\$\{body\}<\/div>/.test(pagesSrc), 'no panel wrapper around ${body} at the render site — taskTable self-panels (UAT-1)');
-  assert.match(pagesSrc, /\$\{body\}\s*\n\s*\$\{historySblock\(\)\}/, 'the table renders bare between the header row and the history sblock');
+  assert.match(pagesSrc, /\$\{body\}\s*\n\s*\$\{historySblock\(flags\)\}/, 'the table renders bare between the header row and the history sblock');
   /* Alignment: every td carries text-align:left + vertical-align:middle;
      padding-left:14px appears ONLY on the first column's td/th. */
   const tableBody = pagesSrc.slice(pagesSrc.indexOf('const taskTable ='), pagesSrc.indexOf('/* Builder form'));
@@ -472,8 +472,8 @@ test('94-02 UAT-3: Type column + merged restore rows in the unified sblock', () 
   /* The sblock body appends the restore rows AFTER the backup rows — the
      backup rows keep the pinned verbatim renderer. */
   const sblockBody = pagesSrc.slice(pagesSrc.indexOf('const historySblock ='), pagesSrc.indexOf('const lastRunBadge ='));
-  assert.match(sblockBody, /const backupRows = showBackup \? visibleRuns\.map\(historyTr\)\.join\(''\) : '';/, 'backup rows render as table rows (UAT round-4 real table)');
-  assert.match(sblockBody, /const restoreRows = showRestore \? restoreRuns\.map\(restoreRunTr\)\.join\(''\) : '';/, 'restore rows render as table rows after the backup rows');
+  assert.match(sblockBody, /const merged = \[/, 'backup + restore rows merge into one date-ordered stream (UAT round-6: date-ordered history)');
+  assert.match(sblockBody, /visibleRuns\.map\(r => \(\{ at: Number\(r\.started_at\) \|\| Number\(r\.created_at\) \|\| 0, row: historyTr\(r\)\s*\}\)\)/, 'backup rows enter the merged stream verbatim');
   /* UAT round-4: the Type filter gates BOTH sides (all/backup/restore). */
   assert.match(sblockBody, /const showBackup = f\.type !== 'restore';/, 'the Type filter gates the backup rows');
   assert.match(sblockBody, /const showRestore = f\.type !== 'backup';/, 'the Type filter gates the restore rows');
@@ -507,7 +507,7 @@ test('94-03 UAT-3b: Rotated (deleted) rows excluded from the default render; the
     /const visibleRuns = !h \|\| h\.err \? \[\] : f\.status === 'deleted' \? h\.runs : h\.runs\.filter\(r => r\.status !== 'deleted'\)/,
     'Rotated rows are hidden by default and shown only through the Rotated filter',
   );
-  assert.match(sblockBody, /backupRows \|\| restoreRows/, 'the empty-state gate counts only visible rendered rows');
+  assert.match(sblockBody, /merged\.length/, 'the empty-state gate counts only visible rendered rows');
   assert.ok(!sblockBody.includes('${h.runs.map(historyTr)'), 'no unfiltered backup-row render remains');
   /* The Rotated filter entry: 'deleted' is a first-class status-filter option,
      labelled through page.backup.statusDeleted ("Rotated" in en). */
@@ -566,4 +566,30 @@ test('94-03 UAT-4b: retention label at box middle; GFS labels horizontally cente
     assert.match(formCard, re, `the ${k} label sits above its box, horizontally centered`);
   }
   assert.match(retentionRow, /label class="label" style="text-align:center"/, 'GFS scale labels center horizontally within their boxes');
+});
+
+/* =====================================================================
+   UAT 2026-11-27 (owner): restore an OFF-INSTANCE archive. The history
+   header carries the upload CTA (canRestore-gated), the action funnels
+   through the raw-body API client and opens the STANDARD preview drawer
+   on the returned runId.
+   ===================================================================== */
+test('restore upload CTA: canRestore-gated header button, raw-body API client, standard preview drawer handoff', () => {
+  assert.match(pagesSrc, /const historySblock = flags =>/, 'the history sblock receives the flags');
+  const sblockBody = pagesSrc.slice(pagesSrc.indexOf('const historySblock ='), pagesSrc.indexOf('const lastRunBadge ='));
+  assert.match(
+    sblockBody,
+    /flags\?\.canRestore \? `<button class="btn btn-sm btn-secondary" data-a="restoreUploadPick">\$\{ic\('upload', 13\)\}\$\{t\('page\.backup\.uploadRestore'\)\}<\/button>` : ''/,
+    'the upload CTA rides the history header, canRestore-gated',
+  );
+  assert.match(actionsSrc, /A\.restoreUploadPick = \(\) =>/, 'the pick action exists');
+  assert.match(actionsSrc, /input\.accept = '\.tar\.gz,\.tgz'/, 'the picker accepts tar.gz only');
+  assert.match(actionsSrc, /await A\.restorePreview\(\{ dataset: \{ id: res\.data\.runId \} \}\)/, 'the returned runId opens the STANDARD preview drawer');
+  assert.match(apiSrc, /async restoreUploadArchive\(file, \{ signal \} = \{\}\)/, 'the raw-body API client method exists');
+  assert.match(apiSrc, /\/api\/backup\/restore\/upload\?name=/, 'the upload endpoint shape');
+  /* Locale keys ×5 — the i18n scan enforces coverage; these pins freeze the KEY names. */
+  const enCatalog = JSON.parse(read('src/locales/en.json'));
+  for (const k of ['page.backup.uploadRestore', 'err.restoreUploadName', 'err.restoreUploadInvalid']) {
+    assert.ok(enCatalog[k], `${k} exists in the en catalogue`);
+  }
 });

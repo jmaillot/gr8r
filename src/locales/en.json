@@ -2381,5 +2381,11 @@
   "restore.alert.done.project.body": "The restore of project “{name}” completed — the restored copy is live in the new workspace “{ws}”.",
   "restore.alert.done.overwrite.body": "The overwrite restore of “{name}” completed — the target content was replaced in place.",
   "page.backup.typeSnapshot": "Snapshot",
-  "page.restore.snapshotTip": "Before the restore runs, a snapshot of the target workspace is stored locally (kept for 30 days) so the operation can be undone."
+  "page.restore.snapshotTip": "Before the restore runs, a snapshot of the target workspace is stored locally (kept for 30 days) so the operation can be undone.",
+  "page.backup.uploadRestore": "Restore an archive…",
+  "page.backup.uploadingRestore": "Uploading the archive…",
+  "page.backup.uploadedRestore": "Archive uploaded — review it before restoring",
+  "err.restoreUploadName": "Provide a .tar.gz backup archive",
+  "err.restoreUploadInvalid": "Not a valid projects-studio backup archive",
+  "err.restoreUploadFailed": "The archive upload failed"
 }
