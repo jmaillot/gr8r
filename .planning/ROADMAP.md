@@ -81,7 +81,11 @@ Plans:
   2. All three restore routes (preview server.js:10826/:10842/:10857, overwrite :11004-11032, instance :11134-11168) call the single helper — zero duplicated ladder logic remains.
   3. The full test suite stays at its documented baseline (2672 tests / 2 documented pre-existing failures) — the refactor introduces no regression and no new dependency.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 103-01-PLAN.md — Goldens-first: selection-order + byte-identity golden pinned against the unmodified ladders (pre-refactor reference)
+- [ ] 103-02-PLAN.md — Extract resolveRestoreSource (all 6 sites) into export/restore.js, rewrite twin-gate source-pattern tests, baseline verification
 
 ### Phase 104: Restore-Source Backend — `source` Param & Probe Route
 
