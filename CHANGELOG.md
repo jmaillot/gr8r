@@ -5,6 +5,36 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] — 2026-11-27 — Backup Destinations SMB & FTP
+
+5 phases (96–100). Highlights:
+
+- **Two new backup destinations: FTP/FTPS and SMB/CIFS**, hand-rolled on the
+  Node standard library (zero new npm dependencies), joining local + S3 in a
+  destination registry. Per-task opt-in toggles in the backup editor; env-only
+  credential custody frozen at boot (`FTP_*`, `SMB_*` mirroring `S3_*`); a
+  partial env set disables the destination with a boot warning.
+- **Scheduled runs mirror to every opted-in destination** (upload → size/hash
+  verify → flag), with keyed failure statuses and alerts; the local archive
+  stays the primary. GFS rotation now also prunes rotated-out remote copies.
+- **Restore reads any surviving mirror** — flag is the truth, registry order
+  s3 > ftp > smb picks the seam, sha256 re-verified before any byte is
+  consumed. Deleting a remote archive out-of-band surfaces on the next restore
+  attempt and clears the run's mirror badge (audited).
+- **Probes at save** per destination with typed error classes in all 5 UI
+  locales; FTPS self-signed acceptance and plain-FTP carry keyed warnings;
+  SMB reports guest access as informational.
+- **Hand-rolled SMB2.1 client**: MD4 from RFC 1320 vectors, NTLMv2, mandatory
+  signing with verify-before-dispatch, serial 60 KB writes, retry envelope —
+  proven end-to-end against real samba (SMB2-min happy path, guest mapping,
+  SMB3-min keyed refusal) and the owner's Synology NAS.
+- **Restore UX honesty**: history leads with the archive filename, restore
+  emails name the project, pre-restore snapshots stay local-only.
+- **Ops fixes absorbed from owner UAT**: SMB uploads were corrupt by
+  construction (path text written instead of bytes) — fixed with a read-back
+  sha256 verify at upload time; Run-now now honors per-task destination
+  opt-ins.
+
 ## [3.2.0] — 2026-11-20 — Entra Group Mapping & Governance Backlog
 
 5 phases (80–84). Highlights:

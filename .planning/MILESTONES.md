@@ -1,5 +1,26 @@
 # Milestones
 
+## v3.5 Backup Destinations SMB & FTP (Shipped: 2026-11-27)
+
+**Phases completed:** 5 phases (96–100), 14 plans · 132 files, +17914/−464 LOC · gate 2672 tests / 2639 pass / 2 documented pre-existing failures (D-05 fr-typography, D-06 webhook-routes)
+
+**Key accomplishments:**
+- **Cross-destination seam generalization (DEST-01).** The S3 single-slot seam became an insertion-ordered destination registry (descriptor: enabled/manualPrefix/upload/rm/verify/config); dormant ftp/smb slots with boot-frozen `FTP_*`/`SMB_*` env custody mirror `S3_*`; per-task opt-in via `ftp_enabled`/`smb_enabled` columns (dual-engine DDL); Wave-0 static gate pins seam shape, D-04 order, single uploaded=1 write site.
+- **Zero-dep FTP/FTPS client (FTP-01).** export/ftp.js on node:net/node:tls — USER/PASS, TYPE I, EPSV with PASV fallback + `FTP_PASV_HOST` override, STOR/DELE/SIZE, PBSZ/PROT P, NOOP keep-alive, REST resume, TLS session-reuse; golden-vector parser contract; vsftpd env-gated e2e.
+- **FTP destination end-to-end (FTP-02).** Toggle in the task editor, staged upload after local publish with SIZE+sidecar verify, location badges in run rows and restore list, restore read-back via the shared staged seam, probe route cloning the S3 guard chain with typed error classes ×5 (authFailed/tlsFailed/passiveFailed/quotaExceeded/... + insecureTls warning).
+- **Zero-dep SMB2.1 client (SMB-01).** export/smb.js (~1,600 LOC) on node:crypto — hand-rolled MD4 pinned by RFC 1320 vectors, NTLMv2 auth, unconditional HMAC-SHA256 signing with verify-before-dispatch, serial session engine with MessageId correlation, structural retry envelope (re-auth + single replay, offset-resume); NTLM material scrubbed from every surfaced error.
+- **SMB destination end-to-end (SMB-02).** Same seams as FTP — toggle, staged upload + read-back sha256 verify, badges, restore twins (import_new + DR + overwrite), probe with SMB error classes ×5 incl. guestSession info flag; STATUS_NOT_SUPPORTED keys dialectUnsupported; real-samba e2e 5/5 (SMB2-min + guest pin + SMB3-min refusal; guest sessions proven to sign NOTHING — flag-gated unsigned both directions).
+- **Mirror-truth maintenance (owner ruling).** A live staged fetch proving the remote object gone (ftp 550 / SMB not-found NTSTATUS / s3 404) clears the run's mirror flag — audited `mirror_flag_cleared:<dest>`, history auto-refreshes; NTSTATUS map completed (0xc000003a PATH_NOT_FOUND, 0xc0000056 DELETE_PENDING → pathNotFound) so SMB deletions clear like ftp/s3.
+- **Follow-local remote prune (DEST-02).** Rotation removes rotated-out runs' SMB/FTP copies (remote_pruned additive column, soleCopy guard, per-destination containment, never touches live runs).
+- **Restore surface honesty.** archive_name column (start events carry the filename; Run cell leads mono with the archive), preview/download/verify-checksum routes gained mirror legs (flag IS the truth, registry order s3 > ftp > smb), overwrite-restore gained s3+ftp+smb read-back twins, restore emails name the project (overwriteProject branch ×5), restoreArchiveMissing surfaces the seam error + auto-refresh.
+- **Ops hardening found by owner UAT (11 rounds).** SMB upload corrupt-by-construction FIXED (write(path) wrote path text; now readFileSync + R-4 read-back sha256 verify at upload); Run-now per-task opt-in parity (taskId gates all three registries); pre-restore snapshots stay LOCAL (never mirrored); workspace-logo blob id fixed.
+
+**Owner UAT:** validated 2026-11-27 on the real Synology NAS — backup → mirror → restore → overwrite on local+S3+FTP+SMB; scheduled-run badges; out-of-band deletion badge clearing (FTP, S3, SMB); SMB restore confirmed working end-to-end. Deferred to backlog: GFS rotation live UAT (2-day-retention job, observe with prune badges); restore-source selection (phase 101 / v3.6).
+
+**Integration audit:** PASS — 8/8 surfaces wired, 4/4 E2E flows complete, 0 blockers (.planning/v3.5-MILESTONE-AUDIT.md + v3.5-MILESTONE-AUDIT-INTEGRATION.md).
+
+---
+
 ## v3.4 UX Polish & Backup Console Refinement (Shipped: 2026-11-24)
 
 **Phases completed:** 5 phases (91–95), 10 plans, ~40 tasks · 53 files, +5092/−806 LOC · 48 scoped commits

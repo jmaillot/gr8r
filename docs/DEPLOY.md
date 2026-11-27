@@ -243,6 +243,10 @@ JSON writes, not uploads). Raise it if users legitimately attach larger files; a
 value is a cheap guard against oversized binaries. Uploaded file contents live under
 `DATA_DIR/files/` (see § Backups).
 
+`BACKUP_UPLOAD_MB=2048` caps the raw-body restore upload (POST an archive back for a
+manual restore) in megabytes. Raise it when your archives exceed the 2 GiB default.
+Independent of `MAX_BODY_BYTES` and `MAX_UPLOAD_MB`.
+
 `APP_URL` is the absolute URL the app prints in share and invite links and shows in the
 workspace URL fields, e.g. `https://projects.example.com`. Leave it empty when the browser
 requests the same hostname users should see: the app then uses the request host (honouring

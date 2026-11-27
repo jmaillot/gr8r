@@ -1,17 +1,10 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-25 — Milestone v3.5 Backup Destinations — SMB & FTP started. v3.4 shipped and archived 2026-11-24 (see MILESTONES.md).*
+*Last updated: 2026-11-27 — Milestone v3.5 Backup Destinations — SMB & FTP shipped (phases 96–100; owner UAT validated on the real NAS; see MILESTONES.md).*
 
-## Current Milestone: v3.5 Backup Destinations — SMB & FTP
+## Current Milestone: v3.5 Backup Destinations — SMB & FTP — SHIPPED (2026-11-27)
 
-**Goal:** Étendre la famille de destinations backup (local + S3) avec deux destinations distantes — SMB/CIFS et FTP/FTPS — sur le pipeline v1 existant (staging, checksum, sidecar sha256, rotation GFS, probe), sans nouvelle dépendance npm et en gardant le modèle env-only de D-88.
-
-**Target features:**
-- Destination SMB/CIFS : client zero-dep (à arbitrer en research : client SMB hand-rolled vs montage CIFS), chemins UNC, credentials env
-- Destination FTP/FTPS : client zero-dep sur net/tls natifs, mode passif, TLS explicite
-- Config env-only gelée au boot (D-88 inchangé) : variables SMB_* / FTP_* symétriques des S3_*
-- Toggle par tâche dans l'éditeur backup + badges de localisation (runs + restore list) + probe à classes d'erreur typées ×5
-- Custody des credentials (jamais loggés), audit des refus, invariant local-first puis miroir
+**Phases 96–100, 14 plans.** Cross-destination seam generalization (destination registry replacing the S3 single-slot seam, dormant-slot contract, Wave-0 static gate); hand-rolled FTP/FTPS client (export/ftp.js, node:net/node:tls, golden-vector parser contract); FTP destination end-to-end (toggle, staged upload + SIZE verify, badges, restore read-back, probe ×5); hand-rolled SMB2.1 client (export/smb.js, node:crypto, RFC 1320 MD4 vectors, unconditional signing, NTLM scrub); SMB destination end-to-end (same seams + guest-session semantics); follow-local remote prune (remote_pruned additive, rotation-integrated). Owner UAT validated all four destinations (local/S3/FTP/SMB) against the real Synology NAS: backup → mirror → restore → overwrite, scheduled badges, out-of-band deletion badge clearing, SMB e2e 5/5 vs real samba. Zero new npm dependencies.
 
 ## Milestone v3.4 UX Polish & Backup Console Refinement — SHIPPED (2026-11-24)
 
