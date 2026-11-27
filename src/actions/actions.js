@@ -3,6 +3,7 @@
    ===================================================================== */
 import { $, $$, TODAY, addD, dOff, esc, fmtDate, iso, parse, uid, jsonEqual } from '../core/utils.js';
 import { t, t as tMsg, tErr, getLocale, negotiate, primeLocale, readStoredLocale, setLocale, storeLocale } from '../core/i18n.js';
+import { canonicalizeGuid } from '../core/guid.js';
 import { ASSIGNEE_CAP, DEFAULT_OPTIONS, PR, PSTAT, LB } from '../core/constants.js';
 /* Phase 65 (65-01): subtask-tree ordering — new subtasks are born with
    parentId:null and the next free position (D-01/D-02/D-03). */
@@ -4791,6 +4792,54 @@ A.mapRetry = () => {
   S.ui.mapErr = null; // CR-01: recovery goes through the explicit retry action, never an auto re-kick
   render();
   refreshMappings();
+};
+
+/* =====================================================================
+   102-02 CREATE FORM (MAPUI-02, D-01/D-03/D-08/D-09): the always-visible
+   panel's four inputs ride data-in handlers — the staged draft lives in
+   S.ui.mapForm ({guid,label,wsId,role}), never the DOM (the govEditBody
+   doctrine). Re-render on every keystroke is the house govOpQ idiom.
+   ===================================================================== */
+IN.mapGuid = el => {
+  if (!S.ui.mapForm) S.ui.mapForm = {};
+  S.ui.mapForm.guid = el.value;
+  render();
+};
+IN.mapLabel = el => {
+  if (!S.ui.mapForm) S.ui.mapForm = {};
+  S.ui.mapForm.label = el.value;
+  render();
+};
+IN.mapWs = el => {
+  if (!S.ui.mapForm) S.ui.mapForm = {};
+  S.ui.mapForm.wsId = el.value;
+  render();
+};
+IN.mapRole = el => {
+  if (!S.ui.mapForm) S.ui.mapForm = {};
+  S.ui.mapForm.role = el.value;
+  render();
+};
+A.mapCreate = async () => {
+  const f = S.ui.mapForm || {};
+  /* D-08 light pre-checks ONLY — the server stays the funnel of record.
+     The GUID canonicalizes BEFORE submit ({braced}/no-hyphen/uppercase
+     accepted identically to the server port); invalid shape → keyed toast. */
+  const guid = canonicalizeGuid(f.guid || '');
+  if (!guid) return toast(t('err.groupMappingBadGuid'), { kind: 'err' });
+  const label = (f.label || '').trim();
+  if (!label) return toast(t('page.mappings.badLabelToast'), { kind: 'err' });
+  /* camelCase body per the server.js POST handler (groupGuid/workspaceId/
+     role/label — the Phase 101 field names). */
+  const res = await api.groupMappingCreate({ groupGuid: guid, workspaceId: f.wsId || '', role: f.role || 'member', label });
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    const code = res.data?.code; // operatorOnly / groupMappingBadGuid / groupMappingUnknownWorkspace / groupMappingBadRole / groupMappingDuplicate — all keyed (D-09)
+    return toast(tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.mapForm = null; // success resets the draft
+  toast(t('page.mappings.createdToast'));
+  await refreshMappings();
 };
 
 /* =====================================================================

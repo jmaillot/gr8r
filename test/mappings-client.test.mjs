@@ -180,3 +180,84 @@ test('page.mappings.dead* keys exist ×5 and page.governance.dead* keys exist in
     assert.ok(!Object.keys(cat).some(k => deadPrefix.test(k)), `${name} still carries a page.governance.dead* key`);
   }
 });
+
+/* =====================================================================
+   102-02 Task 1: the always-visible create form (MAPUI-02,
+   D-01/D-03/D-08/D-09).
+   ===================================================================== */
+
+/* (a) the 11 Task-1 keys exist in ALL 5 catalogues */
+test('the create-form i18n keys exist in ALL 5 catalogues', () => {
+  const keys = [
+    'page.mappings.formTitle',
+    'page.mappings.formLead',
+    'page.mappings.guidLabel',
+    'page.mappings.guidPlaceholder',
+    'page.mappings.labelLabel',
+    'page.mappings.wsLabel',
+    'page.mappings.wsPlaceholder',
+    'page.mappings.roleLabel',
+    'page.mappings.create',
+    'page.mappings.createdToast',
+    'page.mappings.badLabelToast',
+  ];
+  for (const k of keys) {
+    assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+});
+
+/* (b) the create path canonicalizes the GUID BEFORE submit (D-08) and
+   POSTs the camelCase body through api.groupMappingCreate */
+test('A.mapCreate canonicalizes the GUID pre-submit and POSTs the camelCase body', () => {
+  const a = src('src/actions/actions.js');
+  const fn = a.match(/A\.mapCreate = async \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(fn, 'A.mapCreate is missing');
+  assert.match(a, /import \{ canonicalizeGuid \} from '\.\.\/core\/guid\.js';/, 'actions.js does not import canonicalizeGuid');
+  assert.match(fn[0], /canonicalizeGuid\(f\.guid \|\| ''\)/, 'the GUID is not canonicalized before submit');
+  assert.ok(fn[0].indexOf('canonicalizeGuid') < fn[0].indexOf('groupMappingCreate'), 'canonicalization must run before the POST');
+  assert.match(fn[0], /groupGuid: guid, workspaceId: f\.wsId \|\| '', role: f\.role \|\| 'member', label/, 'the camelCase body shape is wrong');
+  assert.match(fn[0], /\(f\.label \|\| ''\)\.trim\(\)/, 'the label is not trimmed');
+});
+
+/* (c) the label input carries maxlength="200" (T-102-04: server slices) */
+test('the create-form label input carries maxlength="200" and esc()d value attributes', () => {
+  const p = src('src/pages/mappings.js');
+  const form = p.match(/const mapCreateForm = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(form, 'mapCreateForm is missing');
+  assert.match(form[0], /maxlength="200"/, 'the label input lacks maxlength="200"');
+  /* every value-bearing attribute rides esc() (T-102-04) */
+  assert.match(form[0], /value="\$\{esc\(f\.guid \|\| ''\)\}"/, 'the guid value attribute is unescaped');
+  assert.match(form[0], /value="\$\{esc\(f\.label \|\| ''\)\}"/, 'the label value attribute is unescaped');
+  assert.match(form[0], /value="\$\{esc\(w\.id \|\| ''\)\}"/, 'the workspace option value is unescaped');
+  assert.match(form[0], /data-a="mapCreate"/, 'the create CTA is missing');
+  /* the form panel renders ABOVE the list (D-01) */
+  assert.ok(p.indexOf('mapCreateForm()') < p.indexOf('class="panel" style="overflow-x:auto"'), 'the form is not above the list');
+});
+
+/* (d) the pre-checks are LIGHT (D-08): exactly two flags, both keyed, and
+   the refusal funnel is the tErr keyed lookup (D-09) */
+test('A.mapCreate carries the two light pre-checks and the keyed tErr refusal funnel', () => {
+  const a = src('src/actions/actions.js');
+  const fn = a.match(/A\.mapCreate = async \(\) => \{[\s\S]*?\n\};/);
+  assert.match(fn[0], /t\('err\.groupMappingBadGuid'\)/, 'the bad-guid pre-check toast is missing');
+  assert.match(fn[0], /t\('page\.mappings\.badLabelToast'\)/, 'the empty-label pre-check toast is missing');
+  assert.match(fn[0], /res\.status === 401\) return/, 'the 401 silent bail is missing');
+  assert.match(fn[0], /tErr\(code, null, res\.error \|\| t\('err\.serverUnreachable'\)\)/, 'the keyed refusal funnel is missing');
+});
+
+/* (e) D-09 parity gate: every refusal code in the Phase 101 inventory maps
+   to an existing err.${code} key in ALL 5 catalogues — zero new err keys */
+test('every group-mapping refusal code maps to an existing err.* key ×5 (D-09 parity gate)', () => {
+  const codes = [
+    'groupMappingBadGuid',
+    'groupMappingUnknownWorkspace',
+    'groupMappingBadRole',
+    'groupMappingDuplicate',
+    'operatorOnly',
+    'notFound',
+    'tooManyAttempts',
+  ];
+  for (const c of codes) {
+    assert.ok(en[`err.${c}`] && fr[`err.${c}`] && nl[`err.${c}`] && de[`err.${c}`] && es[`err.${c}`], `err.${c} missing from a catalogue`);
+  }
+});

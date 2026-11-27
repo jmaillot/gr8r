@@ -62,12 +62,57 @@ export function pageMappings() {
 
   return `<div class="page wide" style="max-width:1200px">
     <div class="ph"><div><h1>${t('nav.route.mappings')}</h1><p>${t('page.mappings.subtitle')}</p></div></div>
+    ${mapCreateForm()}
     <div class="sblock">
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
     ${api.user?.isInstanceAdmin ? govDeadCard() : ''}
   </div>`;
 }
+
+/* =====================================================================
+   102-02 CREATE FORM PANEL (MAPUI-02, D-01/D-03/D-08): ALWAYS visible —
+   a compact panel ABOVE the list, no reveal-on-add button (searching =
+   adding, the governance D-90-3 precedent). GUID paste input, label
+   input maxlength="200" (the server slices at 200), workspace select
+   fed by S.ui.mapWs (the plan-01 loader's advisory pool — until it
+   lands the picker shows a disabled 'select workspace' option), role
+   select owner/admin/member riding the existing common.role.* keys
+   (the govOrphanBody precedent). Every draft value renders through
+   esc() — value attributes are the stored-XSS watch-item (T-102-04).
+   Draft state lives in S.ui.mapForm via the IN.map* handlers, never
+   the DOM.
+   ===================================================================== */
+const mapCreateForm = () => {
+  const f = S.ui.mapForm || {};
+  const wsPool = S.ui.mapWs || [];
+  const wsOptions = wsPool.length
+    ? wsPool.map(w => `<option value="${esc(w.id || '')}" ${f.wsId === w.id ? 'selected' : ''}>${esc(w.name || '')}</option>`).join('')
+    : '';
+  const wsSelect = `<select class="input" id="map-ws" data-in="mapWs" aria-label="${t('page.mappings.wsLabel')}">${
+    wsPool.length
+      ? `<option value="" ${!f.wsId ? 'selected' : ''} disabled>${t('page.mappings.wsPlaceholder')}</option>${wsOptions}`
+      : `<option value="" selected disabled>${t('page.mappings.wsPlaceholder')}</option>`
+  }</select>`;
+  const roleSelect = `<select class="input" id="map-role" data-in="mapRole" aria-label="${t('page.mappings.roleLabel')}">${['owner', 'admin', 'member']
+    .map(r => `<option value="${r}" ${(f.role || 'member') === r ? 'selected' : ''}>${t('common.role.' + r)}</option>`)
+    .join('')}</select>`;
+  return `<div class="sblock">
+    <h2 style="margin-bottom:4px">${t('page.mappings.formTitle')}</h2>
+    <p class="hint" style="margin-bottom:10px">${t('page.mappings.formLead')}</p>
+    <div class="panel" style="padding:12px">
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><label class="label" for="map-guid">${t('page.mappings.guidLabel')}</label>
+          <input class="input" id="map-guid" data-in="mapGuid" placeholder="${t('page.mappings.guidPlaceholder')}" value="${esc(f.guid || '')}" aria-label="${t('page.mappings.guidLabel')}"></div>
+        <div><label class="label" for="map-label">${t('page.mappings.labelLabel')}</label>
+          <input class="input" id="map-label" data-in="mapLabel" value="${esc(f.label || '')}" maxlength="200" aria-label="${t('page.mappings.labelLabel')}"></div>
+        <div><label class="label" for="map-ws">${t('page.mappings.wsLabel')}</label>${wsSelect}</div>
+        <div><label class="label" for="map-role">${t('page.mappings.roleLabel')}</label>${roleSelect}</div>
+        <button class="btn btn-primary" data-a="mapCreate">${t('page.mappings.create')}</button>
+      </div>
+    </div>
+  </div>`;
+};
 
 /* =====================================================================
    83-02 DEAD-MAPPING WARNING CARD (D-06/D-07/D-08/D-10/D-11, T-83-07)
