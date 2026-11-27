@@ -261,3 +261,73 @@ test('every group-mapping refusal code maps to an existing err.* key ×5 (D-09 p
     assert.ok(en[`err.${c}`] && fr[`err.${c}`] && nl[`err.${c}`] && de[`err.${c}`] && es[`err.${c}`], `err.${c} missing from a catalogue`);
   }
 });
+
+/* =====================================================================
+   102-02 Task 2: row hints (D-02) + the staged inline-confirm delete
+   (D-04/D-05, D-90 pattern).
+   ===================================================================== */
+
+/* (a) the 7 Task-2 keys exist in ALL 5 catalogues */
+test('the row-hint/delete i18n keys exist in ALL 5 catalogues', () => {
+  const keys = [
+    'page.mappings.viaGroup',
+    'page.mappings.deadBadgeArchived',
+    'page.mappings.deadBadgeDeleted',
+    'page.mappings.delete',
+    'page.mappings.deleteConfirm',
+    'page.mappings.deleteCopy',
+    'page.mappings.deletedToast',
+  ];
+  for (const k of keys) {
+    assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+});
+
+/* (b) the EN deleteCopy carries the verbatim SC sentence (D-05 — pinned) */
+test('en.json page.mappings.deleteCopy carries the verbatim lazy-revocation sentence', () => {
+  assert.ok(
+    en['page.mappings.deleteCopy'].includes('Members mapped through this group will lose access at their next Microsoft sign-in.'),
+    'the verbatim SC sentence is missing from en.json deleteCopy',
+  );
+});
+
+/* (c) ROUTE_TEARDOWN.mappings clears the staged delete state (no stage
+   across route exit) */
+test('ROUTE_TEARDOWN.mappings clears S.ui.mapStage', () => {
+  const p = src('src/pages/mappings.js');
+  assert.match(p, /ROUTE_TEARDOWN\.mappings = mapTeardown;/, 'the teardown registration is missing');
+  const td = p.match(/const mapTeardown = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(td, 'mapTeardown is missing');
+  assert.match(td[0], /S\.ui\.mapStage = null/, 'the teardown does not clear the delete stage');
+});
+
+/* (d) the delete fires on the second click with the OPAQUE row id only
+   (Phase 101 D-08 — never a GUID+workspace composite) */
+test('mapDeleteAsk/Confirm/Cancel stage and fire with the opaque row id via encodeURIComponent-free opaque id', () => {
+  const a = src('src/actions/actions.js');
+  const ask = a.match(/A\.mapDeleteAsk = el => \{[\s\S]*?\n\};/);
+  const cancel = a.match(/A\.mapDeleteCancel = \(\) => \{[\s\S]*?\n\};/);
+  const confirm = a.match(/A\.mapDeleteConfirm = async el => \{[\s\S]*?\n\};/);
+  assert.ok(ask && cancel && confirm, 'the staged delete trio is missing');
+  assert.match(ask[0], /S\.ui\.mapStage = el\.dataset\.id/, 'the ask handler does not stage the row id');
+  assert.match(cancel[0], /S\.ui\.mapStage = null/, 'the cancel handler does not clear the stage');
+  assert.match(confirm[0], /api\.groupMappingDelete\(id\)/, 'the confirm handler does not call api.groupMappingDelete with the opaque id');
+  assert.match(confirm[0], /res\.status === 401\) return/, 'the 401 silent bail is missing');
+  assert.match(confirm[0], /tErr\(code, null, res\.error \|\| t\('err\.serverUnreachable'\)\)/, 'the keyed refusal funnel is missing');
+  assert.match(confirm[0], /t\('page\.mappings\.deletedToast'\)/, 'the success toast is missing');
+  assert.match(confirm[0], /await refreshMappings\(\)/, 'the list refresh is missing');
+});
+
+/* (e) the staged-row repaint is a re-render through the SAME template —
+   esc() coverage persists on the delete path (T-102-04 stored-XSS
+   watch-item) */
+test('the staged delete row template keeps esc() coverage on every value-bearing attribute', () => {
+  const p = src('src/pages/mappings.js');
+  const row = p.match(/const mapRow = m => \{[\s\S]*?\n\};/);
+  assert.ok(row, 'mapRow is missing');
+  assert.match(row[0], /data-id="\$\{esc\(m\.id\)\}"/, 'the staged-row ids render unescaped');
+  assert.match(row[0], /page\.mappings\.deadBadgeArchived/, 'the archived dead badge is missing');
+  assert.match(row[0], /page\.mappings\.deadBadgeDeleted/, 'the deleted dead badge is missing');
+  assert.match(row[0], /page\.mappings\.viaGroup'\)\.replace\('\{n\}'/, 'the count chip does not use the {n} placeholder convention');
+  assert.match(row[0], /S\.ui\.mapStage === m\.id/, 'the staged branch is missing');
+});

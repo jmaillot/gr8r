@@ -4843,6 +4843,35 @@ A.mapCreate = async () => {
 };
 
 /* =====================================================================
+   102-02 STAGED INLINE-CONFIRM DELETE (MAPUI-03, D-04/D-05, D-90
+   pattern — the govRoleRevokeAsk/Cancel/Confirm trio verbatim): click
+   delete → the row stages (S.ui.mapStage = the OPAQUE row id) and
+   re-renders showing the verbatim lazy-revocation copy; the second
+   click fires. NO modal. The id is the opaque Phase 101 row id only —
+   never a GUID+workspace composite (Phase 101 D-08).
+   ===================================================================== */
+A.mapDeleteAsk = el => {
+  S.ui.mapStage = el.dataset.id; // D-90: the inline confirmation stage carries the row id
+  render();
+};
+A.mapDeleteCancel = () => {
+  S.ui.mapStage = null;
+  render();
+};
+A.mapDeleteConfirm = async el => {
+  const id = el.dataset.id;
+  const res = await api.groupMappingDelete(id);
+  S.ui.mapStage = null;
+  if (!res.ok) {
+    if (res.status === 401) return;
+    const code = res.data?.code; // notFound / tooManyAttempts — keyed (D-09)
+    return toast(tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  toast(t('page.mappings.deletedToast'));
+  await refreshMappings();
+};
+
+/* =====================================================================
    85-02 BACKUP (D-20/D-24/D-26) — the gated top-level surface's ground
    truth. Render-only from the GET /api/backup/tasks payload and its
    capability flags (D-23: the client never derives roles). One fill

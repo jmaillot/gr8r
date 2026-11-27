@@ -2140,6 +2140,13 @@
   "page.mappings.create": "Créer la correspondance",
   "page.mappings.createdToast": "Correspondance créée",
   "page.mappings.badLabelToast": "Donnez d’abord un libellé à la correspondance",
+  "page.mappings.viaGroup": "{n} via le groupe",
+  "page.mappings.deadBadgeArchived": "Espace archivé",
+  "page.mappings.deadBadgeDeleted": "Espace supprimé",
+  "page.mappings.delete": "Supprimer",
+  "page.mappings.deleteConfirm": "Confirmer la suppression",
+  "page.mappings.deleteCopy": "Les membres mappés via ce groupe perdront l’accès à leur prochaine connexion Microsoft. La réconciliation des connexions SSO supprime la correspondance automatiquement.",
+  "page.mappings.deletedToast": "Correspondance supprimée",
 
   "common.instance": "Instance",
   "page.governance.subtitle": "Chaque espace de travail de cette instance. Vous seul pouvez voir cette page.",

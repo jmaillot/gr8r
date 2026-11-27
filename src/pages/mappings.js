@@ -31,17 +31,35 @@ const fullErr = () =>
   `<div class="fullstate"><div class="box"><div class="empty-state err" style="padding:0"><div class="glyph">${ic('cloud-alert', 20)}</div></div><h1>${t('page.somethingWrong')}</h1><p>${t('page.loadFailedBody')}</p><div class="row"><button class="btn btn-primary" data-a="mapRetry">${ic('refresh-cw', 14)}${t('page.tryAgain')}</button></div></div></div>`;
 
 /* One row per mapping — the payload's flat row shape (Phase 101): label,
-   workspaceName, role badge, groupGuid (mono), and the createdAt/updatedAt
-   timestamps in the house ago() format (MAPUI-02: timestamps in the list).
-   label/workspaceName/groupGuid ride esc() at EVERY render — the stored-XSS
-   watch-item (T-102-01). No data-a anywhere: display-only this plan (plan 02
-   adds the delete control). */
-const mapRow = m =>
-  srow(
-    `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom;font-weight:600">${esc(m.label || '')}</span><span class="badge">${t('common.role.' + (m.role || 'member'))}</span></span>`,
-    `<span class="row" style="gap:8px"><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(m.workspaceName || '—')}</span><span class="faint mono trunc" style="display:inline-block;max-width:180px;vertical-align:bottom">${esc(m.groupGuid || '')}</span></span>`,
-    `<span class="row" style="gap:8px"><span class="faint">${esc(ago(m.createdAt))}</span><span class="faint">${esc(ago(m.updatedAt))}</span></span>`,
+   workspaceName, role badge, groupGuid (mono), the createdAt/updatedAt
+   timestamps in the house ago() format (MAPUI-02: timestamps in the list),
+   and the D-02 hints: dead rows an amber badge per deadReason, every row
+   a faint liveMembers count chip. label/workspaceName/groupGuid ride
+   esc() at EVERY render — including the staged-delete repaint, which is
+   a re-render through this same template (T-102-04, T-79-10). */
+const mapRow = m => {
+  /* D-02: the amber dead badge per deadReason — 'workspace-deleted' and
+     'workspace-archived' carry their own keys; anything else falls back
+     to the archived copy. */
+  const deadBadge = m.dead
+    ? `<span class="badge amber">${t(m.deadReason === 'workspace-deleted' ? 'page.mappings.deadBadgeDeleted' : 'page.mappings.deadBadgeArchived')}</span>`
+    : '';
+  /* D-02: the faint count chip — the localized '{n}' placeholder convention
+     (en.json interpolation style), the count esc()d through String(). */
+  const chip = `<span class="faint">${t('page.mappings.viaGroup').replace('{n}', esc(String(m.liveMembers ?? 0)))}</span>`;
+  /* D-90 staged inline-confirm (the govRoleRevoke pattern): the staged row
+     swaps its controls for the verbatim lazy-revocation copy + confirm/
+     cancel pair. The id is the OPAQUE Phase 101 row id — never a
+     GUID+workspace composite (Phase 101 D-08). */
+  const ctl = S.ui.mapStage === m.id
+    ? `<span class="row" style="gap:8px;max-width:340px"><span class="hint">${t('page.mappings.deleteCopy')}</span><button class="btn btn-danger btn-sm" data-a="mapDeleteConfirm" data-id="${esc(m.id)}">${t('page.mappings.deleteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteCancel">${t('common.cancel')}</button></span>`
+    : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="mapDeleteAsk" data-id="${esc(m.id)}">${t('page.mappings.delete')}</button></span>`;
+  return srow(
+    `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(m.label || '')}</span><span class="badge">${t('common.role.' + (m.role || 'member'))}</span>${deadBadge}</span>`,
+    `<span class="row" style="gap:8px"><span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(m.workspaceName || '—')}</span><span class="faint mono trunc" style="display:inline-block;max-width:170px;vertical-align:bottom">${esc(m.groupGuid || '')}</span>${chip}<span class="faint">${esc(ago(m.createdAt))}</span><span class="faint">${esc(ago(m.updatedAt))}</span></span>`,
+    ctl,
   );
+};
 
 export function pageMappings() {
   /* The server decision, surfaced verbatim (governance DASH-04/D-52-4 shape):
@@ -153,8 +171,12 @@ const govDeadCard = () => {
   return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.mappings.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.mappings.deadLead')}</p><div class="panel"><div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.mappings.deadOrphans')}</div>${orphans.map(orphanRow).join('')}</div><div><div class="label" style="margin-bottom:6px">${t('page.mappings.deadTrail')}</div>${trail.map(trailRow).join('')}</div></div></div>`;
 };
 
-/* Phase 60 (D-05): teardown registry pattern — the skeleton's stub; plan 02
-   fills this with the staged inline-confirm/form state cleanup (the
-   governance.js govOrphanTeardown pattern). */
-const mapTeardown = () => {};
+/* Phase 60 (D-05): teardown registry pattern — no staged inline-confirm
+   state survives route exit (the govOrphanTeardown discipline): the
+   delete stage is cleared so a stale confirm never re-appears on
+   re-entry, and the create-form draft sheds with the page. */
+const mapTeardown = () => {
+  if (S.ui.mapStage) S.ui.mapStage = null;
+  S.ui.mapForm = null;
+};
 ROUTE_TEARDOWN.mappings = mapTeardown;
