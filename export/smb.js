@@ -587,6 +587,14 @@ export const SMB_ERROR_CLASSES = {
   0xc0000044: 'noSpace',           // STATUS_QUOTA_EXCEEDED
   0xc000005a: 'sessionExpired',    // STATUS_NETWORK_SESSION_EXPIRED
   0xc0000034: 'pathNotFound',      // STATUS_OBJECT_NAME_NOT_FOUND (100-01 additive — prune idempotency, Pitfall 1)
+  /* UAT 2026-11-27 (owner: deleting the SMB archive answered smbGeneric on
+     the read-back — the mirror flag never cleared): DSM/Samba answer a
+     CREATE-on-deleted-file with OTHER not-found statuses than
+     OBJECT_NAME_NOT_FOUND — PATH_NOT_FOUND (parent traversal) and
+     DELETE_PENDING (the delete is still settling). All three mean "the
+     object is not readable" and map to pathNotFound. */
+  0xc000003a: 'pathNotFound',      // STATUS_OBJECT_PATH_NOT_FOUND
+  0xc0000056: 'pathNotFound',      // STATUS_DELETE_PENDING
 };
 
 const SMB_CLASS_MESSAGES = {

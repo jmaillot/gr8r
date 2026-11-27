@@ -848,6 +848,15 @@ test('NTSTATUS 0xc0000034 maps to pathNotFound; the pre-existing 9 mappings stay
   const err = smbErrorFrom(0xc0000034);
   assert.equal(err.smbClass, 'pathNotFound');
   assert.equal(err.code, 'smbPathNotFound');
+  /* UAT 2026-11-27: the OTHER not-found statuses DSM answers a
+     CREATE-on-deleted-file with — PATH_NOT_FOUND and DELETE_PENDING map
+     to pathNotFound too (the read-back's mirror-flag clearing keys on
+     this class; a generic miss never clears the badge). */
+  for (const status of [0xc000003a, 0xc0000056]) {
+    const e = smbErrorFrom(status);
+    assert.equal(e.smbClass, 'pathNotFound', `0x${status.toString(16)} maps to pathNotFound`);
+    assert.equal(e.code, 'smbPathNotFound');
+  }
 });
 
 test('OBJECT_NAME_NOT_FOUND on CREATE → pathNotFound over the wire', async () => {

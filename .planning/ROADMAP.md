@@ -153,3 +153,7 @@ Plans:
 | 98. FTP Destination End-to-End | 4/4 | In Progress|  |
 | 99. SMB 2.1 Client (Spike-Hardened) | 2/2 | In Progress|  |
 | 100. SMB Destination End-to-End + Remote Prune | 5/5 | In Progress|  |
+
+## Backlog
+
+- **GFS rotation UAT** (v3.5 carry / owner UAT 2026-11-27): owner will create a backup job with 2-day retention to observe the GFS rotation, prune badges (remote_pruned) and the rotation-deletion preview against the real NAS. Deferred from the v3.5 owner-UAT checklist — scheduled-run badges validated OK the same day.
