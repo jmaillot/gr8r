@@ -58,4 +58,22 @@
 
 ## Traceability
 
-*(filled by roadmap — requirement → phase mapping)*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| MAP-01 | Phase 101 | Pending |
+| MAP-02 | Phase 101 | Pending |
+| MAP-03 | Phase 101 | Pending |
+| MAP-04 | Phase 101 | Pending |
+| MAPUI-01 | Phase 102 | Pending |
+| MAPUI-02 | Phase 102 | Pending |
+| MAPUI-03 | Phase 102 | Pending |
+| MAPUI-04 | Phase 102 | Pending |
+| RSRC-01 | Phase 103 | Pending |
+| RSRC-02 | Phase 104 | Pending |
+| RSRC-03 | Phase 104 | Pending |
+| RSRC-04 | Phase 105 | Pending |
+| OIDCDOC-01 | Phase 105 | Pending |
+| OIDCDOC-02 | Phase 105 | Pending |
+| OIDCDOC-03 | Phase 105 | Pending |
+
+Coverage: 15/15 v1 requirements mapped, no orphans, no duplicates.
