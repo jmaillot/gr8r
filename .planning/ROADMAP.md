@@ -46,7 +46,10 @@
   3. Pasting `{braced}`, no-hyphen or uppercase GUID variants through create/delete collapses to one canonical key via `canonicalizeGuid`/`guidRefusal`; a viewer-role mapping refuses at save; a (group_guid, workspace_id) duplicate maps to the keyed `groupMappingDuplicate` refusal in BOTH SQLite and Postgres — never a raw 500.
   4. The mappings list flags rows pointing at archived/deleted workspaces inline and surfaces label/GUID mismatches from stored provenance where derivable, so dead mappings are visible before they bite.
   5. Every new refusal key exists in all 5 locale catalogues in the same commit as the first emitting gate.
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 101-01-PLAN.md — GET list + DELETE routes, dialect-parity duplicate backstop, full test matrix
 
 ### Phase 102: Mappings SPA — Entra ID Mappings Page
 **Goal**: Operators manage Entra group mappings end-to-end from a dedicated page in the app, with honest delete semantics and the dead-mapping problem made visible where mappings live.
