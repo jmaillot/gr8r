@@ -1,9 +1,9 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.5
-milestone_name: Backup Destinations SMB & FTP
-current_phase: 100
-status: executing
+milestone: none
+milestone_name: (none — awaiting v3.6)
+current_phase: null
+status: idle
 stopped_at: Completed 100-05-PLAN.md
 last_updated: "2026-11-25T19:58:27.192Z"
 last_activity: 2026-11-25
