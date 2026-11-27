@@ -9056,6 +9056,42 @@ async function handleApi(req, res, url) {
     });
   }
 
+  /* DELETE (MAP-02): mutation route — guard order copied EXACTLY from the
+     instance-roles POST (Pitfall 1): sameOrigin → requireUser → operator-keyed
+     throttle → isInstanceAdmin. The throttle sits BEFORE the gate so every
+     attempt — including a 403 refusal — consumes a try (D-02, T-85-04).
+     Unknown id → uniform generic 404 for everyone (D-01: no existence oracle);
+     no canonicalization re-run, no role re-validation (D-08 — the stored role
+     is CHECK-constrained). R-3 lazy revocation: the tx contains EXACTLY two
+     statements — the delete plus the same-tx `group_mapping_deleted` audit row
+     (D-09/D-10/D-11, T-85-05 posture: a forced audit failure rolls the delete
+     back). Never touches memberships/team_members — access lapses at next
+     sign-in, when the reconcile reads the mappings table. */
+  const groupMappingIdMatch = pathname.match(/^\/api\/governance\/group-mappings\/([A-Za-z0-9_-]{1,64})$/);
+  if (groupMappingIdMatch && method === 'DELETE') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (tooMany(`group-mapping-delete|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const row = await db.get('select id, group_guid, workspace_id, role, kind, label from group_mappings where id = ?', [groupMappingIdMatch[1]]);
+    if (!row) return fail(res, 404, 'notFound', 'Not found'); // D-01: uniform generic 404, no oracle
+    await db.tx(async () => {
+      await db.run('delete from group_mappings where id = ?', [row.id]);
+      // D-10: the audit row carries GUID + workspace id + label (mirrors
+      // group_mapping_saved's logInfo content); D-11: operator actor attribution.
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), operator.id, row.workspace_id, 'group_mapping_deleted', 0, clientIp(req), row.workspace_id,
+         operator.name, operator.email, row.label || row.workspace_id,
+         `group ${row.group_guid} → workspace ${row.workspace_id} (${row.role})${row.label ? ` "${row.label}"` : ''}`, now()],
+      );
+    });
+    await logSecurity(operator.id, 'group_mapping_deleted');
+    logInfo(`group mapping deleted: group ${row.group_guid} → workspace ${row.workspace_id} (${row.role})${row.label ? ` "${row.label}"` : ''} by ${operator.email}`);
+    return json(res, 200, { deleted: true });
+  }
+
   if (pathname === '/api/auth/operator/dead-mappings' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const operator = await requireUser(req, res);

@@ -210,3 +210,102 @@ test('liveMembers counts by EXACT provenance equality — two groups in one work
     await server.stop();
   }
 });
+
+/* ---------- T4: DELETE gates — throttle BEFORE the operator gate (Pitfall 1, D-02) ---------- */
+
+test('non-operator DELETE: each 403 consumes a throttle try → the 6th attempt is 429 (throttle-before-gate)', async () => {
+  const server = await startServer({});
+  try {
+    const joined = await signup(server.base, { name: 'Plain User', email: 'plain@test.local' });
+    assert.equal(joined.status, 201);
+    for (let i = 1; i <= 5; i++) {
+      const res = await joined.client.del('/api/governance/group-mappings/gm-whatever');
+      assert.equal(res.status, 403, `attempt ${i} must be the operator-gate 403, got ${res.status}`);
+      assert.equal(res.data.code, 'operatorOnly');
+    }
+    const sixth = await joined.client.del('/api/governance/group-mappings/gm-whatever');
+    assert.equal(sixth.status, 429, `the 6th attempt must be throttled, got ${sixth.status}: ${JSON.stringify(sixth.data)}`);
+    assert.equal(sixth.data.code, 'tooManyAttempts');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('unknown mapping id DELETE → uniform generic 404 notFound for the operator (D-01: no existence oracle)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    // zero mappings exist vs one exists — the SAME generic 404 either way
+    const empty = await operator.del('/api/governance/group-mappings/gm-unknown-id');
+    assert.equal(empty.status, 404);
+    assert.equal(empty.data.code, 'notFound');
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: acmeId(server).id });
+    const populated = await operator.del('/api/governance/group-mappings/gm-different-id');
+    assert.deepEqual({ status: populated.status, code: populated.data.code }, { status: empty.status, code: empty.data.code }, 'identical refusal with and without rows — no oracle');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- T5: DELETE success — same-tx audit, R-3 lazy revocation ---------- */
+
+test('operator DELETE success: row gone, EXACTLY one group_mapping_deleted audit row, memberships + team_members byte-identical (R-3)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id, label: 'Platform Team' });
+    const joinedA = await signup(server.base, { name: 'Member A', email: 'member-a@test.local' });
+    const joinedB = await signup(server.base, { name: 'Member B', email: 'member-b@test.local' });
+    assert.equal(joinedA.status, 201);
+    assert.equal(joinedB.status, 201);
+    seedMembership(server, { wsId: ws.id, email: 'member-a@test.local', provenance: 'group:' + GUID_OK.toLowerCase() });
+    seedMembership(server, { wsId: ws.id, email: 'member-b@test.local', provenance: 'invite' });
+    const operatorId = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get(ADMIN.email).id);
+    const before = withDb(server.dbPath, db => ({
+      memberships: db.prepare('select * from memberships order by workspace_id, user_id').all(),
+      teamMembers: db.prepare('select * from team_members').all(),
+      mappings: db.prepare('select * from group_mappings').all(),
+    }));
+
+    const res = await operator.del('/api/governance/group-mappings/gm-a1b2c3d4');
+    assert.equal(res.status, 200, `DELETE must succeed: ${JSON.stringify(res.data)}`);
+    assert.deepEqual(res.data, { deleted: true });
+
+    const after = withDb(server.dbPath, db => ({
+      memberships: db.prepare('select * from memberships order by workspace_id, user_id').all(),
+      teamMembers: db.prepare('select * from team_members').all(),
+      mappings: db.prepare('select * from group_mappings').all(),
+      audits: db.prepare("select * from audit_log where action = 'group_mapping_deleted'").all(),
+    }));
+    assert.equal(after.mappings.length, 0, 'the mapping row is gone');
+    assert.deepEqual(after.memberships, before.memberships, 'memberships byte-identical — lazy revocation only (R-3)');
+    assert.deepEqual(after.teamMembers, before.teamMembers, 'team_members byte-identical (R-3)');
+    assert.equal(after.audits.length, 1, 'exactly one group_mapping_deleted audit row');
+    assert.equal(after.audits[0].actor_id, operatorId, 'operator actor attribution (D-11)');
+    assert.match(after.audits[0].target_email || '', new RegExp(GUID_OK.toLowerCase()), 'audit carries the GUID (D-10)');
+    assert.match(after.audits[0].target_email || '', /Platform Team/, 'audit carries the label (D-10)');
+    assert.equal(after.audits[0].workspace_id, ws.id, 'audit carries the workspace id (D-10)');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- T6: WR-83-03 pin — group_mapping_deleted never matches the dead-mappings trail LIKE ---------- */
+
+test('dead-mappings trail returns ONLY encoded guard rows — group_mapping_saved/deleted never leak into the trail (WR-83-03 SAFE pin)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const guid = GUID_OK.toLowerCase();
+    insertTrail(server, { action: 'group_mapping_saved' });
+    insertTrail(server, { action: 'group_mapping_deleted' });
+    insertTrail(server, { action: `group_membership_removed:group:${guid}:lost-claim` }); // the ONLY trail-shaped row
+    const res = await operator.get('/api/auth/operator/dead-mappings');
+    assert.equal(res.status, 200);
+    const actions = res.data.trail.map(t => t.action);
+    assert.deepEqual(actions, [`group_membership_removed:group:${guid}:lost-claim`], 'the LIKE group\\_%:group:% must not over-match group_mapping_* rows');
+  } finally {
+    await server.stop();
+  }
+});
