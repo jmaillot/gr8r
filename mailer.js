@@ -691,11 +691,24 @@ function buildRestoreAlertMessage(config, msg) {
     return v === key ? null : v;
   };
   const subjectKey = failed ? 'restore.alert.failed.subject' : 'restore.alert.done.subject';
-  const bodyKey = failed ? 'restore.alert.failed.body' : 'restore.alert.done.body';
+  /* UAT 2026-11-27 (owner: a project restore email read as if the workspace
+     itself was restored): the copy matches the real scope — a project
+     restore lands in a NEW workspace holding the project; an overwrite
+     replaces in place. */
+  const bodyKey = failed
+    ? 'restore.alert.failed.body'
+    : msg.scopeKind === 'project'
+      ? 'restore.alert.done.project.body'
+      : msg.scopeKind === 'overwrite'
+        ? 'restore.alert.done.overwrite.body'
+        : 'restore.alert.done.body';
+  const bodyVars = msg.scopeKind === 'project'
+    ? { name: text(msg.projectName) || finalName || runId, ws: finalName || runId }
+    : { name: finalName || runId };
   const frame = {
     greeting: tr('notif.email.greeting'),
     subject: tr(subjectKey, { name: finalName || runId }),
-    sentence: tr(bodyKey, { name: finalName || runId }),
+    sentence: tr(bodyKey, bodyVars),
     footer: tr('notif.email.body.footer'),
   };
   if (!frame.greeting || !frame.subject || !frame.sentence || !frame.footer) {
@@ -704,7 +717,11 @@ function buildRestoreAlertMessage(config, msg) {
     frame.subject = failed ? `Restore failed: ${finalName || runId}` : `Restore completed: ${finalName || runId}`;
     frame.sentence = failed
       ? `The restore run${finalName ? ` for "${finalName}"` : ''} failed. Check the restore history for details.`
-      : `The restore run${finalName ? ` for "${finalName}"` : ''} completed — the restored copy is live under its new name.`;
+      : msg.scopeKind === 'project'
+        ? `The restore of project "${text(msg.projectName) || finalName || runId}" completed — the restored copy is live in the new workspace "${finalName || runId}".`
+        : msg.scopeKind === 'overwrite'
+          ? `The overwrite restore of "${finalName || runId}" completed — the target content was replaced in place.`
+          : `The restore run${finalName ? ` for "${finalName}"` : ''} completed — the restored copy is live under its new name.`;
     frame.footer = 'You receive this message because you are a backup operator of this instance.';
   }
 

@@ -2377,5 +2377,9 @@
   "page.restore.projectPickHint": "Elige el proyecto que se sobrescribirá con los datos del archivo.",
   "page.restore.overwriteCta": "Sobrescribir proyecto…",
   "page.restore.overwriteConfirmTitle": "¿Sobrescribir el proyecto {name}?",
-  "err.restoreNameCollision": "Ya existe un proyecto con este nombre en el workspace de destino"
+  "err.restoreNameCollision": "Ya existe un proyecto con este nombre en el workspace de destino",
+  "restore.alert.done.project.body": "La restauración del proyecto «{name}» se completó — la copia restaurada está disponible en el nuevo espacio de trabajo «{ws}».",
+  "restore.alert.done.overwrite.body": "La restauración por sobrescritura de «{name}» se completó — el contenido del destino se reemplazó en su lugar.",
+  "page.backup.typeSnapshot": "Instantánea",
+  "page.restore.snapshotTip": "Antes de la restauración, se guarda localmente una instantánea del espacio de trabajo de destino (se conserva 30 días) para poder deshacer la operación."
 }

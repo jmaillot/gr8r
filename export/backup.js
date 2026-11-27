@@ -210,6 +210,32 @@ export function sweepStaleBackupStaging() {
   return removed;
 }
 
+/* UAT 2026-11-27 (owner ruling): pre-restore snapshots (backups/.snapshots/,
+   localOnly runs) purge at 30 days — file mtime is the clock (the archive is
+   immutable post-publish). The matching backup_runs row is marked deleted
+   AFTER both unlinks succeed (the D-12 discipline: history rows REMAIN,
+   marked deleted). Missing dir / file errors are best-effort — the purge
+   never throws into boot. Returns the number of archives purged. */
+export function purgeSnapshots(maxAgeMs = 30 * 24 * 3600 * 1000, { now = Date.now() } = {}) {
+  const { backupsDir } = dataDirs();
+  const dir = path.join(backupsDir, '.snapshots');
+  if (!fs.existsSync(dir)) return 0;
+  const cutoff = now - maxAgeMs;
+  let purged = 0;
+  for (const entry of fs.readdirSync(dir)) {
+    if (!entry.endsWith('.tar.gz')) continue;
+    const full = path.join(dir, entry);
+    let mtime = 0;
+    try { mtime = fs.statSync(full).mtimeMs; } catch { continue; }
+    if (mtime > cutoff) continue;
+    try { fs.rmSync(full, { force: true }); } catch { continue; }
+    try { fs.rmSync(`${full}.sha256`, { force: true }); } catch { /* best-effort */ }
+    try { dbRun('update backup_runs set status = ? where filename = ?', ['deleted', `.snapshots/${entry}`]); } catch { /* best-effort */ }
+    purged += 1;
+  }
+  return purged;
+}
+
 /* ---- ustar writer (hand-rolled, D-33-11) ---- */
 function octalField(value, width) {
   // width includes the terminating NUL: 11 octal digits + NUL
@@ -707,6 +733,7 @@ export async function runExport(scope, meta = {}) {
     instance: '', // Phase 92 (D-03): instance-name segment, resolved ONCE below (Pitfall 5)
     gfsBucket: null, // Phase 92 (D-01): scheduled runs only — resolved ONCE below
     taskName: typeof meta.taskName === 'string' ? meta.taskName : '', // UAT 2026-11-27 owner rename: filename leads with the task name
+    localOnly: meta.localOnly === true, // 2026-11-27: pre-restore snapshot posture — local publish only, zero mirrors
     now: Number.isFinite(meta.now) ? meta.now : null, // injectable clock — test-only; production passes nothing
   };
   const runId = claimRun(scope);
@@ -764,7 +791,12 @@ export async function runExport(scope, meta = {}) {
             candidates.push({ type: 'file', record });
           }
           if (scope.kind === 'workspace' && doc.logo) {
-            candidates.push({ type: 'logo', file: String(doc.logo) });
+            /* UAT 2026-11-27 (owner tar revealed `logos/[object Object]`):
+               the workspace logo lives in the doc as the OBJECT the upload
+               route writes ({ ext, file, uploaded_at }) — the blob id is
+               .file. Legacy string shape stays tolerated. */
+            const logoFile = typeof doc.logo === 'object' ? doc.logo?.file : doc.logo;
+            if (logoFile) candidates.push({ type: 'logo', file: String(logoFile) });
           }
         }
       }
@@ -849,7 +881,15 @@ export async function runExport(scope, meta = {}) {
        final name, and the sidecar below is written from this FINAL
        uniquified filename (Pitfall 3: the sha256 sidecar carries the
        authoritative name; archives are never renamed post-creation). */
-    const baseName = archiveName(scope, runMeta.now ?? Date.now(), runMeta);
+    /* UAT 2026-11-27 (owner rulings): pre-restore snapshots live in a
+       dedicated backups/.snapshots/ folder (kept OUT of the operator's
+       archive listing eye-line by the filename prefix below), purged at
+       30 days (purgeSnapshots, boot + daily tick). The filename column
+       carries the `.snapshots/` prefix so every backupsRoot()+filename
+       join (badges, restore resolution, download) resolves unchanged. */
+    const publishDir = runMeta.localOnly ? path.join(dirs.backupsDir, '.snapshots') : dirs.backupsDir;
+    if (runMeta.localOnly) fs.mkdirSync(publishDir, { recursive: true });
+    const baseName = runMeta.localOnly ? `.snapshots/${archiveName(scope, runMeta.now ?? Date.now(), runMeta)}` : archiveName(scope, runMeta.now ?? Date.now(), runMeta);
     let filename = baseName;
     let uniquifier = 1;
     while (fs.existsSync(path.join(dirs.backupsDir, filename)) && uniquifier < 100) {
@@ -877,6 +917,12 @@ export async function runExport(scope, meta = {}) {
        survive untouched. ---- */
     const failedUploads = [];
     for (const [destName, dest] of destinations) {
+      /* UAT 2026-11-27 (owner ruling: the pre-restore snapshot stays a
+         LOCAL safety net — never mirrors to S3/FTP/SMB): meta.localOnly
+         short-circuits the whole upload stage before any destination is
+         consulted. The local archive + history row are complete on their
+         own (the snapshot's only job is repair-from-local). */
+      if (runMeta.localOnly) break;
       if (!dest?.enabled || typeof dest.upload !== 'function') continue; // dormant-slot contract (D-05)
       const provided = await dest.upload(runMeta); // returns { config } to upload, or null to skip (disabled / task s3_enabled off)
       if (!provided?.config) continue;

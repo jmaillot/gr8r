@@ -2417,5 +2417,9 @@
   "page.restore.projectPickHint": "Choisis le projet à écraser avec les données de l'archive.",
   "page.restore.overwriteCta": "Écraser le projet…",
   "page.restore.overwriteConfirmTitle": "Écraser le projet {name} ?",
-  "err.restoreNameCollision": "Un projet portant ce nom existe déjà dans le workspace cible"
+  "err.restoreNameCollision": "Un projet portant ce nom existe déjà dans le workspace cible",
+  "restore.alert.done.project.body": "La restauration du projet « {name} » est terminée — la copie restaurée est en ligne dans le nouvel espace « {ws} ».",
+  "restore.alert.done.overwrite.body": "La restauration par écrasement de « {name} » est terminée — le contenu de la cible a été remplacé sur place.",
+  "page.backup.typeSnapshot": "Snapshot",
+  "page.restore.snapshotTip": "Avant la restauration, un snapshot de l'espace cible est stocké localement (conservé 30 jours) afin de permettre l'annulation de l'opération."
 }

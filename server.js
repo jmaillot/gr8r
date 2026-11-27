@@ -84,7 +84,7 @@ import { buildWorkbook } from './export/xlsx.js';
 import { buildMspdi } from './export/mspdi.js';
 /* Phase 86 (86-02, D-16): the /api/backup/runs surface — trigger + status
    routes wire the 86-01 pipeline; run-state/sweep/claim all come from it. */
-import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, setBackupRunWriter, setBackupDestination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
+import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, purgeSnapshots, setBackupRunWriter, setBackupDestination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
 import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
@@ -3872,7 +3872,7 @@ const writeRestoreRunRow = async event => {
       'update restore_runs set status = ?, stage = ?, summary = coalesce(?, summary), final_name = coalesce(?, final_name), finished_at = ? where id = ? and status = ?',
       ['done', 'done', event.summary ?? null, event.finalName ?? null, event.finishedAt, event.runId, 'running'],
     );
-    if (res.changes) await handleRestoreRunOutcome(event.runId, 'done', { finalName: event.finalName ?? null });
+    if (res.changes) await handleRestoreRunOutcome(event.runId, 'done', { finalName: event.finalName ?? null, scopeKind: event.scopeKind ?? null, projectName: event.projectName ?? null });
   }
 };
 setRestoreRunWriter(writeRestoreRunRow);
@@ -3892,7 +3892,7 @@ setRestoreRunWriter(writeRestoreRunRow);
    renders the English literals in the meantime. DR (trigger 'instance')
    skips this gate — the re-login wall is its notification (D-89-28,
    enforced by the trigger check below). */
-async function handleRestoreRunOutcome(runId, outcome, { error = '', finalName = null } = {}) {
+async function handleRestoreRunOutcome(runId, outcome, { error = '', finalName = null, scopeKind = null, projectName = null } = {}) {
   if (!MAILER.enabled) return;
   /* D-89-28: DR (trigger 'instance') skips the outcome email — the
      post-commit global session revocation (D-89-25) IS its notification:
@@ -3920,6 +3920,11 @@ async function handleRestoreRunOutcome(runId, outcome, { error = '', finalName =
         outcome, // 'done' | 'failed'
         runId,
         finalName: finalName || '',
+        /* UAT 2026-11-27 (owner: a project restore email read as if the
+           workspace itself was restored): the scope kind + project name
+           ride the ctx so the mailer picks the honest copy. */
+        scopeKind: scopeKind || '',
+        projectName: projectName || '',
         error: error || '',
         locale,
       }),
@@ -13196,6 +13201,13 @@ async function main() {
      'interrupted' at boot, BEFORE the first sweep tick (history never lies). */
   const interruptedRuns = await sweepStaleBackupRuns();
   if (interruptedRuns) logInfo(`backup run sweep: marked ${interruptedRuns} stale running run(s) interrupted`);
+  /* UAT 2026-11-27 (owner ruling): pre-restore snapshots purge at 30 days —
+     boot + a daily tick (best-effort, never throws into boot). */
+  const purgedSnapshots = purgeSnapshots();
+  if (purgedSnapshots) logInfo(`snapshot purge: removed ${purgedSnapshots} archive(s) older than 30 days`);
+  setInterval(() => {
+    try { const n = purgeSnapshots(); if (n) logInfo(`snapshot purge: removed ${n} archive(s) older than 30 days`); } catch (err) { logWarn(`snapshot purge failed: ${err?.message || err}`); }
+  }, 24 * 3600 * 1000).unref();
   /* BKRST-02/D-89-31 (89-02): stale running restore runs become interrupted
      and a held restore_lock is released at boot — the same stale-sweep
      idiom as the backup sweep, before the first trigger can observe them. */

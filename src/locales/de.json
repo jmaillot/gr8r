@@ -2377,5 +2377,9 @@
   "page.restore.projectPickHint": "Wähle das Projekt, das mit den Archivdaten überschrieben wird.",
   "page.restore.overwriteCta": "Projekt überschreiben…",
   "page.restore.overwriteConfirmTitle": "Projekt {name} überschreiben?",
-  "err.restoreNameCollision": "Ein Projekt mit diesem Namen existiert bereits im Ziel-Workspace"
+  "err.restoreNameCollision": "Ein Projekt mit diesem Namen existiert bereits im Ziel-Workspace",
+  "restore.alert.done.project.body": "Die Wiederherstellung des Projekts „{name}“ ist abgeschlossen — die wiederhergestellte Kopie ist im neuen Workspace „{ws}“ live.",
+  "restore.alert.done.overwrite.body": "Die Überschreibungs-Wiederherstellung von „{name}“ ist abgeschlossen — der Inhalt des Ziels wurde an Ort und Stelle ersetzt.",
+  "page.backup.typeSnapshot": "Snapshot",
+  "page.restore.snapshotTip": "Vor der Wiederherstellung wird ein Snapshot des Ziel-Workspaces lokal gespeichert (30 Tage aufbewahrt), damit die Operation rückgängig gemacht werden kann."
 }

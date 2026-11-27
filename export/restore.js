@@ -912,6 +912,7 @@ export function planRemap(manifest, archiveRows, liveContext = {}) {
 
     return {
       kind: 'project',
+      projectName: project?.name ?? '', // UAT 2026-11-27: the honest email subject/body name
       wsId: null, // resolved by the executor (the live target)
       map,
       sourceWs: { id: srcRow.id, name: srcRow.name ?? 'restored', color: srcRow.color ?? '#1D1C1A' },
@@ -1248,7 +1249,7 @@ export async function restoreImportAsNew(opts = {}) {
     teamMembers: { skipped: plan.teamMembersSkipped, inserted: plan.teamMemberRows.length },
     files: { restored: blobPlan.length, missingBlob: missingBlobRestored },
   };
-  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName, finishedAt: Date.now() });
+  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName, finishedAt: Date.now(), scopeKind: plan.kind, projectName: plan.kind === 'project' ? (plan.projectName || '') : '' });
   fs.rmSync(stagingDir, { recursive: true, force: true }); // success sweep — staging is spent
   return { ok: true, runId, workspaceId: wsId, finalName, slug, summary };
 }
@@ -1569,7 +1570,7 @@ async function overwriteProjectFragment(env) {
     project: { replaced: targetProjectId, name: project?.name ?? null, tasks: tasks.length, comments: comments.length, files: files.length, deadTasks: deadTasks.size },
     files: { swapped: blobPlan.length, removed: removedIds.length },
   };
-  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName: targetRow.name, finishedAt: Date.now() });
+  await emitRestoreEvent({ kind: 'finish', runId, summary: JSON.stringify(summary), finalName: targetRow.name, finishedAt: Date.now(), scopeKind: 'overwrite' });
   return {
     ok: true,
     runId,
@@ -1668,7 +1669,7 @@ export async function restoreOverwriteUnit(opts = {}) {
   let swapDir = null;
   let swappedDests = []; // outer scope: the unexpected-throw catch repairs from it
   try {
-    snapshot = await runExport({ kind: 'workspace', id: targetWorkspaceId }, { trigger: 'manual' });
+    snapshot = await runExport({ kind: 'workspace', id: targetWorkspaceId }, { trigger: 'manual', localOnly: true });
     if (!snapshot?.ok) {
       return failWith(keyed('restoreSnapshotFailed', `restore: pre_restore snapshot failed: ${snapshot?.error ?? 'unknown export failure'}`));
     }
@@ -2413,7 +2414,7 @@ export async function restoreInstanceUnit(opts = {}) {
   let swapDir = null;
   let swappedDests = [];
   try {
-    snapshot = await runExport({ kind: 'instance' }, { trigger: 'manual' });
+    snapshot = await runExport({ kind: 'instance' }, { trigger: 'manual', localOnly: true });
     if (!snapshot?.ok) {
       /* 90-review WR-01: this exit predates cleanup()'s declaration below,
          so the staged S3 temp needs its own rm-finally here — a repeated

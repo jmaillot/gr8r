@@ -167,7 +167,9 @@ async function resetWorld() {
 await freshDb();
 await db.ensureSearchIndex();
 
-const backupsCount = () => fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.tar.gz')).length;
+const backupsCount = () =>
+  fs.readdirSync(BACKUPS_DIR).filter(f => f.endsWith('.tar.gz')).length +
+  (fs.existsSync(path.join(BACKUPS_DIR, '.snapshots')) ? fs.readdirSync(path.join(BACKUPS_DIR, '.snapshots')).filter(f => f.endsWith('.tar.gz')).length : 0);
 
 function overwriteUnit(overrides = {}) {
   return restore.restoreOverwriteUnit({

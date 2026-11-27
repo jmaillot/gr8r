@@ -180,8 +180,11 @@ const historyTr = run => {
   /* The GFS badge: the payload's gfs_bucket resolves through the four gfs
      keys — no client GFS math, ever (D-90-12/16 doctrine carries over). */
   const gfsKey = GFS_SCALE_KEYS[run.gfs_bucket];
-  /* UAT round-4: the unified sblock renders as a REAL TABLE — one <tr> per
-     run under the Type/Run/Trigger/Schedule/Status/Date headers. */
+  /* UAT 2026-11-27 (owner): Snapshot rows (the pre-restore snapshot in
+     backups/.snapshots/) show their own type badge, not Backup. */
+  const typeBadge = String(run.filename || '').startsWith('.snapshots/')
+    ? `<span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.backup.typeSnapshot'))}</span>`
+    : `<span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('nav.route.backup'))}</span>`;
   /* UAT round-5: the Run cell shows the SHORT label — the 12-hex instance id
      is stripped for display only (identical on every row of a single
      instance); the full server label stays in the tooltip, the stored field
@@ -256,7 +259,7 @@ const historyTr = run => {
         </span>`
       : '';
   return `<tr${chkBusy ? ' aria-busy="true"' : ''}>
-    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('nav.route.backup'))}</span></td>
+    <td style="padding-left:14px">${typeBadge}</td>
     <td>${runCell}</td>
     <td class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</td>
     <td>${scheduleCell}</td>
@@ -603,8 +606,12 @@ const RESTORE_STAGE_KEYS = {
 const previewDetail = (label, value) =>
   `<div><div class="faint" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${label}</div><div class="mono" style="font-size:13px;margin-top:2px">${value}</div></div>`;
 
-const restorePreviewBody = (d, flags) => {
-  const tables = Array.isArray(d.tables) ? d.tables : [];
+/* UAT 2026-11-27 (owner): the restore dialog states the pre-restore snapshot
+   — local-only, 30-day retention — before any destructive CTA. */
+const snapshotTipLine = () =>
+  `<div class="hint" style="margin-top:10px;display:flex;gap:6px;align-items:flex-start">${ic('circle-alert', 13)}<span>${t('page.restore.snapshotTip')}</span></div>`;
+
+const restorePreviewBody = (d, flags) => {  const tables = Array.isArray(d.tables) ? d.tables : [];
   const files = Array.isArray(d.files) ? d.files : [];
   const flagged = files.filter(f => f.flagged);
   const kind = d.scope?.kind;
@@ -681,6 +688,7 @@ const restorePreviewBody = (d, flags) => {
     }
     ${picker}
     ${projectPicker}
+    ${snapshotTipLine()}
     <div class="row" style="gap:8px;margin-top:12px">${ctas.join('')}</div>`;
 };
 
@@ -748,8 +756,7 @@ const restoreRunTr = run => {
       : ''
   }`;
   return `<tr>
-    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>
-    <td>${runCell}</td>
+    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>    <td>${runCell}</td>
     <td class="faint">—</td>
     <td><span class="faint">—</span></td>
     <td><span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span></td>

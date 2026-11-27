@@ -2377,5 +2377,9 @@
   "page.restore.projectPickHint": "Kies het project dat met de gegevens uit het archief wordt overschreven.",
   "page.restore.overwriteCta": "Project overschrijven…",
   "page.restore.overwriteConfirmTitle": "Project {name} overschrijven?",
-  "err.restoreNameCollision": "Er bestaat al een project met deze naam in de doel-workspace"
+  "err.restoreNameCollision": "Er bestaat al een project met deze naam in de doel-workspace",
+  "restore.alert.done.project.body": "Het herstel van project „{name}” is voltooid — de herstelde kopie staat live in de nieuwe workspace „{ws}”.",
+  "restore.alert.done.overwrite.body": "De overschrijdende herstel van „{name}” is voltooid — de inhoud van het doel is ter plaatse vervangen.",
+  "page.backup.typeSnapshot": "Snapshot",
+  "page.restore.snapshotTip": "Vóór het herstel wordt een snapshot van de doelworkspace lokaal opgeslagen (30 dagen bewaard) zodat de bewerking ongedaan kan worden gemaakt."
 }

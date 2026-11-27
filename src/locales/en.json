@@ -2377,5 +2377,9 @@
   "page.restore.projectPickHint": "Pick the project to overwrite with the archive's data.",
   "page.restore.overwriteCta": "Overwrite project…",
   "page.restore.overwriteConfirmTitle": "Overwrite project {name}?",
-  "err.restoreNameCollision": "A project with this name already exists in the target workspace"
+  "err.restoreNameCollision": "A project with this name already exists in the target workspace",
+  "restore.alert.done.project.body": "The restore of project “{name}” completed — the restored copy is live in the new workspace “{ws}”.",
+  "restore.alert.done.overwrite.body": "The overwrite restore of “{name}” completed — the target content was replaced in place.",
+  "page.backup.typeSnapshot": "Snapshot",
+  "page.restore.snapshotTip": "Before the restore runs, a snapshot of the target workspace is stored locally (kept for 30 days) so the operation can be undone."
 }
