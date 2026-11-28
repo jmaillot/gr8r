@@ -5805,6 +5805,18 @@ A.restoreRunErr = el => {
   render();
 };
 
+/* Phase 105 (RSRC-04): the armed restore source — the operator's explicit
+   pick, sent ONLY when it differs from the run's first available source
+   (local-first default = omit the param, the server's registry order runs).
+   Mirror, never authority: only values that arrived in sources[] are ever
+   sent — an armed-but-not-offered value is dropped client-side and refused
+   keyed by the server anyway (restoreSourceNotMirrored). */
+const restoreArmedSource = runId => {
+  const sources = (Array.isArray(S.ui.restoreSourcesById?.[String(runId)]) ? S.ui.restoreSourcesById[String(runId)] : []);
+  const armed = S.ui.restoreSource;
+  return armed && sources.includes(armed) && armed !== sources[0] ? armed : undefined;
+};
+
 /* The preview drawer: opens on a list row, streams the manifest, and NEVER
    opens without one — a refusal closes it and surfaces the keyed copy
    (corrupt manifests show the page.restore.previewCorrupt contract copy,
@@ -5812,9 +5824,35 @@ A.restoreRunErr = el => {
 A.restorePreview = async el => {
   const runId = el.dataset.id;
   if (!runId) return;
+  const prevRunId = S.ui.restorePreview?.runId;
   S.ui.restorePreview = { runId };
   S.ui.restorePreviewData = null;
+  /* Phase 105 (RSRC-04): opening on a DIFFERENT run invalidates the armed
+     source + probe badges — a stale arm never leaks across drawers (the
+     probe state is keyed runId|source, but the arm is per-drawer). */
+  if (prevRunId && prevRunId !== runId) {
+    S.ui.restoreSource = null;
+    S.ui.restoreProbe = null;
+  }
   render();
+  /* Phase 105 (RSRC-04): the picker's data feed — sources[] rides ONLY the
+     restore-backups GET (GD-8: the preview payload carries none). One kick
+     per drawer open, staged runId → sources[]; fail-open: the drawer
+     renders WITHOUT the picker when the list is unavailable (the server's
+     registry order still runs — the picker is ergonomics, never authority).
+     ZERO probes fire here — the list GET never probes (D-89-14). */
+  if (!S.ui.restoreSourcesById) {
+    api
+      .restoreBackups()
+      .then(res => {
+        if (res.ok)
+          S.ui.restoreSourcesById = Object.fromEntries(
+            (Array.isArray(res.data?.runs) ? res.data.runs : []).map(r => [r.runId, Array.isArray(r.sources) ? r.sources : []]),
+          );
+        render();
+      })
+      .catch(() => {});
+  }
   /* UAT round-8: a Super Admin without live memberships still needs a
      target — the phase-92 scopes endpoint lists every active workspace
      (same authority idiom as the trigger gate). Non-admins keep the
@@ -5845,6 +5883,11 @@ A.restorePreviewClose = () => {
   S.ui.restorePreview = null;
   S.ui.restorePreviewData = null;
   S.ui.backupScopes = null;
+  /* Phase 105 (RSRC-04): the picker state resets with the drawer — a
+     reopened drawer never shows a stale arm or stale probe badges. */
+  S.ui.restoreSource = null;
+  S.ui.restoreProbe = null;
+  S.ui.restoreSourcesById = null;
   render();
 };
 
@@ -5889,7 +5932,7 @@ A.restoreNew = async el => {
      never shows a misleading membership message. */
   if (S.ui.restorePreviewData?.data?.scope?.kind === 'project' && !S.ui.restoreTarget)
     return toast(restoreToast('restoreTargetMissing'), { kind: 'err' });
-  const res = await api.restoreRun({ runId, targetWorkspaceId: S.ui.restoreTarget || undefined });
+  const res = await api.restoreRun({ runId, targetWorkspaceId: S.ui.restoreTarget || undefined, source: restoreArmedSource(runId) });
   if (!res.ok) {
     if (res.status === 401) return;
     return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
@@ -5898,8 +5941,19 @@ A.restoreNew = async el => {
   S.ui.restorePreviewData = null;
   S.ui.restoreTarget = null;
   S.ui.restoreTargetProject = null;
+  S.ui.restoreSource = null;
+  S.ui.restoreProbe = null;
+  S.ui.restoreSourcesById = null;
   S.ui.restorePending = true;
   backupStartPolling();
+  render();
+};
+
+A.restoreSourcePick = el => {
+  /* Phase 105 (RSRC-04): arming a source chip — the pick rides every
+     drawer-originated call until close/trigger (never mid-run: once a
+     trigger is accepted the drawer unmounts into the pending panel). */
+  S.ui.restoreSource = el.dataset.source || null;
   render();
 };
 
@@ -5956,6 +6010,9 @@ A.restoreOverwrite = el => {
         S.ui.restorePreviewData = null;
         S.ui.restoreTarget = null;
         S.ui.restoreTargetProject = null;
+        S.ui.restoreSource = null;
+        S.ui.restoreProbe = null;
+        S.ui.restoreSourcesById = null;
         S.ui.restorePending = true;
         backupStartPolling();
         render();
@@ -5982,6 +6039,9 @@ A.restoreOverwrite = el => {
       S.ui.restorePreviewData = null;
       S.ui.restoreTarget = null;
       S.ui.restoreTargetProject = null;
+      S.ui.restoreSource = null;
+      S.ui.restoreProbe = null;
+      S.ui.restoreSourcesById = null;
       S.ui.restorePending = true;
       backupStartPolling();
       render();
@@ -6009,6 +6069,9 @@ A.restoreInstance = el => {
       }
       S.ui.restorePreview = null;
       S.ui.restorePreviewData = null;
+      S.ui.restoreSource = null;
+      S.ui.restoreProbe = null;
+      S.ui.restoreSourcesById = null;
       S.ui.restorePending = true;
       backupStartPolling();
       render();

@@ -2407,6 +2407,8 @@
   "restore.alert.done.overwrite.body": "The overwrite restore of “{name}” completed — the target content was replaced in place.",
   "page.backup.typeSnapshot": "Snapshot",
   "page.restore.snapshotTip": "Before the restore runs, a snapshot of the target workspace is stored locally (kept for 30 days) so the operation can be undone.",
+  "page.restore.sourcePickLabel": "Restore from",
+  "page.restore.sourcePickHint": "Pick where the archive is fetched from. Default is the first available.",
   "page.backup.uploadRestore": "Restore an archive…",
   "page.backup.uploadingRestore": "Uploading the archive…",
   "page.backup.uploadedRestore": "Archive uploaded — review it before restoring",

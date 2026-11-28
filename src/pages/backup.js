@@ -679,6 +679,25 @@ const restorePreviewBody = (d, flags) => {  const tables = Array.isArray(d.table
           )
           .join('')}</div></div>`
       : '';
+  /* Phase 105 (RSRC-04): source picker — chips fed by the server's
+     sources[] (enabled destinations only, local-first registry order,
+     verbatim from the restore-backups GET via S.ui.restoreSourcesById).
+     Renders only when MORE than one source exists — single-source archives
+     render no dead chrome. Chip labels ride the RESTORE_LOCATION_KEYS fixed
+     vocabulary (t()-rendered); the armed pick is S.ui.restoreSource with
+     sources[0] as the implicit default. The picker is ergonomics, never
+     authority — fail-open without the feed (the server's registry order
+     still runs), and the client never derives availability (D-23). */
+  const sources = Array.isArray(S.ui.restoreSourcesById?.[String(d.runId)]) ? S.ui.restoreSourcesById[String(d.runId)] : [];
+  const sourcePicker =
+    sources.length > 1
+      ? `<div style="margin-top:12px"><div class="label" style="margin-bottom:4px">${t('page.restore.sourcePickLabel')}</div><div class="hint" style="margin:0 0 8px">${t('page.restore.sourcePickHint')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${sources
+          .map(
+            s =>
+              `<button class="btn btn-sm${(S.ui.restoreSource || sources[0]) === s ? ' btn-primary' : ''}" data-a="restoreSourcePick" data-source="${esc(s)}">${t(RESTORE_LOCATION_KEYS[s])}</button>`,
+          )
+          .join('')}</div></div>`
+      : '';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px">
       ${previewDetail(t('page.restore.scopeLabel'), esc(String(kind ?? '')))}
       ${previewDetail(t('page.restore.tablesLabel'), esc(String(tables.length)))}
@@ -692,6 +711,7 @@ const restorePreviewBody = (d, flags) => {  const tables = Array.isArray(d.table
         ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><span class="faint" style="font-size:12px">${ic('circle-alert', 12)}${esc(String(d.missingBlobCount ?? flagged.length))}</span>${flagged.map(f => `<span class="badge">${esc(f.name)}</span>`).join('')}</div>`
         : ''
     }
+    ${sourcePicker}
     ${picker}
     ${projectPicker}
     ${snapshotTipLine()}

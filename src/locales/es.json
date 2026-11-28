@@ -2407,6 +2407,8 @@
   "restore.alert.done.overwrite.body": "La restauración por sobrescritura de «{name}» se completó — el contenido del destino se reemplazó en su lugar.",
   "page.backup.typeSnapshot": "Instantánea",
   "page.restore.snapshotTip": "Antes de la restauración, se guarda localmente una instantánea del espacio de trabajo de destino (se conserva 30 días) para poder deshacer la operación.",
+  "page.restore.sourcePickLabel": "Restaurar desde",
+  "page.restore.sourcePickHint": "Elige de dónde se obtiene el archivo. Por defecto, el primero disponible.",
   "page.backup.uploadRestore": "Restaurar un archivo…",
   "page.backup.uploadingRestore": "Subiendo el archivo…",
   "page.backup.uploadedRestore": "Archivo subido — revísalo antes de restaurar",

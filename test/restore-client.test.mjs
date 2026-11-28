@@ -273,7 +273,9 @@ test('restore refusals ride the CLOSED toast map — every route-level code maps
      path for restore codes (unknown codes fall to tErr's raw-message D-03
      fallback inside restoreToast itself). */
   for (const a of ['A.restorePreview =', 'A.restoreNew =', 'A.restoreOverwrite =', 'A.restoreInstance =']) {
-    const slice = actionsSrc.slice(actionsSrc.indexOf(a), actionsSrc.indexOf(a) + 1600);
+    /* 105-01: the preview action also carries the restoreBackups picker
+       kick (RSRC-04) — the window widens to cover the full action. */
+    const slice = actionsSrc.slice(actionsSrc.indexOf(a), actionsSrc.indexOf(a) + 2600);
     /* UAT 2026-11-27: restoreMissingToast wraps restoreToast — the
        restoreArchiveMissing detail (which seam failed, why) rides the toast.
        Client-side early refusals (restoreTargetMissing) keep restoreToast —

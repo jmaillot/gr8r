@@ -2407,6 +2407,8 @@
   "restore.alert.done.overwrite.body": "De overschrijdende herstel van „{name}” is voltooid — de inhoud van het doel is ter plaatse vervangen.",
   "page.backup.typeSnapshot": "Snapshot",
   "page.restore.snapshotTip": "Vóór het herstel wordt een snapshot van de doelworkspace lokaal opgeslagen (30 dagen bewaard) zodat de bewerking ongedaan kan worden gemaakt.",
+  "page.restore.sourcePickLabel": "Herstellen vanaf",
+  "page.restore.sourcePickHint": "Kies waar het archief vandaan wordt gehaald. Standaard de eerst beschikbare.",
   "page.backup.uploadRestore": "Een archief herstellen…",
   "page.backup.uploadingRestore": "Archief wordt geüpload…",
   "page.backup.uploadedRestore": "Archief geüpload — controleer het voordat je herstelt",

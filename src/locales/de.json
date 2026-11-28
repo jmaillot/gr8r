@@ -2407,6 +2407,8 @@
   "restore.alert.done.overwrite.body": "Die Überschreibungs-Wiederherstellung von „{name}“ ist abgeschlossen — der Inhalt des Ziels wurde an Ort und Stelle ersetzt.",
   "page.backup.typeSnapshot": "Snapshot",
   "page.restore.snapshotTip": "Vor der Wiederherstellung wird ein Snapshot des Ziel-Workspaces lokal gespeichert (30 Tage aufbewahrt), damit die Operation rückgängig gemacht werden kann.",
+  "page.restore.sourcePickLabel": "Wiederherstellen von",
+  "page.restore.sourcePickHint": "Wählen Sie, woher das Archiv geholt wird. Standard ist das zuerst verfügbare.",
   "page.backup.uploadRestore": "Ein Archiv wiederherstellen…",
   "page.backup.uploadingRestore": "Archiv wird hochgeladen…",
   "page.backup.uploadedRestore": "Archiv hochgeladen — vor der Wiederherstellung prüfen",
