@@ -2469,5 +2469,12 @@
   "settings.colIp": "IP",
   "settings.colKey": "Clave",
   "settings.sessions.colLastSeen": "Visto por última vez",
-  "settings.sessions.noSessions": "No hay sesiones iniciadas."
+  "settings.sessions.noSessions": "No hay sesiones iniciadas.",
+  "settings.colProject": "Proyecto",
+  "settings.colTeams": "Equipos",
+  "settings.colStatus": "Estado",
+  "settings.colMember": "Miembro",
+  "settings.notif.colRegistered": "Registrado",
+  "settings.tfa.colFactor": "Factor",
+  "settings.tfa.colLastStep": "Último paso"
 }

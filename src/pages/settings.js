@@ -429,7 +429,16 @@ export function settingsBody(sec, title) {
       return (
         H(t('settings.members.lead', { n: d.members.length, name: esc(d.ws.name) })) +
         `<div class="row" style="margin-bottom:12px">${isMemberAdmin() ? `<button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}${t('settings.members.invite')}</button>` : ''}<button class="btn btn-secondary" data-a="go" data-r="members">${t('settings.members.openDirectory')}</button></div>
-      <div class="panel" style="overflow:hidden">${d.members.map(m => `<div class="mini" style="min-height:52px;cursor:default" data-ctx="member" data-id="${m.id}">${av(m.id, 'md', false)}<div class="grow"><div style="font-weight:500">${esc(m.name)}</div><div class="faint" style="font-size:12px">${esc(m.email)}</div></div>${m.status === 'invited' ? `<span class="badge amber">${t('common.invited')}</span>` : ''}${isMemberAdmin() && m.id !== d.me && (me()?.role === 'Owner' || (m.role !== 'Owner' && m.role !== 'Admin')) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}<button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.settings.options')}">${ic('ellipsis', 14)}</button></div>`).join('')}</div>`
+      <div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colMember')}</th><th style="text-align:left">${t('modal.role')}</th><th style="text-align:left">${t('settings.colStatus')}</th><th></th></tr></thead><tbody>${d.members
+        .map(
+          m =>
+            /* NO When column (112-01): d.members is the workspace-doc profile
+               array (id/name/email/role/status/title/tz) — no served joined
+               field; the joinedAt-bearing /api/workspaces/:slug/members feed
+               is not consumed here (zero-server-delta ruling). */
+            `<tr data-ctx="member" data-id="${m.id}"><td><span class="row" style="gap:8px">${av(m.id, 'sm', false)}<span class="col" style="gap:0"><span style="font-weight:500">${esc(m.name)}</span><span class="faint" style="font-size:12px">${esc(m.email)}</span></span></span></td><td>${isMemberAdmin() && m.id !== d.me && (me()?.role === 'Owner' || (m.role !== 'Owner' && m.role !== 'Admin')) ? `<button class="pillbtn bordered" data-a="pop" data-pop="role" data-id="${m.id}">${m.role}${ic('chevron-down', 12)}</button>` : `<span class="pillbtn">${m.role === 'Owner' ? ic('crown', 13) : ''}${m.role}</span>`}</td><td>${m.status === 'invited' ? `<span class="badge amber">${t('common.invited')}</span>` : ''}</td><td><button class="ibtn ibtn-sm" data-a="ctxBtn" data-ctx="member" data-id="${m.id}" aria-label="${t('a11y.settings.options')}">${ic('ellipsis', 14)}</button></td></tr>`,
+        )
+        .join('')}</tbody></table></div>`
       );
     case 'teams':
       return H(t('settings.teams.lead')) + teamsGrid();
@@ -454,12 +463,13 @@ export function settingsBody(sec, title) {
       const arch = d.projects.filter(p => p.archived);
       const active = d.projects.filter(p => !p.archived);
       const activeRows = active.length
-        ? active
+        ? /* perm-t (112-01) — narrow table, min-width deliberately omitted. */
+          `<div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colProject')}</th><th style="text-align:left">${t('settings.colTeams')}</th><th style="text-align:left">${t('settings.colStatus')}</th><th></th></tr></thead><tbody>${active
             .map(p => {
               const tmNames = projTeams(p).map(id => team(id)?.name).filter(Boolean);
-              return `<div class="srow"><div class="row" style="cursor:default"><a class="row" href="#" data-a="go" data-r="project" data-id="${p.id}" style="color:inherit;text-decoration:none">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></a>${tmNames.length ? `<span class="faint" style="font-size:12px">${esc(tmNames.join(', '))}</span>` : ''}</div><div class="row"><span class="badge faint">${esc(p.status)}</span></div></div>`;
+              return `<tr><td><a class="row" href="#" data-a="go" data-r="project" data-id="${p.id}" style="color:inherit;text-decoration:none">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></a></td><td class="faint">${tmNames.length ? esc(tmNames.join(', ')) : '<span class="faint">—</span>'}</td><td><span class="badge faint">${esc(p.status)}</span></td><td></td></tr>`;
             })
-            .join('')
+            .join('')}</tbody></table></div>`
         : `<p class="faint" style="padding:12px 0">${t('settings.projects.noActive')}</p>`;
       return (
         H(t('settings.projects.lead')) +
@@ -480,7 +490,7 @@ export function settingsBody(sec, title) {
         ) +
         srow(t('settings.projects.showDone'), '', tog('showDoneBoard', P.showDoneBoard !== false)) +
         `<div class="sblock"><h2>${t('settings.projects.active')}</h2>${activeRows}</div>` +
-        `<div class="sblock"><h2>${t('settings.projects.archived')}</h2>${arch.length ? arch.map(p => `<div class="srow"><div class="row">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></div><div class="row"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">${t('act.restore')}</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">${t('act.delete')}</button></div></div>`).join('') : `<p class="faint" style="padding:12px 0">${t('settings.projects.noArchived')}</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}${t('settings.projects.openArchive')}</button></div></div>`
+        `<div class="sblock"><h2>${t('settings.projects.archived')}</h2>${arch.length ? /* perm-t (112-01) — narrow table, min-width deliberately omitted. */ `<div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colProject')}</th><th style="text-align:left">${t('settings.colTeams')}</th><th style="text-align:left">${t('settings.colStatus')}</th><th></th></tr></thead><tbody>${arch.map(p => `<tr><td><span class="row" style="gap:8px">${pIcon(p, '', 14)}<b style="font-weight:500">${esc(p.name)}</b></span></td><td class="faint">${(() => { const tmNames = projTeams(p).map(id => team(id)?.name).filter(Boolean); return tmNames.length ? esc(tmNames.join(', ')) : '<span class="faint">—</span>'; })()}</td><td><span class="badge faint">${esc(p.status)}</span></td><td><span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="restoreProject" data-id="${p.id}">${t('act.restore')}</button><button class="btn btn-danger-ghost btn-sm" data-a="delProject" data-id="${p.id}">${t('act.delete')}</button></span></td></tr>`).join('')}</tbody></table></div>` : `<p class="faint" style="padding:12px 0">${t('settings.projects.noArchived')}</p>`}<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" data-a="go" data-r="archive">${ic('archive', 13)}${t('settings.projects.openArchive')}</button></div></div>`
       );
     }
     case 'my-access': {
@@ -557,15 +567,13 @@ export function settingsBody(sec, title) {
       const deviceRows =
         `<div class="sblock"><h2>${t('settings.notif.pushDevices')}</h2>` +
         (devices.length
-          ? devices
-              .map(dev =>
-                srow(
-                  `<span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(dev.label || t('settings.notif.pushUnnamed'))}</span>`,
-                  dev.created_at ? ago(dev.created_at) : '—',
-                  `<button class="btn btn-secondary btn-sm" data-a="pushTest" data-id="${esc(dev.endpoint)}">${t('settings.notif.pushTest')}</button><button class="btn btn-danger-ghost btn-sm" data-a="pushUnsub" data-id="${esc(dev.endpoint)}">${t('act.delete')}</button>`,
-                ),
+          ? /* perm-t (112-01) — narrow table, min-width deliberately omitted. */
+            `<div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colDevice')}</th><th style="text-align:left">${t('settings.notif.colRegistered')}</th><th></th></tr></thead><tbody>${devices
+              .map(
+                dev =>
+                  `<tr><td><span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(dev.label || t('settings.notif.pushUnnamed'))}</span></td><td class="faint">${dev.created_at ? esc(ago(dev.created_at)) : '<span class="faint">—</span>'}</td><td><span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="pushTest" data-id="${esc(dev.endpoint)}">${t('settings.notif.pushTest')}</button><button class="btn btn-danger-ghost btn-sm" data-a="pushUnsub" data-id="${esc(dev.endpoint)}">${t('act.delete')}</button></span></td></tr>`,
               )
-              .join('')
+              .join('')}</tbody></table></div>`
           : `<p class="faint" style="padding:12px 0">${t('settings.notif.pushNoDevices')}</p>`) +
         `</div>`;
       return (
@@ -684,18 +692,18 @@ export function settingsBody(sec, title) {
               ? ''
               : `<button class="btn btn-secondary" data-a="tfaAddFactor">${t('settings.tfa.addFactor')}</button><button class="btn btn-secondary" data-a="tfaAskRegen">${t('settings.tfa.regenShort')}</button><button class="btn btn-danger-ghost" data-a="tfaAskDisable">${t('act.turnOff')}</button>`,
           ) +
-          factors
-            .map(f =>
-              srow(
-                `<span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(t(f.name))}</span>`,
-                f.lastStep > 0 ? ago(f.lastStep * 30 * 1000) : '—',
-                /* TOTP2 (D-19): per-factor remove opens the in-place staged
-                   confirm — never a picker. The id selects the target; the
-                   confirm form echoes the name via the factor list lookup. */
-                `<button class="btn btn-danger-ghost btn-sm" data-a="tfaAskRemove" data-id="${esc(f.id)}">${t('settings.tfa.remove')}</button>`,
-              ),
-            )
-            .join('') +
+          (factors.length
+            ? /* perm-t (112-01) — narrow table, min-width deliberately omitted. */
+              `<div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.tfa.colFactor')}</th><th style="text-align:left">${t('settings.tfa.colLastStep')}</th><th></th></tr></thead><tbody>${factors
+                .map(
+                  f =>
+                    /* TOTP2 (D-19): per-factor remove opens the in-place staged
+                       confirm — never a picker. The id selects the target; the
+                       confirm form echoes the name via the factor list lookup. */
+                    `<tr><td><span class="row" style="gap:8px">${ic('smartphone', 15)}${esc(t(f.name))}</span></td><td class="faint">${f.lastStep > 0 ? esc(ago(f.lastStep * 30 * 1000)) : '<span class="faint">—</span>'}</td><td><button class="btn btn-danger-ghost btn-sm" data-a="tfaAskRemove" data-id="${esc(f.id)}">${t('settings.tfa.remove')}</button></td></tr>`,
+                )
+                .join('')}</tbody></table></div>`
+            : '') +
           (stage === 'disable'
             ? `<form data-submit="tfaDisableConfirm" class="col" style="gap:14px;max-width:400px;margin-top:14px">
                 ${fld('tfa-off-pw', t('settings.tfa.pwLabel'), 'tfaOffPw', 'type="password" autocomplete="current-password"')}
