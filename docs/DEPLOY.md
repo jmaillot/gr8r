@@ -328,15 +328,27 @@ test — the authorize → Microsoft → callback round-trip is the one check th
 verified without the real tenant.
 
 **Linking policy — verified email required**: SSO only links an existing account,
-JIT-provisions a new one, or auto-accepts a pending invitation when the Entra ID token
-carries `email_verified: true`. Tokens without a verified email fail closed with the
-generic SSO error — no account is created, linked, or reconciled. Once an identity has
-been linked, repeat sign-ins resolve to the same account without re-checking the claim.
+JIT-provisions a new one, or auto-accepts a pending invitation when the IdP token carries
+`email_verified: true`. Fail closed: tokens without a verified email get the generic SSO
+error — no account is created, linked, or reconciled. Once an identity has been linked,
+repeat sign-ins resolve to the same account without re-checking the claim.
 
-**Operator note**: Microsoft Entra sets `email_verified` for tenant-member accounts whose
-mail attribute is verified in the tenant. If a real-tenant sign-in fails with the generic
-SSO error, check that the account's email is verified in the tenant (Entra admin center →
-Users → the account → contact info) before debugging the app config.
+**Azure AD work/school tenants:** their tokens routinely omit `email_verified` entirely,
+which fail-closed blocks linking AND JIT provisioning for genuine tenant members. Set
+`OIDC_TRUST_TENANT_EMAIL=true` to substitute the tenant pin for the claim: the substitution
+applies to **pinned-tenant members only** (the token's `tid` matches your configured
+`OIDC_TENANT_ID`, non-guest shape) and covers both account linking and JIT provisioning.
+
+**Guest carve-out:** guest accounts (Microsoft `acct=1`) and external-IdP identities
+(`idp` claim present and different from your issuer) **always** require the literal
+`email_verified: true` claim — the flag never applies to them. Fix guests at the IdP by
+verifying their mail, not with app config.
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| "Sign-in with Microsoft failed" (generic error) for a real tenant user | Azure AD work/school token omits `email_verified` | Set `OIDC_TRUST_TENANT_EMAIL=true` (pinned tenant, non-guest) |
+| Guest sign-in fails with the generic error | Guests/external-IdP identities always need the literal `email_verified: true` claim | Verify the guest's email at the IdP — the flag does not cover guests |
+| Still failing with the flag set | Issuer/tenant pinning mismatch (`tid` ≠ `OIDC_TENANT_ID`, or a non-guest external `idp` claim) | Check `OIDC_TENANT_ID` matches the token's `tid`; verify no `idp` claim makes the identity guest-shaped |
 
 **Smoke-test checklist** (from an empty config to a working sign-in):
 
@@ -379,6 +391,9 @@ mapping can match:
   app (Enterprise applications → your app → Users and groups → Add user/group).
 - The claim arrives as **Object-ID GUIDs**. The app matches mappings by GUID, never by
   the group's display name — a display label is opaque and is never guessed client-side.
+- **Copy the group's GUID for the mappings form:** Entra admin center → Identity →
+  Groups → your group → Overview → copy **Object ID**. That GUID is exactly the value
+  pasted into the /governance mappings form.
 - ApplicationGroup membership is **direct**: the claim lists groups assigned to the app,
   with no app-side nesting resolution. A user inside a group that contains an assigned
   group does not inherit the mapping. If you need transitive membership instead, the
