@@ -429,7 +429,7 @@ export function settingsBody(sec, title) {
       return (
         H(t('settings.members.lead', { n: d.members.length, name: esc(d.ws.name) })) +
         `<div class="row" style="margin-bottom:12px">${isMemberAdmin() ? `<button class="btn btn-primary" data-a="invite">${ic('user-plus', 14)}${t('settings.members.invite')}</button>` : ''}<button class="btn btn-secondary" data-a="go" data-r="members">${t('settings.members.openDirectory')}</button></div>
-      <div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colMember')}</th><th style="text-align:left">${t('modal.role')}</th><th style="text-align:left">${t('settings.colStatus')}</th><th></th></tr></thead><tbody>${d.members
+      /* perm-t (112-01) — narrow table, min-width deliberately omitted. */ <div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colMember')}</th><th style="text-align:left">${t('modal.role')}</th><th style="text-align:left">${t('settings.colStatus')}</th><th></th></tr></thead><tbody>${d.members
         .map(
           m =>
             /* NO When column (112-01): d.members is the workspace-doc profile
