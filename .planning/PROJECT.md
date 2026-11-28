@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-29 — Milestone v3.8 Governance UI Refresh SHIPPED.*
+*Last updated: 2026-11-29 — Milestone v3.9 Backup & Settings UI Refresh started.*
 
 ## Current State
 
@@ -12,6 +12,14 @@ self-hosted, zero-dependency, multi-tenant project-management workspace: hand-ro
 local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings **now with optional team
 targets and mapping edit**, per-source restore selection with availability probes **now with per-run
 archive presence stat** (stat-only, three-state badge). Test baseline: 2836 tests with exactly 2 documented pre-existing failures (french-typography content, webhook-routes GET list).
+
+## Current Milestone: v3.9 Backup & Settings UI Refresh (started 2026-11-29)
+
+**Goal:** Complete the v3.7/v3.8 design language across the two remaining surfaces — Backup console detailing (min-width drift → 880, run-history superset headers per R-15) and Settings unification (all 6 data lists → perm-t per R-14; preference rows keep srow per R-17) — plus the housekeeping fold-in (scheduler/load flake documented-as-known-flake per R-16, STATE.md drift).
+
+**Phase shape (owner-approved):** 111 Backup detailing (client-only, small — backup.js is ~85% compliant already) → 112 Settings unification (client-only, larger; sequential with 111 — shared i18n pin lines) → 113 housekeeping (parallel-safe, docs-only).
+
+**Research:** `.planning/research/BACKUP-SETTINGS-REFRESH.md` (8cb00689 — HIGH; drift enumerated to backup.js:429/:320/:826-827 and settings.js:860-866/:811-820/:460/:483; zero server/API changes — every When field already served).
 
 ## Milestone v3.8 Governance UI Refresh — SHIPPED (2026-11-29)
 

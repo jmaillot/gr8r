@@ -1,17 +1,17 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.8
-milestone_name: Governance UI Refresh
-status: milestone_complete
+milestone: v3.9
+milestone_name: Backup & Settings UI Refresh
+status: initialized
 stopped_at: Completed 110-01-PLAN.md — Phase 110 done (HK-01/HK-02)
-last_updated: "2026-11-28T16:16:39.000Z"
+last_updated: "2026-11-28T18:54:32.000Z"
 state_head: ddaa48bda1cfdbee94fdeb089d273add192dfe59
 progress:
-  total_phases: 2
-  completed_phases: 2
+  total_phases: 3
+  completed_phases: 0
   total_plans: 0
-  completed_plans: 2
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Projects Studio — v3.6
