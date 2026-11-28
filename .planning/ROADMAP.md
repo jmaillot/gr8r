@@ -55,4 +55,4 @@
 **Depends on:** none (parallel-safe with 109 — disjoint files: docs/test vs client code). **Plans:** 1 plan
 
 Plans:
-- [ ] 110-01-PLAN.md — Bracketed anchor corrections + seed marks (HK-01) and due.reminder fixed-now flake fix + baseline reword (HK-02)
+- [x] 110-01-PLAN.md — Bracketed anchor corrections + seed marks (HK-01) and due.reminder fixed-now flake fix + baseline reword (HK-02) — DONE 2026-11-29 (commits 2f1e5b5e/36ae3245; 6 annotations, survival gate proved; webhook-events ×3 green; 2836 tests / exactly 2 documented failures)

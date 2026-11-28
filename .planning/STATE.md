@@ -3,7 +3,7 @@ gsd_state_version: "1.0"
 milestone: v3.8
 milestone_name: Governance UI Refresh
 status: initialized
-stopped_at: Completed 108-02-PLAN.md — Phase 108 done, milestone-closeout ready
+stopped_at: Completed 110-01-PLAN.md — Phase 110 done (HK-01/HK-02)
 last_updated: "2026-11-28T16:16:39.000Z"
 state_head: ddaa48bda1cfdbee94fdeb089d273add192dfe59
 progress:
