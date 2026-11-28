@@ -41,7 +41,7 @@
 **Depends on:** none. **Plans:** 1 plan
 
 Plans:
-- [ ] 111-01-PLAN.md — Superset run-history headers (R-15/BK-02) as the tracer, then min-width 880 (BK-01) + 11-point checklist sweep (BK-03); zero server diff
+- [x] 111-01-PLAN.md — Superset run-history headers (R-15/BK-02) as the tracer, then min-width 880 (BK-01) + 11-point checklist sweep (BK-03); zero server diff → 111-01-SUMMARY.md (2 commits, pins unchanged, full-suite baseline held)
 
 ### Phase 112: Settings Unification — Client Only
 **Goal:** All 6 settings data lists on the design language (R-14); preference rows untouched (R-17).

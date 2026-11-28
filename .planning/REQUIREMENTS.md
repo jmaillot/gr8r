@@ -18,9 +18,9 @@
 
 ### Backup console detailing (Phase 111 — client-only, small)
 
-- [ ] **BK-01**: min-width drift closed — runs-history table (:429) and restore table (:320) from 860/820 → the 880 standard.
-- [ ] **BK-02**: restore-row header alignment — initiator data currently renders under the "Task" header (backup.js:827); per R-15 the run-history table gets superset headers (Task / Workspace / Project / Initiator / When / …) with per-kind rows filling what applies, `—` elsewhere; malformed :826 line fixed in the same commit.
-- [ ] **BK-03**: any residual backup.js surface failing the 11-point design checklist (research §Q3) brought to compliance; no data-a churn expected (net-zero).
+- [x] **BK-01**: min-width drift closed — runs-history table (:429) and restore table (:320) from 860/820 → the 880 standard.
+- [x] **BK-02**: restore-row header alignment — initiator data currently renders under the "Task" header (backup.js:827); per R-15 the run-history table gets superset headers (Task / Workspace / Project / Initiator / When / …) with per-kind rows filling what applies, `—` elsewhere; malformed :826 line fixed in the same commit.
+- [x] **BK-03**: any residual backup.js surface failing the 11-point design checklist (research §Q3) brought to compliance; no data-a churn expected (net-zero).
 
 ### Settings unification (Phase 112 — client-only, larger)
 
