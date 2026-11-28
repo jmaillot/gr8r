@@ -30,7 +30,7 @@
 
 ### Restore-source selection (RSRC)
 
-- [ ] **RSRC-01**: The three duplicated staged-fetch ladders (preview server.js:10826/:10842/:10857, overwrite :11004-11032, instance :11134-11168) collapse into ONE `resolveRestoreSource(row, source)` helper — byte-identical behavior pinned by golden tests over the s3 > ftp > smb ordering + local fallback; no `source` param in this phase (refactor is purely mechanical).
+- [x] **RSRC-01**: The three duplicated staged-fetch ladders (preview server.js:10826/:10842/:10857, overwrite :11004-11032, instance :11134-11168) collapse into ONE `resolveRestoreSource(row, source)` helper — byte-identical behavior pinned by golden tests over the s3 > ftp > smb ordering + local fallback; no `source` param in this phase (refactor is purely mechanical).
 - [ ] **RSRC-02**: Restore routes accept an explicit `source` parameter validated against the run's mirror flags (uploaded/ftp_uploaded/smb_uploaded — flags ARE the truth, D-23); chosen source flows through the existing sha256 read-back twin seam (dropStagedTmp, mirrorMissing → clearMirrorFlag, restore lock, stage vocabulary frozen — detail lives in error text + audit, never new statuses); invalid/disabled source = keyed refusal ×5.
 - [ ] **RSRC-03**: Restore payload surfaces `sources[]` derived server-side from the run's mirror flags, and a dedicated throttled availability-check POST probes the chosen destination on demand (probeS3/probeFtp/probeSmb seams — never on list GET, D-89-14); probing never mutates run state.
 - [ ] **RSRC-04**: The restore dialog offers a source picker fed by `sources[]` (picker restricted to enabled destinations per the dormant-slot contract), with an on-demand availability check UI (per-source or check-all — UX decided at discuss-phase); restoring from a chosen source shows its verification result honestly (badge/toast), and source switching mid-run is not offered (new runId semantics).
@@ -68,7 +68,7 @@
 | MAPUI-02 | Phase 102 | Pending |
 | MAPUI-03 | Phase 102 | Pending |
 | MAPUI-04 | Phase 102 | Pending |
-| RSRC-01 | Phase 103 | Pending |
+| RSRC-01 | Phase 103 | Complete |
 | RSRC-02 | Phase 104 | Pending |
 | RSRC-03 | Phase 104 | Pending |
 | RSRC-04 | Phase 105 | Pending |
