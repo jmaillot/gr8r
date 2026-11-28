@@ -174,13 +174,16 @@ test('remote_pruned rides all three runs SELECTs (all=1 / manual / task) — res
      4th restore SELECT (overwrite of a local-deleted run answered
      restoreArchiveMissing). Restore still never publishes the flag.
      Phase 104 (RSRC-03): the restore-probe route's flag-read SELECT
-     joined the family (flags ARE the probe's truth, R-4). */
-  assert.equal(selects.length, 12, `three runs SELECTs + delete-set + restore-list + two 100-05 restore-trigger SELECTs + three UAT mirror-leg SELECTs + the overwrite SELECT + the restore-probe SELECT (${selects.length})`);
+     joined the family (flags ARE the probe's truth, R-4).
+     Phase 108 (CARRY-01): the restore-stat route's flag-read SELECT
+     joined too (flags ARE the stat's truth, R-4 — same single-line
+     shape, +1). */
+  assert.equal(selects.length, 13, `three runs SELECTs + delete-set + restore-list + two 100-05 restore-trigger SELECTs + three UAT mirror-leg SELECTs + the overwrite SELECT + the restore-probe SELECT + the restore-stat SELECT (${selects.length})`);
   const runsSelects = selects.filter(l => l.includes('checksum_ok'));
   assert.equal(runsSelects.length, 3, 'three runs SELECT lines carry the full history chrome');
   for (const q of runsSelects) assert.ok(q.includes('remote_pruned'), 'each runs SELECT carries remote_pruned');
   const untouched = selects.filter(l => !l.includes('checksum_ok'));
-  assert.equal(untouched.length, 9, 'the delete-set SELECT + the restore-list SELECT + the two 100-05 restore-trigger SELECTs + the three UAT mirror-leg SELECTs + the overwrite SELECT + the restore-probe SELECT remain');
+  assert.equal(untouched.length, 10, 'the delete-set SELECT + the restore-list SELECT + the two 100-05 restore-trigger SELECTs + the three UAT mirror-leg SELECTs + the overwrite SELECT + the restore-probe SELECT + the restore-stat SELECT remain');
   assert.ok(untouched.every(l => !l.includes('remote_pruned')), 'delete-set + restore SELECTs stay free of remote_pruned (restore never publishes it)');
 });
 
