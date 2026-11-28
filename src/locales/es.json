@@ -1804,6 +1804,8 @@
   "err.invalidRetention": "La retención debe ser enteros pequeños no negativos",
   "err.backupRunInProgress": "Ya se está ejecutando una copia de seguridad",
   "err.restoreArchiveMissing": "Ese archivo de copia de seguridad ha desaparecido de todos los destinos",
+  "err.restoreSourceInvalid": "Esa fuente de restauración no es reconocida",
+  "err.restoreSourceNotMirrored": "Ese archivo de copia de seguridad no tiene ninguna copia conservada en la fuente solicitada",
   "err.restoreNoWorkspace": "No eres miembro de ningún espacio de trabajo. Únete a uno o crea uno primero.",
   "err.backupRestoreInProgress": "Ya se está ejecutando una copia de seguridad o una restauración. Espera a que termine.",
   "err.restoreEntryRejected": "Ese archivo contiene entradas que no se pueden restaurar",

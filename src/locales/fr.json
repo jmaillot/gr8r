@@ -1804,6 +1804,8 @@
   "err.invalidRetention": "La rétention doit être de petits entiers positifs",
   "err.backupRunInProgress": "Une sauvegarde est déjà en cours",
   "err.restoreArchiveMissing": "Cette archive de sauvegarde a disparu de toutes les destinations",
+  "err.restoreSourceInvalid": "Cette source de restauration n’est pas reconnue",
+  "err.restoreSourceNotMirrored": "Cette archive de sauvegarde n’a aucune copie conservée à la source demandée",
   "err.restoreNoWorkspace": "Vous n’êtes membre d’aucun espace de travail. Rejoignez-en un ou créez-en un d’abord.",
   "err.backupRestoreInProgress": "Une sauvegarde ou une restauration est déjà en cours. Attendez qu’elle se termine.",
   "err.restoreEntryRejected": "Cette archive contient des entrées qui ne peuvent pas être restaurées",

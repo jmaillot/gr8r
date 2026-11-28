@@ -1,0 +1,365 @@
+/* =====================================================================
+   Phase 104 plan 01 — explicit restore `source` param (RSRC-02).
+   NEW file: the golden contract (test/restore-source-resolution.test.mjs)
+   must pass UNCHANGED — its 16 cases pin the DEFAULT (omitted-source)
+   registry path; every case here exercises the EXPLICIT path behind the
+   helper's `opts.source !== undefined` guard.
+
+   Harness mirrors the golden (server harness via helpers/server.mjs +
+   in-process engine harness): DATA_DIR set BEFORE the module graph
+   imports; route tests spawn child servers with their own dataDirs and
+   read audits AFTER server.stop() (WAL checkpoint — the golden's note).
+
+   What is pinned here (per 104-RESEARCH.md Golden Impact + plan tasks):
+   - preview ?source=local on a real local run → 200 through the local leg;
+   - preview ?source=<valid> whose flag ≠ 1 → keyed restoreSourceNotMirrored
+     (400) + restore_refused audit;
+   - preview ?source=bogus → keyed restoreSourceInvalid (400);
+   - omitted source → registry order re-assert (golden covers it too);
+   - helper explicit-source semantics: single-leg selection (no registry
+     walk, no fall-through), explicit 'local' missing → 'missing' DIRECTLY,
+     explicit+disabled destination refuses in BOTH disabledBehavior modes
+     (GD-5), success through the REQUESTED leg only (fake S3 seam);
+   - units map the helper's structured reasons through their OWN keyed
+     funnels (restoreSourceInvalid / restoreSourceNotMirrored codes);
+   - both err.* keys present ×5 locales (GD-7 same-commit rule).
+
+   Zero new dependencies. Refusal ENVELOPE strings stay at callers —
+   the helper returns structured reasons only (golden contract).
+   ===================================================================== */
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { test } from 'node:test';
+import { ADMIN, login, signup, startServer, withDb } from './helpers/server.mjs';
+
+/* ---------------------------------------------------------------------
+   ENGINE HALF FIXTURE — identical shape to the golden's (temp DATA_DIR
+   before imports; child servers carry their own DATA_DIRs).
+   --------------------------------------------------------------------- */
+const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-'));
+process.env.DATA_DIR = DATA_DIR;
+delete process.env.BACKUPS_DIR;
+const FILES_DIR = path.join(DATA_DIR, 'files');
+const LOGOS_DIR = path.join(DATA_DIR, 'logos');
+const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
+
+const db = await import('../db-adapter.mjs');
+const backup = await import('../export/backup.js');
+const restore = await import('../export/restore.js');
+
+const T = 1700000000000;
+const OP = { id: 'user-op-000000000000', email: 'op@test.local', name: 'Operator' };
+
+async function freshDb() {
+  await db.close();
+  await db.connectDb({ dbPath: path.join(DATA_DIR, 'projects.db') });
+  await db.runSchema(db.SQLITE_SCHEMA);
+}
+
+function wsDoc(id, name) {
+  return JSON.stringify({
+    data: {
+      members: [{ id: 'm1', name: 'Owner', email: 'owner@example.com' }],
+      projects: [{ id: 'p1', name: 'Project One', color: '#33aa55' }],
+      tasks: [{ id: 't1', project: 'p1', title: 'Task one', status: 'open' }],
+      comments: [{ id: 'c1', task: 't1', body: 'hello restore' }],
+      files: [{ id: 'f1', project: 'p1', name: 'new.txt', ext: 'txt' }],
+      teams: [],
+      projOrder: ['p1'],
+      logo: 'lg1',
+      notifs: [],
+      events: [],
+      savedViews: [],
+      recentSearches: [],
+      activity: [],
+      ...(id ? {} : {}),
+    },
+    _meta: { workspaceName: name },
+  });
+}
+
+let sourceRun = null;
+
+async function resetWorld() {
+  for (const t of ['memberships', 'audit_log', 'backup_runs', 'restore_runs', 'workspaces', 'users']) {
+    await db.run(`delete from ${t}`);
+  }
+  fs.rmSync(FILES_DIR, { recursive: true, force: true });
+  fs.rmSync(LOGOS_DIR, { recursive: true, force: true });
+  fs.rmSync(BACKUPS_DIR, { recursive: true, force: true });
+  fs.mkdirSync(FILES_DIR, { recursive: true });
+  fs.mkdirSync(LOGOS_DIR, { recursive: true });
+
+  await db.run('insert into users (id, email, name, password_hash, created_at) values (?,?,?,?,?)', [OP.id, OP.email, OP.name, 'x', T]);
+  const src = { id: 'ws-src', slug: 'src-fixture', name: 'Source WS' };
+  await db.run(
+    'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)',
+    [src.id, src.slug, src.name, '#123456', wsDoc(src.id, src.name), 1, T, T, 0],
+  );
+  const tgt = { id: 'ws-target', slug: 'target-fixture', name: 'Target WS' };
+  await db.run(
+    'insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)',
+    [tgt.id, tgt.slug, tgt.name, '#654321', wsDoc(tgt.id, tgt.name), 1, T, T, 0],
+  );
+  await db.run('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)', [src.id, OP.id, 'owner', 'm_op-src', 'manual']);
+  await db.run('insert into memberships (workspace_id, user_id, role, member_id, provenance) values (?,?,?,?,?)', [tgt.id, OP.id, 'owner', 'm_op-tgt', 'manual']);
+
+  fs.writeFileSync(path.join(FILES_DIR, 'f1'), 'source new blob\n');
+  fs.writeFileSync(path.join(LOGOS_DIR, 'lg1'), 'source new logo');
+
+  sourceRun = await backup.runExport({ kind: 'workspace', id: 'ws-src' });
+  assert.equal(sourceRun.ok, true, `fixture export failed: ${sourceRun.error}`);
+}
+
+await freshDb();
+await db.ensureSearchIndex();
+restore.setRestoreRunEmitter(async () => { /* best-effort discipline */ });
+await resetWorld();
+
+/* ---------------------------------------------------------------------
+   ROUTE HALF — child-server idioms copied from the golden (signup →
+   grant restore_operator role → login; plant rows via withDb).
+   --------------------------------------------------------------------- */
+const makeAuditReader = dataDir => () =>
+  withDb(path.join(dataDir, 'projects.db'), db2 =>
+    db2.prepare("select * from audit_log where action like 'restore_refused:restoreSource%' order by created_at, id").all());
+
+async function makeRestoreOp(server, email) {
+  const joined = await signup(server.base, { name: 'Restore Op', email });
+  assert.equal(joined.status, 201, `signup ${email}: ${JSON.stringify(joined.data)}`);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const userId = withDb(server.dbPath, db2 => db2.prepare('select id from users where email = ?').get(email).id);
+  const grant = await operator.post('/api/auth/operator/instance-roles', { userId, role: 'restore_operator' });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  return (await login(server.base, email, 'password-1234')).client;
+}
+
+async function makeBackupOpAndRun(server, email, restoreOp) {
+  const joined = await signup(server.base, { name: 'Backup Op', email });
+  assert.equal(joined.status, 201);
+  const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+  const userId = withDb(server.dbPath, db2 => db2.prepare('select id from users where email = ?').get(email).id);
+  const grant = await operator.post('/api/auth/operator/instance-roles', { userId, role: 'backup_operator' });
+  assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+  const backupOp = (await login(server.base, email, 'password-1234')).client;
+  const post = await backupOp.post('/api/backup/runs', { scope: { kind: 'instance' } });
+  assert.equal(post.status, 200, `trigger: ${JSON.stringify(post.data)}`);
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    const poll = await backupOp.get('/api/backup/runs/current');
+    assert.equal(poll.status, 200, `poll failed: ${JSON.stringify(poll.data)}`);
+    if (poll.data.stage === 'done') break;
+    if (poll.data.stage === 'failed') throw new Error(`run failed: ${JSON.stringify(poll.data)}`);
+    if (Date.now() > deadline) throw new Error('run poll timeout');
+    await new Promise(r => setTimeout(r, 50));
+  }
+  const list = await restoreOp.get('/api/backup/restore/backups');
+  assert.equal(list.status, 200, `list: ${JSON.stringify(list.data)}`);
+  const run = list.data.runs.find(r => r.runId === post.data.runId);
+  assert.ok(run, 'the completed run appears in the restore list with its filename + sha256');
+  return run;
+}
+
+function plantRows(server, rows) {
+  withDb(server.dbPath, db2 => {
+    const ins = db2.prepare(
+      `insert into backup_runs (id, task_id, scope, trigger, status, started_at, finished_at, duration_ms, size_bytes, sha256, filename, error, created_at, uploaded, ftp_uploaded, smb_uploaded)
+       values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    );
+    for (const r of rows) {
+      ins.run(
+        r.id, r.taskId ?? 'task-matrix', JSON.stringify(r.scope ?? { kind: 'workspace', id: 'ws-1' }), 'manual', 'deleted',
+        T, T, 0, 1, r.sha256 ?? 'a'.repeat(64), r.filename ?? 'backup-gone-local.tar.gz', null, T,
+        r.uploaded ?? 0, r.ftp_uploaded ?? 0, r.smb_uploaded ?? 0,
+      );
+    }
+  });
+}
+
+const LIVES_IN_S3 = 'That backup archive lives in S3 but no S3 destination is configured';
+const NOT_RECOGNIZED = 'That restore source is not recognized';
+const NO_SURVIVING_COPY = 'That backup archive has no surviving copy at the requested source';
+
+test('104-01 route: preview ?source=local on a real local run resolves the LOCAL archive (200, checksum = run sha256)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-r1-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-r1@test.local');
+    const realRun = await makeBackupOpAndRun(server, 'bop-param-r1@test.local', restoreOp);
+    const res = await restoreOp.get(`/api/backup/restore/preview?runId=${realRun.runId}&source=local`);
+    assert.equal(res.status, 200, `explicit local preview: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.checksum, realRun.sha256, 'the streamed checksum equals the run sha256 — the LOCAL archive was verified');
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-01 route: preview ?source=<valid> on a flag-0 run → 400 restoreSourceNotMirrored (no registry fall-through)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-r2-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-r2@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-r2@test.local', restoreOp);
+    /* ftp flag = 0 but s3 flag = 1: an explicit ftp request must refuse —
+       NEVER fall through to the s3 leg despite its flag being set. */
+    plantRows(server, [{ id: 'param-ftp-not-mirrored', uploaded: 1, ftp_uploaded: 0 }]);
+    const res = await restoreOp.get('/api/backup/restore/preview?runId=param-ftp-not-mirrored&source=ftp');
+    assert.equal(res.status, 400, `flag-0 explicit source: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'restoreSourceNotMirrored');
+    assert.equal(res.data.error, NO_SURVIVING_COPY);
+  } finally {
+    await server.stop();
+  }
+  const audits = makeAuditReader(dataDir)();
+  assert.ok(audits.some(a => a.action === 'restore_refused:restoreSourceNotMirrored'), 'preview not-mirrored refusal audits restore_refused:restoreSourceNotMirrored');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-01 route: preview ?source=bogus → 400 restoreSourceInvalid (never a raw 500)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-r3-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-r3@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-r3@test.local', restoreOp);
+    plantRows(server, [{ id: 'param-invalid', uploaded: 1 }]);
+    const res = await restoreOp.get('/api/backup/restore/preview?runId=param-invalid&source=bogus');
+    assert.equal(res.status, 400, `invalid enum: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.code, 'restoreSourceInvalid');
+    assert.equal(res.data.error, NOT_RECOGNIZED);
+  } finally {
+    await server.stop();
+  }
+  const audits = makeAuditReader(dataDir)();
+  assert.ok(audits.some(a => a.action === 'restore_refused:restoreSourceInvalid'), 'preview invalid-source refusal audits restore_refused:restoreSourceInvalid');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-01 route: preview OMITTED source → registry order re-assert (s3 wins over ftp+smb; default path unchanged)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-r4-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-r4@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-r4@test.local', restoreOp);
+    plantRows(server, [
+      { id: 'param-omit-all-flags', uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 },
+      { id: 'param-omit-ftp-only', ftp_uploaded: 1 },
+    ]);
+    const all = await restoreOp.get('/api/backup/restore/preview?runId=param-omit-all-flags');
+    assert.equal(all.status, 404, `omitted all-flags: ${JSON.stringify(all.data)}`);
+    assert.equal(all.data.code, 'restoreArchiveMissing');
+    assert.equal(all.data.error, LIVES_IN_S3, 'the s3 enablement refusal answers first — registry order intact');
+
+    const ftpOnly = await restoreOp.get('/api/backup/restore/preview?runId=param-omit-ftp-only&source=');
+    assert.equal(ftpOnly.status, 404, `empty-string source counts as omitted: ${JSON.stringify(ftpOnly.data)}`);
+    assert.equal(ftpOnly.data.error, 'That backup archive lives in FTP but no FTP destination is configured');
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+/* ---------------------------------------------------------------------
+   ENGINE HALF — resolveRestoreSource explicit-source semantics at the
+   helper boundary (structured results; callers own envelope text).
+   --------------------------------------------------------------------- */
+
+const deadS3 = { endpoint: 'http://127.0.0.1:1', bucket: 'b', accessKeyId: 'a', secretAccessKey: 's', region: 'r', pathStyle: true };
+const deadFtp = { host: '127.0.0.1', port: 1, user: 'u', password: 'p', secure: 'none' };
+const deadSmb = { host: '127.0.0.1', port: 1, share: 's', user: 'u', password: 'p' };
+const GONE_ROW = { taskId: 'task-fixture', filename: 'backup-gone-local.tar.gz', sha256: 'a'.repeat(64) };
+
+test('104-01 engine: helper explicit invalid enum → sourceInvalid (structured, no throw)', async () => {
+  const src = await restore.resolveRestoreSource({ ...GONE_ROW, uploaded: 1 }, { s3: deadS3 }, { source: 'bogus' });
+  assert.equal(src.ok, false);
+  assert.equal(src.reason, 'sourceInvalid');
+  assert.equal(src.err.code, 'restoreArchiveMissing', 'err.code stays the existing family — the golden contract');
+});
+
+test('104-01 engine: helper explicit source visits ONLY the requested leg — ftp flag-0 with s3 flag+config → sourceNotMirrored, NO s3 fetch attempted', async () => {
+  const src = await restore.resolveRestoreSource({ ...GONE_ROW, uploaded: 1, ftp_uploaded: 0 }, { s3: deadS3 }, { source: 'ftp' });
+  assert.equal(src.ok, false);
+  assert.equal(src.reason, 'sourceNotMirrored');
+  assert.equal(src.dest, 'ftp');
+  /* deadS3 points at port 1 — a fetch attempt would surface as fetchFailed.
+     sourceNotMirrored proves the registry walk never ran. */
+});
+
+test('104-01 engine: helper explicit local with a missing local file → reason missing DIRECTLY (no mirror fall-through, GD-2)', async () => {
+  const src = await restore.resolveRestoreSource({ ...GONE_ROW, uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 }, { s3: deadS3, ftp: deadFtp, smb: deadSmb }, { source: 'local' });
+  assert.equal(src.ok, false);
+  assert.equal(src.reason, 'missing');
+  assert.equal(src.dest, 'local');
+  /* dead mirror configs — any registry walk would surface fetchFailed. */
+});
+
+test('104-01 engine: helper explicit+disabled destination refuses in BOTH disabledBehavior modes (GD-5 divergence resolved for explicit source)', async () => {
+  for (const disabledBehavior of ['refuse', 'skip']) {
+    const src = await restore.resolveRestoreSource({ ...GONE_ROW, ftp_uploaded: 1 }, { ftp: null }, { source: 'ftp', disabledBehavior });
+    assert.equal(src.ok, false, `disabledBehavior=${disabledBehavior}`);
+    assert.equal(src.reason, 'sourceNotMirrored', `disabledBehavior=${disabledBehavior} — explicit+disabled NEVER silent-skips`);
+    assert.equal(src.dest, 'ftp');
+  }
+  /* The DEFAULT path keeps the skip semantics — covered by the golden's
+     unit cases (silent skip → "not found at either destination"). */
+});
+
+test('104-01 engine: helper explicit source fetches through the REQUESTED leg only (fake S3 serves the real archive)', async () => {
+  /* Fake S3: a GET for the requested key streams the REAL fixture archive
+     bytes — downloadToStaged's on-pipe sha256 re-verify must pass. */
+  const archivePath = path.join(BACKUPS_DIR, sourceRun.filename);
+  const fake = http.createServer((req, res) => {
+    if (req.method === 'GET' && req.url.includes(encodeURIComponent(sourceRun.filename))) {
+      const bytes = fs.readFileSync(archivePath);
+      res.writeHead(200, { 'content-length': bytes.length });
+      res.end(bytes);
+    } else {
+      res.writeHead(404, { 'content-type': 'application/xml' });
+      res.end('<?xml version="1.0" encoding="UTF-8"?><Error><Code>NoSuchKey</Code></Error>');
+    }
+  });
+  await new Promise(r => fake.listen(0, '127.0.0.1', r));
+  try {
+    const rowLike = { ...GONE_ROW, taskId: 'task-fixture', filename: sourceRun.filename, sha256: sourceRun.sha256, uploaded: 1 };
+    const src = await restore.resolveRestoreSource(rowLike, { s3: { endpoint: `http://127.0.0.1:${fake.address().port}`, bucket: 'b', accessKeyId: 'a', secretAccessKey: 's', region: 'r', pathStyle: true } }, { source: 's3', runId: 'param-s3-success-run' });
+    assert.equal(src.ok, true, `explicit s3 fetch: ${JSON.stringify({ ...src, err: undefined })}`);
+    assert.equal(src.dest, 's3', 'the REQUESTED leg answered');
+    assert.equal(src.sha256, sourceRun.sha256, 'the staged fetch re-verified the digest');
+    assert.ok(src.stagedPath && fs.existsSync(src.stagedPath), 'a staged temp exists at the seam contract');
+    fs.rmSync(src.stagedPath, { force: true }); // caller owns cleanup (D-89-16 parity)
+  } finally {
+    fake.closeAllConnections?.();
+    await new Promise(r => fake.close(r));
+  }
+});
+
+test('104-01 engine: helper explicit ftp with a LIVE-configured ftp leg but dead endpoint → fetchFailed dest ftp (only that leg visited)', async () => {
+  const src = await restore.resolveRestoreSource({ ...GONE_ROW, ftp_uploaded: 1, uploaded: 1 }, { s3: deadS3, ftp: deadFtp }, { source: 'ftp' });
+  assert.equal(src.ok, false);
+  assert.equal(src.reason, 'fetchFailed');
+  assert.equal(src.dest, 'ftp', 'the failure names the REQUESTED leg — the s3 leg (flag set, config present) was never visited');
+});
+
+/* ---------------------------------------------------------------------
+   UNITS — added in Task 2 with the unit wiring (the structured reasons
+   map through each unit's OWN keyed funnel — failWith / throw keyed,
+   never a raw throw past the funnel, 89-05).
+   --------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------
+   LOCALES (GD-7): both keys present ×5 in the SAME commit as the first
+   emitting fail() codes.
+   --------------------------------------------------------------------- */
+
+test('104-01 locales: err.restoreSourceInvalid + err.restoreSourceNotMirrored present in all five locale files', () => {
+  for (const lang of ['en', 'de', 'es', 'fr', 'nl']) {
+    const catalog = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'locales', `${lang}.json`), 'utf8'));
+    assert.equal(typeof catalog['err.restoreSourceInvalid'], 'string', `${lang}: err.restoreSourceInvalid present`);
+    assert.ok(catalog['err.restoreSourceInvalid'].length > 0, `${lang}: err.restoreSourceInvalid non-empty`);
+    assert.equal(typeof catalog['err.restoreSourceNotMirrored'], 'string', `${lang}: err.restoreSourceNotMirrored present`);
+    assert.ok(catalog['err.restoreSourceNotMirrored'].length > 0, `${lang}: err.restoreSourceNotMirrored non-empty`);
+  }
+});

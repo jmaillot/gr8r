@@ -1804,6 +1804,8 @@
   "err.invalidRetention": "Retention must be small non-negative integers",
   "err.backupRunInProgress": "A backup is already running",
   "err.restoreArchiveMissing": "That backup archive is gone from all destinations",
+  "err.restoreSourceInvalid": "That restore source is not recognized",
+  "err.restoreSourceNotMirrored": "That backup archive has no surviving copy at the requested source",
   "err.restoreNoWorkspace": "You are not a member of any workspace. Join or create one first.",
   "err.backupRestoreInProgress": "A backup or restore is already running. Wait for it to finish.",
   "err.restoreEntryRejected": "That archive contains entries that cannot be restored",

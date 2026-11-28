@@ -1389,6 +1389,58 @@ export async function resolveRestoreSource(rowLike, configs, opts = {}) {
   const localPath = opts.archivePath !== undefined
     ? opts.archivePath
     : (filename ? path.join(backupsRoot(), filename) : null);
+  /* Phase 104 (RSRC-02): explicit `source` override — the ENTIRE branch
+     sits behind the `opts.source !== undefined` guard so the default
+     path (local-first, registry order s3 > ftp > smb) is byte-identical
+     (R-5; the 16 goldens in test/restore-source-resolution.test.mjs
+     must stay green). Validated against the SAME flags the legs array
+     uses (flags ARE the truth, R-4 — no new truth source, D-23):
+       - invalid enum value → reason 'sourceInvalid' (err.code stays the
+         restoreArchiveMissing family — the golden contract; refusal
+         ENVELOPE text stays at callers, never here);
+       - flag ≠ 1 → reason 'sourceNotMirrored';
+       - explicit 'local' → the local block ONLY: a gone local file
+         refuses ('missing') — NO registry walk, NO mirror fall-through
+         (GD-2: explicit local means local, Pitfall 6);
+       - flag = 1 but config absent → 'sourceNotMirrored' REGARDLESS of
+         disabledBehavior (GD-5: explicit-source + disabled destination
+         refuses everywhere — this resolves the documented 103 skip-mode
+         divergence for the explicit-source case ONLY; the units keep
+         silent-skip for the DEFAULT path);
+       - when valid, ONLY the requested leg is visited — the fetch uses
+         the same staged seams, key derivations and mirrorMissing →
+         clearMirrorFlag contract as the default loop. */
+  if (opts.source !== undefined) {
+    const requested = opts.source;
+    if (requested !== 'local' && requested !== 's3' && requested !== 'ftp' && requested !== 'smb') {
+      return { ok: false, dest: null, reason: 'sourceInvalid', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+    }
+    if (requested === 'local') {
+      if (localPath && fs.existsSync(localPath)) {
+        return { ok: true, dest: 'local', archivePath: localPath, stagedPath: null, sha256: null, localPath };
+      }
+      return { ok: false, dest: 'local', reason: 'missing', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+    }
+    const flagOk = requested === 's3' ? uploaded === 1 : requested === 'ftp' ? ftp_uploaded === 1 : smb_uploaded === 1;
+    const legConfig = requested === 's3' ? configs.s3 : requested === 'ftp' ? configs.ftp : configs.smb;
+    if (!flagOk || !filename || !legConfig || typeof legConfig !== 'object') {
+      return { ok: false, dest: requested, reason: 'sourceNotMirrored', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+    }
+    try {
+      const key = requested === 's3' ? s3BackupKey({ taskId }, filename) : `backup-task-${taskId}/${filename}`;
+      const back = await (requested === 's3' ? downloadToStaged : requested === 'ftp' ? fetchToStaged : fetchSmbToStaged)(legConfig, key, sha256, restoreStagingDir());
+      return { ok: true, dest: requested, archivePath: back.tmpPath, stagedPath: back.tmpPath, sha256: back.sha256 ?? null, localPath };
+    } catch (err) {
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, requested);
+      return {
+        ok: false,
+        dest: requested,
+        reason: 'fetchFailed',
+        localPath,
+        err: { code: 'restoreArchiveMissing', detail: err?.code || err?.message || 'unknown', mirrorLost: mirrorMissing(err) ? requested : null, raw: err },
+      };
+    }
+  }
   if (localPath && fs.existsSync(localPath)) {
     return { ok: true, dest: 'local', archivePath: localPath, stagedPath: null, sha256: null, localPath };
   }

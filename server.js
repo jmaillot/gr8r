@@ -6115,6 +6115,24 @@ function fail(res, status, code, message, extra) {
   return json(res, status, { error: message, code, ...extra });
 }
 
+/* Phase 104 (RSRC-02): the restore `source` param vocabulary — shared by
+   the six restore sites (preview/download query, verify-checksum + the
+   three trigger POST bodies, GD-4 transport). Returns null when omitted,
+   'invalid' when outside the enum {local,s3,ftp,smb}, else the value.
+   Validation against the run's mirror FLAGS stays at each route (flags
+   ARE the truth, R-4) — this only normalizes the wire value. */
+function parseRestoreSource(raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  return raw === 'local' || raw === 's3' || raw === 'ftp' || raw === 'smb' ? raw : 'invalid';
+}
+
+/* The run's mirror flag for a requested source — the SAME truth the legs
+   array in resolveRestoreSource reads (no new truth source, D-23). 'local'
+   and 'invalid' never reach here (callers gate first). */
+function restoreSourceFlag(row, source) {
+  return source === 's3' ? row.uploaded : source === 'ftp' ? row.ftp_uploaded : row.smb_uploaded;
+}
+
 /* HARD-05 (D-07): one first-value discipline for every trusted proxy header —
    multi-value x-forwarded-* collapses to its first value. An absent header
    yields '' so each caller's existing truthiness gate behaves unchanged. */
@@ -10881,6 +10899,20 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
     }
+    /* Phase 104 (RSRC-02): explicit `source` on the query (GD-4) — validated
+       against the run's mirror flags AFTER the row read and BEFORE the
+       ladder (R-4; helper re-validates as the funnel-of-record). Invalid
+       enum → keyed restoreSourceInvalid; valid value whose flag ≠ 1 → keyed
+       restoreSourceNotMirrored — both audited restore_refused:<code>.
+       Omitted source → today's behavior verbatim. */
+    const reqSource = parseRestoreSource(url.searchParams.get('source'));
+    if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
+      const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+      await auditBackupTask(user, `restore_refused:${code}`);
+      return fail(res, 400, code, reqSource === 'invalid'
+        ? 'That restore source is not recognized'
+        : 'That backup archive has no surviving copy at the requested source');
+    }
     const localPath = row.filename ? path.join(backupsRoot(), row.filename) : null;
     const hasLocal = !!localPath && fs.existsSync(localPath);
     /* 2026-11-26 UAT (owner: restore of an smb-uploaded run answered
@@ -10900,7 +10932,7 @@ async function handleApi(req, res, url) {
            resolveRestoreSource (export/restore.js — doctrine comments and
            the UAT 2026-11-27 transport-404 ruling live there now). The
            route keeps its own refusal envelopes verbatim. */
-        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse' });
+        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse', source: reqSource ?? undefined });
         if (src.ok) {
           stagedPath = src.stagedPath;
           archivePath = src.archivePath;

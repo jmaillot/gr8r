@@ -1804,6 +1804,8 @@
   "err.invalidRetention": "Aufbewahrung muss kleine nicht-negative ganze Zahlen sein",
   "err.backupRunInProgress": "Es läuft bereits eine Sicherung",
   "err.restoreArchiveMissing": "Dieses Backup-Archiv ist von allen Zielen verschwunden",
+  "err.restoreSourceInvalid": "Diese Wiederherstellungs-Quelle ist nicht erkannt",
+  "err.restoreSourceNotMirrored": "Von diesem Backup-Archiv ist keine Kopie an der angeforderten Quelle erhalten",
   "err.restoreNoWorkspace": "Sie sind Mitglied keines Arbeitsbereichs. Treten Sie zuerst einem bei oder erstellen Sie einen.",
   "err.backupRestoreInProgress": "Es läuft bereits eine Sicherung oder Wiederherstellung. Warten Sie, bis sie abgeschlossen ist.",
   "err.restoreEntryRejected": "Dieses Archiv enthält Einträge, die nicht wiederhergestellt werden können",
