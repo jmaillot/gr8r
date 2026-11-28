@@ -6079,6 +6079,59 @@ A.restoreInstance = el => {
   });
 };
 
+/* Phase 105 (RSRC-04): the probe detail toast — the probe seam's keyed
+   result maps through the EXISTING toast.*Probe* / err.* families (the
+   actions.js 5448-5494 idiom: s3 → toast.s3Probe* / err.s3*; ftp →
+   toast.ftpProbe* / err.ftp*; smb → toast.smbProbe* / err.smb*, all ×5
+   pre-existing). Unmapped keys fall to the family's Unreachable toast. */
+const restoreProbeToast = (source, key, data) => {
+  if (key === 'success') return toast(t(`toast.${source}ProbeSuccess`));
+  if (source === 's3') {
+    if (key === 'deleteFailed') return toast(t('toast.s3ProbeDeleteFailed'));
+    if (key === 'badCreds') return toast(t('toast.s3ProbeBadCreds'), { kind: 'err' });
+    if (key === 's3ClockSkew') return toast(tErr('s3ClockSkew', null, t('toast.s3ProbeUnreachable')), { kind: 'err' });
+    if (key === 's3NoBucket') return toast(tErr('s3NoBucket', null, t('toast.s3ProbeUnreachable')), { kind: 'err' });
+    if (data?.httpWarning) return toast(t('toast.s3ProbeHttpWarning'));
+  } else if (source === 'ftp') {
+    for (const k of ['ftpAuthFailed', 'ftpTlsFailed', 'ftpPassiveFailed', 'ftpPathNotFound', 'ftpQuotaExceeded'])
+      if (key === k) return toast(tErr(k, null, t('toast.ftpProbeUnreachable')), { kind: 'err' });
+    if (data?.httpWarning) return toast(tErr('insecureTlsWarning', null, t('toast.ftpProbeUnreachable')));
+  } else if (source === 'smb') {
+    if (key === 'smbDialectUnsupported') return toast(tErr('smbDialectUnsupported', null, t('toast.smbProbeUnreachable')), { kind: 'err' });
+    if (data?.guest === true) return toast(t('toast.smbGuestAccess'), { kind: 'info' });
+  }
+  return toast(t(`toast.${source}ProbeUnreachable`), { kind: 'err' });
+};
+
+/* Phase 105 (RSRC-04): the ONLY probe caller in the SPA — zero probes fire
+   on load or in any render path (D-89-14); every probe is an explicit
+   owner click against the server's `restoreprobe|<uid>` 10/15-min budget.
+   Per-source (never check-all): 2 sources × N runs would drain the shared
+   operator budget; a per-source check IS the owner intent. A failed probe
+   NEVER mutates a mirror flag (R-4: the flag is truth) and never disables
+   the chip — the badge is the honest result. State is keyed runId|source
+   (never source alone) so one run's result never leaks into another. */
+A.restoreProbe = async el => {
+  const runId = el.dataset.id;
+  const source = el.dataset.source;
+  if (!runId || !source || source === 'local') return; // server refuses local keyed — the client never sends it
+  const key = `${runId}|${source}`;
+  S.ui.restoreProbe = S.ui.restoreProbe || {};
+  S.ui.restoreProbe[key] = { pending: true };
+  render();
+  const res = await api.restoreProbe({ runId, source });
+  if (res.status === 401) return; // D-28: the central intercept owns the teardown
+  if (!res.ok) {
+    S.ui.restoreProbe[key] = { pending: false, result: { ok: false, key: res.data?.code, data: res.data } };
+    render();
+    return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
+  }
+  const result = { ok: res.data?.key === 'success', key: res.data?.key, data: res.data };
+  S.ui.restoreProbe[key] = { pending: false, result };
+  render();
+  restoreProbeToast(source, result.key, res.data);
+};
+
 /* =====================================================================
    85-02 INSTANCE ROLES (D-29..D-31, BKROLE-01) — the governance tab's
    grant/revoke client half. Render-only from the single GET fetch

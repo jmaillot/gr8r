@@ -616,6 +616,20 @@ export const api = {
   async restoreInstance(body, { signal } = {}) {
     return call('POST', '/api/backup/restore/instance', body, { signal });
   },
+  /* Phase 105 (RSRC-04): the per-source availability probe — POSTs the live
+     Phase-104 route (server.js 9952+). s3/ftp/smb ONLY (a `local` request is
+     a keyed 400 restoreSourceInvalid — the UI never renders a local probe
+     control and never sends local). The route rides the operator-keyed
+     `restoreprobe|<uid>` throttle (10 per 15 min) — the client fires this
+     ONLY from the explicit A.restoreProbe click (owner intent, never on
+     load or render — D-89-14). Refusal vocabulary (verbatim): 429
+     tooManyAttempts, 403 backupRoleRequired, 400 restoreInvalidRunId /
+     restoreSourceInvalid / restoreSourceNotMirrored, 404
+     restoreArchiveMissing. The 200 payload is the probe seam's keyed
+     result { ok, key, httpWarning?, guest? } — render-only. */
+  async restoreProbe(body, { signal } = {}) {
+    return call('POST', '/api/backup/restore/probe', body, { signal });
+  },
   /* Phase 92 scopes family (UAT round-8, phase 94): every active workspace
      for the restore-target picker — a Super Admin without live membership
      still picks a target (the server gate accepts the same authority). */

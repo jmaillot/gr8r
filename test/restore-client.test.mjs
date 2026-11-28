@@ -382,6 +382,61 @@ test('backstop: consequence copy wraps inside the modal body — no nowrap or ov
 });
 
 /* =====================================================================
+   Phase 105 (RSRC-04, plan 105-01): the per-source probe surface —
+   api.restoreProbe, the honest badge + detail toast, the structural
+   zero-probes-on-load guarantee (D-89-14).
+   ===================================================================== */
+test('105-01: the probe rides api.restoreProbe ONLY — one call site, inside A.restoreProbe, never in a render path', () => {
+  assert.match(apiSrc, /async restoreProbe\(/, 'the api client exports restoreProbe');
+  assert.match(apiSrc, /call\('POST', '\/api\/backup\/restore\/probe'/, 'the probe POSTs the live Phase-104 route');
+  /* Refusal vocabulary of the probe route, named verbatim in the doc block. */
+  for (const code of ['tooManyAttempts', 'backupRoleRequired', 'restoreInvalidRunId', 'restoreArchiveMissing', 'restoreSourceInvalid', 'restoreSourceNotMirrored']) {
+    assert.ok(apiSrc.includes(code), `the probe doc block names the refusal ${code} exactly as the server emits it`);
+  }
+  const sites = [...actionsSrc.matchAll(/api\.restoreProbe\(/g)].length;
+  assert.equal(sites, 1, 'exactly ONE probe call site exists in actions.js');
+  const probe = actionsSrc.slice(actionsSrc.indexOf('A.restoreProbe ='), actionsSrc.indexOf('A.restoreProbe =') + 1500);
+  assert.ok(probe.includes('api.restoreProbe('), 'the probe call sits inside A.restoreProbe');
+  assert.ok(probe.includes("source === 'local'"), 'local never probes (the server keyed-400s it)');
+  assert.ok(probe.includes('`${runId}|${source}`'), 'probe state is keyed runId|source — one run\'s result never leaks into another');
+  assert.ok(/restore(Missing)?Toast\(/.test(probe), 'probe refusals ride the closed restoreMissingToast map');
+  assert.ok(probe.includes('restoreProbeToast('), 'the probe result toasts through the keyed family mapping');
+  /* Zero probes on load: the page layer never calls the probe at all. */
+  assert.ok(!pagesSrc.includes('api.restoreProbe'), 'no probe call under the page — probes fire only from explicit clicks (D-89-14)');
+});
+
+test('105-01: the source picker renders probe affordances + honest badges; failed probes never disable a chip', () => {
+  assert.match(pagesSrc, /data-a="restoreProbe" data-id="\$\{esc\(d\.runId\)\}" data-source="\$\{esc\(s\)\}"/, 'the probe button carries esc()d runId + source data attributes');
+  assert.match(pagesSrc, /aria-label="\$\{t\('page\.restore\.sourceProbeCheck'\)\}"/, 'the probe button is labelled');
+  assert.match(pagesSrc, /aria-busy="true"/, 'the pending probe is aria-busy');
+  assert.match(pagesSrc, /s !== 'local'/, 'NO probe control renders for local (server refuses it keyed)');
+  assert.match(pagesSrc, /probe\.result\.ok \? 'green'/, 'the ok badge is green-styled');
+  assert.match(pagesSrc, /title="\$\{esc\(String\(probe\.result\.key \|\| ''\)\)\}"/, 'the badge exposes the raw probe key in title (honest: key inspectable)');
+  assert.match(pagesSrc, /page\.restore\.sourceProbeOk/, 'the ok badge copy is keyed');
+  assert.match(pagesSrc, /page\.restore\.sourceProbeFail/, 'the fail badge copy is keyed');
+  /* A probe result never disables the source chip (R-4: the flag is truth —
+     a failed probe does not mutate a mirror flag). */
+  const picker = pagesSrc.slice(pagesSrc.indexOf('const sourcePicker'), pagesSrc.indexOf('${sourcePicker}'));
+  assert.ok(!/data-a="restoreSourcePick"[^>]*disabled/.test(picker), 'the source chip is never disabled by a probe result');
+});
+
+test('105-01: 5-locale parity for the source picker + probe keys', () => {
+  const required = [
+    'page.restore.sourcePickLabel', 'page.restore.sourcePickHint',
+    'page.restore.sourceProbeCheck', 'page.restore.sourceProbeChecking',
+    'page.restore.sourceProbeOk', 'page.restore.sourceProbeFail',
+  ];
+  const sets = new Set();
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    sets.add(Object.keys(cat).filter(k => k.startsWith('page.restore.')).sort().join('|'));
+    for (const key of required) assert.ok(Object.hasOwn(cat, key), `${loc} is missing ${key}`);
+  }
+  assert.equal(sets.size, 1, 'page.restore.* key sets stay identical across the five locales (same-commit doctrine)');
+  assert.ok(pagesSrc.includes('page.restore.sourceProbeCheck') && pagesSrc.includes('page.restore.sourcePickHint'), 'the new keys are consumed by the page source');
+});
+
+/* =====================================================================
    95-05 (BKRST-05, D-02/D-03) — project-level target picker + Overwrite
    CTA + confirm phrase for project archives.
    ===================================================================== */

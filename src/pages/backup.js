@@ -692,10 +692,25 @@ const restorePreviewBody = (d, flags) => {  const tables = Array.isArray(d.table
   const sourcePicker =
     sources.length > 1
       ? `<div style="margin-top:12px"><div class="label" style="margin-bottom:4px">${t('page.restore.sourcePickLabel')}</div><div class="hint" style="margin:0 0 8px">${t('page.restore.sourcePickHint')}</div><div class="row" style="gap:6px;flex-wrap:wrap">${sources
-          .map(
-            s =>
-              `<button class="btn btn-sm${(S.ui.restoreSource || sources[0]) === s ? ' btn-primary' : ''}" data-a="restoreSourcePick" data-source="${esc(s)}">${t(RESTORE_LOCATION_KEYS[s])}</button>`,
-          )
+          .map(s => {
+            /* Phase 105 (RSRC-04): per-source probe affordance — s3/ftp/smb
+               ONLY (local is server-refused keyed, no control renders for
+               it). Pending = disabled + aria-busy; the result badge is the
+               honest surface (ok = green, fail = raw probe key inspectable
+               in title). A failed probe never disables the chip and never
+               mutates a mirror flag (R-4) — the state is keyed runId|source
+               so one run's result never leaks into another. Probes fire
+               ONLY from the A.restoreProbe click — nothing here fetches. */
+            const probe = S.ui.restoreProbe?.[`${d.runId}|${s}`];
+            const probeUi =
+              s !== 'local'
+                ? `<button class="ibtn ibtn-sm" data-a="restoreProbe" data-id="${esc(d.runId)}" data-source="${esc(s)}" aria-label="${t('page.restore.sourceProbeCheck')}"${probe?.pending ? ' disabled aria-busy="true"' : ''}>${probe?.pending ? `<span>${t('page.restore.sourceProbeChecking')}</span>` : ic('activity', 13)}</button>`
+                : '';
+            const badge = probe?.result
+              ? `<span class="badge ${probe.result.ok ? 'green' : ''}" title="${esc(String(probe.result.key || ''))}">${probe.result.ok ? t('page.restore.sourceProbeOk') : t('page.restore.sourceProbeFail')}</span>`
+              : '';
+            return `<span class="row" style="gap:4px;align-items:center"><button class="btn btn-sm${(S.ui.restoreSource || sources[0]) === s ? ' btn-primary' : ''}" data-a="restoreSourcePick" data-source="${esc(s)}">${t(RESTORE_LOCATION_KEYS[s])}</button>${probeUi}${badge}</span>`;
+          })
           .join('')}</div></div>`
       : '';
   return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px">
