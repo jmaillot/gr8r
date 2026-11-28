@@ -53,17 +53,25 @@ function seedWorkspace(db, { id, slug, name }) {
   db.prepare('insert into workspaces (id, slug, name, doc, created_at, updated_at) values (?,?,?,?,?,?)').run(id, slug, name, '{}', t, t);
 }
 
-function seedMapping(db, { guid, workspaceId, role = 'member', kind = 'workspace' }) {
+function seedMapping(db, { guid, workspaceId, role = 'member', kind = 'workspace', teamId = null }) {
   const t = Date.now();
-  db.prepare('insert into group_mappings (id, group_guid, workspace_id, role, kind, created_at, updated_at) values (?,?,?,?,?,?,?)').run(
+  db.prepare('insert into group_mappings (id, group_guid, workspace_id, role, kind, team_id, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
     `gm_${guid.slice(0, 8)}_${workspaceId}`,
     guid,
     workspaceId,
     role,
     kind,
+    teamId,
     t,
     t,
   );
+}
+
+/* Phase 106 fixture: a workspace whose doc defines teams[] (the doc is the
+   team whitelist — D-02). */
+function seedWorkspaceWithTeams(db, { id, slug, name, teams }) {
+  const t = Date.now();
+  db.prepare('insert into workspaces (id, slug, name, doc, created_at, updated_at) values (?,?,?,?,?,?)').run(id, slug, name, JSON.stringify({ data: { teams } }), t, t);
 }
 
 /* Seed one pending invite through the real API — a harness-owner login creates
@@ -425,6 +433,98 @@ test('no-op re-login pin: group row exactly matching the mapped role writes noth
       assert.equal(rows[0].provenance, 'group:34111111-2222-3333-4444-555555555555');
       const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_%'").all(uid).map(r => r.action);
       assert.deepEqual(audits, ['group_granted:group:34111111-2222-3333-4444-555555555555'], 'exactly login 1’s grant row — the re-login added ZERO delta rows');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Phase 106 Plan 01 Task 1 (TEAM-02/03/05, Option A): the team sync cell —
+   a team-bearing mapping grants BOTH the workspace role AND a team_members
+   row stamped provenance `group:<guid>` at sign-in. */
+test('team-bearing mapping grants the team row with group:<guid> provenance alongside the role (TEAM-02/03)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-team1', slug: 'team1ws', name: 'Team1 WS', teams: [{ id: 'team-a', name: 'A' }] });
+      seedMapping(db, { guid: '91111111-2222-3333-4444-555555555555', workspaceId: 'ws-team1', role: 'member', teamId: 'team-a' });
+    });
+    const { callback } = await runFlow(server, { sub: 'sub-team1', email: 'team1@example.com', email_verified: true, groups: ['91111111-2222-3333-4444-555555555555'] }, 'code-team1');
+    assert.equal(callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('team1@example.com').id;
+      const mem = db.prepare('select * from memberships where workspace_id = ?').get('ws-team1');
+      assert.equal(mem.role, 'member', 'the workspace role still grants');
+      assert.equal(mem.provenance, 'group:91111111-2222-3333-4444-555555555555');
+      const team = db.prepare('select * from team_members where workspace_id = ? and user_id = ?').get('ws-team1', uid);
+      assert.ok(team, 'a team_members row landed');
+      assert.equal(team.team_id, 'team-a');
+      assert.equal(team.provenance, 'group:91111111-2222-3333-4444-555555555555', 'provenance stamped group:<guid>');
+      assert.ok(team.member_id, 'member_id carried');
+      const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_%'").all(uid).map(r => r.action);
+      assert.ok(audits.includes('group_team_granted:group:91111111-2222-3333-4444-555555555555'), 'the distinct group_team_granted delta row landed (TEAM-06)');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Phase 106 Plan 01 Task 1 (changes-only, research §4): an immediate re-login
+   with UNCHANGED mappings performs ZERO additional writes — the changes-only
+   WHERE guard on the sync-cell upsert is what keeps this green. */
+test('team-bearing re-login with unchanged mappings writes nothing (changes-only)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-team2', slug: 'team2ws', name: 'Team2 WS', teams: [{ id: 'team-a', name: 'A' }] });
+      seedMapping(db, { guid: '92111111-2222-3333-4444-555555555555', workspaceId: 'ws-team2', role: 'member', teamId: 'team-a' });
+    });
+    const claims = { sub: 'sub-team2', email: 'team2@example.com', email_verified: true, groups: ['92111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-team2-1');
+    assert.equal(first.callback.location, '/');
+    const second = await runFlow(server, claims, 'code-team2-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('team2@example.com').id;
+      const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_%'").all(uid).map(r => r.action).sort();
+      assert.deepEqual(audits, ['group_granted:group:92111111-2222-3333-4444-555555555555', 'group_team_granted:group:92111111-2222-3333-4444-555555555555'], 'exactly login 1’s role + team rows — the re-login added ZERO delta rows');
+      assert.equal(db.prepare('select count(*) as n from team_members where workspace_id = ? and user_id = ?').get('ws-team2', uid).n, 1, 'exactly one team row — no duplicate from the re-login');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* Phase 106 Plan 01 Task 1 (TEAM-05 ruling, supersedes milestone §3a): a
+   NON-winner mapping's team is still granted — the sync cell keys off RAW
+   mappings, not the resolve() winners. */
+test('non-winner mapping still grants its team (TEAM-05)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, {
+        id: 'ws-team3',
+        slug: 'team3ws',
+        name: 'Team3 WS',
+        teams: [{ id: 'team-a', name: 'A' }, { id: 'team-b', name: 'B' }],
+      });
+      seedMapping(db, { guid: '93111111-2222-3333-4444-555555555555', workspaceId: 'ws-team3', role: 'admin', teamId: 'team-a' });
+      seedMapping(db, { guid: '94111111-2222-3333-4444-555555555555', workspaceId: 'ws-team3', role: 'member', teamId: 'team-b' });
+    });
+    const { callback } = await runFlow(server, {
+      sub: 'sub-team3',
+      email: 'team3@example.com',
+      email_verified: true,
+      groups: ['93111111-2222-3333-4444-555555555555', '94111111-2222-3333-4444-555555555555'],
+    }, 'code-team3');
+    assert.equal(callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('team3@example.com').id;
+      const mem = db.prepare('select * from memberships where workspace_id = ?').get('ws-team3');
+      assert.equal(mem.role, 'admin', 'the winner’s role applies');
+      const teams = db.prepare('select team_id, provenance from team_members where workspace_id = ? and user_id = ? order by team_id').all('ws-team3', uid);
+      assert.deepEqual(teams.map(t => t.team_id), ['team-a', 'team-b'], 'the NON-winner mapping’s team was granted too (TEAM-05)');
+      assert.equal(teams[1].provenance, 'group:94111111-2222-3333-4444-555555555555', 'each team row carries its own driving group');
     });
   } finally {
     await server.stop();

@@ -248,6 +248,10 @@ export const SQLITE_SCHEMA = `
     team_id      text not null,
     member_id    text,
     user_id      text not null references users(id) on delete cascade,
+    /* Phase 106 (TEAM-02): row origin — group:<guid> | null (manual/invite).
+       Selection key for the sign-in team sync cell (TEAM-03) and the
+       manual-PUT immunity clause (TEAM-04); never backfilled. */
+    provenance   text,
     primary key (workspace_id, team_id, user_id)
   );
   create index if not exists team_members_user on team_members(workspace_id, user_id);
@@ -412,6 +416,10 @@ export const SQLITE_SCHEMA = `
     group_guid   text not null,
     workspace_id text not null,
     role         text not null check (role in ('owner','admin','member')),
+    /* Phase 106 (TEAM-01): optional team riding the same mapping (R-6) —
+       nullable, references the doc's teams[] whitelist (no FK, checked at
+       write time). The pair index is untouched (NULL-distinct trap). */
+    team_id      text,
     kind         text not null default 'workspace' check (kind in ('workspace','operator')),
     label        text,
     created_by   text references users(id) on delete set null,

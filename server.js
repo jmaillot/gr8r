@@ -582,6 +582,10 @@ const SCHEMA = `
     team_id      text not null,
     member_id    text,
     user_id      text not null references users(id) on delete cascade,
+    /* Phase 106 (TEAM-02): row origin — group:<guid> | null (manual/invite).
+       Selection key for the sign-in team sync cell (TEAM-03) and the
+       manual-PUT immunity clause (TEAM-04); never backfilled. */
+    provenance   text,
     primary key (workspace_id, team_id, user_id)
   );
   create index if not exists team_members_user on team_members(workspace_id, user_id);
@@ -803,6 +807,10 @@ const SCHEMA = `
     group_guid   text not null,
     workspace_id text not null,
     role         text not null check (role in ('owner','admin','member')),
+    /* Phase 106 (TEAM-01): optional team riding the same mapping (R-6) —
+       nullable, references the doc's teams[] whitelist (no FK, checked at
+       write time). The pair index is untouched (NULL-distinct trap). */
+    team_id      text,
     kind         text not null default 'workspace' check (kind in ('workspace','operator')),
     label        text,
     created_by   text references users(id) on delete set null,
@@ -1035,6 +1043,13 @@ async function initDb() {
   /* Phase 81 (D-81-6): membership origin — group:<guid> | invite | manual | null(legacy).
      Selection key for Phase 82 removal-sync; never backfilled. */
   await adapterEnsureColumn('memberships', 'provenance', 'text');
+  /* Phase 106 (TEAM-01/TEAM-02): team-bearing mappings + team-row origin.
+     Engine-neutral (probe branches to information_schema on pg) — no epoch
+     registration (not timestamps), no pgSchemaVariant entry (no CHECK or
+     collation delta), no index changes. Def bytes match the SCHEMA twins
+     verbatim (Pitfall P-B). */
+  await adapterEnsureColumn('group_mappings', 'team_id', 'text');
+  await adapterEnsureColumn('team_members', 'provenance', 'text');
   await adapterEnsureColumn('invites', 'workspace_id', 'text');
   // Phase 28 D-07: invites carry a JSON array of teams. The scalar `team`
   // column above stays on disk as backfill-only legacy (D-04) — never read.
@@ -6794,7 +6809,7 @@ async function handleApi(req, res, url) {
            or counts in the message. */
         if (claimState.reason === 'overage') logWarn('sso groups claim overage — treating as unmapped');
       } else {
-        const mappings = await db.all('select group_guid, workspace_id, role, kind from group_mappings');
+        const mappings = await db.all('select group_guid, workspace_id, role, kind, team_id from group_mappings');
         const { grants, operatorFlag } = resolve(claimState.groups, mappings);
         /* D-81-3: viewer ranks 0 — ANY mapped role upgrades a viewer row. This
            map is callback-local ON PURPOSE: groups.js ROLE_RANK is test-locked
@@ -6843,6 +6858,66 @@ async function handleApi(req, res, url) {
           /* Widened Phase 81 select: the delete cell needs member_id and the
              provenance GUID, not just the role. */
           const existing = await db.get('select role, member_id, provenance from memberships where workspace_id = ? and user_id = ?', [wsId, row.id]);
+          /* Phase 106 (TEAM-02/03/05, Option A): the team sync cell — the
+             SINGLE writer for group-driven team rows. Inserted BEFORE the
+             branch chain so it runs on EVERY iteration of this loop (every
+             branch below ends in `continue`). It keys off RAW mappings —
+             winner AND non-winner alike (TEAM-05; resolve() never surfaces
+             non-winners) — with the claimed GUID set canonicalized on the
+             mapping side. The removal side parses the guid from the ROW's
+             own provenance (T-82-01/T-82-02 property, never from claims —
+             T-106-01). Dead/archived workspace or doc parse failure →
+             no-op posture, never throw past the fail-closed catch
+             (T-106-04). addMembership is NOT touched (its insert-or-ignore
+             serves only manual/invite callers); the GS-01 blanket team
+             delete below still cleans any rows this cell wrote when the
+             membership dies — the GS-01 contract. */
+          const wsCell = await db.get('select doc, archived from workspaces where id = ?', [wsId]);
+          if (wsCell && wsCell.archived !== 1) {
+            /* Doc content is the team whitelist (D-02); a parse failure
+               means no live teams — sweep-only posture (T-106-04). */
+            let liveTeamIds = new Set();
+            try {
+              liveTeamIds = new Set((JSON.parse(wsCell.doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
+            } catch { /* sweep-only: nothing live, nothing granted */ }
+            const claimedSet = new Set(claimState.groups);
+            const livePair = new Map(); // `${teamId}\u0000${guid}` → { teamId, guid }
+            for (const m of mappings) {
+              if (m.workspace_id !== wsId || !m.team_id) continue;
+              if (!claimedSet.has(canonicalizeGuid(m.group_guid))) continue;
+              /* Dead-team mapping: the team left doc.data.teams — the GRANT
+                 skips, the mapping's ROLE grant below is untouched. */
+              if (!liveTeamIds.has(m.team_id)) continue;
+              livePair.set(`${m.team_id}\u0000${m.group_guid}`, { teamId: m.team_id, guid: m.group_guid });
+            }
+            const cellMemberId = existing?.member_id || (await memberIdFor(wsId, row));
+            for (const { teamId, guid } of livePair.values()) {
+              await db.tx(async () => {
+                /* Changes-only WHERE guard is MANDATORY (research §4): an
+                   unconditional do update counts byte-identical no-ops as
+                   writes and breaks the zero-write re-login pins
+                   (:387/:408/:692). `on conflict` is the engine-proven
+                   shape (memberships :6032); `insert or ignore` is
+                   forbidden on pg (pgSchemaVariant is DDL-only, adapter
+                   :536 comment). */
+                const wrote = await db.run(
+                  `insert into team_members (workspace_id, team_id, member_id, user_id, provenance) values (?,?,?,?,?)
+                   on conflict(workspace_id, team_id, user_id) do update set provenance = excluded.provenance
+                   where team_members.provenance is not excluded.provenance`,
+                  [wsId, teamId, cellMemberId, row.id, 'group:' + guid],
+                );
+                /* Changes-only audit (T-106-03): the encoded row lands in
+                   the SAME tx ONLY when a row was actually inserted or
+                   updated — no-op re-logins emit nothing. */
+                if (wrote.changes > 0) {
+                  await db.run(
+                    'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                    [uid(), row.id, row.id, `group_team_granted:group:${guid}`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+                  );
+                }
+              });
+            }
+          }
           if (!mapped) {
             /* GS-01 delete cell: NO mapping for this workspace. Only a
                group-derived row is removed — manual/invite/NULL rows are
