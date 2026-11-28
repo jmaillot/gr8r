@@ -1821,6 +1821,7 @@
   "err.groupMappingUnknownWorkspace": "Aucun espace de travail n’existe avec cet identifiant",
   "err.groupMappingBadRole": "Le rôle doit être owner, admin ou member",
   "err.groupMappingDuplicate": "Ce groupe est déjà associé à cet espace de travail",
+  "err.groupMappingImmutable": "L’identifiant de groupe (GUID) ne peut pas être modifié sur une affectation existante",
   "err.workspaceNameRequired": "Saisissez un nom d’espace de travail",
   "err.invalidSlug": "Utilisez 2 à 40 lettres minuscules, chiffres ou tirets",
   "err.slugTaken": "Cette URL est déjà prise",

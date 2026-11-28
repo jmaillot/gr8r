@@ -1821,6 +1821,7 @@
   "err.groupMappingUnknownWorkspace": "Er bestaat geen werkruimte met die ID",
   "err.groupMappingBadRole": "De rol moet owner, admin of member zijn",
   "err.groupMappingDuplicate": "Die groep is al gekoppeld aan deze werkruimte",
+  "err.groupMappingImmutable": "De groeps-GUID kan op een bestaande koppeling niet worden gewijzigd",
   "err.workspaceNameRequired": "Voer een naam voor de werkruimte in",
   "err.invalidSlug": "Gebruik 2–40 kleine letters, cijfers of koppeltekens",
   "err.slugTaken": "Die URL is al in gebruik",

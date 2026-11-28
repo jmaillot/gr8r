@@ -1821,6 +1821,7 @@
   "err.groupMappingUnknownWorkspace": "Es existiert kein Arbeitsbereich mit dieser ID",
   "err.groupMappingBadRole": "Die Rolle muss owner, admin oder member sein",
   "err.groupMappingDuplicate": "Diese Gruppe ist bereits mit diesem Arbeitsbereich verknüpft",
+  "err.groupMappingImmutable": "Die Gruppen-GUID kann auf einer bestehenden Zuordnung nicht geändert werden",
   "err.workspaceNameRequired": "Geben Sie einen Arbeitsbereich-Namen ein",
   "err.invalidSlug": "Verwenden Sie 2–40 Kleinbuchstaben, Ziffern oder Bindestriche",
   "err.slugTaken": "Diese URL ist bereits vergeben",

@@ -9251,6 +9251,61 @@ async function handleApi(req, res, url) {
     return json(res, 200, { deleted: true });
   }
 
+  /* PATCH (EDIT-01, Phase 106): partial mapping edit — guard ladder copied
+     EXACTLY from the DELETE sibling above (D-03: one family, one ladder —
+     NOT the workspace PATCH's requireWorkspace-first order). Throttle sits
+     BEFORE the operator gate so 403s consume a try (T-85-04); unknown id →
+     uniform generic 404 (D-01, no oracle). R-8: the GUID is immutable — a
+     body that carries groupGuid is an EXPLICIT keyed refusal (house style:
+     no silent ignore). Partial-update idiom from the workspace PATCH
+     precedent: per-provided-field validation, merge over current values,
+     single UPDATE with updated_at, and a same-tx `group_mapping_updated`
+     audit row (AUD-01: a forced audit failure rolls the edit back). */
+  if (groupMappingIdMatch && method === 'PATCH') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const operator = await requireUser(req, res);
+    if (!operator) return;
+    if (tooMany(`group-mapping-edit|${operator.id}`, 5, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
+    const row = await db.get('select id, group_guid, workspace_id, role, kind, label, team_id from group_mappings where id = ?', [groupMappingIdMatch[1]]);
+    if (!row) return fail(res, 404, 'notFound', 'Not found'); // D-01: uniform generic 404, no oracle
+    const body = await readJson(req);
+    if (body?.groupGuid !== undefined) return fail(res, 400, 'groupMappingImmutable', 'The group GUID cannot be changed on an existing mapping');
+    /* Partial-update merge (workspace PATCH idiom): validate every provided
+       field BEFORE any write, keep the stored value otherwise. Task 106-02.1
+       wires role + label; workspace/team slots land in Task 106-02.2. */
+    const next = { role: row.role, label: row.label };
+    if (body?.role !== undefined) {
+      const roleR = roleTokenRefusal(body.role, 'groupMappingBadRole', 'Role must be owner, admin, or member');
+      if (roleR) return fail(res, 400, roleR.code, roleR.message);
+      next.role = body.role;
+    }
+    if (body?.label !== undefined) next.label = String(body.label || '').trim().slice(0, 200) || null;
+    /* Audit detail rides the DELETE's target_email slot style, but only the
+       CHANGED parts (before→after) — a no-op edit still audits, with the
+       group → ws stem only. */
+    const parts = [];
+    if (next.role !== row.role) parts.push(`${row.role}→${next.role}`);
+    if (next.label !== row.label) parts.push(`label "${row.label || ''}"→"${next.label || ''}"`);
+    const detail = `group ${row.group_guid} → ws ${row.workspace_id}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+    const t = now();
+    await db.tx(async () => {
+      await db.run('update group_mappings set role = ?, label = ?, updated_at = ? where id = ?', [next.role, next.label, t, row.id]);
+      // D-10/D-11: same audit shape as the DELETE sibling — operator actor,
+      // GUID + workspace + before→after detail in the free-text slot.
+      await db.run(
+        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+        [uid(), operator.id, row.workspace_id, 'group_mapping_updated', 0, clientIp(req), row.workspace_id,
+         operator.name, operator.email, row.label || row.workspace_id, detail, t],
+      );
+    });
+    await logSecurity(operator.id, 'group_mapping_updated');
+    logInfo(`group mapping updated: ${detail} by ${operator.email}`);
+    return json(res, 200, {
+      mapping: { id: row.id, groupGuid: row.group_guid, workspaceId: row.workspace_id, role: next.role, kind: row.kind, label: next.label },
+    });
+  }
+
   if (pathname === '/api/auth/operator/dead-mappings' && method === 'GET') {
     if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
     const operator = await requireUser(req, res);

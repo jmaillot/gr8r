@@ -344,3 +344,144 @@ test('dead-mappings route: a mapping whose team vanished from the doc is an orph
     await server.stop();
   }
 });
+
+/* =====================================================================
+   Phase 106 (EDIT-01/02): the PATCH sibling — guard ladder cloned from
+   DELETE (D-03), throttle-before-gate with key group-mapping-edit,
+   uniform 404, GUID immutability (R-8), partial role/label update with a
+   same-tx group_mapping_updated audit row (AUD-01).
+   ===================================================================== */
+
+const patchRow = (srv, id) =>
+  withDb(srv.dbPath, db => db.prepare('select * from group_mappings where id = ?').get(id));
+const updatedAudits = srv =>
+  withDb(srv.dbPath, db => db.prepare("select * from audit_log where action = 'group_mapping_updated'").all());
+
+test('PATCH happy path: role + label partially updated, EXACTLY one group_mapping_updated audit row, memberships/team_members byte-identical', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id, role: 'admin', label: 'Old Label' });
+    const joinedA = await signup(server.base, { name: 'Member A', email: 'member-a@test.local' });
+    assert.equal(joinedA.status, 201);
+    seedMembership(server, { wsId: ws.id, email: 'member-a@test.local', provenance: 'group:' + GUID_OK.toLowerCase() });
+    const operatorId = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get(ADMIN.email).id);
+    const before = withDb(server.dbPath, db => ({
+      memberships: db.prepare('select * from memberships order by workspace_id, user_id').all(),
+      teamMembers: db.prepare('select * from team_members').all(),
+    }));
+
+    const res = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { role: 'member', label: 'New Label' });
+    assert.equal(res.status, 200, `PATCH must succeed: ${JSON.stringify(res.data)}`);
+    assert.deepEqual(res.data.mapping, { id: 'gm-a1b2c3d4', groupGuid: GUID_OK.toLowerCase(), workspaceId: ws.id, role: 'member', kind: 'workspace', label: 'New Label' });
+
+    const row = patchRow(server, 'gm-a1b2c3d4');
+    assert.equal(row.role, 'member');
+    assert.equal(row.label, 'New Label');
+    const after = withDb(server.dbPath, db => ({
+      memberships: db.prepare('select * from memberships order by workspace_id, user_id').all(),
+      teamMembers: db.prepare('select * from team_members').all(),
+    }));
+    assert.deepEqual(after.memberships, before.memberships, 'the edit never touches memberships (R-3 lazy revocation)');
+    assert.deepEqual(after.teamMembers, before.teamMembers, 'the edit never touches team_members');
+
+    const audits = updatedAudits(server);
+    assert.equal(audits.length, 1, 'exactly one group_mapping_updated audit row');
+    assert.equal(audits[0].actor_id, operatorId, 'operator actor attribution (D-11)');
+    assert.equal(audits[0].workspace_id, ws.id, 'audit carries the workspace id (D-10)');
+    assert.match(audits[0].target_email || '', new RegExp(GUID_OK.toLowerCase()), 'audit carries the GUID (D-10)');
+    assert.match(audits[0].target_email || '', /admin→member/, 'audit carries the role before→after');
+    assert.ok((audits[0].target_email || '').includes('label "Old Label"→"New Label"'), 'audit carries the label before→after');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH ladder: 401 without a user; 403 crossOriginRejected with origin; 403 operatorOnly consumes nothing extra', async () => {
+  const server = await startServer({});
+  try {
+    const res401 = await fetch(`${server.base}/api/governance/group-mappings/gm-x`, { method: 'PATCH' });
+    assert.equal(res401.status, 401);
+
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const resCross = await fetch(`${server.base}/api/governance/group-mappings/gm-x`, {
+      method: 'PATCH',
+      headers: { cookie: operator.cookie(), origin: 'https://evil.example' },
+    });
+    assert.equal(resCross.status, 403);
+    assert.equal((await resCross.json()).code, 'crossOriginRejected');
+
+    const joined = await signup(server.base, { name: 'Plain User', email: 'plain@test.local' });
+    assert.equal(joined.status, 201);
+    const res403 = await joined.client.patch('/api/governance/group-mappings/gm-x', { role: 'member' });
+    assert.equal(res403.status, 403);
+    assert.equal(res403.data.code, 'operatorOnly');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH throttle-before-gate: each 403 consumes a try → the 6th attempt is 429 (T-85-04, key group-mapping-edit)', async () => {
+  const server = await startServer({});
+  try {
+    const joined = await signup(server.base, { name: 'Plain User', email: 'plain2@test.local' });
+    assert.equal(joined.status, 201);
+    for (let i = 1; i <= 5; i++) {
+      const res = await joined.client.patch('/api/governance/group-mappings/gm-whatever', { role: 'member' });
+      assert.equal(res.status, 403, `attempt ${i} must be the operator-gate 403, got ${res.status}`);
+      assert.equal(res.data.code, 'operatorOnly');
+    }
+    const sixth = await joined.client.patch('/api/governance/group-mappings/gm-whatever', { role: 'member' });
+    assert.equal(sixth.status, 429, `the 6th attempt must be throttled, got ${sixth.status}`);
+    assert.equal(sixth.data.code, 'tooManyAttempts');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH unknown id → uniform generic 404 notFound (D-01)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const empty = await operator.patch('/api/governance/group-mappings/gm-unknown-id', { role: 'member' });
+    assert.equal(empty.status, 404);
+    assert.equal(empty.data.code, 'notFound');
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: acmeId(server).id });
+    const populated = await operator.patch('/api/governance/group-mappings/gm-different-id', { role: 'member' });
+    assert.deepEqual({ status: populated.status, code: populated.data.code }, { status: empty.status, code: empty.data.code }, 'identical refusal with and without rows — no oracle');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH body carrying groupGuid → 400 groupMappingImmutable, row untouched (R-8, no silent ignore)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: acmeId(server).id, role: 'admin' });
+    const res = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { groupGuid: GUID_B, role: 'member' });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'groupMappingImmutable');
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').role, 'admin', 'the row is untouched when the body tries to retarget the GUID');
+    assert.equal(updatedAudits(server).length, 0, 'no audit row for a refused edit');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH bad role → 400 groupMappingBadRole via the POST funnel; empty-string label normalizes to null', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: acmeId(server).id, role: 'admin', label: 'Keep' });
+    const badRole = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { role: 'viewer' });
+    assert.equal(badRole.status, 400);
+    assert.equal(badRole.data.code, 'groupMappingBadRole');
+    const cleared = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { label: '   ' });
+    assert.equal(cleared.status, 200);
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').label, null, 'whitespace-only label → null (POST idiom verbatim)');
+  } finally {
+    await server.stop();
+  }
+});
