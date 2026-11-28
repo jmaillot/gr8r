@@ -4813,6 +4813,17 @@ IN.mapLabel = el => {
 IN.mapWs = el => {
   if (!S.ui.mapForm) S.ui.mapForm = {};
   S.ui.mapForm.wsId = el.value;
+  /* 107-01 (SPA-05, Pitfall 8): changing the workspace resets the draft's
+     teamId — a team picked under the old ws would produce a confusing
+     groupMappingTeamUnknown refusal under the new one. */
+  S.ui.mapForm.teamId = '';
+  render();
+};
+/* 107-01 (SPA-05): the team picker draft — the staged draft lives in
+   S.ui.mapForm, never the DOM (the IN.map* doctrine). */
+IN.mapTeam = el => {
+  if (!S.ui.mapForm) S.ui.mapForm = {};
+  S.ui.mapForm.teamId = el.value;
   render();
 };
 IN.mapRole = el => {
@@ -4830,8 +4841,9 @@ A.mapCreate = async () => {
   const label = (f.label || '').trim();
   if (!label) return toast(t('page.mappings.badLabelToast'), { kind: 'err' });
   /* camelCase body per the server.js POST handler (groupGuid/workspaceId/
-     role/label — the Phase 101 field names). */
-  const res = await api.groupMappingCreate({ groupGuid: guid, workspaceId: f.wsId || '', role: f.role || 'member', label });
+     role/label — the Phase 101 field names; teamId rides since Phase 106 —
+     null = the workspace-only default). */
+  const res = await api.groupMappingCreate({ groupGuid: guid, workspaceId: f.wsId || '', teamId: f.teamId || null, role: f.role || 'member', label });
   if (!res.ok) {
     if (res.status === 401) return; // D-28: the central intercept owns the teardown
     const code = res.data?.code; // operatorOnly / groupMappingBadGuid / groupMappingUnknownWorkspace / groupMappingBadRole / groupMappingDuplicate — all keyed (D-09)

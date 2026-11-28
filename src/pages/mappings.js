@@ -18,7 +18,6 @@ import { api } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { empty } from '../ui/helpers.js';
 import { ROUTE_TEARDOWN } from '../shell/render.js';
-import { srow } from './settings.js';
 import { refreshMappings } from '../actions/actions.js';
 
 /* The fullstates are verbatim governance.js shapes: 403 → lock glyph +
@@ -30,23 +29,34 @@ const full403 = () =>
 const fullErr = () =>
   `<div class="fullstate"><div class="box"><div class="empty-state err" style="padding:0"><div class="glyph">${ic('cloud-alert', 20)}</div></div><h1>${t('page.somethingWrong')}</h1><p>${t('page.loadFailedBody')}</p><div class="row"><button class="btn btn-primary" data-a="mapRetry">${ic('refresh-cw', 14)}${t('page.tryAgain')}</button></div></div></div>`;
 
-/* One row per mapping — the payload's flat row shape (Phase 101): label,
-   workspaceName, role badge, groupGuid (mono), the createdAt/updatedAt
-   timestamps in the house ago() format (MAPUI-02: timestamps in the list),
-   and the D-02 hints: dead rows an amber badge per deadReason, every row
-   a faint liveMembers count chip. label/workspaceName/groupGuid ride
+/* =====================================================================
+   107-01 (SPA-01) THE MAPPINGS TABLE — one <tr> per mapping, the perm-t
+   idiom verbatim from governance.js:104 (table class="perm-t"
+   min-width:880px, first th padding-left:14px, last th empty gutter,
+   wrapper <div class="panel" style="overflow-x:auto">). SPA-01 columns:
+   Label / Group ID (mono) / Workspace (— when null — the server never
+   fakes names) / Team (teamMissing-keyed badge — NEVER a falsy teamName
+   check, the 106-02 handoff: a set teamId with a null name is a REAL
+   "team left the doc" state) / Role badge / Users added (m.liveMembers,
+   current-members semantics — the former {n} count chip retired) /
+   When (ago(m.createdAt) — planner decision A6: "When" reads as "since
+   this mapping exists", so the created_at, not the updatedAt). The
+   gutter keeps the staged Delete (D-90 mapStage trio untouched) and
+   leaves room for the Task-2 Edit button. Every interpolated cell and
+   attribute rides esc() (T-107-01). All payload strings render through
    esc() at EVERY render — including the staged-delete repaint, which is
    a re-render through this same template (T-102-04, T-79-10). */
-const mapRow = m => {
+const mapTr = m => {
   /* D-02: the amber dead badge per deadReason — 'workspace-deleted' and
      'workspace-archived' carry their own keys; anything else falls back
      to the archived copy. */
   const deadBadge = m.dead
     ? `<span class="badge amber">${t(m.deadReason === 'workspace-deleted' ? 'page.mappings.deadBadgeDeleted' : 'page.mappings.deadBadgeArchived')}</span>`
     : '';
-  /* D-02: the faint count chip — the localized '{n}' placeholder convention
-     (en.json interpolation style), the count esc()d through String(). */
-  const chip = `<span class="faint">${t('page.mappings.viaGroup').replace('{n}', esc(String(m.liveMembers ?? 0)))}</span>`;
+  /* SPA-01 team cell — keyed off teamMissing (106-02 handoff, Pitfall 2). */
+  const teamCell = m.teamMissing
+    ? `<span class="badge amber">${t('page.mappings.teamMissingBadge')}</span>`
+    : esc(m.teamName || '—');
   /* D-90 staged inline-confirm (the govRoleRevoke pattern): the staged row
      swaps its controls for the verbatim lazy-revocation copy + confirm/
      cancel pair. The id is the OPAQUE Phase 101 row id — never a
@@ -54,11 +64,7 @@ const mapRow = m => {
   const ctl = S.ui.mapStage === m.id
     ? `<span class="row" style="gap:8px;max-width:340px"><span class="hint">${t('page.mappings.deleteCopy')}</span><button class="btn btn-danger btn-sm" data-a="mapDeleteConfirm" data-id="${esc(m.id)}">${t('page.mappings.deleteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteCancel">${t('common.cancel')}</button></span>`
     : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="mapDeleteAsk" data-id="${esc(m.id)}">${t('page.mappings.delete')}</button></span>`;
-  return srow(
-    `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(m.label || '')}</span><span class="badge">${t('common.role.' + (m.role || 'member'))}</span>${deadBadge}</span>`,
-    `<span class="row" style="gap:8px"><span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(m.workspaceName || '—')}</span><span class="faint mono trunc" style="display:inline-block;max-width:170px;vertical-align:bottom">${esc(m.groupGuid || '')}</span>${chip}<span class="faint">${esc(ago(m.createdAt))}</span><span class="faint">${esc(ago(m.updatedAt))}</span></span>`,
-    ctl,
-  );
+  return `<tr><td style="padding-left:14px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(m.label || '')}</span>${deadBadge}</td><td><span class="faint mono trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(m.groupGuid || '')}</span></td><td style="text-align:left"><span class="faint trunc" style="display:inline-block;max-width:180px;vertical-align:bottom">${esc(m.workspaceName || '—')}</span></td><td style="text-align:left">${teamCell}</td><td style="text-align:left"><span class="badge">${t('common.role.' + (m.role || 'member'))}</span></td><td style="text-align:left">${esc(String(m.liveMembers ?? 0))}</td><td style="text-align:left"><span class="faint">${esc(ago(m.createdAt))}</span></td><td style="text-align:left">${ctl}</td></tr>`;
 };
 
 export function pageMappings() {
@@ -72,16 +78,20 @@ export function pageMappings() {
   if (!S.ui.mapRows && !S.ui.mapErr) refreshMappings(); // in-render kick covers a boot-time deep link (governance.js:76 precedent)
 
   const rows = loading ? [] : S.ui.mapRows;
+  /* The per-section three-tier (governance.js:99–105 shape): loading panel,
+     table when rows exist, keyed quiet empty state otherwise. */
   const body = loading
     ? `<div class="panel-b faint" aria-busy="true">${t('page.mappings.loading')}</div>`
     : rows.length
-      ? rows.map(mapRow).join('')
+      ? `<table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.mappings.colLabel')}</th><th>${t('page.mappings.colGuid')}</th><th style="text-align:left">${t('page.mappings.colWorkspace')}</th><th style="text-align:left">${t('page.mappings.colTeam')}</th><th style="text-align:left">${t('page.mappings.colRole')}</th><th style="text-align:left">${t('page.mappings.colUsers')}</th><th style="text-align:left">${t('page.mappings.colWhen')}</th><th></th></tr></thead><tbody>${rows.map(mapTr).join('')}</tbody></table>`
       : empty('link', t('page.mappings.emptyTitle'), t('page.mappings.emptyBody'), '', 'sm', 3);
 
   return `<div class="page wide" style="max-width:1200px">
     <div class="ph"><div><h1>${t('nav.route.mappings')}</h1><p>${t('page.mappings.subtitle')}</p></div></div>
     ${mapCreateForm()}
     <div class="sblock">
+      <h2>${t('page.mappings.sectionTitle')}</h2>
+      <p class="hint">${t('page.mappings.sectionLead')}</p>
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
     ${api.user?.isInstanceAdmin ? govDeadCard() : ''}
@@ -112,6 +122,19 @@ const mapCreateForm = () => {
       ? `<option value="" ${!f.wsId ? 'selected' : ''} disabled>${t('page.mappings.wsPlaceholder')}</option>${wsOptions}`
       : `<option value="" selected disabled>${t('page.mappings.wsPlaceholder')}</option>`
   }</select>`;
+  /* 107-01 (SPA-05): the team picker renders ONLY when a workspace is
+     chosen — hidden until then, and fed by THAT workspace's doc.teams
+     (the operatorWorkspaces payload extension; no new state slot, the
+     pool IS the feed). The empty-value option is the server's nullable
+     teamId default (workspace-only mapping). Changing the workspace
+     resets the draft's teamId (IN.mapWs — a stale team under a new ws
+     would produce confusing groupMappingTeamUnknown refusals, Pitfall 8). */
+  const wsTeams = wsPool.find(w => w.id === f.wsId)?.teams || [];
+  const teamSelect = f.wsId
+    ? `<div><label class="label" for="map-team">${t('page.mappings.teamLabel')}</label><select class="input" id="map-team" data-in="mapTeam" aria-label="${t('page.mappings.teamLabel')}"><option value="" ${(f.teamId || '') === '' ? 'selected' : ''}>${t('page.mappings.teamNone')}</option>${wsTeams
+        .map(tm => `<option value="${esc(tm.id || '')}" ${f.teamId === tm.id ? 'selected' : ''}>${esc(tm.name || '')}</option>`)
+        .join('')}</select></div>`
+    : '';
   const roleSelect = `<select class="input" id="map-role" data-in="mapRole" aria-label="${t('page.mappings.roleLabel')}">${['owner', 'admin', 'member']
     .map(r => `<option value="${r}" ${(f.role || 'member') === r ? 'selected' : ''}>${t('common.role.' + r)}</option>`)
     .join('')}</select>`;
@@ -125,6 +148,7 @@ const mapCreateForm = () => {
         <div><label class="label" for="map-label">${t('page.mappings.labelLabel')}</label>
           <input class="input" id="map-label" data-in="mapLabel" value="${esc(f.label || '')}" maxlength="200" aria-label="${t('page.mappings.labelLabel')}"></div>
         <div><label class="label" for="map-ws">${t('page.mappings.wsLabel')}</label>${wsSelect}</div>
+        ${teamSelect}
         <div><label class="label" for="map-role">${t('page.mappings.roleLabel')}</label>${roleSelect}</div>
         <button class="btn btn-primary" data-a="mapCreate">${t('page.mappings.create')}</button>
       </div>

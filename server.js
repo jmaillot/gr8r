@@ -8843,13 +8843,19 @@ async function handleApi(req, res, url) {
     // no membership in. Creator is derived from the owner-membership join ONLY:
     // no created_by column exists (Pitfall 1); null when the owner membership is
     // gone. memberCount is a scalar subquery so zero-member rows survive the join.
-    const rows = await db.all(`select w.id, w.slug, w.name, w.archived, w.created_at,
+    const rows = await db.all(`select w.id, w.slug, w.name, w.archived, w.created_at, w.doc,
         (select count(*) from memberships m where m.workspace_id = w.id) as member_count,
         owner_u.name as creator_name, owner_u.email as creator_email
       from workspaces w
       left join memberships owner_m on owner_m.workspace_id = w.id and owner_m.role = 'owner'
       left join users owner_u on owner_u.id = owner_m.user_id
       order by w.created_at, w.name collate nocase`);
+    /* Phase 107 (SPA-05): the create-form team picker's feed — one doc parse
+       per row (plain JS, NO json_extract — pg parity, TEAM-MAPPING §2) via
+       the shared docTeamNames helper (106-02). The helper returns a
+       Map<teamId, name>; the payload exposes [{id, name}] pairs. A doc
+       parse failure yields an EMPTY teams array (missing-name posture),
+       never a throw — identical to the mappings GET teamMaps posture. */
     return json(res, 200, {
       workspaces: rows.map(r => ({
         id: r.id,
@@ -8859,6 +8865,7 @@ async function handleApi(req, res, url) {
         createdAt: r.created_at,
         memberCount: r.member_count,
         creator: r.creator_name ? { name: r.creator_name, email: r.creator_email } : null,
+        teams: [...docTeamNames(r.doc)].map(([teamId, teamName]) => ({ id: teamId, name: teamName })),
       })),
     });
   }

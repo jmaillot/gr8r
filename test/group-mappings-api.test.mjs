@@ -707,6 +707,31 @@ test('GET payload carries teamId/teamName/teamMissing: live-team row resolves th
   }
 });
 
+/* ---------- Phase 107 Task 1: operatorWorkspaces teams feed (SPA-05) ---------- */
+
+test('GET /api/auth/operator/workspaces carries teams per workspace from the doc (SPA-05 feed)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    setDocTeams(server, ws.id, [{ id: 'team-alpha', name: 'Alpha Team' }, { id: 'team-beta', name: null }]);
+
+    const res = await operator.get('/api/auth/operator/workspaces');
+    assert.equal(res.status, 200);
+    const row = res.data.workspaces.find(w => w.id === ws.id);
+    assert.ok(row, 'the workspace row is missing');
+    assert.deepEqual(row.teams, [{ id: 'team-alpha', name: 'Alpha Team' }, { id: 'team-beta', name: null }], 'the doc.teams do not ride the payload as {id,name} pairs');
+    /* a workspace with NO doc teams carries an empty array (never undefined) */
+    const joined = await signup(server.base, { name: 'Teams Feed 2', email: 'teamsfeed2@test.local' });
+    await joined.client.post('/api/workspaces', { name: 'Teams Feed Co' });
+    const res2 = await operator.get('/api/auth/operator/workspaces');
+    const other = res2.data.workspaces.find(w => w.id !== ws.id);
+    assert.ok(other && Array.isArray(other.teams) && other.teams.length === 0, 'a team-less workspace must carry an empty teams array');
+  } finally {
+    await server.stop();
+  }
+});
+
 test('locale parity: the three Phase 106 refusal keys exist in ALL 5 catalogues (GD-7 same-commit rule)', () => {
   const files = ['en', 'de', 'es', 'fr', 'nl'];
   const keys = ['err.groupMappingImmutable', 'err.groupMappingTeamUnknown', 'err.groupMappingDead'];

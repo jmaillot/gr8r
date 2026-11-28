@@ -79,12 +79,101 @@ test('the mappings row template esc()s label and workspaceName', () => {
   assert.match(p, /\$\{esc\(m\.workspaceName \|\| '—'\)\}/, 'workspaceName renders unescaped');
 });
 
-/* MAPUI-02 checker W1: the row template carries the createdAt/updatedAt
-   timestamps in the house ago() format — presence pinned at source. */
-test('the mappings row template renders createdAt/updatedAt timestamps', () => {
+/* MAPUI-02 checker W1 → 107-01 (planner decision A6): the row template
+   renders the created_at timestamp in the house ago() format — "When"
+   reads as "since this mapping exists", so the updatedAt is NOT rendered. */
+test('the mappings row template renders createdAt (created_at semantics, A6) and never updatedAt', () => {
   const p = src('src/pages/mappings.js');
   assert.match(p, /ago\(m\.createdAt\)/, 'createdAt timestamp missing from the row template');
-  assert.match(p, /ago\(m\.updatedAt\)/, 'updatedAt timestamp missing from the row template');
+  assert.doesNotMatch(p, /ago\(m\.updatedAt\)/, 'updatedAt must not render — When = created_at (A6)');
+});
+
+/* =====================================================================
+   107-01 Task 1 (SPA-01): the perm-t table + the team cell + the picker.
+   ===================================================================== */
+
+/* (SPA-01) the perm-t idiom verbatim: table class, first-th padding,
+   wrapper panel with overflow-x, rows.map(mapTr) */
+test('the mappings section renders as a perm-t table (SPA-01 idiom)', () => {
+  const p = src('src/pages/mappings.js');
+  assert.match(p, /const mapTr = m => \{/, 'the mapTr builder is missing');
+  assert.doesNotMatch(p, /const mapRow = m => \{/, 'the old srow mapRow lingers');
+  assert.match(p, /<table class="perm-t" style="min-width:880px">/, 'the perm-t table idiom is missing');
+  assert.match(p, /<th style="padding-left:14px">/, 'the first-th padding is missing');
+  assert.match(p, /rows\.map\(mapTr\)\.join\(''\)/, 'rows are not mapped through mapTr');
+  assert.match(p, /<div class="panel" style="overflow-x:auto">\$\{body\}/, 'the table wrapper panel is missing');
+  for (const k of ['colLabel', 'colGuid', 'colWorkspace', 'colTeam', 'colRole', 'colUsers', 'colWhen']) {
+    assert.match(p, new RegExp(`page\\.mappings\\.${k}`), `the ${k} column header is missing`);
+  }
+});
+
+/* (SPA-01 team cell, 106-02 handoff) the team state keys off teamMissing —
+   never a falsy teamName check — and every interpolated cell rides esc() */
+test('the team cell keys off teamMissing and every new interpolated cell rides esc() (T-107-01)', () => {
+  const p = src('src/pages/mappings.js');
+  assert.match(p, /m\.teamMissing\s*\n?\s*\?/, 'the team cell must key off teamMissing (106-02 handoff)');
+  assert.doesNotMatch(p, /m\.teamName \?/, 'a falsy teamName check would mask the dead-team state (Pitfall 2)');
+  assert.match(p, /esc\(m\.teamName \|\| '—'\)/, 'the teamName cell renders unescaped');
+  assert.match(p, /esc\(m\.groupGuid \|\| ''\)/, 'the GUID cell renders unescaped');
+  assert.match(p, /\$\{esc\(String\(m\.liveMembers \?\? 0\)\)\}/, 'the liveMembers count renders unescaped');
+  assert.doesNotMatch(p, /viaGroup/, 'the {n} viaGroup chip must be retired with the table columns');
+});
+
+/* ×5 parity for the Task-1 key batch */
+test('the 107-01 Task-1 i18n keys exist in ALL 5 catalogues (and viaGroup is retired ×5)', () => {
+  const keys = [
+    'page.mappings.sectionTitle',
+    'page.mappings.sectionLead',
+    'page.mappings.colLabel',
+    'page.mappings.colGuid',
+    'page.mappings.colWorkspace',
+    'page.mappings.colTeam',
+    'page.mappings.colRole',
+    'page.mappings.colUsers',
+    'page.mappings.colWhen',
+    'page.mappings.teamMissingBadge',
+    'page.mappings.teamLabel',
+    'page.mappings.teamNone',
+  ];
+  for (const k of keys) {
+    assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+  for (const [name, cat] of [['en', en], ['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
+    assert.ok(!cat['page.mappings.viaGroup'], `${name} still carries the retired viaGroup key`);
+  }
+});
+
+/* (SPA-05) the create-form team picker: hidden until a workspace is chosen,
+   options from that workspace's teams, esc()d values + names, teamNone default */
+test('mapCreateForm renders the team picker only when wsId is set, fed by that workspace’s teams (SPA-05)', () => {
+  const p = src('src/pages/mappings.js');
+  const form = p.match(/const mapCreateForm = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(form, 'mapCreateForm is missing');
+  assert.match(form[0], /wsPool\.find\(w => w\.id === f\.wsId\)\?\.teams \|\| \[\]/, 'the picker options do not come from the chosen workspace’s teams');
+  assert.match(form[0], /const teamSelect = f\.wsId\s*\n?\s*\?/, 'the picker must be hidden until a workspace is chosen (SPA-05)');
+  assert.match(form[0], /value="\$\{esc\(tm\.id \|\| ''\)\}"/, 'the team option value is unescaped');
+  assert.match(form[0], />\$\{esc\(tm\.name \|\| ''\)\}<\/option>/, 'the team option name is unescaped');
+  assert.match(form[0], /page\.mappings\.teamNone/, 'the — no team — empty-value option is missing');
+  assert.doesNotMatch(form[0], /teamPlaceholder/, 'the hidden picker carries no placeholder markup');
+});
+
+/* (SPA-05, Pitfall 8) changing the workspace resets the draft teamId; the
+   team picker draft rides IN.mapTeam (staged draft, never the DOM) */
+test('IN.mapWs resets the draft teamId and IN.mapTeam stages the pick (Pitfall 8)', () => {
+  const a = src('src/actions/actions.js');
+  const ws = a.match(/IN\.mapWs = el => \{[\s\S]*?\n\};/);
+  const team = a.match(/IN\.mapTeam = el => \{[\s\S]*?\n\};/);
+  assert.ok(ws && team, 'the picker handlers are missing');
+  assert.match(ws[0], /S\.ui\.mapForm\.teamId = '';/, 'changing the workspace must reset the stale teamId');
+  assert.match(team[0], /S\.ui\.mapForm\.teamId = el\.value;/, 'the team pick is not staged in the draft');
+});
+
+/* (SPA-05 wiring) A.mapCreate sends the picked teamId (POST accepts it
+   since Phase 106) — null when unset */
+test('A.mapCreate sends the draft teamId (null when unset) in the camelCase body', () => {
+  const a = src('src/actions/actions.js');
+  const fn = a.match(/A\.mapCreate = async \(\) => \{[\s\S]*?\n\};/);
+  assert.match(fn[0], /teamId: f\.teamId \|\| null/, 'the create body does not carry the picked team');
 });
 
 /* =====================================================================
@@ -215,7 +304,7 @@ test('A.mapCreate canonicalizes the GUID pre-submit and POSTs the camelCase body
   assert.match(a, /import \{ canonicalizeGuid \} from '\.\.\/core\/guid\.js';/, 'actions.js does not import canonicalizeGuid');
   assert.match(fn[0], /canonicalizeGuid\(f\.guid \|\| ''\)/, 'the GUID is not canonicalized before submit');
   assert.ok(fn[0].indexOf('canonicalizeGuid') < fn[0].indexOf('groupMappingCreate'), 'canonicalization must run before the POST');
-  assert.match(fn[0], /groupGuid: guid, workspaceId: f\.wsId \|\| '', role: f\.role \|\| 'member', label/, 'the camelCase body shape is wrong');
+  assert.match(fn[0], /groupGuid: guid, workspaceId: f\.wsId \|\| '', teamId: f\.teamId \|\| null, role: f\.role \|\| 'member', label/, 'the camelCase body shape is wrong');
   assert.match(fn[0], /\(f\.label \|\| ''\)\.trim\(\)/, 'the label is not trimmed');
 });
 
@@ -231,7 +320,7 @@ test('the create-form label input carries maxlength="200" and esc()d value attri
   assert.match(form[0], /value="\$\{esc\(w\.id \|\| ''\)\}"/, 'the workspace option value is unescaped');
   assert.match(form[0], /data-a="mapCreate"/, 'the create CTA is missing');
   /* the form panel renders ABOVE the list (D-01) */
-  assert.ok(p.indexOf('mapCreateForm()') < p.indexOf('class="panel" style="overflow-x:auto"'), 'the form is not above the list');
+  assert.ok(p.indexOf('mapCreateForm()') < p.indexOf('class="panel" style="overflow-x:auto">${body}'), 'the form is not above the list');
 });
 
 /* (d) the pre-checks are LIGHT (D-08): exactly two flags, both keyed, and
@@ -270,7 +359,6 @@ test('every group-mapping refusal code maps to an existing err.* key ×5 (D-09 p
 /* (a) the 7 Task-2 keys exist in ALL 5 catalogues */
 test('the row-hint/delete i18n keys exist in ALL 5 catalogues', () => {
   const keys = [
-    'page.mappings.viaGroup',
     'page.mappings.deadBadgeArchived',
     'page.mappings.deadBadgeDeleted',
     'page.mappings.delete',
@@ -323,12 +411,11 @@ test('mapDeleteAsk/Confirm/Cancel stage and fire with the opaque row id via enco
    watch-item) */
 test('the staged delete row template keeps esc() coverage on every value-bearing attribute', () => {
   const p = src('src/pages/mappings.js');
-  const row = p.match(/const mapRow = m => \{[\s\S]*?\n\};/);
-  assert.ok(row, 'mapRow is missing');
+  const row = p.match(/const mapTr = m => \{[\s\S]*?\n\};/);
+  assert.ok(row, 'mapTr is missing');
   assert.match(row[0], /data-id="\$\{esc\(m\.id\)\}"/, 'the staged-row ids render unescaped');
   assert.match(row[0], /page\.mappings\.deadBadgeArchived/, 'the archived dead badge is missing');
   assert.match(row[0], /page\.mappings\.deadBadgeDeleted/, 'the deleted dead badge is missing');
-  assert.match(row[0], /page\.mappings\.viaGroup'\)\.replace\('\{n\}'/, 'the count chip does not use the {n} placeholder convention');
   assert.match(row[0], /S\.ui\.mapStage === m\.id/, 'the staged branch is missing');
 });
 
