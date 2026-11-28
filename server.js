@@ -9929,6 +9929,59 @@ async function handleApi(req, res, url) {
     return json(res, 200, result);
   }
 
+  /* -------------- restore availability probe (Phase 104, RSRC-03) --------------
+     POST /api/backup/restore/probe { runId, source: 'ftp' } — clones the
+     ftp-probe route funnel above (Phase 98), adapted per the 104 Probe
+     Route Spec: sameOrigin → requireUser → dedicated operator-keyed
+     throttle `restoreprobe|<uid>` (10/15min, consume-on-refusal D-89-22;
+     SEPARATE from `backupprobe|` — different guarded resource: network
+     egress per run mirror) → dual-role capability gate CAP.RESTORE_USE ∥
+     CAP.BACKUP_MANAGE (GD-1 — the probe serves the restore drawer, the
+     restore-preview tier) → runId regex → run-row read → source enum
+     (restricted to s3/ftp/smb — GD-4: local availability is fs.existsSync,
+     a remote probe is meaningless for local) → flag validation (flags ARE
+     the truth, R-4). NO destination-config enabled gate: a probe of a
+     disabled/unreachable destination returns the seam's own keyed
+     unreachable/auth class — that IS the availability answer.
+     NEVER mutates run state — no clearMirrorFlag, no claimRestoreLock, no
+     staging, no restore_runs writes (T-104-06); the marker PUT/DELE
+     touches the DESTINATION only (existing seam behavior). Never on any
+     list GET (D-89-14). Probe result returns VERBATIM. Audit
+     restore_probe_ok / restore_probe_failed:<source>, detail = result.key
+     ONLY — never config (Pitfall 5 / T-98-04). */
+  if (pathname === '/api/backup/restore/probe' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`restoreprobe|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE)) && !(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'restore_probe_refused:restoreRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator or Backup Operator can probe restore sources');
+    }
+    const body = await readJson(req);
+    const backupRunId = typeof body?.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.runId) ? body.runId : null;
+    if (!backupRunId) return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
+    const row = await db.get('select id, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?', [backupRunId]);
+    if (!row) {
+      await auditBackupTask(user, 'restore_probe_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
+    }
+    const source = body?.source === 's3' || body?.source === 'ftp' || body?.source === 'smb' ? body.source : null;
+    if (!source) {
+      await auditBackupTask(user, 'restore_probe_refused:restoreSourceInvalid');
+      return fail(res, 400, 'restoreSourceInvalid', NOT_RECOGNIZED_ERR);
+    }
+    if (restoreSourceFlag(row, source) !== 1) {
+      await auditBackupTask(user, 'restore_probe_refused:restoreSourceNotMirrored');
+      return fail(res, 400, 'restoreSourceNotMirrored', NO_SURVIVING_COPY_ERR);
+    }
+    const result = await probeFtp(FTP.config());
+    await auditBackupTask(user, result.ok ? 'restore_probe_ok' : `restore_probe_failed:${source}`, user.id, result.key);
+    if (!result.ok) logProbeFailure('ftp', result);
+    logInfo(`restore probe: ${source} → ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
+    return json(res, 200, result);
+  }
+
   /* -------------- backup run endpoints (Phase 86, 86-02, BKBCK-01/D-16) --------------
      The frozen /api/backup/runs surface Phases 87/88 build on: POST triggers a
      background export (86-01 pipeline) and returns the D-18 UUID immediately;

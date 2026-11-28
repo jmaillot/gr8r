@@ -567,3 +567,207 @@ test('104-01 locales: err.restoreSourceInvalid + err.restoreSourceNotMirrored pr
     assert.ok(catalog['err.restoreSourceNotMirrored'].length > 0, `${lang}: err.restoreSourceNotMirrored non-empty`);
   }
 });
+
+/* =====================================================================
+   Phase 104 plan 02 — POST /api/backup/restore/probe (RSRC-03).
+   Clones the ftp-probe route funnel; dedicated restoreprobe|<uid>
+   throttle; NEVER mutates run state; result returned VERBATIM from the
+   seam. The ftp "ok" case rides a minimal scripted mock FTP server (the
+   same shape as test/backup-ftp-client.test.mjs's fakeFtp, stripped to
+   the probe transcript: USER/PASS/TYPE/EPSV/STOR/DELE/QUIT).
+   ===================================================================== */
+
+import net from 'node:net';
+
+function fakeFtpProbe() {
+  const commands = [];
+  const dataReceived = [];
+  let dataPort = null;
+  let dataDone = false;
+  let storPending = null;
+  const dataServer = net.createServer(sock => {
+    sock.on('data', c => dataReceived.push(c));
+    sock.on('end', () => sock.end());
+    sock.on('end', () => { dataDone = true; storPending?.(); });
+    sock.on('close', () => { dataDone = true; storPending?.(); });
+  });
+  const ctrlSocks = new Set();
+  const ctrl = net.createServer(socket => {
+    ctrlSocks.add(socket);
+    socket.write('220 mock FTP ready\r\n');
+    let buf = '';
+    const reply = line => { if (socket.writable) socket.write(line + '\r\n'); };
+    socket.on('data', chunk => {
+      buf += chunk.toString('utf8');
+      let idx;
+      while ((idx = buf.indexOf('\r\n')) >= 0) {
+        const line = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        commands.push(line);
+        const cmd = line.toUpperCase();
+        if (cmd.startsWith('USER')) reply('331 password required');
+        else if (cmd.startsWith('PASS')) reply('230 logged in');
+        else if (cmd.startsWith('TYPE')) reply('200 binary mode set');
+        else if (cmd.startsWith('EPSV')) reply(`229 Entering Extended Passive Mode (|||${dataPort}|)`);
+        else if (cmd.startsWith('PASV')) reply(`227 Entering Passive Mode (127,0,0,1,${dataPort >> 8},${dataPort & 255})`);
+        else if (cmd.startsWith('STOR')) {
+          storPending = () => { if (socket.writable) socket.write('226 Transfer complete\r\n'); };
+          socket.write('150 opening data connection\r\n');
+          if (dataDone) storPending();
+        } else if (cmd.startsWith('DELE')) reply('250 deleted');
+        else if (cmd.startsWith('QUIT')) { reply('221 bye'); socket.end(); }
+        else reply('200 ok');
+      }
+    });
+  });
+  return {
+    commands,
+    dataReceived,
+    listen: async () => {
+      await new Promise(r => ctrl.listen(0, '127.0.0.1', r));
+      await new Promise(r => dataServer.listen(0, '127.0.0.1', r));
+      dataPort = dataServer.address().port;
+    },
+    port: () => ctrl.address().port,
+    close: async () => {
+      for (const s of ctrlSocks) { try { s.destroy(); } catch { /* gone */ } }
+      ctrl.closeAllConnections?.();
+      dataServer.closeAllConnections?.();
+      await Promise.all([new Promise(r => ctrl.close(r)), new Promise(r => dataServer.close(r))]);
+    },
+  };
+}
+
+const PROBE_AUDITS = dataDir => () =>
+  withDb(path.join(dataDir, 'projects.db'), db2 =>
+    db2.prepare("select * from audit_log where action like 'restore_probe%' order by created_at, id").all());
+
+const flagsOf = (server, runId) =>
+  withDb(server.dbPath, db2 => db2.prepare('select uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?').get(runId));
+
+test('104-02 probe route: ftp probe through a LIVE fake ftp seam → 200 { ok, key success } VERBATIM, audit restore_probe_ok with key-only detail, flags unchanged', async () => {
+  const ftp = fakeFtpProbe();
+  await ftp.listen();
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-probe-ftp-ok-'));
+  const server = await startServer({
+    dataDir,
+    env: { FTP_HOST: '127.0.0.1', FTP_PORT: String(ftp.port()), FTP_USER: 'probe-user-secret', FTP_PASSWORD: 'probe-pass-secret' },
+  });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-probe-ok@test.local');
+    await makeBackupOpAndRun(server, 'bop-probe-ok@test.local', restoreOp);
+    plantRows(server, [{ id: 'probe-ftp-ok', uploaded: 0, ftp_uploaded: 1, smb_uploaded: 0 }]);
+    const res = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-ftp-ok', source: 'ftp' });
+    assert.equal(res.status, 200, `ftp probe: ${JSON.stringify(res.data)}`);
+    assert.deepEqual(
+      { ok: res.data.ok, key: res.data.key, warning: res.data.warning, httpWarning: res.data.httpWarning },
+      { ok: true, key: 'success', warning: false, httpWarning: true },
+      'the seam result returns VERBATIM (secure none → httpWarning true)',
+    );
+    assert.ok(ftp.commands.some(c => c.startsWith('STOR projects-studio-probe/probe-')), 'the probe marker was STORed — the route hit the REAL seam');
+    assert.ok(ftp.commands.some(c => c.startsWith('DELE projects-studio-probe/probe-')), 'the probe marker was DELEted');
+    /* T-104-06: zero run-state mutation. */
+    const f = flagsOf(server, 'probe-ftp-ok'); assert.deepEqual({ uploaded: f.uploaded, ftp_uploaded: f.ftp_uploaded, smb_uploaded: f.smb_uploaded }, { uploaded: 0, ftp_uploaded: 1, smb_uploaded: 0 }, 'mirror flags byte-identical after the probe');
+    /* T-104-05: audit token + result.key-only detail, never config —
+       read AFTER stop() (WAL checkpoint, the golden's note). */
+  } finally {
+    await server.stop();
+    await ftp.close();
+  }
+  const audits = PROBE_AUDITS(dataDir)();
+  const ok = audits.find(a => a.action === 'restore_probe_ok');
+  assert.ok(ok, 'restore_probe_ok audited');
+  assert.equal(ok.target_name, 'success', 'audit detail = result.key ONLY');
+  /* the `ip` column legitimately carries the client's loopback — only the
+     config-bearing text fields must stay scrubbed. */
+  const auditBlob = JSON.stringify({ action: ok.action, target_id: ok.target_id, actor_name: ok.actor_name, actor_email: ok.actor_email, target_name: ok.target_name, target_email: ok.target_email });
+  assert.ok(!auditBlob.includes('probe-user-secret') && !auditBlob.includes('probe-pass-secret') && !auditBlob.includes('127.0.0.1'), 'no config/credential text in the audit row (Pitfall 5 / T-98-04)');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 probe route: keyed refusals — not-mirrored, invalid enum (incl. local, GD-4), missing run', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-probe-ref-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-probe-ref@test.local');
+    await makeBackupOpAndRun(server, 'bop-probe-ref@test.local', restoreOp);
+    plantRows(server, [{ id: 'probe-ref-nm', uploaded: 1, ftp_uploaded: 0, smb_uploaded: 1 }]);
+    const nm = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-ref-nm', source: 'ftp' });
+    assert.equal(nm.status, 400, `not-mirrored probe: ${JSON.stringify(nm.data)}`);
+    assert.equal(nm.data.code, 'restoreSourceNotMirrored');
+    assert.equal(nm.data.error, NO_SURVIVING_COPY);
+    const bad = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-ref-nm', source: 'bogus' });
+    assert.equal(bad.status, 400, `invalid probe: ${JSON.stringify(bad.data)}`);
+    assert.equal(bad.data.code, 'restoreSourceInvalid');
+    assert.equal(bad.data.error, NOT_RECOGNIZED);
+    const local = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-ref-nm', source: 'local' });
+    assert.equal(local.status, 400, 'local is NOT probeable (GD-4 — fs.existsSync owns local availability)');
+    assert.equal(local.data.code, 'restoreSourceInvalid');
+    const missing = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-ref-gone', source: 'smb' });
+    assert.equal(missing.status, 404, `missing run: ${JSON.stringify(missing.data)}`);
+    assert.equal(missing.data.code, 'restoreArchiveMissing');
+    const f = flagsOf(server, 'probe-ref-nm'); assert.deepEqual({ uploaded: f.uploaded, ftp_uploaded: f.ftp_uploaded, smb_uploaded: f.smb_uploaded }, { uploaded: 1, ftp_uploaded: 0, smb_uploaded: 1 }, 'flags unchanged through every refusal');
+  } finally {
+    await server.stop();
+  }
+  const audits = PROBE_AUDITS(dataDir)();
+  assert.ok(audits.some(a => a.action === 'restore_probe_refused:restoreSourceNotMirrored'), 'not-mirrored refusal audited');
+  assert.ok(audits.some(a => a.action === 'restore_probe_refused:restoreSourceInvalid'), 'invalid-source refusal audited');
+  assert.ok(audits.some(a => a.action === 'restore_probe_refused:restoreArchiveMissing'), 'missing-run refusal audited');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 probe route: dedicated restoreprobe throttle (10/15min) SEPARATE from the backupprobe budget — 11th probe 429, destination probe route does NOT 429', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-probe-thr-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-probe-thr@test.local');
+    await makeBackupOpAndRun(server, 'bop-probe-thr@test.local', restoreOp);
+    plantRows(server, [{ id: 'probe-thr', uploaded: 1, ftp_uploaded: 0 }]);
+    /* refused probes consume the restoreprobe budget too (D-89-22) —
+       cheap (no seam ever runs on a refusal). */
+    for (let i = 0; i < 10; i++) {
+      const r = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-thr', source: 'bogus' });
+      assert.equal(r.status, 400, `probe ${i + 1} must be refused (not throttled): ${JSON.stringify(r.data)}`);
+    }
+    const eleventh = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-thr', source: 'bogus' });
+    assert.equal(eleventh.status, 429, `11th restore probe: ${JSON.stringify(eleventh.data)}`);
+    /* Separation: the DESTINATION probe budget (backupprobe|) is a
+       different key — the restore-only operator's ftp-probe request
+       passes the throttle step and answers its OWN capability 403 (never
+       the 429 that a shared budget would return). */
+    const dest = await restoreOp.post('/api/backup/tasks/ftp-probe', {});
+    assert.equal(dest.status, 403, `destination probe after restoreprobe exhaustion: ${JSON.stringify(dest.data)}`);
+    assert.equal(dest.data.code, 'backupManageRequired');
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 probe route: ftp probe of a flag-1 row against a DEAD ftp endpoint → 200 { ok:false, key unreachable } verbatim, audit restore_probe_failed:ftp (key-only detail), flags unchanged', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-probe-dead-'));
+  const server = await startServer({
+    dataDir,
+    env: { FTP_HOST: '127.0.0.1', FTP_PORT: '1', FTP_USER: 'u', FTP_PASSWORD: 'p' },
+  });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-probe-dead@test.local');
+    await makeBackupOpAndRun(server, 'bop-probe-dead@test.local', restoreOp);
+    plantRows(server, [{ id: 'probe-dead-ftp', uploaded: 0, ftp_uploaded: 1 }]);
+    const res = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-dead-ftp', source: 'ftp' });
+    assert.equal(res.status, 200, `dead ftp probe: ${JSON.stringify(res.data)}`);
+    assert.equal(res.data.ok, false);
+    assert.equal(res.data.key, 'unreachable');
+    assert.ok(res.data.error, 'the seam carries its own sliced error text — verbatim');
+    const f = flagsOf(server, 'probe-dead-ftp'); assert.deepEqual({ uploaded: f.uploaded, ftp_uploaded: f.ftp_uploaded, smb_uploaded: f.smb_uploaded }, { uploaded: 0, ftp_uploaded: 1, smb_uploaded: 0 }, 'a FAILED probe never mutates run state either');
+  } finally {
+    await server.stop();
+  }
+  const audits = PROBE_AUDITS(dataDir)();
+  const failed = audits.find(a => a.action === 'restore_probe_failed:ftp');
+  assert.ok(failed, 'restore_probe_failed:ftp audited');
+  assert.equal(failed.target_name, 'unreachable', 'audit detail = result.key ONLY');
+  assert.ok(!JSON.stringify({ action: failed.action, target_id: failed.target_id, target_name: failed.target_name }).includes('127.0.0.1'), 'no endpoint text in the config-bearing audit fields (T-104-05)');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
