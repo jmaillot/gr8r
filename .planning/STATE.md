@@ -1,17 +1,17 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.6
-milestone_name: Entra ID Mappings & Restore Sources
-status: milestone_complete
-stopped_at: Milestone v3.6 complete — 5/5 phases verified, audit passed
-last_updated: "2026-11-28T10:30:00.000Z"
-state_head: 8d5edd42
+milestone: v3.7
+milestone_name: Mappings UX & Team Mapping
+status: initialized
+stopped_at: Milestone v3.7 initialized — 3 phases (106-108), requirements 15, research committed
+last_updated: "2026-11-28T09:32:56.000Z"
+state_head: 2a185f8b
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Projects Studio — v3.6
@@ -27,8 +27,8 @@ progress:
 ## Current Position
 
 - **Phase:** 105 — final phase, verified
-- **Status:** Milestone v3.6 complete — audit passed (all findings = bookkeeping staleness, reconciled)
-- **Progress:** ▰▰▰▰▰ 101 · ▰▰▰▰▰ 102 · ▰▰▰▰▰ 103 · ▰▰▰▰▰ 104 · ▰▰▰▰▰ 105
+- **Status:** v3.7 initialized — ready for /gsd-plan-phase 106
+- **Progress:** ▱▱▱▱▱ 106 · ▱▱▱▱▱ 107 · ▱▱▱▱▱ 108
 
 ## Performance Metrics
 
