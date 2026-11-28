@@ -87,10 +87,10 @@ import { buildMspdi } from './export/mspdi.js';
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, purgeSnapshots, setBackupRunWriter, setBackupDestination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
-import { probeS3, downloadToStaged, s3BackupKey } from './export/s3.js';
-import { connectFtp, probeFtp, fetchToStaged } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03); 2026-11-26 UAT: fetchToStaged in the preview/download/verify routes' ftp mirror leg
-import { probeSmb, connectSmb, fetchSmbToStaged } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity); 100-04: connectSmb for the prune wrappers; 2026-11-26 UAT: fetchSmbToStaged in the preview/download/verify routes' smb mirror leg
-import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter, mirrorMissing, clearMirrorFlag } from './export/restore.js';
+import { probeS3 } from './export/s3.js'; // 88-01 seam (staged-fetch read-back) — Plan 103-02: the mirror legs collapsed into resolveRestoreSource (imported from export/restore.js below); server.js no longer calls the seams directly
+import { connectFtp, probeFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03); the ftp mirror leg rides resolveRestoreSource (Plan 103-02)
+import { probeSmb, connectSmb } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity); 100-04: connectSmb for the prune wrappers; the smb mirror leg rides resolveRestoreSource (Plan 103-02)
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter, resolveRestoreSource, mirrorMissing, clearMirrorFlag } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -3981,7 +3981,7 @@ setBackupDestination('s3', {
 
 /* Phase 96 (D-05): dormant ftp/smb registry slots — canonical order s3,
    ftp, smb (D-04), registered AFTER s3. enabled derives from the
-   boot-frozen env consts (D-05); upload/verify/probe/fetchToStaged are
+   boot-frozen env consts (D-05); upload/verify/probe/staged-fetch are
    deliberately UNSET — phases 98/100 install the real clients. The
    manualPrefixes are DECLARED per-destination (D-01) but never used in 96.
    NO fake probe, NO UI render, NO export/ftp.js or export/smb.js this
@@ -4013,7 +4013,7 @@ setBackupDestination('ftp', {
     }
     return { config: FTP.config() };
   },
-  verify: FTP.verify, // R-4 SIZE-based verify (97 client) — no downloadToStaged read-back on the ftp arm
+  verify: FTP.verify, // R-4 SIZE-based verify (97 client) — no staged-fetch read-back on the ftp arm
 });
 /* Phase 100 (100-02): the SMB destination install — fills the 96 dormant
    slot in the destination registry (canonical order s3, ftp, smb kept).
@@ -10451,7 +10451,7 @@ async function handleApi(req, res, url) {
      (D-89-21), refusal keyed + audited. runId regex gate BEFORE any row
      read — no 404-vs-400 existence oracle (T-86-06 shape). Archive
      resolution from run-row truth ONLY (D-89-14/15): local file → stream-
-     verify in place; else uploaded = 1 → the 88-01 downloadToStaged seam
+     verify in place; else uploaded = 1 → the 88-01 staged-fetch seam
      into restore-staging (D-89-16), temp removed in finally; else keyed
      restoreArchiveMissing. Every 89-01 reader refusal class is named on
      the consumer side (D-89-33 families 2/3): entry-gate rejections →
@@ -10895,67 +10895,27 @@ async function handleApi(req, res, url) {
     try {
       let archivePath = localPath;
       if (!hasLocal) {
-        /* D-89-16: S3-located archive — fetch through the 88-01 seam into
-           restore-staging (same-fs with the archives); downloadToStaged
-           itself refuses keyed on a stream-back digest mismatch. The key
-           reconstructs from the run row exactly as the upload built it
-           (D-88-6 task prefix / D-88-9 backup-manual/).
-           98-04/100-05 twins (2026-11-26 UAT reveal): an ftp_uploaded or
-           smb_uploaded row fetches through its own client's staged seam
-           — the key derivation mirrors the upload arms (task-prefix +
-           filename). The registry order (s3 > ftp > smb, D-04) picks the
-           seam when several flags are set.
-           2026-11-27 UAT (owner: the Restore dialog answered a bare
-           "Internal server error" on an smb-located run): a TRANSPORT
-           failure inside a staged fetch (DSM throttle, connection reset,
-           fid churn) is a keyed 404 — never a bare throw → 500. The
-           owner-visible detail rides the fail message. */
-        if (row.uploaded === 1) {
-          if (!S3.enabled) {
-            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
-          }
-          let back = null;
-          try {
-            back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
-          } catch (err) {
-            /* UAT 2026-11-27: a live fetch proving the object gone clears the mirror flag — the badge re-resolves honestly. */
-            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 's3');
-            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
-          }
-          stagedPath = back.tmpPath;
-          archivePath = back.tmpPath;
-        } else if (row.ftp_uploaded === 1) {
-          if (!FTP.enabled) {
-            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in FTP but no FTP destination is configured');
-          }
-          let back = null;
-          try {
-            back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
-          } catch (err) {
-            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'ftp');
-            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
-          }
-          stagedPath = back.tmpPath;
-          archivePath = back.tmpPath;
+        /* Single-source ladder (Plan 103-02, R-5): selection + flag gate +
+           staged fetch + mirrorMissing→clearMirrorFlag live in
+           resolveRestoreSource (export/restore.js — doctrine comments and
+           the UAT 2026-11-27 transport-404 ruling live there now). The
+           route keeps its own refusal envelopes verbatim. */
+        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse' });
+        if (src.ok) {
+          stagedPath = src.stagedPath;
+          archivePath = src.archivePath;
         } else {
-          if (!SMB.enabled) {
-            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in SMB but no SMB destination is configured');
-          }
-          let back = null;
-          try {
-            back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
-          } catch (err) {
-            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'smb');
-            await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
-          }
-          stagedPath = back.tmpPath;
-          archivePath = back.tmpPath;
+          await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
+          const why = src.reason === 'fetchFailed'
+            ? (src.dest === 's3' ? `That backup archive could not be fetched from S3 (${src.err.detail})`
+              : src.dest === 'ftp' ? `That backup archive could not be fetched from FTP (${src.err.detail})`
+              : `That backup archive could not be fetched from SMB (${src.err.detail})`)
+            : src.reason === 'disabled'
+              ? (src.dest === 's3' ? 'That backup archive lives in S3 but no S3 destination is configured'
+                : src.dest === 'ftp' ? 'That backup archive lives in FTP but no FTP destination is configured'
+                : 'That backup archive lives in SMB but no SMB destination is configured')
+              : 'That backup archive is gone from all destinations';
+          return fail(res, 404, 'restoreArchiveMissing', why);
         }
       }
       let verified;
@@ -11027,7 +10987,7 @@ async function handleApi(req, res, url) {
      T-86-06); runId is regex-gated before any row read. Archive resolution
      from run-row truth ONLY (D-89-14): local file → stream straight off
      BACKUPS_DIR (zero staging leg, D-90-8); else uploaded = 1 → the 88-01
-     downloadToStaged seam into restore-staging with the temp removed in a
+     staged-fetch seam into restore-staging with the temp removed in a
      finally AFTER the stream completes (D-89-16: the temp never outlives the
      response); else keyed restoreArchiveMissing + audit — the fail-closed
      double with the CTA the client hides (D-90-9). The Content-Disposition
@@ -11081,55 +11041,31 @@ async function handleApi(req, res, url) {
         /* 2026-11-26 UAT (owner: smb-located rows had no download path):
            the mirror legs ride the same staged-seam pattern as the
            preview route — flag IS the truth, registry order picks the
-           seam, each client's staged fetch re-verifies the digest. */
+           seam, each client's staged fetch re-verifies the digest.
+           Plan 103-02 (R-5): the ladder itself now lives in
+           resolveRestoreSource (single-source pattern); the route keeps
+           its own refusal envelopes verbatim. */
         if (row.uploaded !== 1 && row.ftp_uploaded !== 1 && row.smb_uploaded !== 1) {
           await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
           return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
         }
-        if (row.uploaded === 1) {
-          if (!S3.enabled) {
-            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
-          }
+        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse' });
+        if (src.ok) {
           /* The 88-01 seam re-verifies the digest on the stream-back itself —
              a mismatch refuses keyed before any byte reaches the client. */
-          let back = null;
-          try {
-            back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
-          } catch (err) {
-            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 's3');
-            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
-          }
-          stagedPath = back.tmpPath;
-        } else if (row.ftp_uploaded === 1) {
-          if (!FTP.enabled) {
-            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in FTP but no FTP destination is configured');
-          }
-          let back = null;
-          try {
-            back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
-          } catch (err) {
-            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'ftp');
-            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
-          }
-          stagedPath = back.tmpPath;
+          stagedPath = src.stagedPath;
         } else {
-          if (!SMB.enabled) {
-            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in SMB but no SMB destination is configured');
-          }
-          let back = null;
-          try {
-            back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
-          } catch (err) {
-            if (mirrorMissing(err)) await clearMirrorFlag(row.id, 'smb');
-            await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
-          }
-          stagedPath = back.tmpPath;
+          await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
+          const why = src.reason === 'fetchFailed'
+            ? (src.dest === 's3' ? `That backup archive could not be fetched from S3 (${src.err.detail})`
+              : src.dest === 'ftp' ? `That backup archive could not be fetched from FTP (${src.err.detail})`
+              : `That backup archive could not be fetched from SMB (${src.err.detail})`)
+            : src.reason === 'disabled'
+              ? (src.dest === 's3' ? 'That backup archive lives in S3 but no S3 destination is configured'
+                : src.dest === 'ftp' ? 'That backup archive lives in FTP but no FTP destination is configured'
+                : 'That backup archive lives in SMB but no SMB destination is configured')
+              : 'That backup archive is gone from all destinations';
+          return fail(res, 404, 'restoreArchiveMissing', why);
         }
       }
       /* D-90-10: the success audit rides the confirmed-resolvable path —
@@ -11165,7 +11101,7 @@ async function handleApi(req, res, url) {
      regex → row lookup → resolution identical to the preview route: local
      file → exported sha256AndSize on the pipe (no staging leg); else
      uploaded = 1 → S3.enabled else keyed 404, then the 88-01
-     downloadToStaged seam (it re-hashes mid-stream and throws keyed on a
+     staged-fetch seam (it re-hashes mid-stream and throws keyed on a
      digest mismatch — that keyed throw IS the verify result, caught and
      persisted, never a 5xx) with the staged temp removed in finally; else
      keyed restoreArchiveMissing + audit. A mismatch is a RESULT
@@ -11210,66 +11146,41 @@ async function handleApi(req, res, url) {
         /* 2026-11-26 UAT (owner): the verify path mirrors the preview/
            download twin legs — flag IS the truth, registry order picks
            the seam, each client's staged fetch refuses keyed on a digest
-           mismatch (that keyed throw IS the verify result). */
+           mismatch (that keyed throw IS the verify result). Plan 103-02:
+           selection + fetch + flag-clearing live in resolveRestoreSource;
+           the route keeps its own catch interpretation verbatim — a
+           digest mismatch is a RESULT (ok = false), never a 4xx. */
         if (row.uploaded !== 1 && row.ftp_uploaded !== 1 && row.smb_uploaded !== 1) {
           await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
           return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
         }
-        if (row.uploaded === 1) {
-          if (!S3.enabled) {
-            await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in S3 but no S3 destination is configured');
-          }
+        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse' });
+        if (src.ok) {
           /* The 88-01 seam re-hashes ON the stream-back and refuses keyed
              (s3Class sha256Mismatch) — that keyed throw IS the verify result
              (mismatch semantics above), so it is caught and persisted, never
              surfaced as a 5xx. The seam removed its own temp on the throw. */
-          try {
-            const back = await downloadToStaged(S3.config(), s3BackupKey({ taskId: row.task_id }, row.filename), row.sha256, restoreStagingDir());
-            stagedPath = back.tmpPath;
-            ok = back.sha256 === row.sha256; // the seam already refused on any mismatch
-          } catch (err) {
-            if (err?.s3Class === 'sha256Mismatch') ok = false;
-            else if (mirrorMissing(err)) {
-              await clearMirrorFlag(row.id, 's3');
-              await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
-              return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from S3 (${err?.code || err?.message || 'unknown'})`);
-            } else throw err;
-          }
-        } else if (row.ftp_uploaded === 1) {
-          if (!FTP.enabled) {
+          stagedPath = src.stagedPath;
+          ok = src.sha256 === row.sha256;
+        } else if (src.reason === 'fetchFailed') {
+          const err = src.err.raw;
+          if (err?.s3Class === 'sha256Mismatch') ok = false;
+          else if (err?.code === 'ftpSha256Mismatch') ok = false;
+          else if (err?.code === 'smbSha256Mismatch') ok = false;
+          else if (mirrorMissing(err)) {
             await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in FTP but no FTP destination is configured');
-          }
-          try {
-            const back = await fetchToStaged(FTP.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
-            stagedPath = back.tmpPath;
-            ok = back.sha256 === row.sha256;
-          } catch (err) {
-            if (err?.code === 'ftpSha256Mismatch') ok = false;
-            else if (mirrorMissing(err)) {
-              await clearMirrorFlag(row.id, 'ftp');
-              await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
-              return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from FTP (${err?.code || err?.message || 'unknown'})`);
-            } else throw err;
-          }
+            const why = src.dest === 's3' ? `That backup archive could not be fetched from S3 (${src.err.detail})`
+              : src.dest === 'ftp' ? `That backup archive could not be fetched from FTP (${src.err.detail})`
+              : `That backup archive could not be fetched from SMB (${src.err.detail})`;
+            return fail(res, 404, 'restoreArchiveMissing', why);
+          } else throw err;
         } else {
-          if (!SMB.enabled) {
-            await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
-            return fail(res, 404, 'restoreArchiveMissing', 'That backup archive lives in SMB but no SMB destination is configured');
-          }
-          try {
-            const back = await fetchSmbToStaged(SMB.config(), `backup-task-${row.task_id}/${row.filename}`, row.sha256, restoreStagingDir());
-            stagedPath = back.tmpPath;
-            ok = back.sha256 === row.sha256;
-          } catch (err) {
-            if (err?.code === 'smbSha256Mismatch') ok = false;
-            else if (mirrorMissing(err)) {
-              await clearMirrorFlag(row.id, 'smb');
-              await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
-              return fail(res, 404, 'restoreArchiveMissing', `That backup archive could not be fetched from SMB (${err?.code || err?.message || 'unknown'})`);
-            } else throw err;
-          }
+          await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
+          return fail(res, 404, 'restoreArchiveMissing', src.reason === 'disabled'
+            ? (src.dest === 's3' ? 'That backup archive lives in S3 but no S3 destination is configured'
+              : src.dest === 'ftp' ? 'That backup archive lives in FTP but no FTP destination is configured'
+              : 'That backup archive lives in SMB but no SMB destination is configured')
+            : 'That backup archive is gone from all destinations');
         }
       }
       /* Both outcomes persist with the SERVER timestamp — the client badge

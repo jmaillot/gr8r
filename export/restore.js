@@ -1415,11 +1415,8 @@ export async function resolveRestoreSource(rowLike, configs, opts = {}) {
       continue;
     }
     try {
-      const back = leg.dest === 's3'
-        ? await downloadToStaged(leg.config, s3BackupKey({ taskId }, filename), sha256, restoreStagingDir())
-        : leg.dest === 'ftp'
-          ? await fetchToStaged(leg.config, `backup-task-${taskId}/${filename}`, sha256, restoreStagingDir())
-          : await fetchSmbToStaged(leg.config, `backup-task-${taskId}/${filename}`, sha256, restoreStagingDir());
+      const key = leg.dest === 's3' ? s3BackupKey({ taskId }, filename) : `backup-task-${taskId}/${filename}`;
+      const back = await (leg.dest === 's3' ? downloadToStaged : leg.dest === 'ftp' ? fetchToStaged : fetchSmbToStaged)(leg.config, key, sha256, restoreStagingDir());
       return { ok: true, dest: leg.dest, archivePath: back.tmpPath, stagedPath: back.tmpPath, sha256: back.sha256 ?? null, localPath };
     } catch (err) {
       /* UAT 2026-11-27 (owner ruling): a live fetch proving the object gone
@@ -1766,40 +1763,24 @@ export async function restoreOverwriteUnit(opts = {}) {
   let stagedTmp = null;
   const dropStagedTmp = () => { if (stagedTmp) { try { fs.rmSync(stagedTmp, { force: true }); } catch { /* best-effort */ } stagedTmp = null; } };
   /* 2026-11-27 UAT (owner: overwrite of an s3-located run answered
-     restoreArchiveMissing): the s3 read-back twin joins FIRST (registry
-     order s3 > ftp > smb, D-04) — GUARDED like the ftp/smb twins. */
-  if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object' && backupRun.filename) {
-    try {
-      const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
-    } catch (err) {
-      dropStagedTmp();
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, 's3');
-      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
-    }
-  }
-  if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
-    try {
-      const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
-    } catch (err) {
-      dropStagedTmp();
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'ftp');
-      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
-    }
-  }
-  if ((!archivePath || !fs.existsSync(archivePath)) && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
-    try {
-      const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
-    } catch (err) {
-      dropStagedTmp();
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'smb');
-      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`));
-    }
+     restoreArchiveMissing): the s3 read-back twin joined FIRST (registry
+     order s3 > ftp > smb, D-04) — Plan 103-02 (R-5): the whole ladder
+     (local-first + s3 > ftp > smb legs, staged seams, key derivations,
+     mirrorMissing→clearMirrorFlag) now lives in resolveRestoreSource
+     below — the single-source pattern. The unit keeps its own keyed
+     envelopes verbatim (failWith so the funnel releases the
+     restore_lock, 89-05 CR) and its dropStagedTmp contract (D-89-16).
+     Disabled destinations silently skip (documented divergence). */
+  const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath });
+  if (src.ok) {
+    archivePath = src.archivePath;
+    stagedTmp = src.stagedPath;
+  } else if (src.reason === 'fetchFailed') {
+    dropStagedTmp();
+    const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
+      : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
+      : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
+    return failWith(keyed('restoreArchiveMissing', why));
   }
   if (!archivePath || !fs.existsSync(archivePath)) {
     return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
@@ -2250,53 +2231,22 @@ export async function runRestore(opts = {}) {
 
     /* fetching: local archive in place → use it; else the uploaded copy
        comes home through the 88-01 seam into restore-staging (same-fs
-       with the archives — D-89-16), digest-verified by downloadToStaged. */
+       with the archives — D-89-16), digest-verified on the pipe.
+       Plan 103-02 (R-5): the ladder lives in resolveRestoreSource
+       (single-source pattern — s3 > ftp > smb, mirror-truth maintenance,
+       the UAT 2026-11-27 comments live there now); this unit keeps its
+       own keyed envelopes verbatim (throw keyed — resolve-by-design, the
+       outer catch folds the failure into the run row). */
     let archivePath = opts.archivePath ?? null;
-    const localPath = backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null;
-    if (!archivePath && localPath && fs.existsSync(localPath)) archivePath = localPath;
-    if (!archivePath && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object') {
-      try {
-        const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
-        archivePath = back.tmpPath;
-        stagedTmp = back.tmpPath;
-      } catch (err) {
-        /* UAT 2026-11-27: mirror-truth maintenance — a live fetch that
-           proves the object gone clears the flag (D-89-14, updated BY a
-           verification); the throw folds into the run row's fail event. */
-        if (mirrorMissing(err)) await clearMirrorFlag(runId, 's3');
-        throw keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`);
-      }
-    }
-    /* Phase 98 (98-04, D-05): ftp read-back twin — an ftp_uploaded run whose
-       local archive rotated away comes home through the 97 client's
-       fetchToStaged (single-shot + sha256, keyed on ftp_uploaded === 1).
-       Key derivation mirrors the 98-01 upload arm: task-prefix + filename.
-       Local-first ordering preserved — this gate is additive below it. */
-    if (!archivePath && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
-      try {
-        const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-        archivePath = back.tmpPath;
-        stagedTmp = back.tmpPath;
-      } catch (err) {
-        if (mirrorMissing(err)) await clearMirrorFlag(runId, 'ftp');
-        throw keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`);
-      }
-    }
-    /* Phase 100 (100-05): smb read-back twin — an smb_uploaded run whose
-       local archive rotated away comes home through the 99 client's
-       fetchSmbToStaged (single-shot + sha256, keyed on smb_uploaded === 1).
-       Key derivation mirrors the 100-02 upload arm: task-prefix + filename.
-       Local-first ordering preserved — this gate is additive below it.
-       sha256 verification lives in fetchSmbToStaged (100-01) — no re-verify. */
-    if (!archivePath && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
-      try {
-        const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-        archivePath = back.tmpPath;
-        stagedTmp = back.tmpPath;
-      } catch (err) {
-        if (mirrorMissing(err)) await clearMirrorFlag(runId, 'smb');
-        throw keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`);
-      }
+    const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath: opts.archivePath });
+    if (src.ok) {
+      archivePath = src.archivePath;
+      stagedTmp = src.stagedPath;
+    } else if (src.reason === 'fetchFailed') {
+      const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
+        : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
+        : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
+      throw keyed('restoreArchiveMissing', why);
     }
     if (!archivePath || !fs.existsSync(archivePath)) {
       throw keyed('restoreArchiveMissing', 'restore: archive not found at either destination');
@@ -2522,50 +2472,22 @@ export async function restoreInstanceUnit(opts = {}) {
     if (stagedTmp) { try { fs.unlinkSync(stagedTmp); } catch { /* best-effort — the sweep collects leftovers */ } stagedTmp = null; }
   };
   let archivePath = opts.archivePath ?? null;
-  const localPath = backupRun.filename ? path.join(backupsRoot(), backupRun.filename) : null;
-  if (!archivePath && localPath && fs.existsSync(localPath)) archivePath = localPath;
-  if (!archivePath && backupRun.uploaded === 1 && opts.s3Config && typeof opts.s3Config === 'object' && backupRun.filename) {
-    try {
-      const back = await downloadToStaged(opts.s3Config, s3BackupKey({ taskId: backupRun.taskId }, backupRun.filename), backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
-    } catch (err) {
-      dropStagedTmp();
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, 's3');
-      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the S3 seam failed (${err?.code || err?.message || 'unknown'})`));
-    }
-  }
-  /* Phase 98 (98-04, D-05): ftp read-back twin — GUARDED like the s3 twin:
-     the seam throw routes through failWith so the funnel releases the
-     restore_lock. fetchToStaged enforces sha256 (T-98-06) — mismatch
-     refuses the restore, no unverified bytes reach it. Key derivation
-     mirrors the 98-01 upload arm (task-prefix + filename). */
-  if (!archivePath && backupRun.ftp_uploaded === 1 && opts.ftpConfig && typeof opts.ftpConfig === 'object' && backupRun.filename) {
-    try {
-      const back = await fetchToStaged(opts.ftpConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
-    } catch (err) {
-      dropStagedTmp();
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'ftp');
-      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the FTP seam failed (${err?.code || err?.message || 'unknown'})`));
-    }
-  }
-  /* Phase 100 (100-05): smb read-back twin — GUARDED like the s3/ftp twins:
-     the seam throw routes through failWith so the funnel releases the
-     restore_lock. fetchSmbToStaged enforces sha256 (T-100-10) — mismatch
-     refuses the restore, no unverified bytes reach it. Key derivation
-     mirrors the 100-02 upload arm (task-prefix + filename). */
-  if (!archivePath && backupRun.smb_uploaded === 1 && opts.smbConfig && typeof opts.smbConfig === 'object' && backupRun.filename) {
-    try {
-      const back = await fetchSmbToStaged(opts.smbConfig, `backup-task-${backupRun.taskId}/${backupRun.filename}`, backupRun.sha256, restoreStagingDir());
-      archivePath = back.tmpPath;
-      stagedTmp = back.tmpPath;
-    } catch (err) {
-      dropStagedTmp();
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, 'smb');
-      return failWith(keyed('restoreArchiveMissing', `restore: archive not retrievable — local missing and the SMB seam failed (${err?.code || err?.message || 'unknown'})`));
-    }
+  /* fetching (mirrors runRestore): Plan 103-02 (R-5) — the ladder lives
+     in resolveRestoreSource below (single-source pattern). GUARDED: the
+     seam throw routes through failWith so the funnel releases the
+     restore_lock (89-05 CR contract — a stranded lock wedges every later
+     restore AND backup run). The unit keeps its own keyed envelopes
+     verbatim and its dropStagedTmp contract (D-89-16). */
+  const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath: opts.archivePath });
+  if (src.ok) {
+    archivePath = src.archivePath;
+    stagedTmp = src.stagedPath;
+  } else if (src.reason === 'fetchFailed') {
+    dropStagedTmp();
+    const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
+      : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
+      : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
+    return failWith(keyed('restoreArchiveMissing', why));
   }
   if (!archivePath || !fs.existsSync(archivePath)) {
     return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
