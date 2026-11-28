@@ -472,6 +472,14 @@ export const api = {
   async groupMappingDelete(id) {
     return call('DELETE', `/api/governance/group-mappings/${encodeURIComponent(id)}`);
   },
+  /* 107-01 Task 2 (SPA-02, the 106 PATCH route): the staged edit modal's
+     save — ONE call, ALL FOUR fields sent (workspaceId/teamId/role/label;
+     the server per-field merges, so sending all is idempotent; teamId null
+     clears). NEVER send groupGuid — the server refuses with
+     groupMappingImmutable. patchWorkspace above is the PATCH precedent. */
+  async groupMappingUpdate(id, body) {
+    return call('PATCH', `/api/governance/group-mappings/${encodeURIComponent(id)}`, body);
+  },
   /* 85-02 (D-19/D-24): the Backup page's ground truth — the stub payload
      carries the capability flags beside the (Phase 86/87) task list. */
   async backupTasks({ signal } = {}) {

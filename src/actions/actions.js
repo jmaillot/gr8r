@@ -4884,6 +4884,80 @@ A.mapDeleteConfirm = async el => {
 };
 
 /* =====================================================================
+   107-01 Task 2 (SPA-02) THE STAGED EDIT MODAL — the govEditAsk idiom
+   verbatim (actions.js:6326): mapEditAsk stages S.ui.mapEdit ({id, guid,
+   wsId, teamId, role, label}) from the row payload and opens the
+   chunk-backed custom host rendering the mappings page's mapEditBody;
+   field edits ride IN.mapEdit* handlers — the staged draft, never the
+   DOM. mapEditSave carries LIGHT client pre-checks only (D-08: label
+   trim + non-empty) — NO client validation of ws/team/role (D-09: the
+   server is the funnel; refusals surface via the tErr keyed lookup
+   against the existing ×5 err keys); 401 silent bail (D-28); success
+   toast + draft clear + ONE refreshMappings reconcile. The Edit button
+   renders on EVERY row including dead rows — dead-row edit is the
+   sanctioned repair (the PATCH accepts it only when retargeting to a
+   live ws); no client-side gating (D-11: the server refuses with
+   groupMappingDead and the keyed toast shows it). The body sends ALL
+   FOUR fields camelCase and NEVER groupGuid (server →
+   groupMappingImmutable). */
+A.mapEditAsk = el => {
+  const row = (S.ui.mapRows || []).find(r => r.id === el.dataset.id);
+  if (!row) return;
+  S.ui.mapEdit = { id: row.id, guid: row.groupGuid || '', wsId: row.workspaceId || '', teamId: row.teamId || null, role: row.role || 'member', label: row.label || '' };
+  import('../pages/mappings.js')
+    .then(m => {
+      openModal({ type: 'custom', cls: 'sm', render: () => m.mapEditBody(S.ui.mapEdit) });
+    })
+    .catch(e => {
+      console.error(e);
+      S.ui.mapEdit = null;
+      toast(t('err.serverUnreachable'), { kind: 'err' });
+    });
+};
+IN.mapEditWs = el => {
+  if (!S.ui.mapEdit) return;
+  S.ui.mapEdit.wsId = el.value;
+  /* Pitfall 8: changing the target ws resets the draft teamId — the team
+     options re-derive from the new ws (the server validates against the
+     EFFECTIVE ws). */
+  S.ui.mapEdit.teamId = null;
+  render();
+};
+IN.mapEditTeam = el => {
+  if (S.ui.mapEdit) S.ui.mapEdit.teamId = el.value || null;
+};
+IN.mapEditRole = el => {
+  if (S.ui.mapEdit) S.ui.mapEdit.role = el.value;
+};
+IN.mapEditLabel = el => {
+  if (S.ui.mapEdit) S.ui.mapEdit.label = el.value;
+};
+A.mapEditCancel = () => {
+  S.ui.mapEdit = null;
+  closeModal();
+};
+A.mapEditSave = async () => {
+  const d = S.ui.mapEdit;
+  if (!d) return;
+  /* D-08 light pre-check ONLY — label trim + non-empty (the mapCreate
+     badLabelToast pattern). NO ws/team/role validation client-side. */
+  const label = (d.label || '').trim();
+  if (!label) return toast(t('page.mappings.badLabelToast'), { kind: 'err' });
+  /* camelCase body, ALL FOUR fields (server per-field merges — sending
+     all is idempotent); NEVER groupGuid. teamId null clears (106). */
+  const res = await api.groupMappingUpdate(d.id, { workspaceId: d.wsId || '', teamId: d.teamId || null, role: d.role || 'member', label });
+  if (!res.ok) {
+    if (res.status === 401) return; // D-28: the central intercept owns the teardown
+    const code = res.data?.code; // groupMappingUnknownWorkspace / groupMappingBadRole / groupMappingTeamUnknown / groupMappingDuplicate / groupMappingDead / groupMappingImmutable / notFound / tooManyAttempts — all keyed (D-09)
+    return toast(tErr(code, null, res.error || t('err.serverUnreachable')), { kind: 'err' });
+  }
+  S.ui.mapEdit = null; // the modal closes with the draft
+  closeModal();
+  toast(t('page.mappings.savedToast'));
+  await refreshMappings();
+};
+
+/* =====================================================================
    85-02 BACKUP (D-20/D-24/D-26) — the gated top-level surface's ground
    truth. Render-only from the GET /api/backup/tasks payload and its
    capability flags (D-23: the client never derives roles). One fill

@@ -177,6 +177,87 @@ test('A.mapCreate sends the draft teamId (null when unset) in the camelCase body
 });
 
 /* =====================================================================
+   107-01 Task 2 (SPA-02): the staged edit modal + groupMappingUpdate.
+   ===================================================================== */
+
+/* the api method exists and PATCHes the 106 route */
+test('api.groupMappingUpdate PATCHes the 106 route with the encodeURIComponentd id', () => {
+  const a = src('src/core/api.js');
+  assert.match(a, /async groupMappingUpdate\(id, body\) \{\s*\n\s*return call\('PATCH', `\/api\/governance\/group-mappings\/\$\{encodeURIComponent\(id\)\}`, body\);/, 'the PATCH method is missing or malformed');
+});
+
+/* the modal body: GUID read-only (no data-in binding), esc'd mono + hint */
+test('mapEditBody renders the GUID read-only esc mono with the cannot-change hint (R-8 client-side)', () => {
+  const p = src('src/pages/mappings.js');
+  const body = p.match(/export function mapEditBody\(\) \{[\s\S]*?\n\}\n\n/);
+  assert.ok(body, 'mapEditBody is missing');
+  assert.match(p, /export function mapEditBody\(\)/, 'mapEditBody is not exported');
+  assert.doesNotMatch(body[0], /data-in="mapEditGuid"/, 'the GUID must have NO editable binding');
+  assert.doesNotMatch(body[0], /<input[^>]*guid/i, 'no GUID input may exist in the edit modal');
+  assert.match(body[0], /\$\{esc\(d\.guid \|\| ''\)\}/, 'the read-only GUID renders unescaped');
+  assert.match(body[0], /page\.mappings\.editGuidHint/, 'the cannot-change hint is missing');
+  assert.match(body[0], /maxlength="200"/, 'the label input lacks maxlength="200"');
+  assert.match(body[0], /value="\$\{esc\(d\.label \|\| ''\)\}"/, 'the label value attribute is unescaped');
+  assert.match(body[0], /value="\$\{esc\(tm\.id \|\| ''\)\}"/, 'the team option value is unescaped');
+  assert.match(body[0], /wsPool\.find\(w => w\.id === d\.wsId\)\?\.teams/, 'the team options must follow the select’s CURRENT wsId (Pitfall 8)');
+  assert.match(body[0], /data-a="mapEditSave"/, 'the save control is missing');
+  assert.match(body[0], /data-a="mapEditCancel"/, 'the cancel control is missing');
+  assert.match(body[0], /t\('common\.save'\)/, 'the footer must reuse common.save');
+});
+
+/* the edit trio: staged draft, IN handlers, 401 bail, tErr funnel, refresh */
+test('A.mapEditAsk/Save/Cancel stage the draft and PATCH all four fields (never groupGuid)', () => {
+  const a = src('src/actions/actions.js');
+  const ask = a.match(/A\.mapEditAsk = el => \{[\s\S]*?\n\};/);
+  const save = a.match(/A\.mapEditSave = async \(\) => \{[\s\S]*?\n\};/);
+  const cancel = a.match(/A\.mapEditCancel = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(ask && save && cancel, 'the edit trio is missing');
+  assert.match(ask[0], /S\.ui\.mapEdit = \{ id: row\.id/, 'the ask handler does not stage the draft');
+  assert.match(ask[0], /openModal\(\{ type: 'custom', cls: 'sm', render: \(\) => m\.mapEditBody/, 'the modal host idiom is missing');
+  assert.match(save[0], /\(d\.label \|\| ''\)\.trim\(\)/, 'the label pre-check is missing');
+  assert.match(save[0], /api\.groupMappingUpdate\(d\.id, \{ workspaceId: d\.wsId \|\| '', teamId: d\.teamId \|\| null, role: d\.role \|\| 'member', label \}\)/, 'the PATCH body must carry ALL FOUR fields');
+  assert.doesNotMatch(save[0], /groupGuid: /, 'the PATCH body must NEVER carry groupGuid');
+  assert.match(save[0], /res\.status === 401\) return/, 'the 401 silent bail is missing');
+  assert.match(save[0], /tErr\(code, null, res\.error \|\| t\('err\.serverUnreachable'\)\)/, 'the keyed refusal funnel is missing');
+  assert.match(save[0], /t\('page\.mappings\.savedToast'\)/, 'the success toast is missing');
+  assert.match(save[0], /await refreshMappings\(\)/, 'the reconcile refresh is missing');
+  assert.match(cancel[0], /S\.ui\.mapEdit = null;/, 'the cancel does not clear the draft');
+  assert.match(cancel[0], /closeModal\(\)/, 'the cancel does not close the modal');
+});
+
+/* the IN.mapEdit* handlers + the Pitfall-8 ws-change team reset */
+test('IN.mapEdit* handlers stage in S.ui.mapEdit; changing ws resets the draft teamId (Pitfall 8)', () => {
+  const a = src('src/actions/actions.js');
+  for (const h of ['mapEditWs', 'mapEditTeam', 'mapEditRole', 'mapEditLabel']) {
+    assert.match(a, new RegExp(`IN\\.${h} = el => \\{`), `IN.${h} is missing`);
+  }
+  const ws = a.match(/IN\.mapEditWs = el => \{[\s\S]*?\n\};/);
+  assert.match(ws[0], /S\.ui\.mapEdit\.teamId = null;/, 'changing the target ws must reset the draft teamId');
+});
+
+/* teardown clears the edit draft too (extends the :296 pin) */
+test('ROUTE_TEARDOWN.mappings also clears S.ui.mapEdit', () => {
+  const p = src('src/pages/mappings.js');
+  const td = p.match(/const mapTeardown = \(\) => \{[\s\S]*?\n\};/);
+  assert.match(td[0], /S\.ui\.mapEdit = null;/, 'the teardown does not clear the edit draft');
+});
+
+/* the Edit button renders on EVERY row (dead-row repair sanctioned, D-11) */
+test('the mapTr gutter carries the Edit button beside the staged Delete', () => {
+  const p = src('src/pages/mappings.js');
+  const row = p.match(/const mapTr = m => \{[\s\S]*?\n\};/);
+  assert.match(row[0], /data-a="mapEditAsk" data-id="\$\{esc\(m\.id\)\}"/, 'the Edit button is missing or unescaped');
+});
+
+/* ×5 parity for the Task-2 key batch */
+test('the 107-01 Task-2 i18n keys exist in ALL 5 catalogues', () => {
+  const keys = ['page.mappings.edit', 'page.mappings.editTitle', 'page.mappings.editGuidHint', 'page.mappings.savedToast'];
+  for (const k of keys) {
+    assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+});
+
+/* =====================================================================
    102-01 Task 2 (TDD): src/core/guid.js — the client canonicalizeGuid
    port of groups.js:27-55. Acceptance contract: {braced}/no-hyphen/
    uppercase inputs canonicalize identically to the server implementation
@@ -247,7 +328,7 @@ test('governance.js keeps zero dead-card/dead-fetch references (strict move, D-0
 });
 
 /* (b) the moved card is display-only — no data-a in the card region (D-06/D-07) */
-test('the moved dead card carries no data-a attributes (display-only)', () => {
+test('the govDeadCard block carries no data-a attributes (display-only; re-scoped 107-01 — the edit modal below it legitimately carries the mapEdit pair)', () => {
   const p = src('src/pages/mappings.js');
   const card = p.match(/83-02 DEAD-MAPPING WARNING CARD[\s\S]*?^};/m);
   assert.ok(card, 'the moved govDeadCard block is missing from mappings.js');
@@ -256,6 +337,8 @@ test('the moved dead card carries no data-a attributes (display-only)', () => {
   assert.match(card[0], /splitFirst/, 'the FIRST-colon split logic did not move intact');
   /* rendered BELOW the list */
   assert.match(p, /pageMappings\(\)[\s\S]*govDeadCard\(\)/, 'the card is not rendered from the page body');
+  /* the edit modal body (BELOW the card region) carries the staged edit pair */
+  assert.match(p, /export function mapEditBody\(\)[\s\S]*data-a="mapEditSave"/, 'the edit modal pair is missing');
 });
 
 /* (c) the renamed keys: page.mappings.dead* ×5, page.governance.dead* nowhere */
@@ -429,6 +512,12 @@ test('all data-a attributes in mappings.js live outside the dead-card region (D-
   const p = src('src/pages/mappings.js');
   const cardStart = p.indexOf('83-02 DEAD-MAPPING WARNING CARD');
   assert.ok(cardStart >= 0, 'the dead-card block marker is missing');
-  assert.doesNotMatch(p.slice(cardStart), /data-a=/, 'a data-a attribute leaked into the dead-card region');
+  /* 107-01 re-scope: the DISPLAY-only dead card block itself stays data-a-free;
+     the mapEditBody modal AFTER it legitimately carries the staged edit pair. */
+  const card = p.match(/83-02 DEAD-MAPPING WARNING CARD[\s\S]*?^};/m);
+  assert.doesNotMatch(card[0], /data-a=/, 'a data-a attribute leaked into the dead-card block');
+  const afterCard = p.slice(cardStart);
+  const afterModal = afterCard.slice(afterCard.indexOf('export function mapEditBody'));
+  assert.doesNotMatch(afterModal, /data-a="(?!mapEdit)/, 'an unexpected data-a leaked after the edit modal');
   assert.ok(p.slice(0, cardStart).includes('data-a="mapDeleteAsk"') && p.slice(0, cardStart).includes('data-a="mapCreate"'), 'the interactive controls are missing from the page region above the card');
 });

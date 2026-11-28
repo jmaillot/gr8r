@@ -63,7 +63,7 @@ const mapTr = m => {
      GUID+workspace composite (Phase 101 D-08). */
   const ctl = S.ui.mapStage === m.id
     ? `<span class="row" style="gap:8px;max-width:340px"><span class="hint">${t('page.mappings.deleteCopy')}</span><button class="btn btn-danger btn-sm" data-a="mapDeleteConfirm" data-id="${esc(m.id)}">${t('page.mappings.deleteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteCancel">${t('common.cancel')}</button></span>`
-    : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="mapDeleteAsk" data-id="${esc(m.id)}">${t('page.mappings.delete')}</button></span>`;
+    : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="mapEditAsk" data-id="${esc(m.id)}">${t('page.mappings.edit')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteAsk" data-id="${esc(m.id)}">${t('page.mappings.delete')}</button></span>`;
   return `<tr><td style="padding-left:14px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(m.label || '')}</span>${deadBadge}</td><td><span class="faint mono trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(m.groupGuid || '')}</span></td><td style="text-align:left"><span class="faint trunc" style="display:inline-block;max-width:180px;vertical-align:bottom">${esc(m.workspaceName || '—')}</span></td><td style="text-align:left">${teamCell}</td><td style="text-align:left"><span class="badge">${t('common.role.' + (m.role || 'member'))}</span></td><td style="text-align:left">${esc(String(m.liveMembers ?? 0))}</td><td style="text-align:left"><span class="faint">${esc(ago(m.createdAt))}</span></td><td style="text-align:left">${ctl}</td></tr>`;
 };
 
@@ -195,6 +195,60 @@ const govDeadCard = () => {
   return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.mappings.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.mappings.deadLead')}</p><div class="panel"><div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.mappings.deadOrphans')}</div>${orphans.map(orphanRow).join('')}</div><div><div class="label" style="margin-bottom:6px">${t('page.mappings.deadTrail')}</div>${trail.map(trailRow).join('')}</div></div></div>`;
 };
 
+/* =====================================================================
+   107-01 Task 2 (SPA-02) THE EDIT MODAL BODY — the govEditBody export
+   pattern verbatim (governance.js:386): rendered through the generic
+   custom modal host (openModal {type:'custom', cls:'sm'} from
+   A.mapEditAsk), state lives in S.ui.mapEdit ({id, wsId, teamId, role,
+   label}) staged in actions.js, never the DOM. The GUID renders
+   READ-ONLY esc'd mono with the visible editGuidHint — R-8 client-side
+   mirror of the server's groupMappingImmutable refusal (no
+   data-in="mapEditGuid" input exists anywhere). Workspace select fed by
+   S.ui.mapWs; team select fed by the EFFECTIVE ws — options re-derive
+   from the select's CURRENT wsId value (the server validates the team
+   against targetWsRow || curWsRow — a stale option list after a ws
+   change would produce confusing groupMappingTeamUnknown toasts,
+   Pitfall 8; IN.mapEditWs resets the draft teamId on ws change). Role
+   select rides common.role.*; label input maxlength="200" (T-102-04)
+   with esc()d value. Every payload string rides esc() (T-107-01).
+   ===================================================================== */
+export function mapEditBody() {
+  const d = S.ui.mapEdit;
+  if (!d)
+    return `<div class="modal-b faint" aria-busy="true" style="padding-top:18px">${t('page.mappings.loading')}</div><div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="mapEditCancel">${t('common.cancel')}</button></div>`;
+  const wsPool = S.ui.mapWs || [];
+  const wsOptions = wsPool.length
+    ? wsPool.map(w => `<option value="${esc(w.id || '')}" ${d.wsId === w.id ? 'selected' : ''}>${esc(w.name || '')}</option>`).join('')
+    : '';
+  const wsSelect = `<select class="input" id="map-edit-ws" data-in="mapEditWs" aria-label="${t('page.mappings.wsLabel')}">${
+    wsPool.length
+      ? `<option value="" ${!d.wsId ? 'selected' : ''} disabled>${t('page.mappings.wsPlaceholder')}</option>${wsOptions}`
+      : `<option value="" selected disabled>${t('page.mappings.wsPlaceholder')}</option>`
+  }</select>`;
+  /* The team options follow the select's CURRENT wsId (the effective ws),
+     never the row's original one. */
+  const wsTeams = wsPool.find(w => w.id === d.wsId)?.teams || [];
+  const teamSelect = `<select class="input" id="map-edit-team" data-in="mapEditTeam" aria-label="${t('page.mappings.teamLabel')}"><option value="" ${(d.teamId || '') === '' ? 'selected' : ''}>${t('page.mappings.teamNone')}</option>${wsTeams
+    .map(tm => `<option value="${esc(tm.id || '')}" ${d.teamId === tm.id ? 'selected' : ''}>${esc(tm.name || '')}</option>`)
+    .join('')}</select>`;
+  const roleSelect = `<select class="input" id="map-edit-role" data-in="mapEditRole" aria-label="${t('page.mappings.roleLabel')}">${['owner', 'admin', 'member']
+    .map(r => `<option value="${r}" ${(d.role || 'member') === r ? 'selected' : ''}>${t('common.role.' + r)}</option>`)
+    .join('')}</select>`;
+  return `<div class="modal-b" style="padding-top:18px;gap:10px">
+    <h2 style="margin:0;font-size:16px">${t('page.mappings.editTitle')}</h2>
+    <div><span class="label">${t('page.mappings.colGuid')}</span><div class="row" style="gap:8px;align-items:center"><span class="mono trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(d.guid || '')}</span><span class="hint">${t('page.mappings.editGuidHint')}</span></div></div>
+    <label class="label" style="margin:0" for="map-edit-label">${t('page.mappings.labelLabel')}</label>
+    <input class="input" id="map-edit-label" data-in="mapEditLabel" value="${esc(d.label || '')}" maxlength="200" aria-label="${t('page.mappings.labelLabel')}">
+    <label class="label" style="margin:0" for="map-edit-ws">${t('page.mappings.wsLabel')}</label>
+    ${wsSelect}
+    <label class="label" style="margin:0" for="map-edit-team">${t('page.mappings.teamLabel')}</label>
+    ${teamSelect}
+    <label class="label" style="margin:0" for="map-edit-role">${t('page.mappings.roleLabel')}</label>
+    ${roleSelect}
+  </div>
+  <div class="modal-f"><span class="sp"></span><button class="btn btn-secondary" data-a="mapEditCancel">${t('common.cancel')}</button><button class="btn btn-primary" data-a="mapEditSave">${t('common.save')}</button></div>`;
+}
+
 /* Phase 60 (D-05): teardown registry pattern — no staged inline-confirm
    state survives route exit (the govOrphanTeardown discipline): the
    delete stage is cleared so a stale confirm never re-appears on
@@ -202,5 +256,6 @@ const govDeadCard = () => {
 const mapTeardown = () => {
   if (S.ui.mapStage) S.ui.mapStage = null;
   S.ui.mapForm = null;
+  S.ui.mapEdit = null; // 107-01 (SPA-02): the edit-modal draft sheds with the page — a stale draft never re-opens
 };
 ROUTE_TEARDOWN.mappings = mapTeardown;
