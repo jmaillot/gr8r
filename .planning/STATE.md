@@ -1,17 +1,17 @@
 ---
 gsd_state_version: "1.0"
-milestone: v3.7
-milestone_name: Mappings UX & Team Mapping
-status: milestone_complete
+milestone: v3.8
+milestone_name: Governance UI Refresh
+status: initialized
 stopped_at: Completed 108-02-PLAN.md — Phase 108 done, milestone-closeout ready
-last_updated: "2026-11-28T13:55:03.498Z"
+last_updated: "2026-11-28T16:16:39.000Z"
 state_head: ddaa48bda1cfdbee94fdeb089d273add192dfe59
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
-  percent: 100
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State: Projects Studio — v3.6

@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-29 — Milestone v3.7 Mappings UX & Team Mapping SHIPPED.*
+*Last updated: 2026-11-29 — Milestone v3.8 Governance UI Refresh started.*
 
 ## Current State
 
@@ -12,7 +12,13 @@ targets and mapping edit**, per-source restore selection with availability probe
 archive presence stat** (stat-only, three-state badge). Test baseline: ~2836 tests with 2 documented
 pre-existing failures (french-typography content, webhook-routes GET list; webhook-events due.reminder flake).
 
-<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+## Current Milestone: v3.8 Governance UI Refresh (started 2026-11-29)
+
+**Goal:** Unify all Governance tabs on the v3.7 table design language (Super Admin candidates fully converted — owner ruling; Backup/Restore tabs brought to visual parity), plus docs/test housekeeping (ROADMAP corrections as bracketed annotations, seed marks, webhook-events due.reminder flake fix).
+
+**Phase shape (owner-approved):** 109 Governance perm-t unification (client-only, zero server changes) → 110 housekeeping (docs annotations + flake fix; parallel-safe, disjoint files).
+
+**Research:** `.planning/research/GOVERNANCE-REFRESH.md` (e4395efe — HIGH; drift located to governance.js:165–218/:239–292/:301–312; flake root-caused: live `new Date()` vs 08:00 UTC window, fix = fixed-now injection, route already accepts it).
 
 ## Milestone v3.7 Mappings UX & Team Mapping — SHIPPED (2026-11-29)
 
