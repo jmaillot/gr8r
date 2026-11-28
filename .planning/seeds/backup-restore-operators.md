@@ -4,7 +4,7 @@ created: 2026-11-21
 source: user (FR, session 2026-11-21 — post-v3.2 closeout)
 area: instance-ops
 type: feature-pair
-status: draft — needs owner decisions before planning
+status: implemented (v3.3 phases 92/93 — backup/restore operator roles, delegated governance surface)
 ---
 
 # Feature pair: Backup Operator + Restore Operator

@@ -4,6 +4,7 @@ created: 2026-11-21
 source: user (FR, session 2026-11-21)
 area: governance
 type: feature
+status: implemented (v3.3 phase 90-01, D-90-1..6)
 ---
 
 # Super Admin console — role-first listing with promote-search

@@ -9,12 +9,11 @@ self-hosted, zero-dependency, multi-tenant project-management workspace: hand-ro
 (server.js ~14k lines), Vite SPA under src/, dual-engine SQLite/Postgres, backup/restore with
 local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings **now with optional team
 targets and mapping edit**, per-source restore selection with availability probes **now with per-run
-archive presence stat** (stat-only, three-state badge). Test baseline: ~2836 tests with 2 documented
-pre-existing failures (french-typography content, webhook-routes GET list; webhook-events due.reminder flake).
+archive presence stat** (stat-only, three-state badge). Test baseline: 2836 tests with exactly 2 documented pre-existing failures (french-typography content, webhook-routes GET list).
 
 ## Current Milestone: v3.8 Governance UI Refresh (started 2026-11-29)
 
-**Goal:** Unify all Governance tabs on the v3.7 table design language (Super Admin candidates fully converted — owner ruling; Backup/Restore tabs brought to visual parity), plus docs/test housekeeping (ROADMAP corrections as bracketed annotations, seed marks, webhook-events due.reminder flake fix).
+**Goal:** Unify all Governance tabs on the v3.7 table design language (Super Admin candidates fully converted — owner ruling; Backup/Restore tabs brought to visual parity), plus docs/test housekeeping (ROADMAP corrections as bracketed annotations, seed marks, and the due.reminder flake fix — HK-02, webhook-events suite).
 
 **Phase shape (owner-approved):** 109 Governance perm-t unification (client-only, zero server changes) → 110 housekeeping (docs annotations + flake fix; parallel-safe, disjoint files).
 
