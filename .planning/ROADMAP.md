@@ -90,5 +90,5 @@ Plans:
 **Depends on:** none (parallel wave with 106). **Plans:** 2 plans
 
 Plans:
-- [ ] 108-01-PLAN.md — CARRY-01: shared restoreRemoteKey helper, statS3/statFtp/statSmb seams, POST /restore/stat route, additive third badge state, locales ×5, extended D-89-14 pin
-- [ ] 108-02-PLAN.md — CARRY-02/03/04: restore_runs.created_by (DDL + 3 emit sites + writer + runs GET join + Trigger-cell render), fixed SSO logWarn, DEPLOY.md email-claim row
+- [x] 108-01-PLAN.md — CARRY-01: shared restoreRemoteKey helper, statS3/statFtp/statSmb seams, POST /restore/stat route, additive third badge state, locales ×5, extended D-89-14 pin
+- [x] 108-02-PLAN.md — CARRY-02/03/04: restore_runs.created_by (DDL + 3 emit sites + writer + runs GET join + Trigger-cell render), fixed SSO logWarn, DEPLOY.md email-claim row

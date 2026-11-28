@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v3.7
 milestone_name: Mappings UX & Team Mapping
 status: initialized
-stopped_at: Completed 107-01-PLAN.md
-last_updated: "2026-11-28T12:29:00Z"
-state_head: 35a443d030e1aeb46ffbea692189b853bfdb7ff5
+stopped_at: Completed 108-02-PLAN.md — Phase 108 done, milestone-closeout ready
+last_updated: "2026-11-28T13:55:03.498Z"
+state_head: ddaa48bda1cfdbee94fdeb089d273add192dfe59
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 2
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 5
   percent: 67
 ---
 
@@ -46,6 +46,7 @@ progress:
 | Phase 101 P01 | 40m | 3 tasks | 4 files |
 | Phase 103 P01 | 23m | 2 tasks | 1 files |
 | Phase 106 P01 | 35m | 3 tasks | 4 files |
+| Phase 108 P02 | 45 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -68,8 +69,8 @@ progress:
 
 ## Session Continuity
 
-**Last session:** 2026-11-28T10:42:09.693Z
-**Stopped at:** Completed 106-02-PLAN.md
+**Last session:** 2026-11-28T13:55:03.465Z
+**Stopped at:** Completed 108-02-PLAN.md — Phase 108 done, milestone-closeout ready
 **Resume file:** None
 
 - **Last action:** v3.6 roadmap created (Phases 101–105) with 100% requirement coverage; REQUIREMENTS.md traceability filled.
@@ -81,3 +82,4 @@ progress:
 - [Phase 101]: D-02 overrides MAP-01: GET unthrottled, DELETE throttled-before-gate (403 consumes a try)
 - [Phase 101]: isUniqueViolation classifier exported from db-adapter.mjs; SC-4 mismatch = liveMembers===0; SC-1 = 403 non-operator + 404 unknown-id (no oracle)
 - [Phase 106]: Option A: sync cell owns all group team writes off raw mappings; changes-only WHERE-guard upsert protects zero-write pins
+- [Phase 108]: created_by captured at the 3 start-event emit sites; display name resolved server-side via left join users; additive DDL only (no schema-block/epoch registry)
