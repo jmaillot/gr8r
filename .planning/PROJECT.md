@@ -95,7 +95,7 @@ archive presence stat** (stat-only, three-state badge). Test baseline: 2836 test
 - **Restore:** preview-from-manifest, import-as-new (-restored) default, guarded overwrite (type-to-confirm + pre-restore snapshot), Super-Admin-only instance DR + security contract (threats_open 0, ASVS L1), restore authority scoped by live rights, DR revokes all sessions.
 - **Polish:** Super Admin console role-first listing + promote-search, verify-checksum + archive download tiering, rotation-deletion preview + kept-until badges, restore-list invalidation keyed on run identity, PG-parity e2e (full backup→S3→DR cycle), 18-test DST cron matrix, DEPLOY.md trust docs.
 
-**Known gaps carried forward:** webhook-events/webhook-routes test family, french-typography Phase-88 fr keys, logo junk-name quirk (export/backup.js:666 — origin of the removed "[object Promise]/" debris), scheduler overlap load-flake; all documented in deferred-items, acknowledged at close.
+**Known gaps carried forward:** webhook-events/webhook-routes test family, french-typography Phase-88 fr keys, logo junk-name quirk (export/backup.js:666 — origin of the removed "[object Promise]/" debris), scheduler overlap load-flake [status v3.9: documented-known-flake — comment at test/backup-routes.test.mjs header + locale-registry-fixture sibling; runner serialization parked as future housekeeping (R-16)]; all documented in deferred-items, acknowledged at close.
 
 </details>
 

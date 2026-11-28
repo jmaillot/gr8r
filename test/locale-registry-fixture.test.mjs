@@ -1,3 +1,11 @@
+// KNOWN FLAKE (R-16: document-not-chase) — sibling sighting of the v3.3-era
+// scheduler/load contention family whose record lives in the
+// test/backup-routes.test.mjs header comment: during phase 110 verification
+// the i18n scan gate here failed under FULL-SUITE load only, and an isolated
+// rerun was 5/5 green (evidence:
+// .planning/phases/110-docs-test-housekeeping/110-VERIFICATION.md). This
+// proves the family is contention, not backup-specific. Full-suite sightings
+// are not regressions; runner serialization is parked as future housekeeping.
 /* The one-JSON-file-is-one-locale contract, proven end-to-end with a real fixture.
    D-08 / Pitfall 6: adding a locale must require exactly one thing — dropping a JSON file
    into src/locales/. This suite drops a fixture (xx.json), runs the SAME `vite build` CI

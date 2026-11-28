@@ -19,7 +19,24 @@
      old backupNotConfigured pin inverted — tasks live since 87-01).
    Pattern: test/instance-roles-api.test.mjs — startServer-per-case with
    the shared harness, withDb for direct row inspection.
+
    ===================================================================== */
+
+// KNOWN FLAKE (R-16: document-not-chase) — this file hosts the v3.3-era
+// scheduler/load contention family: the restore re-upload test (~:508,
+// "restore upload: a re-uploaded instance archive publishes as
+// uploaded-<name>") can fail under FULL-SUITE load only (real backup run +
+// pollCurrent under CPU contention, sharing the process with the v3.3
+// no-overlap/skipped_overlap scheduler machinery). It never reproduces
+// isolated — 110 verification: 16/16 x2 isolated green. Sibling
+// corroboration: test/locale-registry-fixture.test.mjs failed the same
+// way under full-suite load during 110 verification (see its header for
+// the sibling record; family evidence in
+// .planning/phases/110-docs-test-housekeeping/110-VERIFICATION.md).
+// Full-suite sightings of this family are NOT regressions and do not
+// alter the "exactly 2 documented failures" baseline identity
+// (french-typography, webhook-routes GET list). Runner serialization is
+// parked as future housekeeping (R-16).
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
