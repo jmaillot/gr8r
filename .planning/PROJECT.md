@@ -1,8 +1,31 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-27 — Milestone v3.6 Entra ID Mappings & Restore Sources started.*
+*Last updated: 2026-11-28 — Milestone v3.6 Entra ID Mappings & Restore Sources SHIPPED.*
 
-## Current Milestone: v3.6 Entra ID Mappings & Restore Sources
+## Current State
+
+**v3.6 shipped 2026-11-28** (5 phases, 101–105, all verified; audit passed). The project is a
+self-hosted, zero-dependency, multi-tenant project-management workspace: hand-rolled Node server
+(server.js ~13.5k lines), Vite SPA under src/, dual-engine SQLite/Postgres, backup/restore with
+local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings, per-source restore
+selection with availability probes. Test baseline: ~2767 tests with 2–3 documented pre-existing
+failures (french-typography, webhook-routes GET list, webhook-events due.reminder flake).
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
+
+## Next Milestone Goals (v3.7 candidates, owner-requested Nov 28)
+
+- **Per-run archive probing** — restore-source probe currently checks destination
+  reachability (marker PUT/DELETE); owner wants the badge to verify the run's actual
+  archive exists on that leg (SIZE/HeadObject/file-info per seam, read-only)
+- **Restore initiator in run history** — restore_runs has no operator column; show who
+  triggered a restore (schema route: created_by column, or audit-join route)
+- **SSO callback catch-all logWarn** — server.js:7093 catch swallows everything silently;
+  one fixed non-PII log line turns hours of elimination into one log read (proven Nov 28)
+- **DEPLOY.md symptom row** — "one user fails where another succeeds → email optional
+  claim (Token configuration)"; root cause of the Nov 28 SSO triage
+
+## Milestone v3.6 Entra ID Mappings & Restore Sources — SHIPPED (2026-11-28)
 
 **Goal:** Operator UI for Entra group → workspace mappings (manual GUID + manual label, no Graph), honest OIDC linking docs, and the deferred restore-source selection.
 

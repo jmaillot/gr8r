@@ -5,6 +5,33 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] — 2026-11-28 — Entra ID Mappings & Restore Sources
+
+5 phases (101–105). Highlights:
+
+- **Entra ID group → workspace mappings UI** (no Graph, no API permissions):
+  operators paste a group Object-ID GUID + label; members get the mapped
+  workspace role at their next Microsoft sign-in (lazy revocation, highest
+  role wins, same-tx audit trail). Dedicated Mappings page replaces the
+  governance dead-mappings card; staged delete with honest "next sign-in"
+  copy in all 5 locales.
+- **Restore-source selection end-to-end**: the previously triplicated
+  staged-fetch ladder is extracted into ONE `resolveRestoreSource` helper
+  (byte-identity golden-pinned), then extended with an explicit `source`
+  param on preview/download/verify + all restore triggers — validated
+  against the run's mirror flags (flags ARE the truth), keyed refusals ×5,
+  stage vocabulary frozen.
+- **Restore drawer source picker**: chips fed by server-derived `sources[]`
+  (enabled destinations only, local > s3 > ftp > smb), per-source
+  availability probe via a dedicated throttled POST (`restoreprobe|`, never
+  on list GETs), honest probe badges, no mid-run source swap, zero probes
+  on page load.
+- **Honest OIDC linking docs**: DEPLOY.md linking-policy rewritten to lead
+  with `OIDC_TRUST_TENANT_EMAIL` (tenant pin substitutes for the
+  `email_verified` claim Azure omits; guests excluded) with a symptom→cause
+  table; Azure group-membership setup steps completed with the GUID
+  copy-path; `.env.example` documents the flag in depth.
+
 ## [3.5.0] — 2026-11-27 — Backup Destinations SMB & FTP
 
 5 phases (96–100). Highlights:

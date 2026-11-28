@@ -1,5 +1,24 @@
 # Milestones
 
+## v3.6 Entra ID Mappings & Restore Sources (Shipped: 2026-11-28)
+
+**Phases completed:** 5 phases (101–105), 10 plans, 21 tasks · 135 files, +9,627/−1,179 LOC since milestone start · 61 commits · gate ~2,767 tests / 2–3 documented pre-existing failures (D-05 fr-typography, D-06 webhook-routes, webhook-events due.reminder flake)
+
+**Key accomplishments:**
+- **Mappings backend (GM-01..03, Phase 101).** GET/DELETE `/api/governance/group-mappings` with opaque row ids and uniform 404s, throttled-before-gate DELETE, `group_mapping_deleted` same-tx audit; dead-mapping hints (orphaned GUIDs, guard-refused trail) with the mismatch discipline `dead` ⇔ `liveMembers === 0`.
+- **Mappings SPA (MAPUI-01..04, Phase 102).** Dedicated Entra ID Mappings page (lazy route, nav gated `oidcEnabled` + operator, server 403 is the real gate); create form with client GUID canonicalization (verbatim port of groups.js — groups.js not client-importable); delete moves members at their NEXT Microsoft sign-in (lazy revocation, R-3) with staged inline-confirm copy ×5; dead-mappings card relocated from Governance.
+- **Restore-source refactor (RSRC-01, Phase 103).** The ×6 duplicated staged-fetch ladders (3 server routes + 3 engine units — scope corrected from the roadmap's stale "×3") extracted into ONE `resolveRestoreSource` helper in export/restore.js; byte-identity proven by a 16-case golden test file passing unchanged pre/post; disabled-destination divergence preserved via `opts.disabledBehavior`.
+- **Restore-source backend (RSRC-02/03, Phase 104).** Explicit `source` param on preview/download (`?source=`) and verify-checksum + 3 trigger POSTs (`body.source`, camelCase), validated against the run's mirror flags BEFORE selection and pre-lock on triggers; keyed refusals `restoreSourceInvalid`/`restoreSourceNotMirrored` ×5 locales shipped with the first emitting gate; server-derived `sources[]` on the restore backups GET (enabled-only, local > s3 > ftp > smb); dedicated throttled probe POST `/api/backup/restore/probe` (`restoreprobe|` key, RESTORE_USE ∥ BACKUP_MANAGE) through the existing probeS3/probeFtp/probeSmb seams — never on list GETs (D-89-14 pinned statically: 12 call sites + behavioral), never mutating run state.
+- **Restore-source SPA + OIDC docs (RSRC-04 + OIDCDOC-01..03, Phase 105).** Restore-drawer chip picker fed by `sources[]` (fail-open), per-source probe with honest badges + detail toasts, armed source rides all 6 restore calls (omitted-when-default), zero probes on load (structural test), no mid-run swap; DEPLOY.md linking policy rewritten to lead with `OIDC_TRUST_TENANT_EMAIL` (guest carve-out `acct=1`/foreign-idp, symptom→cause table) verified verbatim against server.js:6673-6727; Azure GUID copy-path bullet; .env.example expansion; 5 fidelity pins in test/oidc-docs.test.mjs.
+
+**Owner UAT:** validated 2026-11-28 — restore picker + probe badges (all six UAT checks passed), mappings page live (mapping created → member granted at next sign-in, proven the same day), DEPLOY.md symptom table validated live by an actual SSO triage (missing `email` optional claim, root cause Azure-side; diag commit added and removed same-day).
+
+**Integration audit:** 15/15 requirements wired (code-verified), both E2E flows (mapping→sign-in→grant; run→sources[]→chip→probe→restore) traced, 0 code blockers — findings were bookkeeping staleness only, reconciled pre-archive (.planning/milestones/v3.6-MILESTONE-AUDIT.md).
+
+**Known accepted gaps → v3.7 candidates:** probe = destination reachability (marker PUT/DELETE), not per-run archive presence (owner requested the latter for v3.7); restore_runs lacks an initiator column; SSO callback catch-all (:7093) swallows silently without a logWarn; DEPLOY.md symptom table lacks the email-claim row.
+
+---
+
 ## v3.5 Backup Destinations SMB & FTP (Shipped: 2026-11-27)
 
 **Phases completed:** 5 phases (96–100), 14 plans · 132 files, +17914/−464 LOC · gate 2672 tests / 2639 pass / 2 documented pre-existing failures (D-05 fr-typography, D-06 webhook-routes)
