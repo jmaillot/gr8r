@@ -98,7 +98,11 @@ Plans:
   3. The restore payload surfaces `sources[]` derived server-side from the run's mirror flags, restricted to enabled destinations per the dormant-slot contract.
   4. A dedicated throttled availability-check POST probes the chosen destination via the existing probeS3/probeFtp/probeSmb seams — the backups list GET never probes (D-89-14), and probing never mutates run state.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 104-01-PLAN.md — `source` param through resolveRestoreSource (helper + 6 call sites), keyed refusals ×5 locales, full param test matrix (RSRC-02)
+- [ ] 104-02-PLAN.md — POST /api/backup/restore/probe (throttled, via probe seams, no state mutation) + sources[] on backups GET (RSRC-03)
 
 ### Phase 105: Restore-Source SPA + OIDC Linking Docs
 
