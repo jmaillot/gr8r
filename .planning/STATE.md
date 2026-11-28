@@ -2,7 +2,7 @@
 gsd_state_version: "1.0"
 milestone: v3.9
 milestone_name: Backup & Settings UI Refresh
-status: initialized
+status: milestone_complete
 stopped_at: Completed 111-01-PLAN.md — Phase 111 done (BK-01..03)
 last_updated: "2026-11-28T19:55:00.000Z"
 state_head: ddaa48bda1cfdbee94fdeb089d273add192dfe59
@@ -27,7 +27,7 @@ progress:
 ## Current Position
 
 - **Phase:** 112 — 112-01 complete (1/1 plans; 113 in flight)
-- **Status:** 111 + 112 + 113 VERIFIED (4/4 each) — ready for /gsd-complete-milestone
+- **Status:** Milestone v3.9 complete — audit passed (9/9 requirements wired, E2E verified), archived
 - **Progress:** ▰▰▰▰▰ 111 · ▰▰▰▰▰ 112 · ▰▰▰▰▰ 113
 
 ## Performance Metrics

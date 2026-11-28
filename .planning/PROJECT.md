@@ -1,6 +1,6 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-29 — Milestone v3.9 Backup & Settings UI Refresh started.*
+*Last updated: 2026-11-29 — Milestone v3.9 Backup & Settings UI Refresh SHIPPED.*
 
 ## Current State
 
@@ -13,13 +13,18 @@ local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings **
 targets and mapping edit**, per-source restore selection with availability probes **now with per-run
 archive presence stat** (stat-only, three-state badge). Test baseline: 2836 tests with exactly 2 documented pre-existing failures (french-typography content, webhook-routes GET list).
 
-## Current Milestone: v3.9 Backup & Settings UI Refresh (started 2026-11-29)
+## Milestone v3.9 Backup & Settings UI Refresh — SHIPPED (2026-11-29)
 
-**Goal:** Complete the v3.7/v3.8 design language across the two remaining surfaces — Backup console detailing (min-width drift → 880, run-history superset headers per R-15) and Settings unification (all 6 data lists → perm-t per R-14; preference rows keep srow per R-17) — plus the housekeeping fold-in (scheduler/load flake documented-as-known-flake per R-16, STATE.md drift).
+**Goal:** Complete the v3.7/v3.8 design language across the two remaining surfaces — Backup console detailing (R-15 superset run-history headers, min-width → 880) and Settings unification (all 6 data lists → perm-t per R-14, preference rows keep srow per R-17) — plus the housekeeping fold-in.
 
-**Phase shape (owner-approved):** 111 Backup detailing (client-only, small — backup.js is ~85% compliant already) → 112 Settings unification (client-only, larger; sequential with 111 — shared i18n pin lines) → 113 housekeeping (parallel-safe, docs-only).
+**Shipped:**
+- **Backup console** — run-history ONE 8-column superset table (Type/Run/Trigger/Initiator/Schedule/Status/When/gutter) with honest `—` per row kind; min-width drift closed (860/820 → 880 ×2); 11-point checklist sweep pass; non-goals held (deletionsPanel D-90-14, chip block frozen)
+- **Settings** — the 6 data lists (sessions, API keys, projects ×2, push devices, tfa factors, members) → perm-t with keyed empty states; members + projects ship WITHOUT When columns (no served field — never a payload extension); min-width:880 only on the 6-col apikeys table
+- **Housekeeping** — the v3.3-era scheduler/load flake documented-as-known-flake (R-16: cross-referenced comments in backup-routes + locale-registry-fixture, PROJECT.md annotation, runner serialization parked); STATE.md drift fixed
 
-**Research:** `.planning/research/BACKUP-SETTINGS-REFRESH.md` (8cb00689 — HIGH; drift enumerated to backup.js:429/:320/:826-827 and settings.js:860-866/:811-820/:460/:483; zero server/API changes — every When field already served).
+**Decisions:** R-14 all 6 settings tables · R-15 superset headers · R-16 document-not-chase · R-17 design language = data lists only. Pins NET-ZERO across the milestone (data-a 635 / data-v 94 / data-r 64 / verbs 86). 14 new keys ×5 (2 backup + 12 settings — 112's overage vs ≤8 verifier-accepted: 22 header slots, 5 reusable, no page.* borrowing). 17 pre-existing lint errors ruled observation-only. webhook-routes noted as a second contention family (future housekeeping candidate).
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 
 ## Milestone v3.8 Governance UI Refresh — SHIPPED (2026-11-29)
 

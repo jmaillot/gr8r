@@ -5,6 +5,20 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] — 2026-11-29 — Backup & Settings UI Refresh
+
+3 phases (111–113). Highlights:
+
+- **Backup console detailing**: the run-history becomes ONE 8-column superset
+  table (honest `—` per row kind, initiator under its own header); min-width
+  drift closed to the 880 standard; full 11-point design-checklist sweep.
+- **Settings unification**: all 6 data lists (sessions, API keys, projects,
+  push devices, tfa factors, members) convert to perm-t tables; preference
+  rows keep their srow shape.
+- **Housekeeping**: the v3.3-era scheduler/load flake documented as
+  known-flake (R-16 — comments cross-referenced, no behavior change);
+  STATE.md drift fixed.
+
 ## [3.8.0] — 2026-11-29 — Governance UI Refresh
 
 2 phases (109–110). Highlights:
