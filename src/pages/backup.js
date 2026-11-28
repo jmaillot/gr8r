@@ -427,7 +427,7 @@ const taskTable = (tasks, manage) => {
       <td style="text-align:left">${manage ? actions(task) : ''}</td>
     </tr>`;
   };
-  return `<div class="panel" style="overflow-x:auto;margin-top:12px"><table class="perm-t" style="min-width:860px"><thead><tr><th style="padding-left:14px;text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.colScope')}</th><th style="text-align:left">${t('page.backup.colSchedule')}</th><th style="text-align:left">${t('page.backup.nextRunLabel')}</th><th style="text-align:left">${t('page.backup.colLastRun')}</th><th></th></tr></thead><tbody>${tasks.map(row).join('')}</tbody></table></div>`;
+  return `<div class="panel" style="overflow-x:auto;margin-top:12px"><table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px;text-align:left">${t('page.backup.colTask')}</th><th style="text-align:left">${t('page.backup.colScope')}</th><th style="text-align:left">${t('page.backup.colSchedule')}</th><th style="text-align:left">${t('page.backup.nextRunLabel')}</th><th style="text-align:left">${t('page.backup.colLastRun')}</th><th></th></tr></thead><tbody>${tasks.map(row).join('')}</tbody></table></div>`;
 };
 
 /* Builder form (D-01): 4 presets — Daily, Weekly, Monthly — plus Custom,
