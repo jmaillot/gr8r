@@ -5927,6 +5927,7 @@ A.restorePreview = async el => {
   if (prevRunId && prevRunId !== runId) {
     S.ui.restoreSource = null;
     S.ui.restoreProbe = null;
+  S.ui.restoreStat = null;
   }
   render();
   /* Phase 105 (RSRC-04): the picker's data feed — sources[] rides ONLY the
@@ -5981,6 +5982,7 @@ A.restorePreviewClose = () => {
      reopened drawer never shows a stale arm or stale probe badges. */
   S.ui.restoreSource = null;
   S.ui.restoreProbe = null;
+  S.ui.restoreStat = null;
   S.ui.restoreSourcesById = null;
   render();
 };
@@ -6037,6 +6039,7 @@ A.restoreNew = async el => {
   S.ui.restoreTargetProject = null;
   S.ui.restoreSource = null;
   S.ui.restoreProbe = null;
+  S.ui.restoreStat = null;
   S.ui.restoreSourcesById = null;
   S.ui.restorePending = true;
   backupStartPolling();
@@ -6106,6 +6109,7 @@ A.restoreOverwrite = el => {
         S.ui.restoreTargetProject = null;
         S.ui.restoreSource = null;
         S.ui.restoreProbe = null;
+  S.ui.restoreStat = null;
         S.ui.restoreSourcesById = null;
         S.ui.restorePending = true;
         backupStartPolling();
@@ -6135,6 +6139,7 @@ A.restoreOverwrite = el => {
       S.ui.restoreTargetProject = null;
       S.ui.restoreSource = null;
       S.ui.restoreProbe = null;
+  S.ui.restoreStat = null;
       S.ui.restoreSourcesById = null;
       S.ui.restorePending = true;
       backupStartPolling();
@@ -6165,6 +6170,7 @@ A.restoreInstance = el => {
       S.ui.restorePreviewData = null;
       S.ui.restoreSource = null;
       S.ui.restoreProbe = null;
+  S.ui.restoreStat = null;
       S.ui.restoreSourcesById = null;
       S.ui.restorePending = true;
       backupStartPolling();
@@ -6224,6 +6230,37 @@ A.restoreProbe = async el => {
   S.ui.restoreProbe[key] = { pending: false, result };
   render();
   restoreProbeToast(source, result.key, res.data);
+};
+
+/* Phase 108 (CARRY-01): the ONLY stat caller in the SPA — additive beside
+   A.restoreProbe (decision A1: the probe surface stays; its pins stay
+   literal). Zero stats fire on load or in any render path (D-89-14);
+   every stat is an explicit owner click against the server's dedicated
+   `restorestat|<uid>` 10/15-min budget (SEPARATE from restoreprobe|).
+   Refusals ride the closed restoreMissingToast map unchanged — no new
+   refusal keys. The three-state result toasts through its own keyed
+   family: present → sourceStatOk; missing → sourceStatFail (the badge
+   carries the honest sourceProbeMissing state); unreachable classes →
+   sourceStatFail with the raw key inspectable in the badge title. */
+A.restoreStat = async el => {
+  const runId = el.dataset.id;
+  const source = el.dataset.source;
+  if (!runId || !source || source === 'local') return; // server refuses local keyed — the client never sends it
+  const key = `${runId}|${source}`;
+  S.ui.restoreStat = S.ui.restoreStat || {};
+  S.ui.restoreStat[key] = { pending: true };
+  render();
+  const res = await api.restoreStat({ runId, source });
+  if (res.status === 401) return; // D-28: the central intercept owns the teardown
+  if (!res.ok) {
+    S.ui.restoreStat[key] = { pending: false, result: { ok: false, key: res.data?.code, data: res.data } };
+    render();
+    return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
+  }
+  const result = { ok: res.data?.ok === true, key: res.data?.key, data: res.data };
+  S.ui.restoreStat[key] = { pending: false, result };
+  render();
+  toast(t(result.ok ? 'page.restore.sourceStatOk' : 'page.restore.sourceStatFail'), { kind: result.ok ? undefined : 'err' });
 };
 
 /* =====================================================================

@@ -492,6 +492,65 @@ test('105-01: 5-locale parity for the source picker + probe keys', () => {
 });
 
 /* =====================================================================
+   Phase 108 (CARRY-01, plan 108-01): the per-run archive STAT surface —
+   additive over the 105-01 pins (decision A1): a second data-a="restoreStat"
+   icon button beside the probe icon, S.ui.restoreStat keyed runId|source,
+   the three-state result toast family. The probe pins above stay literal.
+   ===================================================================== */
+test('108-01: the stat rides api.restoreStat ONLY — one call site, inside A.restoreStat, never in a render path', () => {
+  assert.match(apiSrc, /async restoreStat\(/, 'the api client exports restoreStat');
+  assert.match(apiSrc, /call\('POST', '\/api\/backup\/restore\/stat'/, 'the stat POSTs the live Phase-108 route');
+  /* Refusal vocabulary of the stat route — the SAME probe code family, named verbatim. */
+  for (const code of ['tooManyAttempts', 'backupRoleRequired', 'restoreInvalidRunId', 'restoreArchiveMissing', 'restoreSourceInvalid', 'restoreSourceNotMirrored']) {
+    assert.ok(apiSrc.includes(code), `the stat doc block names the refusal ${code} exactly as the server emits it`);
+  }
+  const sites = [...actionsSrc.matchAll(/api\.restoreStat\(/g)].length;
+  assert.equal(sites, 1, 'exactly ONE stat call site exists in actions.js');
+  const stat = actionsSrc.slice(actionsSrc.indexOf('A.restoreStat ='), actionsSrc.indexOf('A.restoreStat =') + 1500);
+  assert.ok(stat.includes('api.restoreStat('), 'the stat call sits inside A.restoreStat');
+  assert.ok(stat.includes("source === 'local'"), 'local never stats (the server keyed-400s it)');
+  assert.ok(stat.includes('`${runId}|${source}`'), 'stat state is keyed runId|source — one run\'s result never leaks into another');
+  assert.ok(/restore(Missing)?Toast\(/.test(stat), 'stat refusals ride the closed restoreMissingToast map');
+  /* Zero stats on load: the page layer never calls the stat at all. */
+  assert.ok(!pagesSrc.includes('api.restoreStat'), 'no stat call under the page — stats fire only from explicit clicks (D-89-14)');
+});
+
+test('108-01: the source picker renders the additive stat affordance + the three-state stat badge; probe pins stay literal', () => {
+  assert.match(pagesSrc, /data-a="restoreStat" data-id="\$\{esc\(d\.runId\)\}" data-source="\$\{esc\(s\)\}"/, 'the stat button carries esc()d runId + source data attributes');
+  assert.match(pagesSrc, /aria-label="\$\{t\('page\.restore\.sourceStatCheck'\)\}"/, 'the stat button is labelled');
+  assert.match(pagesSrc, /page\.restore\.sourceStatChecking/, 'the pending stat is labelled');
+  /* The 105-01 pinned probe substrings survive ADDITIVELY (decision A1). */
+  assert.match(pagesSrc, /probe\.result\.ok \? 'green'/, 'the ok badge is green-styled (probe, unchanged)');
+  assert.match(pagesSrc, /title="\$\{esc\(String\(probe\.result\.key \|\| ''\)\)\}"/, 'the probe badge title pin survives');
+  assert.match(pagesSrc, /page\.restore\.sourceProbeOk/, 'probe ok copy untouched');
+  assert.match(pagesSrc, /page\.restore\.sourceProbeFail/, 'probe fail copy untouched');
+  assert.match(pagesSrc, /s !== 'local'/, 'NO stat control renders for local either');
+  /* The three-state stat badge. */
+  assert.match(pagesSrc, /page\.restore\.sourceStatOk/, 'the stat ok badge copy is keyed');
+  assert.match(pagesSrc, /page\.restore\.sourceProbeMissing/, 'the archiveMissing badge is the third honest state');
+  assert.match(pagesSrc, /page\.restore\.sourceStatFail/, 'the unreachable stat badge copy is keyed');
+  assert.match(pagesSrc, /title="\$\{esc\(String\(stat\.result\.key \|\| ''\)\)\}"/, 'the stat badge exposes the raw result key in title (honest: key inspectable)');
+  /* A stat result never disables the source chip (R-4: the flag is truth). */
+  const picker = pagesSrc.slice(pagesSrc.indexOf('const sourcePicker'), pagesSrc.indexOf('${sourcePicker}'));
+  assert.ok(!/data-a="restoreSourcePick"[^>]*disabled/.test(picker), 'the source chip is never disabled by a stat result');
+});
+
+test('108-01: 5-locale parity for the stat keys', () => {
+  const required = [
+    'page.restore.sourceProbeMissing', 'page.restore.sourceStatCheck',
+    'page.restore.sourceStatChecking', 'page.restore.sourceStatOk', 'page.restore.sourceStatFail',
+  ];
+  const sets = new Set();
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    sets.add(Object.keys(cat).filter(k => k.startsWith('page.restore.')).sort().join('|'));
+    for (const key of required) assert.ok(Object.hasOwn(cat, key), `${loc} is missing ${key}`);
+  }
+  assert.equal(sets.size, 1, 'page.restore.* key sets stay identical across the five locales (same-commit doctrine)');
+  assert.ok(pagesSrc.includes('page.restore.sourceStatCheck'), 'the stat keys are consumed by the page source');
+});
+
+/* =====================================================================
    95-05 (BKRST-05, D-02/D-03) — project-level target picker + Overwrite
    CTA + confirm phrase for project archives.
    ===================================================================== */

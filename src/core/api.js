@@ -644,6 +644,22 @@ export const api = {
   async restoreProbe(body, { signal } = {}) {
     return call('POST', '/api/backup/restore/probe', body, { signal });
   },
+  /* Phase 108 (CARRY-01): the per-run archive stat — POSTs the live
+     Phase-108 route (server.js, beside the probe route — the probe
+     contract stays byte-identical to T-104 docs). s3/ftp/smb ONLY (a
+     `local` request is a keyed 400 restoreSourceInvalid — the UI never
+     renders a local stat control and never sends local). The route rides
+     the operator-keyed `restorestat|<uid>` throttle (10 per 15 min, its
+     OWN budget separate from `restoreprobe|`) — the client fires this
+     ONLY from the explicit A.restoreStat click (owner intent, never on
+     load or render — D-89-14). Refusal vocabulary (verbatim — the SAME
+     probe code family, no new keys): 429 tooManyAttempts, 403
+     backupRoleRequired, 400 restoreInvalidRunId / restoreSourceInvalid /
+     restoreSourceNotMirrored, 404 restoreArchiveMissing. The 200 payload
+     is the three-state result { ok, present?, key } — render-only. */
+  async restoreStat(body, { signal } = {}) {
+    return call('POST', '/api/backup/restore/stat', body, { signal });
+  },
   /* Phase 92 scopes family (UAT round-8, phase 94): every active workspace
      for the restore-target picker — a Super Admin without live membership
      still picks a target (the server gate accepts the same authority). */

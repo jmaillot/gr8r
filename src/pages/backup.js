@@ -709,7 +709,22 @@ const restorePreviewBody = (d, flags) => {  const tables = Array.isArray(d.table
             const badge = probe?.result
               ? `<span class="badge ${probe.result.ok ? 'green' : ''}" title="${esc(String(probe.result.key || ''))}">${probe.result.ok ? t('page.restore.sourceProbeOk') : t('page.restore.sourceProbeFail')}</span>`
               : '';
-            return `<span class="row" style="gap:4px;align-items:center"><button class="btn btn-sm${(S.ui.restoreSource || sources[0]) === s ? ' btn-primary' : ''}" data-a="restoreSourcePick" data-source="${esc(s)}">${t(RESTORE_LOCATION_KEYS[s])}</button>${probeUi}${badge}</span>`;
+            /* Phase 108 (CARRY-01): the archive stat affordance — ADDITIVE
+               beside the probe (decision A1; the probe markup above stays
+               literal, 105-01 pins). Same click-only doctrine (D-89-14):
+               nothing here fetches; S.ui.restoreStat keyed runId|source.
+               The three-state badge: present → sourceStatOk (green);
+               archiveMissing → the honest third state (sourceProbeMissing);
+               any other key → sourceStatFail, raw key inspectable in title. */
+            const stat = S.ui.restoreStat?.[`${d.runId}|${s}`];
+            const statUi =
+              s !== 'local'
+                ? `<button class="ibtn ibtn-sm" data-a="restoreStat" data-id="${esc(d.runId)}" data-source="${esc(s)}" aria-label="${t('page.restore.sourceStatCheck')}"${stat?.pending ? ' disabled aria-busy="true"' : ''}>${stat?.pending ? `<span>${t('page.restore.sourceStatChecking')}</span>` : ic('archive', 13)}</button>`
+                : '';
+            const statBadge = stat?.result
+              ? `<span class="badge ${stat.result.ok ? 'green' : ''}" title="${esc(String(stat.result.key || ''))}">${stat.result.ok ? t('page.restore.sourceStatOk') : stat.result.key === 'archiveMissing' ? t('page.restore.sourceProbeMissing') : t('page.restore.sourceStatFail')}</span>`
+              : '';
+            return `<span class="row" style="gap:4px;align-items:center"><button class="btn btn-sm${(S.ui.restoreSource || sources[0]) === s ? ' btn-primary' : ''}" data-a="restoreSourcePick" data-source="${esc(s)}">${t(RESTORE_LOCATION_KEYS[s])}</button>${probeUi}${badge}${statUi}${statBadge}</span>`;
           })
           .join('')}</div></div>`
       : '';
