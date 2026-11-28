@@ -65,4 +65,6 @@
 1. Flake family carries the documented-known-flake marker; no behavior change attempted.
 2. STATE.md header names the right milestone; zero code diff.
 
-**Depends on:** none (disjoint files from 111/112 — .planning docs only). **Plans:** TBD
+**Depends on:** none (disjoint files from 111/112 — .planning docs only).
+**Plans:**
+- [ ] 113-01-PLAN.md — Flake documented-as-known-flake (test comments + PROJECT.md annotation, HK-03/R-16) + STATE.md v3.6→v3.9 drift fix (HK-04)
