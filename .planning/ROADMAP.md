@@ -56,7 +56,10 @@ Plans:
 3. settings-client pins green after same-commit re-alignment; pin counts annotated if shifted.
 4. ×5 parity + i18n:scan clean; zero server diff.
 
-**Depends on:** none (sequential with 111 — both touch the shared i18n pin lines; v3.7 corrected premise). **Plans:** TBD
+**Depends on:** none (sequential with 111 — both touch the shared i18n pin lines; v3.7 corrected premise). **Plans:** 1 plan
+
+Plans:
+- [ ] 112-01-PLAN.md — All 6 settings data lists → perm-t (R-14), srow keep-list preserved (R-17), pins re-aligned + ×5 keys same commit (SET-01..04)
 
 ### Phase 113: Housekeeping Fold-In
 **Goal:** The small debts close.
