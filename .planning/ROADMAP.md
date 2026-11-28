@@ -52,4 +52,7 @@
 2. webhook-events suite green across repeated runs (incl. pre-08:00 UTC timing); full suite = exactly 2 documented failures.
 3. Zero server.js change (test-only fix).
 
-**Depends on:** none (parallel-safe with 109 — disjoint files: docs/test vs client code). **Plans:** TBD
+**Depends on:** none (parallel-safe with 109 — disjoint files: docs/test vs client code). **Plans:** 1 plan
+
+Plans:
+- [ ] 110-01-PLAN.md — Bracketed anchor corrections + seed marks (HK-01) and due.reminder fixed-now flake fix + baseline reword (HK-02)
