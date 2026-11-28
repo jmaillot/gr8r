@@ -389,9 +389,10 @@ test('89-03 list: honest dual-location rows newest-first — real local run, del
     assert.equal(local.trigger, 'manual');
     assert.deepEqual(
       Object.keys(local).sort(),
-      ['createdAt', 'filename', 'finishedAt', 'ftp_uploaded', 'location', 'runId', 'sha256', 'sizeBytes', 'smb_uploaded', 'startedAt', 'status', 'taskId', 'trigger', 'uploaded'].sort(),
-      'render-only payload shape — server-derived, client renders verbatim (2026-11-26: mirror flags revealed for the secondary badges)',
+      ['createdAt', 'filename', 'finishedAt', 'ftp_uploaded', 'location', 'runId', 'sha256', 'sizeBytes', 'smb_uploaded', 'sources', 'startedAt', 'status', 'taskId', 'trigger', 'uploaded'].sort(),
+      'render-only payload shape — server-derived, client renders verbatim (2026-11-26: mirror flags revealed for the secondary badges; Phase 104 RSRC-03: sources[] joins, server-derived per D-23)',
     );
+    assert.deepEqual(local.sources, ['local'], 'sources[] server-derived: local file present, no destinations enabled → local only');
 
     /* D-89-15 S3-survival: deleted row WITH uploaded=1 stays listable, badged s3 */
     const s3 = rows.find(r => r.runId === 'run-deleted-s3');

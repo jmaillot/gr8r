@@ -888,3 +888,88 @@ test('104-02 pin: every probeS3/probeFtp/probeSmb call site sits in a config-sav
   const listSlice = s.slice(listStart, listEnd);
   assert.ok(!/probeS3|probeFtp|probeSmb/.test(listSlice), 'the restore backups list GET contains zero probe-seam calls');
 });
+
+/* =====================================================================
+   Task 104-02-3 — sources[] on the restore backups list GET (RSRC-03).
+   Flags ARE the existence truth (R-4); destination `enabled` filters
+   DISPLAY only (D-23 dormant-slot contract). Order: local > s3 > ftp >
+   smb (registry order, D-04). Purely additive — raw flags + location
+   stay untouched.
+   ===================================================================== */
+
+test('104-02 sources[]: local first, then s3/ftp/smb in registry order when all flags set and all destinations enabled', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-sources-all-'));
+  const server = await startServer({
+    dataDir,
+    env: {
+      S3_ENDPOINT: 'http://127.0.0.1:1', S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'k', S3_SECRET_KEY: 's',
+      FTP_HOST: '127.0.0.1', FTP_PORT: '1', FTP_USER: 'u', FTP_PASSWORD: 'p',
+      SMB_HOST: '127.0.0.1', SMB_SHARE: 's', SMB_USER: 'u', SMB_PASSWORD: 'p', SMB_PORT: '1',
+    },
+  });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-sources-all@test.local');
+    fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'backups', 'backup-present-local.tar.gz'), 'archive bytes');
+    plantRows(server, [{ id: 'sources-all', filename: 'backup-present-local.tar.gz', uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 }]);
+    const list = await restoreOp.get('/api/backup/restore/backups');
+    assert.equal(list.status, 200, `list: ${JSON.stringify(list.data)}`);
+    const run = list.data.runs.find(r => r.runId === 'sources-all');
+    assert.ok(run, 'the planted run appears');
+    assert.deepEqual(run.sources, ['local', 's3', 'ftp', 'smb'], `local first, registry order after: ${JSON.stringify(run.sources)}`);
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 sources[]: dormant slots EXCLUDED — flag=1 with destination disabled stays out of sources[] (raw flags still ride the payload)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-sources-dorm-'));
+  const server = await startServer({ dataDir }); // harness default: NO destinations configured
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-sources-dorm@test.local');
+    fs.mkdirSync(path.join(dataDir, 'backups'), { recursive: true });
+    fs.writeFileSync(path.join(dataDir, 'backups', 'backup-dorm-local.tar.gz'), 'archive bytes');
+    plantRows(server, [{ id: 'sources-dorm', filename: 'backup-dorm-local.tar.gz', uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 }]);
+    const list = await restoreOp.get('/api/backup/restore/backups');
+    const run = list.data.runs.find(r => r.runId === 'sources-dorm');
+    assert.deepEqual(run.sources, ['local'], `only local survives: ${JSON.stringify(run.sources)}`);
+    assert.equal(run.uploaded, 1, 'raw s3 flag untouched');
+    assert.equal(run.ftp_uploaded, 1, 'raw ftp flag untouched');
+    assert.equal(run.smb_uploaded, 1, 'raw smb flag untouched');
+    assert.equal(run.filename, 'backup-dorm-local.tar.gz');
+    assert.equal(run.sha256, 'a'.repeat(64));
+    assert.equal(run.sizeBytes, 1);
+    assert.ok(run.location, 'location still server-derived');
+    /* D-89-14 behavioral strengthener: the list GET never probes — the
+       dead destinations above would surface any seam call as latency/
+       errors; the static pin test asserts the source-level absence. */
+    const list2 = await restoreOp.get('/api/backup/restore/backups');
+    assert.equal(list2.status, 200);
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 sources[]: local truth is fs membership — gone file or falsy filename → no local entry', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-sources-loc-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-sources-loc@test.local');
+    plantRows(server, [
+      { id: 'sources-gone', filename: 'backup-gone-local.tar.gz', uploaded: 0, ftp_uploaded: 0, smb_uploaded: 0 },
+      { id: 'sources-null', filename: '', uploaded: 0, ftp_uploaded: 0, smb_uploaded: 0 },
+    ]);
+    const list = await restoreOp.get('/api/backup/restore/backups');
+    const gone = list.data.runs.find(r => r.runId === 'sources-gone');
+    const nul = list.data.runs.find(r => r.runId === 'sources-null');
+    assert.ok(!gone.sources.includes('local'), `gone file → no local: ${JSON.stringify(gone.sources)}`);
+    assert.deepEqual(gone.sources, [], 'nothing mirrored, nothing enabled → empty sources');
+    assert.ok(!nul.sources.includes('local'), 'falsy filename → no local');
+    assert.deepEqual(nul.sources, []);
+  } finally {
+    await server.stop();
+  }
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});

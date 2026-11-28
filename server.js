@@ -10448,6 +10448,22 @@ async function handleApi(req, res, url) {
         uploaded: r.uploaded,
         ftp_uploaded: r.ftp_uploaded,
         smb_uploaded: r.smb_uploaded,
+        /* Phase 104 (RSRC-03): sources[] — server-derived per the SAME
+           truths the client used to guess from (D-23: the client never
+           derives authority). Flags ARE the existence truth (R-4);
+           destination `enabled` filters DISPLAY only (dormant-slot
+           contract — an explicit request for a dormant source still
+           refuses keyed through the restore-source funnel). local first,
+           then the registry order s3 > ftp > smb (D-04). Purely additive
+           — the raw flags above stay (UI badge tests may pin them).
+           ZERO probe-seam calls here — list GETs never probe (D-89-14,
+           pinned by test). */
+        sources: [
+          ...(r.filename && fs.existsSync(path.join(backupsRoot(), r.filename)) ? ['local'] : []),
+          ...(r.uploaded === 1 && S3.enabled ? ['s3'] : []),
+          ...(r.ftp_uploaded === 1 && FTP.enabled ? ['ftp'] : []),
+          ...(r.smb_uploaded === 1 && SMB.enabled ? ['smb'] : []),
+        ],
         filename: r.filename,
         sizeBytes: r.size_bytes,
         sha256: r.sha256,
