@@ -37,9 +37,9 @@
 
 ### OIDC documentation (OIDCDOC)
 
-- [ ] **OIDCDOC-01**: DEPLOY.md "Linking policy — verified email required" section is rewritten to lead with `OIDC_TRUST_TENANT_EMAIL=true` for Azure AD work/school tenants (tokens omit `email_verified`), pinning the guest carve-out (acct=1 / external idp still requires the literal claim), with a symptom→cause table ("Sign-in with Microsoft failed" → missing claim → set the flag) replacing the now-wrong "check tenant email verification" operator note — verified against server.js:6673-6715, not memory.
-- [ ] **OIDCDOC-02**: DEPLOY.md Azure setup steps gain the two missing group-claim prerequisites: manifest edit `groupMembershipClaims: "ApplicationGroup"` (assigned-groups-only semantics stated) and assigning the Entra group to the Enterprise Application (Users and groups), plus where to copy the group Object-ID GUID for the mappings page — feeding the MAPUI-02 paste form.
-- [ ] **OIDCDOC-03**: .env.example's `OIDC_TRUST_TENANT_EMAIL` comment expands to state the why (Azure AD work/school tokens omit the claim), the guest carve-out, and the pointer to the DEPLOY.md section.
+- [x] **OIDCDOC-01**: DEPLOY.md "Linking policy — verified email required" section is rewritten to lead with `OIDC_TRUST_TENANT_EMAIL=true` for Azure AD work/school tenants (tokens omit `email_verified`), pinning the guest carve-out (acct=1 / external idp still requires the literal claim), with a symptom→cause table ("Sign-in with Microsoft failed" → missing claim → set the flag) replacing the now-wrong "check tenant email verification" operator note — verified against server.js:6673-6715, not memory.
+- [x] **OIDCDOC-02**: DEPLOY.md Azure setup steps gain the two missing group-claim prerequisites: manifest edit `groupMembershipClaims: "ApplicationGroup"` (assigned-groups-only semantics stated) and assigning the Entra group to the Enterprise Application (Users and groups), plus where to copy the group Object-ID GUID for the mappings page — feeding the MAPUI-02 paste form.
+- [x] **OIDCDOC-03**: .env.example's `OIDC_TRUST_TENANT_EMAIL` comment expands to state the why (Azure AD work/school tokens omit the claim), the guest carve-out, and the pointer to the DEPLOY.md section.
 
 ## Future Requirements (deferred — not this milestone)
 
@@ -72,8 +72,8 @@
 | RSRC-02 | Phase 104 | Pending |
 | RSRC-03 | Phase 104 | Pending |
 | RSRC-04 | Phase 105 | Pending |
-| OIDCDOC-01 | Phase 105 | Pending |
-| OIDCDOC-02 | Phase 105 | Pending |
-| OIDCDOC-03 | Phase 105 | Pending |
+| OIDCDOC-01 | Phase 105 | Complete |
+| OIDCDOC-02 | Phase 105 | Complete |
+| OIDCDOC-03 | Phase 105 | Complete |
 
 Coverage: 15/15 v1 requirements mapped, no orphans, no duplicates.
