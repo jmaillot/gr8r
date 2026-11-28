@@ -267,6 +267,12 @@ test('a due task with a subscribed hook yields exactly ONE due.reminder delivery
   assert.equal(read.status, 200);
   const next = read.data.doc;
   const today = new Date().toISOString().slice(0, 10);
+  /* Fixed-now injection (HK-02, Phase 110): the route's now body param (server.js:6546)
+     exists precisely so tests drive 08:00-local instants without fake timers or sleeps
+     (server.js:2822 doctrine). One deterministic open-window instant shared by BOTH
+     reminder passes — inside the at-or-after-08:00 member-local window for the UTC
+     fixture workspace, same calendar day so the replay-pass dedup holds. */
+  const nowIso = `${today}T08:05:00Z`;
   next.data.projects = [{ id: 'p1', name: 'P1' }];
   next.data.tasks = [
     ...(Array.isArray(next.data.tasks) ? next.data.tasks : []).filter(t => t.id !== 't-due'),
@@ -284,7 +290,7 @@ test('a due task with a subscribed hook yields exactly ONE due.reminder delivery
     fetch(`${server.base}/api/internal/reminder-pass`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-reminder-token': TOKEN },
-      body: JSON.stringify({ now: new Date().toISOString() }),
+      body: JSON.stringify({ now: nowIso }),
     }).then(async r => {
       assert.equal(r.status, 200, `reminder pass ${r.status}`);
       return r.json();
