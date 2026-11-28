@@ -7236,7 +7236,12 @@ async function handleApi(req, res, url) {
       return res.end();
     } catch {
       /* Pitfall 7: exchange/verification failures (timeout, HTTP error,
-         malformed token) fail closed to the same generic redirect. */
+         malformed token) fail closed to the same generic redirect.
+         CARRY-03: ONE fixed non-interpolated line — the catch binds no
+         error variable and nothing rides exception text on this
+         un-scrubbed log site (an OIDC error body can carry token
+         fragments; T-108-06). */
+      logWarn('sso callback: token exchange or verification failed; redirecting to generic error');
       return errorRedirect();
     }
   }

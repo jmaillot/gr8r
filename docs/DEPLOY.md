@@ -349,6 +349,7 @@ verifying their mail, not with app config.
 | "Sign-in with Microsoft failed" (generic error) for a real tenant user | Azure AD work/school token omits `email_verified` | Set `OIDC_TRUST_TENANT_EMAIL=true` (pinned tenant, non-guest) |
 | Guest sign-in fails with the generic error | Guests/external-IdP identities always need the literal `email_verified: true` claim | Verify the guest's email at the IdP — the flag does not cover guests |
 | Still failing with the flag set | Issuer/tenant pinning mismatch (`tid` ≠ `OIDC_TENANT_ID`, or a non-guest external `idp` claim) | Check `OIDC_TENANT_ID` matches the token's `tid`; verify no `idp` claim makes the identity guest-shaped |
+| One user fails sign-in where another succeeds | Azure AD omits the optional `email` claim for that user's token, so `email_verified` linking fails closed | Azure portal → App registration → Token configuration → Add optional claim → `email` |
 
 **Smoke-test checklist** (from an empty config to a working sign-in):
 
