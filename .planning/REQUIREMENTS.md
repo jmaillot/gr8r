@@ -25,12 +25,12 @@
 - [x] **TEAM-05**: Non-winner mappings still grant their team (team survives while mapping lives, regardless of highest-role-wins on the workspace row).
 - [x] **TEAM-06**: Distinct audit verb `group_team_granted` (and team-removal rides the existing removal vocabulary with team provenance detail).
 - [x] **TEAM-07**: Dead-mapping machinery: new `team-deleted` orphan class (boot warn loop + dead-mappings route); reconcile skips a dead team but still grants the workspace role.
-- [ ] **TEAM-08**: POST/PATCH routes validate team_id (exists in workspace doc.teams, belongs to the mapping's workspace, nullable); refusal keys ×5. Delete-confirm copy states lazy revocation + role loss when the row is the group's only mapping.
+- [x] **TEAM-08**: POST/PATCH routes validate team_id (exists in workspace doc.teams, belongs to the mapping's workspace, nullable); refusal keys ×5. Delete-confirm copy states lazy revocation + role loss when the row is the group's only mapping.
 
 ### Mapping edit (Phase 106)
 
-- [ ] **EDIT-01**: PATCH `/api/governance/group-mappings/:id` — partial update (workspace/team/role/label); GUID immutable (body `groupGuid` present → keyed refusal); workspace PATCH partial-update precedent; validation funnel reused (roleTokenRefusal, workspace-existence check); throttle-before-gate; uniform 404.
-- [ ] **EDIT-02**: Edit lands `group_mapping_updated` same-tx audit; dead rows refuse edit (keyed, keeps D-11 dead-row display-only discipline); edit of the (guid, workspace) pair that collides with an existing row → the existing duplicate pre-check keyed refusal.
+- [x] **EDIT-01**: PATCH `/api/governance/group-mappings/:id` — partial update (workspace/team/role/label); GUID immutable (body `groupGuid` present → keyed refusal); workspace PATCH partial-update precedent; validation funnel reused (roleTokenRefusal, workspace-existence check); throttle-before-gate; uniform 404.
+- [x] **EDIT-02**: Edit lands `group_mapping_updated` same-tx audit; dead rows refuse edit (keyed, keeps D-11 dead-row display-only discipline); edit of the (guid, workspace) pair that collides with an existing row → the existing duplicate pre-check keyed refusal.
 
 ### Mappings SPA restructure (Phase 107)
 
