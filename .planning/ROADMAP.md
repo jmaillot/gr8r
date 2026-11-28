@@ -40,7 +40,11 @@
 3. PATCH changes role/label/workspace/team and audits; GUID tamper and dead-row edit are keyed refusals; ×5 locale parity.
 4. Deleted team → `team-deleted` orphan surfaces; workspace role still granted. Dual-engine DDL verified (SQLite + Postgres matrix).
 
-**Plans:** TBD (`/gsd-plan-phase 106`)
+**Plans:** 2 plans
+
+Plans:
+- [ ] 106-01-PLAN.md — DDL lockstep + SSO reconcile team sync cell (grant/sweep/dead-team skip) + TEAM-04 PUT narrowing + team-deleted orphan machinery (TEAM-01..07)
+- [ ] 106-02-PLAN.md — PATCH edit route + POST/GET team validation + refusal keys ×5 locales (TEAM-08, EDIT-01/02)
 
 ---
 
