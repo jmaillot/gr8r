@@ -771,3 +771,120 @@ test('104-02 probe route: ftp probe of a flag-1 row against a DEAD ftp endpoint 
   assert.ok(!JSON.stringify({ action: failed.action, target_id: failed.target_id, target_name: failed.target_name }).includes('127.0.0.1'), 'no endpoint text in the config-bearing audit fields (T-104-05)');
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
+
+/* =====================================================================
+   Task 104-02-2 — s3 + smb probe branches, audit tokens, D-89-14 pin.
+   ===================================================================== */
+
+/* In-process HTTP sink the S3 probe's SigV4 client hits (same pattern as
+   test/backup-tasks-api.test.mjs's startSink). */
+function startSink(behavior) {
+  const hits = [];
+  const server = http.createServer((req, res) => {
+    let chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      hits.push({ method: req.method, url: req.url });
+      const spec = behavior()[req.method] || { status: 200 };
+      res.writeHead(spec.status, spec.headers || {});
+      res.end(spec.body || '');
+    });
+  });
+  return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({ server, hits, port: server.address().port })));
+}
+
+const S3_ENV = (endpoint, extra = {}) => ({
+  S3_ENDPOINT: endpoint,
+  S3_BUCKET: 'projects-studio-test-bucket',
+  S3_ACCESS_KEY_ID: 'projects-studio-test-key',
+  S3_SECRET_KEY: 'projects-studio-test-secret',
+  ...extra,
+});
+
+test('104-02 probe route: s3 probe through a LIVE sink → 200 { ok, key success, httpWarning } verbatim; marker PUT/DELETE observed; audit restore_probe_ok', async () => {
+  const sink = await startSink(() => ({ HEAD: { status: 200 }, PUT: { status: 200 }, DELETE: { status: 204 } }));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-probe-s3-ok-'));
+  const server = await startServer({ dataDir, env: S3_ENV(`http://127.0.0.1:${sink.port}`) });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-probe-s3-ok@test.local');
+    plantRows(server, [{ id: 'probe-s3-ok', uploaded: 1, ftp_uploaded: 0, smb_uploaded: 0 }]);
+    const res = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-s3-ok', source: 's3' });
+    assert.equal(res.status, 200, `s3 probe: ${JSON.stringify(res.data)}`);
+    assert.deepEqual(
+      { ok: res.data.ok, key: res.data.key, warning: res.data.warning, httpWarning: res.data.httpWarning },
+      { ok: true, key: 'success', warning: false, httpWarning: true },
+      'the probeS3 result returns VERBATIM (plain-http sink → httpWarning true)',
+    );
+    assert.ok(sink.hits.some(h => h.method === 'HEAD' && h.url.includes('projects-studio-test-bucket')), 'HeadBucket hit');
+    assert.ok(sink.hits.some(h => h.method === 'PUT' && h.url.includes('projects-studio-probe/probe-')), 'marker PUT');
+    assert.ok(sink.hits.some(h => h.method === 'DELETE' && h.url.includes('projects-studio-probe/probe-')), 'marker DELETE');
+    const f = flagsOf(server, 'probe-s3-ok'); assert.deepEqual({ uploaded: f.uploaded, ftp_uploaded: f.ftp_uploaded, smb_uploaded: f.smb_uploaded }, { uploaded: 1, ftp_uploaded: 0, smb_uploaded: 0 }, 'flags unchanged');
+  } finally {
+    await server.stop();
+    sink.server.closeAllConnections?.();
+    await new Promise(r => sink.server.close(r));
+  }
+  const ok = PROBE_AUDITS(dataDir)().find(a => a.action === 'restore_probe_ok');
+  assert.ok(ok, 'restore_probe_ok audited');
+  assert.equal(ok.target_name, 'success', 'audit detail = result.key ONLY');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 probe route: s3 + smb probes of dead destinations → 200 { ok:false, key unreachable } verbatim per seam; smb carries NO httpWarning (R-3); restore_probe_failed:<source> audited', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-probe-dead2-'));
+  const server = await startServer({
+    dataDir,
+    env: {
+      S3_ENDPOINT: 'http://127.0.0.1:1',
+      S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'k', S3_SECRET_KEY: 's',
+      SMB_HOST: '127.0.0.1', SMB_SHARE: 's', SMB_USER: 'u', SMB_PASSWORD: 'p', SMB_PORT: '1',
+    },
+  });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-probe-dead2@test.local');
+    plantRows(server, [{ id: 'probe-dead-all', uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 }]);
+    const s3 = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-dead-all', source: 's3' });
+    assert.equal(s3.status, 200, `s3 dead: ${JSON.stringify(s3.data)}`);
+    assert.equal(s3.data.ok, false);
+    assert.equal(s3.data.key, 'unreachable');
+    assert.ok('httpWarning' in s3.data, 'the s3 result keeps its own shape — verbatim');
+    const smb = await restoreOp.post('/api/backup/restore/probe', { runId: 'probe-dead-all', source: 'smb' });
+    assert.equal(smb.status, 200, `smb dead: ${JSON.stringify(smb.data)}`);
+    assert.equal(smb.data.ok, false);
+    assert.equal(smb.data.key, 'unreachable');
+    assert.ok(!('httpWarning' in smb.data), 'R-3: NO httpWarning on the smb result');
+    assert.ok(!('guest' in smb.data), 'no guest on a failed smb probe');
+    const f = flagsOf(server, 'probe-dead-all'); assert.deepEqual({ uploaded: f.uploaded, ftp_uploaded: f.ftp_uploaded, smb_uploaded: f.smb_uploaded }, { uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 }, 'flags unchanged through failed probes');
+  } finally {
+    await server.stop();
+  }
+  const audits = PROBE_AUDITS(dataDir)();
+  assert.ok(audits.some(a => a.action === 'restore_probe_failed:s3' && a.target_name === 'unreachable'), 'restore_probe_failed:s3 audited with key-only detail');
+  assert.ok(audits.some(a => a.action === 'restore_probe_failed:smb' && a.target_name === 'unreachable'), 'restore_probe_failed:smb audited with key-only detail');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+/* D-89-14 pin (static, the wiring-test precedent): after this plan the ONLY
+   probe-seam call sites in server.js remain inside the config-save twins +
+   the four probe routes. Every seam call's nearest preceding route pathname
+   must be one of those; the restore/backups list GET slice contains zero. */
+test('104-02 pin: every probeS3/probeFtp/probeSmb call site sits in a config-save or probe-route handler — the list GETs never probe (D-89-14)', () => {
+  const s = fs.readFileSync(path.join(process.cwd(), 'server.js'), 'utf8');
+  const seamRe = /await (probeS3|probeFtp|probeSmb)\(/g;
+  const allowed = ['/api/backup/tasks', '/api/backup/s3/probe', '/api/backup/tasks/ftp-probe', '/api/backup/tasks/smb-probe', '/api/backup/restore/probe'];
+  let m;
+  const seen = [];
+  while ((m = seamRe.exec(s)) !== null) {
+    const before = s.slice(0, m.index);
+    const lastRoute = before.lastIndexOf("pathname === '");
+    const route = before.slice(lastRoute).match(/pathname === '([^']+)'/)?.[1] ?? '(none)';
+    seen.push(route);
+    assert.ok(allowed.includes(route), `probe-seam call inside an unexpected route: ${route}`);
+  }
+  assert.equal(seen.length, 12, 'exactly the 12 expected seam call sites (config-save create + edit twins, s3/ftp/smb/restore probe routes)');
+  /* behavior pin: the restore/backups list GET slice itself carries zero seam calls */
+  const listStart = s.indexOf("pathname === '/api/backup/restore/backups' && method === 'GET'");
+  const listEnd = s.indexOf("pathname === '/api/backup/restore/backups'", listStart + 10) === -1 ? listStart + 4000 : s.indexOf("pathname === '/api/backup/restore/backups'", listStart + 10);
+  const listSlice = s.slice(listStart, listEnd);
+  assert.ok(!/probeS3|probeFtp|probeSmb/.test(listSlice), 'the restore backups list GET contains zero probe-seam calls');
+});

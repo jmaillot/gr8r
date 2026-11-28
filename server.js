@@ -9975,10 +9975,16 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_probe_refused:restoreSourceNotMirrored');
       return fail(res, 400, 'restoreSourceNotMirrored', NO_SURVIVING_COPY_ERR);
     }
-    const result = await probeFtp(FTP.config());
+    /* Per-source dispatch through the EXISTING seams (no new wire protocol
+       anywhere): s3 → probeS3, ftp → probeFtp, smb → probeSmb with the
+       family's onError logWarn idiom. smb carries `guest`; NO httpWarning
+       (R-3). Each seam's keyed result returns VERBATIM. */
+    const result = source === 's3' ? await probeS3(S3.config())
+      : source === 'ftp' ? await probeFtp(FTP.config())
+      : await probeSmb(SMB.config(), { onError: e => logWarn(`smb probe raw error: ${e?.message || e}`) });
     await auditBackupTask(user, result.ok ? 'restore_probe_ok' : `restore_probe_failed:${source}`, user.id, result.key);
-    if (!result.ok) logProbeFailure('ftp', result);
-    logInfo(`restore probe: ${source} → ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}`);
+    if (!result.ok) logProbeFailure(source, result);
+    logInfo(`restore probe: ${source} → ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}${result.guest ? ' (guest session)' : ''}`);
     return json(res, 200, result);
   }
 
