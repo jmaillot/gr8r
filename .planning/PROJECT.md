@@ -1,34 +1,34 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-28 — Milestone v3.6 Entra ID Mappings & Restore Sources SHIPPED.*
+*Last updated: 2026-11-29 — Milestone v3.7 Mappings UX & Team Mapping SHIPPED.*
 
 ## Current State
 
-**v3.6 shipped 2026-11-28** (5 phases, 101–105, all verified; audit passed). The project is a
+**v3.7 shipped 2026-11-29** (3 phases, 106–108, all verified; audit passed — 15/15 requirements wired, 4/4 E2E flows). The project is a
 self-hosted, zero-dependency, multi-tenant project-management workspace: hand-rolled Node server
-(server.js ~13.5k lines), Vite SPA under src/, dual-engine SQLite/Postgres, backup/restore with
-local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings, per-source restore
-selection with availability probes. Test baseline: ~2767 tests with 2–3 documented pre-existing
-failures (french-typography, webhook-routes GET list, webhook-events due.reminder flake).
+(server.js ~14k lines), Vite SPA under src/, dual-engine SQLite/Postgres, backup/restore with
+local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings **now with optional team
+targets and mapping edit**, per-source restore selection with availability probes **now with per-run
+archive presence stat** (stat-only, three-state badge). Test baseline: ~2836 tests with 2 documented
+pre-existing failures (french-typography content, webhook-routes GET list; webhook-events due.reminder flake).
 
 <!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 
-## Current Milestone: v3.7 Mappings UX & Team Mapping (started 2026-11-28)
+## Milestone v3.7 Mappings UX & Team Mapping — SHIPPED (2026-11-29)
 
-**Goal:** Team-level group mapping (optional team, role unchanged — owner ruling), the Mappings page restructured into proper sections (mappings table / dead mappings table / usage log), **mapping edit** (today only delete exists — GUID immutable, workspace/team/role/label editable), and the four v3.6 closeout items.
+**Goal:** Team-level group mapping (optional team, role unchanged — owner ruling), mapping edit (GUID immutable), the Mappings page restructured into three sections (mappings table / dead mappings table / usage log), and the four v3.6 closeout items.
 
-**Target features:**
-- **Team mapping** — `group_mappings` gains an optional team target (schema, dual-engine DDL); a mapping with a team grants team membership AND the workspace role from the same row; reconcile pass extends to team memberships; deleted-team orphan class feeds the dead mappings card
-- **Mapping edit** — PATCH route + edit UI (GUID immutable; workspace/team/role/label editable); audit `group_mapping_updated`; staged-delete copy interplay reviewed
-- **Mappings page restructure (owner spec Nov 28)** — "Mappings" section: table (Label, Group ID, Workspace, Team, Role, Users added — live count via `provenance = 'group:<guid>'`, When); "Dead group mappings" section: orphaned mappings table; "Usage Log" section: ALL group lifecycle audit actions (granted/upgraded/downgraded/removed/guard-refused — owner ruling), columns Action, Type (droppable if always 'group'), Group ID, Group Name (Label; raw GUID when mapping deleted — accepted), Who, When
-- **Per-run archive probing** — probe badge verifies the run's actual archive exists on the leg (SIZE/HeadObject/file-info per seam, read-only; stat-only lean), not just destination reachability (v3.6 UAT finding)
-- **Restore initiator in run history** — restore_runs operator attribution (schema freeze lifted; schema route preferred: created_by column)
-- **SSO callback catch-all logWarn** — one fixed non-PII log line in the server.js:7093 silent catch
-- **DEPLOY.md symptom row** — "one user fails where another succeeds → email optional claim"
+**Shipped:**
+- **Team mapping** — optional `team_id` on group_mappings (dual-engine DDL); a mapping with a team grants team membership AND the workspace role from the same row; reconcile pass extends to team memberships via `team_members.provenance` (group-keyed sweep, manual rows immune); `team-deleted` orphan class; distinct `group_team_granted` audit verb; latent teams-PUT purge bug fixed
+- **Mapping edit** — PATCH route + staged edit modal (GUID immutable, dead rows refuse, dup-pair guard, `group_mapping_updated` same-tx audit)
+- **Mappings page restructure** — three `perm-t` tables: Mappings (7 cols incl. Team + Users added + When), Dead group mappings, Usage Log (all lifecycle actions incl. team verbs, cap-100 with visible cap-note); workspace-scoped team picker on the create form
+- **Per-run archive probing** — stat-only per-seam presence check (FTP SIZE, S3 HeadObject keyed off status, SMB CREATE-frame) with dedicated `restorestat|` throttle; three-state badge (present/missing/unreachable); zero marker writes (frame-level pinned)
+- **Restore initiator** — `restore_runs.created_by` + left-join name render in run history (legacy rows `—`)
+- **SSO closeout** — fixed non-interpolated callback logWarn; DEPLOY.md email-claim symptom row
 
-**Phase shape (owner-approved):** 106 team-mapping schema + reconcile + edit route → 107 Mappings SPA redesign (3 sections, edit UI, usage log) → 108 carried items (independent, parallel wave).
+**Decisions:** R-6 optional-team role-unchanged · R-7 usage log = all lifecycle actions · R-8 edit exists, GUID immutable · R-9 Governance UI refresh → v3.8 · R-10 carried items ride phase 108. Phase 107/108 executed sequentially (shared i18n pin lines — checker finding; ROADMAP's parallel-safe premise corrected).
 
-**Deferred to v3.8 (owner decision):** Governance UI design refresh — will consume the table/section design language v3.7's Mappings tables establish.
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 
 ## Milestone v3.6 Entra ID Mappings & Restore Sources — SHIPPED (2026-11-28)
 

@@ -5,6 +5,29 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] — 2026-11-29 — Mappings UX & Team Mapping
+
+3 phases (106–108). Highlights:
+
+- **Team-level group mappings** (optional, role unchanged): a mapping can
+  target a team in addition to the workspace role; group-driven team
+  memberships reconcile at SSO sign-in (provenance-keyed sweep, manual rows
+  immune); `team-deleted` orphan class; `group_team_granted` audit verb;
+  latent manual-teams purge bug fixed.
+- **Mapping edit**: PATCH route + staged edit modal — workspace/team/role/
+  label editable, GUID immutable, dead rows refuse, `group_mapping_updated`
+  same-tx audit.
+- **Mappings page restructure**: three tables (Mappings with Team/Users
+  added/When, Dead group mappings, Usage Log covering all lifecycle actions
+  incl. team verbs, cap-100); workspace-scoped team picker on create.
+- **Per-run archive probing**: stat-only per-seam presence check (FTP SIZE,
+  S3 HeadObject, SMB CREATE-frame) — three-state badge (present/missing/
+  unreachable), zero marker writes.
+- **Restore attribution**: run history shows who restored
+  (`restore_runs.created_by`, legacy rows `—`).
+- **SSO closeout**: one fixed non-interpolated callback logWarn; DEPLOY.md
+  email-optional-claim symptom row.
+
 ## [3.6.0] — 2026-11-28 — Entra ID Mappings & Restore Sources
 
 5 phases (101–105). Highlights:
