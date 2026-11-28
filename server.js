@@ -6687,12 +6687,6 @@ async function handleApi(req, res, url) {
       if (!verdict.ok) return errorRedirect();
 
       const claims = verdict.claims;
-      /* TEMPORARY DIAGNOSTIC (remove after SSO triage): one fixed line, claim
-         NAMES only — never values — so no PII and no-oracle posture holds for
-         the client (logs are operator-only). Pinpoints which fail-closed gate
-         a fresh-identity login hits: missing email claim / guest shape /
-         tid mismatch / verification state. */
-      logInfo(`sso diag: keys=${Object.keys(claims).sort().join(',')} tid-match=${claims.tid === OIDC.config.tenantId} acct=${String(claims.acct ?? '?')} has-email=${'email' in claims} email_verified=${String(claims.email_verified ?? 'absent')}`);
       const subject = String(claims.sub || '');
       const email = String(claims.email || '')
         .trim()
