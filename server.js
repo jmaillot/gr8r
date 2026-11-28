@@ -6133,6 +6133,12 @@ function restoreSourceFlag(row, source) {
   return source === 's3' ? row.uploaded : source === 'ftp' ? row.ftp_uploaded : row.smb_uploaded;
 }
 
+/* Caller-owned refusal envelopes for the explicit-source family (RSRC-02 —
+   the helper returns structured reasons; the text NEVER moves there, golden
+   contract). Shared by the six sites so the wording cannot drift. */
+const NOT_RECOGNIZED_ERR = 'That restore source is not recognized';
+const NO_SURVIVING_COPY_ERR = 'That backup archive has no surviving copy at the requested source';
+
 /* HARD-05 (D-07): one first-value discipline for every trusted proxy header —
    multi-value x-forwarded-* collapses to its first value. An absent header
    yields '' so each caller's existing truthiness gate behaves unchanged. */
@@ -10528,9 +10534,7 @@ async function handleApi(req, res, url) {
     if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
       const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
       await auditBackupTask(user, `restore_refused:${code}`);
-      return fail(res, 400, code, reqSource === 'invalid'
-        ? 'That restore source is not recognized'
-        : 'That backup archive has no surviving copy at the requested source');
+      return fail(res, 400, code, reqSource === 'invalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
     }
     let scope = null;
     try {
@@ -10661,9 +10665,7 @@ async function handleApi(req, res, url) {
     if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
       const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
       await auditBackupTask(user, `restore_refused:${code}`);
-      return fail(res, 400, code, reqSource === 'invalid'
-        ? 'That restore source is not recognized'
-        : 'That backup archive has no surviving copy at the requested source');
+      return fail(res, 400, code, reqSource === 'invalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
     }
     let scope = null;
     try {
@@ -10801,9 +10803,7 @@ async function handleApi(req, res, url) {
     if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
       const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
       await auditBackupTask(user, `restore_refused:${code}`);
-      return fail(res, 400, code, reqSource === 'invalid'
-        ? 'That restore source is not recognized'
-        : 'That backup archive has no surviving copy at the requested source');
+      return fail(res, 400, code, reqSource === 'invalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
     }
     let scope = null;
     try {
@@ -10946,9 +10946,7 @@ async function handleApi(req, res, url) {
     if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
       const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
       await auditBackupTask(user, `restore_refused:${code}`);
-      return fail(res, 400, code, reqSource === 'invalid'
-        ? 'That restore source is not recognized'
-        : 'That backup archive has no surviving copy at the requested source');
+      return fail(res, 400, code, reqSource === 'invalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
     }
     const localPath = row.filename ? path.join(backupsRoot(), row.filename) : null;
     const hasLocal = !!localPath && fs.existsSync(localPath);
@@ -10974,6 +10972,15 @@ async function handleApi(req, res, url) {
           stagedPath = src.stagedPath;
           archivePath = src.archivePath;
         } else {
+          /* Phase 104 (RSRC-02): an explicit-source refusal that slipped
+             past the route gate (flag = 1 but the destination is disabled —
+             GD-5, helper-side answer) rides the SAME keyed family — never
+             the default-path GONE_ALL envelope. */
+          if (src.reason === 'sourceInvalid' || src.reason === 'sourceNotMirrored') {
+            const code = src.reason === 'sourceInvalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+            await auditBackupTask(user, `restore_refused:${code}`);
+            return fail(res, 400, code, src.reason === 'sourceInvalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
+          }
           await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
           const why = src.reason === 'fetchFailed'
             ? (src.dest === 's3' ? `That backup archive could not be fetched from S3 (${src.err.detail})`
@@ -11098,9 +11105,7 @@ async function handleApi(req, res, url) {
     if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
       const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
       await auditBackupTask(user, `backup_download_refused:${code}`);
-      return fail(res, 400, code, reqSource === 'invalid'
-        ? 'That restore source is not recognized'
-        : 'That backup archive has no surviving copy at the requested source');
+      return fail(res, 400, code, reqSource === 'invalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
     }
     let scope = null;
     try {
@@ -11136,6 +11141,15 @@ async function handleApi(req, res, url) {
              a mismatch refuses keyed before any byte reaches the client. */
           stagedPath = src.stagedPath;
         } else {
+          /* Phase 104 (RSRC-02): an explicit-source refusal that slipped
+             past the route gate (flag = 1 but the destination is disabled —
+             GD-5) rides the SAME keyed family — never the default-path
+             GONE_ALL envelope. */
+          if (src.reason === 'sourceInvalid' || src.reason === 'sourceNotMirrored') {
+            const code = src.reason === 'sourceInvalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+            await auditBackupTask(user, `backup_download_refused:${code}`);
+            return fail(res, 400, code, src.reason === 'sourceInvalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
+          }
           await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
           const why = src.reason === 'fetchFailed'
             ? (src.dest === 's3' ? `That backup archive could not be fetched from S3 (${src.err.detail})`
@@ -11223,9 +11237,7 @@ async function handleApi(req, res, url) {
     if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
       const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
       await auditBackupTask(user, `backup_verify_refused:${code}`);
-      return fail(res, 400, code, reqSource === 'invalid'
-        ? 'That restore source is not recognized'
-        : 'That backup archive has no surviving copy at the requested source');
+      return fail(res, 400, code, reqSource === 'invalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
     }
     const localPath = path.join(backupsRoot(), row.filename);
     const hasLocal = fs.existsSync(localPath);
@@ -11269,6 +11281,16 @@ async function handleApi(req, res, url) {
             return fail(res, 404, 'restoreArchiveMissing', why);
           } else throw err;
         } else {
+          /* Phase 104 (RSRC-02): an explicit-source refusal that slipped
+             past the route gate (flag = 1 but the destination is disabled —
+             GD-5) rides the SAME keyed family — never the default-path
+             GONE_ALL envelope; the sha-mismatch RESULT semantics above are
+             untouched. */
+          if (src.reason === 'sourceInvalid' || src.reason === 'sourceNotMirrored') {
+            const code = src.reason === 'sourceInvalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+            await auditBackupTask(user, `backup_verify_refused:${code}`);
+            return fail(res, 400, code, src.reason === 'sourceInvalid' ? NOT_RECOGNIZED_ERR : NO_SURVIVING_COPY_ERR);
+          }
           await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
           return fail(res, 404, 'restoreArchiveMissing', src.reason === 'disabled'
             ? (src.dest === 's3' ? 'That backup archive lives in S3 but no S3 destination is configured'

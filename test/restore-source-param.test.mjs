@@ -324,7 +324,7 @@ test('104-01 engine: helper explicit source fetches through the REQUESTED leg on
   await new Promise(r => fake.listen(0, '127.0.0.1', r));
   try {
     const rowLike = { ...GONE_ROW, taskId: 'task-fixture', filename: sourceRun.filename, sha256: sourceRun.sha256, uploaded: 1 };
-    const src = await restore.resolveRestoreSource(rowLike, { s3: { endpoint: `http://127.0.0.1:${fake.address().port}`, bucket: 'b', accessKeyId: 'a', secretAccessKey: 's', region: 'r', pathStyle: true } }, { source: 's3', runId: 'param-s3-success-run' });
+    const src = await restore.resolveRestoreSource(rowLike, { s3: { endpoint: `http://127.0.0.1:${fake.address().port}`, bucket: 'b', accessKeyId: 'a', secretAccessKey: 's', region: 'r', pathStyle: true } }, { source: 's3', runId: 'param-s3-success-run', /* the REAL archive exists locally — override the local derivation so the explicit MIRROR leg is what answers */ archivePath: path.join(BACKUPS_DIR, 'gone-local.tar.gz') });
     assert.equal(src.ok, true, `explicit s3 fetch: ${JSON.stringify({ ...src, err: undefined })}`);
     assert.equal(src.dest, 's3', 'the REQUESTED leg answered');
     assert.equal(src.sha256, sourceRun.sha256, 'the staged fetch re-verified the digest');
@@ -504,6 +504,54 @@ test('104-02 route: instance + overwrite triggers refuse source (restore_refused
   assert.ok(audits.filter(a => a.action === 'restore_refused:restoreSourceInvalid').length >= 2, 'both triggers audited restore_refused:restoreSourceInvalid');
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
+
+/* ---------------------------------------------------------------------
+   TASK 3 MATRIX — the helper-side GD-5 answer (flag = 1, destination
+   disabled) surfaces as the SAME keyed family through every sync route;
+   explicit local missing surfaces honestly without any mirror fetch.
+   --------------------------------------------------------------------- */
+
+test('104-03 matrix: explicit s3 (flag=1, destination disabled) → keyed restoreSourceNotMirrored through preview/download/verify (GD-5, helper-side answer)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-mx-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-mx@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-mx@test.local', restoreOp);
+    /* Harness has no S3/FTP/SMB destinations — flag=1 + disabled dest is
+       the GD-5 case; the route gate (flags only) passes and the HELPER
+       refuses. Never the default-path GONE_ALL envelope. */
+    plantRows(server, [{ id: 'param-mx-flag1-disabled', uploaded: 1, ftp_uploaded: 1, smb_uploaded: 1 }]);
+    const pv = await restoreOp.get('/api/backup/restore/preview?runId=param-mx-flag1-disabled&source=s3');
+    assert.equal(pv.status, 400, `preview GD-5: ${JSON.stringify(pv.data)}`);
+    assert.equal(pv.data.code, 'restoreSourceNotMirrored');
+    assert.equal(pv.data.error, NO_SURVIVING_COPY);
+    const dl = await restoreOp.get('/api/backup/download?runId=param-mx-flag1-disabled&source=ftp');
+    assert.equal(dl.status, 400, `download GD-5: ${JSON.stringify(dl.data)}`);
+    assert.equal(dl.data.code, 'restoreSourceNotMirrored');
+    const vf = await restoreOp.post('/api/backup/verify-checksum', { runId: 'param-mx-flag1-disabled', source: 'smb' });
+    assert.equal(vf.status, 400, `verify GD-5: ${JSON.stringify(vf.data)}`);
+    assert.equal(vf.data.code, 'restoreSourceNotMirrored');
+    /* Explicit LOCAL missing: the refusal surfaces honestly — no mirror
+       fetch is attempted (the ladder's explicit-local branch never walks
+       the registry; a fall-through would answer fetchFailed). */
+    plantRows(server, [{ id: 'param-mx-local-gone', uploaded: 1 }]);
+    const loc = await restoreOp.get('/api/backup/restore/preview?runId=param-mx-local-gone&source=local');
+    assert.equal(loc.status, 404, `explicit local missing: ${JSON.stringify(loc.data)}`);
+    assert.equal(loc.data.code, 'restoreArchiveMissing');
+  } finally {
+    await server.stop();
+  }
+  const audits = withDb(path.join(dataDir, 'projects.db'), db2 =>
+    db2.prepare("select action, count(*) as n from audit_log where action like '%restoreSource%' or action = 'restore_refused:restoreArchiveMissing' group by action").all());
+  const byAction = Object.fromEntries(audits.map(a => [a.action, a.n]));
+  assert.ok(byAction['restore_refused:restoreSourceNotMirrored'] >= 1, 'preview GD-5 audited');
+  assert.ok(byAction['backup_download_refused:restoreSourceNotMirrored'] >= 1, 'download GD-5 audited');
+  assert.ok(byAction['backup_verify_refused:restoreSourceNotMirrored'] >= 1, 'verify GD-5 audited');
+  assert.ok(byAction['restore_refused:restoreArchiveMissing'] >= 1, 'explicit-local missing refusal audited');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+/* ---------------------------------------------------------------------
 
 /* ---------------------------------------------------------------------
    LOCALES (GD-7): both keys present ×5 in the SAME commit as the first

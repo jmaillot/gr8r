@@ -1389,12 +1389,12 @@ export async function resolveRestoreSource(rowLike, configs, opts = {}) {
   const localPath = opts.archivePath !== undefined
     ? opts.archivePath
     : (filename ? path.join(backupsRoot(), filename) : null);
-  /* Phase 104 (RSRC-02): explicit `source` override — the ENTIRE branch
-     sits behind the `opts.source !== undefined` guard so the default
-     path (local-first, registry order s3 > ftp > smb) is byte-identical
-     (R-5; the 16 goldens in test/restore-source-resolution.test.mjs
-     must stay green). Validated against the SAME flags the legs array
-     uses (flags ARE the truth, R-4 — no new truth source, D-23):
+  /* Phase 104 (RSRC-02): explicit `source` override — the default path
+     (local-first, registry order s3 > ftp > smb) is byte-identical when
+     opts.source is undefined (R-5; the 16 goldens in
+     test/restore-source-resolution.test.mjs must stay green). The
+     explicit path reuses the legs array's OWN gates (flags ARE the
+     truth, R-4 — no new truth source, D-23):
        - invalid enum value → reason 'sourceInvalid' (err.code stays the
          restoreArchiveMissing family — the golden contract; refusal
          ENVELOPE text stays at callers, never here);
@@ -1415,31 +1415,6 @@ export async function resolveRestoreSource(rowLike, configs, opts = {}) {
     if (requested !== 'local' && requested !== 's3' && requested !== 'ftp' && requested !== 'smb') {
       return { ok: false, dest: null, reason: 'sourceInvalid', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
     }
-    if (requested === 'local') {
-      if (localPath && fs.existsSync(localPath)) {
-        return { ok: true, dest: 'local', archivePath: localPath, stagedPath: null, sha256: null, localPath };
-      }
-      return { ok: false, dest: 'local', reason: 'missing', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
-    }
-    const flagOk = requested === 's3' ? uploaded === 1 : requested === 'ftp' ? ftp_uploaded === 1 : smb_uploaded === 1;
-    const legConfig = requested === 's3' ? configs.s3 : requested === 'ftp' ? configs.ftp : configs.smb;
-    if (!flagOk || !filename || !legConfig || typeof legConfig !== 'object') {
-      return { ok: false, dest: requested, reason: 'sourceNotMirrored', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
-    }
-    try {
-      const key = requested === 's3' ? s3BackupKey({ taskId }, filename) : `backup-task-${taskId}/${filename}`;
-      const back = await (requested === 's3' ? downloadToStaged : requested === 'ftp' ? fetchToStaged : fetchSmbToStaged)(legConfig, key, sha256, restoreStagingDir());
-      return { ok: true, dest: requested, archivePath: back.tmpPath, stagedPath: back.tmpPath, sha256: back.sha256 ?? null, localPath };
-    } catch (err) {
-      if (mirrorMissing(err)) await clearMirrorFlag(runId, requested);
-      return {
-        ok: false,
-        dest: requested,
-        reason: 'fetchFailed',
-        localPath,
-        err: { code: 'restoreArchiveMissing', detail: err?.code || err?.message || 'unknown', mirrorLost: mirrorMissing(err) ? requested : null, raw: err },
-      };
-    }
   }
   if (localPath && fs.existsSync(localPath)) {
     return { ok: true, dest: 'local', archivePath: localPath, stagedPath: null, sha256: null, localPath };
@@ -1452,12 +1427,49 @@ export async function resolveRestoreSource(rowLike, configs, opts = {}) {
     { dest: 'ftp', flag: ftp_uploaded === 1, config: configs.ftp },
     { dest: 'smb', flag: smb_uploaded === 1, config: configs.smb },
   ];
-  if (legs.every(leg => leg.flag !== true)) {
+  /* Phase 104 (RSRC-02): explicit `source` override — requested ≠ null
+     constrains the walk below to that ONE leg; the flag/config gate stays
+     the legs array's OWN (flags ARE the truth, R-4 — no new gate, no new
+     truth source, D-23). Semantics for the explicit path:
+       - invalid enum → 'sourceInvalid' (checked above, before local-first
+         — a bogus value never resolves ANYTHING);
+       - explicit 'local' with the file gone → 'missing' DIRECTLY (GD-2:
+         no registry walk, no mirror fall-through, Pitfall 6);
+       - requested leg flag ≠ 1 → 'sourceNotMirrored';
+       - requested leg flag = 1 but config absent → 'sourceNotMirrored'
+         REGARDLESS of disabledBehavior (GD-5: explicit-source + disabled
+         destination refuses everywhere — this resolves the documented 103
+         skip-mode divergence for the explicit-source case ONLY; the units
+         keep silent-skip for the DEFAULT path);
+       - the fetch rides the SAME dispatch, key derivations and
+         mirrorMissing → clearMirrorFlag contract as the default loop.
+     opts.source === undefined → requested stays null and EVERY branch
+     below is byte-identical to the pre-104 shape (R-5; the 16 goldens
+     in test/restore-source-resolution.test.mjs stay green). */
+  const requested = opts.source ?? null;
+  if (requested === 'local') {
+    /* the local-first block above already returned on success — here the
+       file is GONE and explicit local means local (GD-2). */
+    return { ok: false, dest: 'local', reason: 'missing', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+  }
+  const requestedLeg = requested !== null ? legs.find(leg => leg.dest === requested) : null;
+  if (requestedLeg) {
+    if (!requestedLeg.flag) {
+      return { ok: false, dest: requested, reason: 'sourceNotMirrored', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+    }
+  } else if (legs.every(leg => leg.flag !== true)) {
     return { ok: false, dest: null, reason: 'missing', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
   }
   for (const leg of legs) {
+    if (requestedLeg && leg.dest !== requested) continue; // explicit source: ONLY the requested leg is visited
     if (!leg.flag || !filename) continue;
     if (!leg.config || typeof leg.config !== 'object') {
+      if (requestedLeg) {
+        /* GD-5: an explicitly requested source whose destination is
+           disabled refuses in ALL sites — the skip-mode divergence is a
+           DEFAULT-path-only contract. */
+        return { ok: false, dest: leg.dest, reason: 'sourceNotMirrored', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+      }
       if (disabledBehavior === 'refuse') {
         return { ok: false, dest: leg.dest, reason: 'disabled', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
       }
@@ -1827,6 +1839,12 @@ export async function restoreOverwriteUnit(opts = {}) {
   if (src.ok) {
     archivePath = src.archivePath;
     stagedTmp = src.stagedPath;
+  } else if (src.reason === 'fetchFailed') {
+    dropStagedTmp();
+    const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
+      : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
+      : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
+    return failWith(keyed('restoreArchiveMissing', why));
   } else if (src.reason === 'sourceInvalid') {
     /* Phase 104 (RSRC-02): explicit-source refusals surface through the
        unit's OWN failWith funnel (never a raw throw past it — 89-05). */
@@ -1835,12 +1853,6 @@ export async function restoreOverwriteUnit(opts = {}) {
     /* GD-5: explicit+not-mirrored/disabled refuses even in skip mode —
        the helper returns the structured reason; the envelope stays HERE. */
     return failWith(keyed('restoreSourceNotMirrored', 'restore: that backup archive has no surviving copy at the requested source'));
-  } else if (src.reason === 'fetchFailed') {
-    dropStagedTmp();
-    const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
-      : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
-      : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
-    return failWith(keyed('restoreArchiveMissing', why));
   }
   if (!archivePath || !fs.existsSync(archivePath)) {
     return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
@@ -2550,6 +2562,12 @@ export async function restoreInstanceUnit(opts = {}) {
   if (src.ok) {
     archivePath = src.archivePath;
     stagedTmp = src.stagedPath;
+  } else if (src.reason === 'fetchFailed') {
+    dropStagedTmp();
+    const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
+      : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
+      : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
+    return failWith(keyed('restoreArchiveMissing', why));
   } else if (src.reason === 'sourceInvalid') {
     /* Phase 104 (RSRC-02): explicit-source refusal through failWith —
        the funnel releases the restore_lock (89-05 CR). */
@@ -2557,12 +2575,6 @@ export async function restoreInstanceUnit(opts = {}) {
   } else if (src.reason === 'sourceNotMirrored') {
     /* GD-5: explicit+not-mirrored/disabled refuses even in skip mode. */
     return failWith(keyed('restoreSourceNotMirrored', 'restore: that backup archive has no surviving copy at the requested source'));
-  } else if (src.reason === 'fetchFailed') {
-    dropStagedTmp();
-    const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
-      : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
-      : `restore: archive not retrievable — local missing and the SMB seam failed (${src.err.detail})`;
-    return failWith(keyed('restoreArchiveMissing', why));
   }
   if (!archivePath || !fs.existsSync(archivePath)) {
     return failWith(keyed('restoreArchiveMissing', 'restore: archive not found at the resolved path'));
