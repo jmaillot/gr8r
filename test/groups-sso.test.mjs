@@ -938,3 +938,188 @@ test('tracer: a mapped groups claim grants membership end-to-end with provenance
     await server.stop();
   }
 });
+
+/* ---------------- Phase 106 Plan 01 Task 2 — sweep arms (TEAM-03/07) ---------------- */
+
+/* (a) TEAM-ONLY sweep: a mapping is deleted → its team row is swept at the
+   next sign-in while the membership SURVIVES via the other mapping. */
+test('deleted mapping sweeps only its team row — membership survives via the surviving mapping (team-only sweep)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, {
+        id: 'ws-sw1',
+        slug: 'sw1ws',
+        name: 'SW1 WS',
+        teams: [{ id: 'team-a', name: 'A' }, { id: 'team-b', name: 'B' }],
+      });
+      seedMapping(db, { guid: '95111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw1', role: 'admin', teamId: 'team-a' });
+      seedMapping(db, { guid: '96111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw1', role: 'member', teamId: 'team-b' });
+    });
+    const { callback } = await runFlow(server, {
+      sub: 'sub-sw1',
+      email: 'sw1@example.com',
+      email_verified: true,
+      groups: ['95111111-2222-3333-4444-555555555555', '96111111-2222-3333-4444-555555555555'],
+    }, 'code-sw1-1');
+    assert.equal(callback.location, '/');
+    // The non-winner team mapping is deleted between logins.
+    withDb(server.dbPath, db => db.prepare('delete from group_mappings where group_guid = ?').run('96111111-2222-3333-4444-555555555555'));
+    const second = await runFlow(server, { sub: 'sub-sw1', email: 'sw1@example.com', email_verified: true, groups: ['95111111-2222-3333-4444-555555555555'] }, 'code-sw1-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw1@example.com').id;
+      const mem = db.prepare('select * from memberships where workspace_id = ?').get('ws-sw1');
+      assert.equal(mem.role, 'admin', 'the membership SURVIVES via the surviving mapping');
+      const teams = db.prepare('select team_id from team_members where workspace_id = ? and user_id = ?').all('ws-sw1', uid).map(t => t.team_id);
+      assert.deepEqual(teams, ['team-a'], 'only the deleted mapping’s team row was swept');
+      const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_team_removed%'").all(uid);
+      assert.equal(audits.length, 1);
+      assert.equal(audits[0].action, 'group_team_removed:group:96111111-2222-3333-4444-555555555555');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* (b) Mapping's team_id edited away → the same sweep; membership survives. */
+test('team_id edited away sweeps the team row at next sign-in — membership survives', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-sw2', slug: 'sw2ws', name: 'SW2 WS', teams: [{ id: 'team-a', name: 'A' }] });
+      seedMapping(db, { guid: '97111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw2', role: 'member', teamId: 'team-a' });
+    });
+    const claims = { sub: 'sub-sw2', email: 'sw2@example.com', email_verified: true, groups: ['97111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-sw2-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => db.prepare('update group_mappings set team_id = null where group_guid = ?').run('97111111-2222-3333-4444-555555555555'));
+    const second = await runFlow(server, claims, 'code-sw2-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw2@example.com').id;
+      assert.equal(db.prepare('select * from memberships where workspace_id = ?').get('ws-sw2').role, 'member', 'membership intact');
+      assert.equal(db.prepare('select count(*) as n from team_members where workspace_id = ? and user_id = ?').get('ws-sw2', uid).n, 0, 'the team row was swept');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* (c) TEAM-07 reconcile half: the team is deleted from the doc → the
+   group-stamped row is swept, the ROLE still grants, a group_team_skipped
+   audit row lands, and the logWarn carries no GUID/email (D-81-10). */
+test('doc-deleted team: row swept, role still granted, skip audit + PII-free warn (TEAM-07)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-sw3', slug: 'sw3ws', name: 'SW3 WS', teams: [{ id: 'team-a', name: 'A' }] });
+      seedMapping(db, { guid: '98111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw3', role: 'member', teamId: 'team-a' });
+    });
+    const claims = { sub: 'sub-sw3', email: 'sw3@example.com', email_verified: true, groups: ['98111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-sw3-1');
+    assert.equal(first.callback.location, '/');
+    // The team is deleted from the doc (the client A.delTeam dance skipped).
+    withDb(server.dbPath, db => {
+      const ws = db.prepare('select doc from workspaces where id = ?').get('ws-sw3');
+      const doc = JSON.parse(ws.doc);
+      doc.data.teams = [];
+      db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), 'ws-sw3');
+    });
+    const second = await runFlow(server, claims, 'code-sw3-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw3@example.com').id;
+      const mem = db.prepare('select * from memberships where workspace_id = ?').get('ws-sw3');
+      assert.equal(mem.role, 'member', 'the ROLE still grants (skip-still-grants)');
+      assert.equal(mem.provenance, 'group:98111111-2222-3333-4444-555555555555');
+      assert.equal(db.prepare('select count(*) as n from team_members where workspace_id = ? and user_id = ?').get('ws-sw3', uid).n, 0, 'the group-stamped row was swept');
+      const audits = db.prepare("select action from audit_log where actor_id = ? and action like 'group_team_skipped%'").all(uid);
+      assert.equal(audits.length, 1);
+      assert.equal(audits[0].action, 'group_team_skipped:group:98111111-2222-3333-4444-555555555555:dead-team');
+    });
+    const out = server.output();
+    assert.ok(out.includes('sso group team skipped — mapping team no longer in workspace'), 'the fixed dead-team warn is present');
+    assert.ok(!/98111111|sw3@example/.test(out.slice(out.indexOf('team skipped'))), 'no GUID or email in the warn (D-81-10)');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* (d) Manual/invite team rows (provenance null) survive every sweep arm. */
+test('manual team rows survive the sweep arms', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-sw4', slug: 'sw4ws', name: 'SW4 WS', teams: [{ id: 'team-a', name: 'A' }, { id: 'team-m', name: 'M' }] });
+      seedMapping(db, { guid: '99111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw4', role: 'member', teamId: 'team-a' });
+    });
+    const claims = { sub: 'sub-sw4', email: 'sw4@example.com', email_verified: true, groups: ['99111111-2222-3333-4444-555555555555'] };
+    const first = await runFlow(server, claims, 'code-sw4-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw4@example.com').id;
+      const mem = db.prepare('select member_id from memberships where workspace_id = ?').get('ws-sw4');
+      db.prepare('insert into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)').run('ws-sw4', 'team-m', mem.member_id, uid);
+    });
+    // Login 2 — same mapping (grant no-op) → sweep runs, manual row immune.
+    const second = await runFlow(server, claims, 'code-sw4-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw4@example.com').id;
+      const teams = db.prepare('select team_id, provenance from team_members where workspace_id = ? and user_id = ? order by team_id').all('ws-sw4', uid);
+      assert.deepEqual(teams.map(t => t.team_id), ['team-a', 'team-m'], 'the manual row survived the sweep');
+      assert.equal(teams[1].provenance, null, 'the manual row stays provenance-null');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* (e) Overage/unmapped login leaves team rows alone (SC5 — the cell lives
+   inside the mapped else-branch). */
+test('overage login leaves team rows alone (SC5)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-sw5', slug: 'sw5ws', name: 'SW5 WS', teams: [{ id: 'team-a', name: 'A' }] });
+      seedMapping(db, { guid: 'a0111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw5', role: 'member', teamId: 'team-a' });
+    });
+    const first = await runFlow(server, { sub: 'sub-sw5', email: 'sw5@example.com', email_verified: true, groups: ['a0111111-2222-3333-4444-555555555555'] }, 'code-sw5-1');
+    assert.equal(first.callback.location, '/');
+    const second = await runFlow(server, { sub: 'sub-sw5', email: 'sw5@example.com', email_verified: true, _claim_names: { groups: 'src1' } }, 'code-sw5-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw5@example.com').id;
+      const teams = db.prepare('select team_id, provenance from team_members where workspace_id = ? and user_id = ?').all('ws-sw5', uid);
+      assert.equal(teams.length, 1, 'the team row SURVIVES the overage login');
+      assert.equal(teams[0].provenance, 'group:a0111111-2222-3333-4444-555555555555');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* (f) GS-01 lost-claim removal still removes team rows via the blanket
+   delete — rows the sync cell just wrote included. */
+test('lost-claim removal purges the granted team row via the GS-01 blanket delete', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-sw6', slug: 'sw6ws', name: 'SW6 WS', teams: [{ id: 'team-a', name: 'A' }] });
+      seedMapping(db, { guid: 'a1111111-2222-3333-4444-555555555555', workspaceId: 'ws-sw6', role: 'member', teamId: 'team-a' });
+    });
+    const first = await runFlow(server, { sub: 'sub-sw6', email: 'sw6@example.com', email_verified: true, groups: ['a1111111-2222-3333-4444-555555555555'] }, 'code-sw6-1');
+    assert.equal(first.callback.location, '/');
+    withDb(server.dbPath, db => db.prepare('delete from group_mappings where group_guid = ?').run('a1111111-2222-3333-4444-555555555555'));
+    const second = await runFlow(server, { sub: 'sub-sw6', email: 'sw6@example.com', email_verified: true, groups: [] }, 'code-sw6-2');
+    assert.equal(second.callback.location, '/');
+    withDb(server.dbPath, db => {
+      const uid = db.prepare('select id from users where email = ?').get('sw6@example.com').id;
+      assert.equal(db.prepare('select count(*) as n from memberships where user_id = ?').get(uid).n, 0, 'the membership was removed (GS-01)');
+      assert.equal(db.prepare('select count(*) as n from team_members where user_id = ?').get(uid).n, 0, 'the granted team row was purged with it');
+    });
+  } finally {
+    await server.stop();
+  }
+});

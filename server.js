@@ -6885,10 +6885,46 @@ async function handleApi(req, res, url) {
             for (const m of mappings) {
               if (m.workspace_id !== wsId || !m.team_id) continue;
               if (!claimedSet.has(canonicalizeGuid(m.group_guid))) continue;
-              /* Dead-team mapping: the team left doc.data.teams — the GRANT
-                 skips, the mapping's ROLE grant below is untouched. */
-              if (!liveTeamIds.has(m.team_id)) continue;
+              /* Dead-team mapping (TEAM-07, reconcile half): the team left
+                 doc.data.teams — the GRANT skips, but the mapping's ROLE
+                 grant below is untouched (team rows never touch roles —
+                 PITFALLS §8). Skip = encoded audit row (matches the ~9151
+                 trail LIKE) + ONE fixed logWarn carrying no GUID and no
+                 email (D-81-10 PII posture). */
+              if (!liveTeamIds.has(m.team_id)) {
+                logWarn('sso group team skipped — mapping team no longer in workspace');
+                await db.tx(async () => {
+                  await db.run(
+                    'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                    [uid(), row.id, row.id, `group_team_skipped:group:${m.group_guid}:dead-team`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+                  );
+                });
+                continue;
+              }
               livePair.set(`${m.team_id}\u0000${m.group_guid}`, { teamId: m.team_id, guid: m.group_guid });
+            }
+            /* Removal sweep (TEAM-03): group-stamped team rows whose
+               (team, guid) pair left the live set — the guid is parsed from
+               the ROW's OWN provenance (T-82-01/T-82-02, never from claims).
+               The opportunistic doc-orphan sweep rides the same pass: a
+               team_id that is no longer in doc.data.teams is swept too
+               (TEAM-03, every sign-in, zero extra queries). Manual/invite
+               rows (provenance null or non-group) are structurally outside
+               this select — immune. Each deletion gets its own db.tx with
+               its encoded audit row (T-106-03). */
+            const stale = (await db.all("select team_id, provenance from team_members where workspace_id = ? and user_id = ? and provenance like 'group:%'", [wsId, row.id])).filter(r => {
+              const g = String(r.provenance).slice('group:'.length);
+              return !livePair.has(`${r.team_id}\u0000${g}`) || !liveTeamIds.has(r.team_id);
+            });
+            for (const r of stale) {
+              const guid = String(r.provenance).slice('group:'.length);
+              await db.tx(async () => {
+                await db.run('delete from team_members where workspace_id = ? and user_id = ? and team_id = ? and provenance = ?', [wsId, row.id, r.team_id, r.provenance]);
+                await db.run(
+                  'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+                  [uid(), row.id, row.id, `group_team_removed:group:${guid}`, 0, clientIp(req), wsId, row.name, row.email, row.name, row.email, now()],
+                );
+              });
             }
             const cellMemberId = existing?.member_id || (await memberIdFor(wsId, row));
             for (const { teamId, guid } of livePair.values()) {
