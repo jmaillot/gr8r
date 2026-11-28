@@ -2460,6 +2460,7 @@
   "page.restore.sourceStatChecking": "Archief wordt gecontroleerd…",
   "page.restore.sourceStatOk": "Archief aanwezig",
   "page.restore.sourceStatFail": "Controle mislukt",
+  "page.restore.initiatorLabel": "Getriggerd door",
   "page.backup.uploadRestore": "Een archief herstellen…",
   "page.backup.uploadingRestore": "Archief wordt geüpload…",
   "page.backup.uploadedRestore": "Archief geüpload — controleer het voordat je herstelt",

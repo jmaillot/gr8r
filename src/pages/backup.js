@@ -787,8 +787,11 @@ const restoreProgress = () => {
    under the same Type/Run/Trigger/Schedule/Status/Date headers. Run =
    final_name (verbatim, esc'd — the server owns the restore-name counter,
    D-89-13) with the skipped tables report and the expandable error kept
-   inside the Run cell; Trigger is an honest '—' (restores are always
-   operator-triggered). */
+   inside the Run cell; Trigger (CARRY-02, Phase 108) now shows the
+   operator's display name — resolved SERVER-SIDE via the runs GET left
+   join on users, esc()d here — with the honest '—' for legacy rows
+   (created_by null pre-column) or a best-effort writer miss. A raw uid
+   never renders. */
 const restoreRunTr = run => {
   const errOpen = S.ui.restoreRunErrOpen?.has(run.id);
   const startedMs = Number(run.started_at);
@@ -821,7 +824,7 @@ const restoreRunTr = run => {
   }`;
   return `<tr>
     <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>    <td>${runCell}</td>
-    <td class="faint">—</td>
+    <td class="faint" title="${t('page.restore.initiatorLabel')}">${run.created_by_name ? esc(String(run.created_by_name)) : '—'}</td>
     <td><span class="faint">—</span></td>
     <td><span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span></td>
     <td class="faint">${esc(when)}</td>

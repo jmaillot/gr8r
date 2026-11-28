@@ -2460,6 +2460,7 @@
   "page.restore.sourceStatChecking": "Checking archive…",
   "page.restore.sourceStatOk": "Archive present",
   "page.restore.sourceStatFail": "Stat failed",
+  "page.restore.initiatorLabel": "Triggered by",
   "page.backup.uploadRestore": "Restore an archive…",
   "page.backup.uploadingRestore": "Uploading the archive…",
   "page.backup.uploadedRestore": "Archive uploaded — review it before restoring",

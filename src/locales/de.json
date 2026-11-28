@@ -2460,6 +2460,7 @@
   "page.restore.sourceStatChecking": "Archiv wird geprüft…",
   "page.restore.sourceStatOk": "Archiv vorhanden",
   "page.restore.sourceStatFail": "Prüfung fehlgeschlagen",
+  "page.restore.initiatorLabel": "Ausgelöst von",
   "page.backup.uploadRestore": "Ein Archiv wiederherstellen…",
   "page.backup.uploadingRestore": "Archiv wird hochgeladen…",
   "page.backup.uploadedRestore": "Archiv hochgeladen — vor der Wiederherstellung prüfen",

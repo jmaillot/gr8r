@@ -126,7 +126,7 @@ test('restore empty/loading/history states mirror the backup card discipline', (
      name stays as the secondary hint. */
   const runTrSlice = pagesSrc.slice(pagesSrc.indexOf('const restoreRunTr ='), pagesSrc.indexOf('const restoreRunTr =') + 1800);
   assert.match(runTrSlice, /run\.archive_name/, 'the Run cell renders the restored archive filename');
-  assert.ok(read('server.js').includes('snapshot_tag, archive_name, error, started_at'), 'the runs select carries archive_name');
+  assert.ok(read('server.js').includes('r.archive_name, r.created_by, u.name as created_by_name'), 'the runs select carries archive_name (+ created_by / created_by_name via the CARRY-02 left join — pin extended, never weakened)');
   assert.ok(!/\.slice\(0, 50\)/.test(pagesSrc), 'no client-side 50 cap');
   assert.match(pagesSrc, /esc\(run\.error\)/, 'restore errors render through esc()');
   assert.match(pagesSrc, /restorePollKickAllowed\(\)/, 'the restore kick honors the WR-02 failure cooldown');
@@ -610,8 +610,34 @@ test('95-05: 5-locale parity for the project picker + overwrite keys', () => {
   assert.ok(pagesSrc.includes('page.restore.overwriteCta') && actionsSrc.includes('page.restore.overwriteConfirmTitle'), 'the new keys are consumed by the source, not just declared');
 });
 
-test('consideration-matrix tally — all 18 explicit rows are pinned by at least one cell', () => {
-  /* The tally lives IN this file and reads its own test names, so an edit
+/* =====================================================================
+   Phase 108 (CARRY-02, plan 108-02): run attribution render — the
+   restoreRunTr Trigger cell (previously a hardcoded '—') shows the
+   operator's display name esc()d; legacy rows (created_by_name null)
+   render '—' exactly as before. NEVER a raw uid. initiatorLabel lands
+   ×5 in one commit (Pitfall 7 parity).
+   ===================================================================== */
+test('108-02: the Trigger cell renders esc(run.created_by_name) with the honest legacy-— fallback; no raw uid', () => {
+  const cell = pagesSrc.slice(pagesSrc.indexOf('const restoreRunTr ='), pagesSrc.indexOf('const restoreRunTr =') + 2600);
+  assert.match(cell, /run\.created_by_name \? esc\(String\(run\.created_by_name\)\) : '—'/, 'the Trigger cell renders the esc()d display name with the legacy dash fallback');
+  assert.match(cell, /t\('page\.restore\.initiatorLabel'\)/, 'the cell consumes the initiatorLabel key (i18n-scan-visible)');
+  /* The pinned 89-06 runTr slice assertions above stay literal — the
+     additive ternary does not restructure the Run cell. */
+  assert.match(cell, /run\.archive_name/, 'the Run cell still leads with the source archive filename');
+  assert.match(pagesSrc, /esc\(run\.error\)/, 'the error render stays esc()d');
+});
+
+test('108-02: page.restore.initiatorLabel exists in all five locales (same-commit parity)', () => {
+  const sets = new Set();
+  for (const loc of ['en', 'fr', 'es', 'de', 'nl']) {
+    const cat = JSON.parse(read(`src/locales/${loc}.json`));
+    assert.ok(typeof cat['page.restore.initiatorLabel'] === 'string' && cat['page.restore.initiatorLabel'] !== '', `${loc} has a non-empty initiatorLabel`);
+    sets.add(Object.keys(cat).filter(k => k.startsWith('page.restore.')).sort().join('|'));
+  }
+  assert.equal(sets.size, 1, 'page.restore.* key sets stay identical across the five locales');
+});
+
+test('consideration-matrix tally — all 18 explicit rows are pinned by at least one cell', () => {  /* The tally lives IN this file and reads its own test names, so an edit
      that drops a pinned cell (or a row's last assertion cell) fails here. */
   const self = read('test/restore-client.test.mjs');
   const titles = [...self.matchAll(/^test\('([^']+)'/gm)].map(m => m[1]);

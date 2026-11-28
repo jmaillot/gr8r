@@ -2500,6 +2500,7 @@
   "page.restore.sourceStatChecking": "Vérification de l’archive…",
   "page.restore.sourceStatOk": "Archive présente",
   "page.restore.sourceStatFail": "Échec de la vérification",
+  "page.restore.initiatorLabel": "Déclenché par",
   "page.backup.uploadRestore": "Restaurer une archive…",
   "page.backup.uploadingRestore": "Envoi de l'archive…",
   "page.backup.uploadedRestore": "Archive envoyée — vérifie-la avant de restaurer",
