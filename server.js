@@ -4716,6 +4716,19 @@ function docTeamIds(doc) {
   }
 }
 
+/* Phase 106 (TEAM-08): the same whitelist extended to id→name — the GET list
+   route resolves team NAMES server-side in plain JS (json_extract is
+   SQLite-only and forbidden by pg parity; TEAM-MAPPING §2). Defensive parse
+   identical to docTeamIds: a doc failure yields an EMPTY map (missing-name
+   posture), never a throw. */
+function docTeamNames(doc) {
+  try {
+    return new Map((JSON.parse(doc)?.data?.teams || []).filter(t => t?.id).map(t => [t.id, t?.name || null]));
+  } catch {
+    return new Map();
+  }
+}
+
 /* Memberships joined with the account, in the order people joined. */
 async function membersOf(workspaceId) {
   return await db.all(
@@ -9201,7 +9214,7 @@ async function handleApi(req, res, url) {
     if (!isInstanceAdmin(operator)) return fail(res, 403, 'operatorOnly', 'Only the instance operator can do that');
     const rows = await db.all(`
       select gm.id, gm.group_guid, gm.workspace_id, gm.role, gm.kind, gm.label,
-             gm.created_at, gm.updated_at,
+             gm.team_id, gm.created_at, gm.updated_at,
              w.name as workspace_name, w.slug as workspace_slug,
              w.id is not null as ws_exists, w.archived as ws_archived,
              (select count(*) from memberships mm
@@ -9210,6 +9223,17 @@ async function handleApi(req, res, url) {
         from group_mappings gm
         left join workspaces w on w.id = gm.workspace_id
        order by gm.created_at desc`);
+    /* TEAM-08 (Phase 106): team-name resolution in server-side JS — one doc
+       parse per distinct live workspace carrying a team_id, into
+       Map<wsId, Map<teamId, name>>. NO json_extract (pg parity, Pitfall 5).
+       The liveMembers count above stays memberships-only exact-equality —
+       team rows never enter it (Pitfall 4). */
+    const teamWsIds = [...new Set(rows.filter(r => r.team_id && r.ws_exists && r.ws_archived !== 1).map(r => r.workspace_id))];
+    const teamMaps = new Map();
+    for (const wid of teamWsIds) {
+      const wr = await db.get('select doc from workspaces where id = ?', [wid]);
+      teamMaps.set(wid, docTeamNames(wr?.doc));
+    }
     return json(res, 200, {
       mappings: rows.map(r => ({
         id: r.id,
@@ -9219,6 +9243,9 @@ async function handleApi(req, res, url) {
         workspaceSlug: r.ws_exists ? r.workspace_slug : null,
         role: r.role,
         kind: r.kind,
+        teamId: r.team_id ?? null,
+        teamName: r.team_id && teamMaps.get(r.workspace_id)?.has(r.team_id) ? teamMaps.get(r.workspace_id).get(r.team_id) : null,
+        teamMissing: r.team_id != null && !teamMaps.get(r.workspace_id)?.has(r.team_id),
         label: r.label, // raw — Phase 102 esc()s (T-83-07); server stays dumb data (D-06)
         createdAt: r.created_at,
         updatedAt: r.updated_at,

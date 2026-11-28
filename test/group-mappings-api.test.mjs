@@ -674,3 +674,46 @@ test('POST teamId: valid team lands; unknown team → groupMappingTeamUnknown; t
     await server.stop();
   }
 });
+
+/* ---------- Phase 106 Task 3: GET team payload (TEAM-08 data contract for 107) ---------- */
+
+test('GET payload carries teamId/teamName/teamMissing: live-team row resolves the name, dead-team row flags missing, unset team stays null', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    setDocTeams(server, ws.id, [{ id: 'team-alpha', name: 'Alpha Team' }]);
+    const t = Date.now();
+    const ins = (id, guid, teamId) =>
+      withDb(server.dbPath, db =>
+        db.prepare('insert into group_mappings (id, group_guid, workspace_id, role, kind, team_id, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+          id, guid, ws.id, 'member', 'workspace', teamId, t, t,
+        ));
+    ins('gm-live-team', GUID_OK.toLowerCase(), 'team-alpha');   // live team → resolved name
+    ins('gm-dead-team', GUID_B, 'team-ghost');                  // team left the doc → teamMissing
+    ins('gm-no-team', '44444444-4444-4444-4444-444444444444', null); // unset → null/false
+
+    const res = await operator.get('/api/governance/group-mappings');
+    assert.equal(res.status, 200);
+    const byId = Object.fromEntries(res.data.mappings.map(r => [r.id, r]));
+    assert.deepEqual({ teamId: byId['gm-live-team'].teamId, teamName: byId['gm-live-team'].teamName, teamMissing: byId['gm-live-team'].teamMissing },
+      { teamId: 'team-alpha', teamName: 'Alpha Team', teamMissing: false }, 'live team resolves its server-side name');
+    assert.deepEqual({ teamId: byId['gm-dead-team'].teamId, teamName: byId['gm-dead-team'].teamName, teamMissing: byId['gm-dead-team'].teamMissing },
+      { teamId: 'team-ghost', teamName: null, teamMissing: true }, 'a doc-deleted team flags teamMissing with a null name');
+    assert.deepEqual({ teamId: byId['gm-no-team'].teamId, teamName: byId['gm-no-team'].teamName, teamMissing: byId['gm-no-team'].teamMissing },
+      { teamId: null, teamName: null, teamMissing: false }, 'unset team is null across the board');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('locale parity: the three Phase 106 refusal keys exist in ALL 5 catalogues (GD-7 same-commit rule)', () => {
+  const files = ['en', 'de', 'es', 'fr', 'nl'];
+  const keys = ['err.groupMappingImmutable', 'err.groupMappingTeamUnknown', 'err.groupMappingDead'];
+  for (const f of files) {
+    const cat = JSON.parse(fs.readFileSync(new URL(`../src/locales/${f}.json`, import.meta.url), 'utf8'));
+    for (const k of keys) {
+      assert.ok(typeof cat[k] === 'string' && cat[k].length > 0, `${f}.json carries ${k}`);
+    }
+  }
+});
