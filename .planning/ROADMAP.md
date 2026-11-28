@@ -68,7 +68,7 @@ Plans:
 **Depends on:** 106 (edit route + team fields). **Plans:** 1 plan
 
 Plans:
-- [ ] 107-01-PLAN.md — Three table sections + edit modal + usage log + team picker + TEAM-08 clause (tracer-first, 3 tasks)
+- [x] 107-01-PLAN.md — Three table sections + edit modal + usage log + team picker + TEAM-08 clause (tracer-first, 3 tasks) — DONE 2026-11-28 (commits 40a73fc0/90632c95/59cd3471; 2814 tests / 2 documented failures)
 
 ---
 
