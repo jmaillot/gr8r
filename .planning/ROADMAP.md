@@ -45,7 +45,7 @@
 
 Plans:
 - [x] 106-01-PLAN.md — DDL lockstep + SSO reconcile team sync cell (grant/sweep/dead-team skip) + TEAM-04 PUT narrowing + team-deleted orphan machinery (TEAM-01..07)
-- [ ] 106-02-PLAN.md — PATCH edit route + POST/GET team validation + refusal keys ×5 locales (TEAM-08, EDIT-01/02)
+- [x] 106-02-PLAN.md — PATCH edit route + POST/GET team validation + refusal keys ×5 locales (TEAM-08, EDIT-01/02)
 
 ---
 
