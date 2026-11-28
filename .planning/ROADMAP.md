@@ -73,4 +73,4 @@ Plans:
 
 **Depends on:** none (disjoint files from 111/112 — .planning docs only).
 **Plans:**
-- [ ] 113-01-PLAN.md — Flake documented-as-known-flake (test comments + PROJECT.md annotation, HK-03/R-16) + STATE.md v3.6→v3.9 drift fix (HK-04)
+- [x] 113-01-PLAN.md — Flake documented-as-known-flake (test comments + PROJECT.md annotation, HK-03/R-16) + STATE.md v3.6→v3.9 drift fix (HK-04)

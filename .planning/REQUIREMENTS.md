@@ -31,8 +31,8 @@
 
 ### Housekeeping (Phase 113 — rides parallel)
 
-- [ ] **HK-03**: v3.3-era scheduler/load flake documented per R-16 — test-file comment at the known-flake family + PROJECT.md deferred-items annotation ("documented-known-flake, runner serialization parked as future housekeeping"); zero behavior change.
-- [ ] **HK-04**: STATE.md header drift fixed (says v3.6 — auto-refresh at milestone intake); optional PROJECT.md:90 annotation; no other wording residue (ROADMAP clean, seeds marked — verified by research).
+- [x] **HK-03**: v3.3-era scheduler/load flake documented per R-16 — test-file comment at the known-flake family + PROJECT.md deferred-items annotation ("documented-known-flake, runner serialization parked as future housekeeping"); zero behavior change.
+- [x] **HK-04**: STATE.md header drift fixed (says v3.6 — auto-refresh at milestone intake); optional PROJECT.md:90 annotation; no other wording residue (ROADMAP clean, seeds marked — verified by research).
 
 ## Requirement → phase map
 
