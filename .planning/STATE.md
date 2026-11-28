@@ -26,7 +26,7 @@ progress:
 
 ## Current Position
 
-- **Phase:** 111 — complete (1/1 plans; 112/113 in flight)
+- **Phase:** 112 — 112-01 complete (1/1 plans; 113 in flight)
 - **Status:** Milestone v3.8 complete — audit passed (6/6 requirements, E2E verified, owner-change integrated), archived
 - **Progress:** ▰▰▰▰▰ 109 · ▰▰▰▰▰ 110 · ▰▰▰▰▰ 111
 
@@ -71,7 +71,7 @@ progress:
 ## Session Continuity
 
 **Last session:** 2026-11-28T13:55:03.465Z
-**Stopped at:** Completed 108-02-PLAN.md — Phase 108 done, milestone-closeout ready
+**Stopped at:** Completed 112-01-PLAN.md — all 6 settings lists on perm-t; pins net-zero
 **Resume file:** None
 
 - **Last action:** v3.6 roadmap created (Phases 101–105) with 100% requirement coverage; REQUIREMENTS.md traceability filled.

@@ -24,10 +24,10 @@
 
 ### Settings unification (Phase 112 — client-only, larger)
 
-- [ ] **SET-01**: the 6 data lists convert to perm-t per R-14: Sessions (:860–866), API keys (:811–820), Projects active/archived (:460/:483), push devices, tfa factors, members. Preference/toggle rows keep srow (R-17).
-- [ ] **SET-02**: When columns from served fields (lastSeenAt/expiresAt for sessions; lastUsedAt/createdAt for keys; etc.). Members ship without a When column if the joined-date field isn't already served (never a payload extension).
-- [ ] **SET-03**: settings-client.test.mjs literal regex pins (:56–58, :97–101) updated same-commit with the markup; one data-a per markup occurrence preserved — verify counts, annotate same-commit if any shift.
-- [ ] **SET-04**: new page.settings.* keys ×5 same commit (headers/When labels); settings.audit.* removal already clean.
+- [x] **SET-01**: the 6 data lists convert to perm-t per R-14: Sessions (:860–866), API keys (:811–820), Projects active/archived (:460/:483), push devices, tfa factors, members. Preference/toggle rows keep srow (R-17).
+- [x] **SET-02**: When columns from served fields (lastSeenAt/expiresAt for sessions; lastUsedAt/createdAt for keys; etc.). Members ship without a When column if the joined-date field isn't already served (never a payload extension).
+- [x] **SET-03**: settings-client.test.mjs literal regex pins (:56–58, :97–101) updated same-commit with the markup; one data-a per markup occurrence preserved — verify counts, annotate same-commit if any shift.
+- [x] **SET-04**: new page.settings.* keys ×5 same commit (headers/When labels); settings.audit.* removal already clean.
 
 ### Housekeeping (Phase 113 — rides parallel)
 
