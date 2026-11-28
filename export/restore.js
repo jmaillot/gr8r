@@ -1331,6 +1331,121 @@ export async function clearMirrorFlag(runId, dest) {
   }
 }
 
+/* ---- Plan 103-02 (R-5): THE single-source restore ladder ----
+   resolveRestoreSource owns, ONCE, what the six ladder sites duplicated
+   (preview/download/verify-checksum routes + overwrite/runRestore/instance
+   units — the ladder already drifted once, 2026-11-27 UAT):
+
+     1. local-first selection: the archive on disk wins before any mirror
+        leg (D-88-16 ordering, now pinned in one place);
+     2. registry-order mirror legs s3 > ftp > smb (D-04), gated on the
+        run's mirror flag === 1 AND a present config (D-05 boot-frozen
+        seam — callers pass `S3.enabled ? S3.config() : null` / the units'
+        opts configs; flags-are-truth, R-4);
+     3. the staged fetch through the existing seams (downloadToStaged /
+        fetchToStaged / fetchSmbToStaged — 88-01/97/99 clients) with the
+        exact key derivations the upload arms built (D-88-6/98-01/100-02:
+        task-prefix + filename). sha256 stays seam-enforced — never
+        re-verified here;
+     4. mirror-truth maintenance (UAT 2026-11-27 owner ruling, mirrored
+        from clearMirrorFlag's doctrine): a live fetch that proves the
+        object GONE clears that leg's mirror flag via mirrorMissing →
+        clearMirrorFlag — best-effort, never masking the seam error.
+
+   It does NOT own: responses, audit tokens, sha-mismatch interpretation
+   (the verify route's ok=false RESULT semantics), temp cleanup (D-89-16
+   rm-finally contracts stay with the callers), or the restore-lock /
+   failWith funnel (89-05). Callers rebuild their own refusal envelopes
+   from the structured result:
+
+     { ok: true,  dest: 'local'|'s3'|'ftp'|'smb', archivePath, stagedPath,
+       sha256, localPath }
+     { ok: false, dest: <dest|null>, reason: 'disabled'|'missing'|'fetchFailed',
+       localPath, err: { code: 'restoreArchiveMissing', detail, mirrorLost, raw } }
+
+   The ONE structural branch — opts.disabledBehavior — encodes the
+   documented divergence, it does not unify it:
+     - 'refuse' (routes): a set flag with no configured destination is a
+       keyed-404 posture — result reason 'disabled', caller answers
+       "lives in X but no X destination is configured";
+     - 'skip' (units): the leg silently falls through to the next leg
+       (today's silent-skip; the terminal stays the unit's own).
+
+   Row-shape normalization (pitfall 6, research): routes pass the db row
+   (task_id/id), units pass backupRun (taskId) + runId in opts — accepted
+   explicitly, never guessed. opts.archivePath (units' override) replaces
+   the local derivation when provided. */
+export async function resolveRestoreSource(rowLike, configs, opts = {}) {
+  const disabledBehavior = opts.disabledBehavior === 'skip' ? 'skip' : 'refuse';
+  const taskId = rowLike.task_id ?? rowLike.taskId;
+  const runId = rowLike.id ?? opts.runId;
+  const filename = rowLike.filename;
+  const sha256 = rowLike.sha256;
+  const uploaded = rowLike.uploaded;
+  const ftp_uploaded = rowLike.ftp_uploaded;
+  const smb_uploaded = rowLike.smb_uploaded;
+  /* local-first: the on-disk archive wins (D-88-16) — no staged temp is
+     created when it resolves (D-89-16 parity). */
+  const localPath = opts.archivePath !== undefined
+    ? opts.archivePath
+    : (filename ? path.join(backupsRoot(), filename) : null);
+  if (localPath && fs.existsSync(localPath)) {
+    return { ok: true, dest: 'local', archivePath: localPath, stagedPath: null, sha256: null, localPath };
+  }
+  /* Registry order s3 > ftp > smb (D-04) — pinned HERE once; every caller
+     shares this ordering. Each leg gates on the mirror flag === 1
+     (flags-are-truth, R-4) AND a present config (D-05 boot-frozen seam). */
+  const legs = [
+    { dest: 's3', flag: uploaded === 1, config: configs.s3 },
+    { dest: 'ftp', flag: ftp_uploaded === 1, config: configs.ftp },
+    { dest: 'smb', flag: smb_uploaded === 1, config: configs.smb },
+  ];
+  if (legs.every(leg => leg.flag !== true)) {
+    return { ok: false, dest: null, reason: 'missing', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+  }
+  for (const leg of legs) {
+    if (!leg.flag || !filename) continue;
+    if (!leg.config || typeof leg.config !== 'object') {
+      if (disabledBehavior === 'refuse') {
+        return { ok: false, dest: leg.dest, reason: 'disabled', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+      }
+      /* the units' documented silent-skip divergence (Plan 103-01 scope
+         ruling): a disabled destination's leg falls through — the terminal
+         stays the unit's own. */
+      continue;
+    }
+    try {
+      const back = leg.dest === 's3'
+        ? await downloadToStaged(leg.config, s3BackupKey({ taskId }, filename), sha256, restoreStagingDir())
+        : leg.dest === 'ftp'
+          ? await fetchToStaged(leg.config, `backup-task-${taskId}/${filename}`, sha256, restoreStagingDir())
+          : await fetchSmbToStaged(leg.config, `backup-task-${taskId}/${filename}`, sha256, restoreStagingDir());
+      return { ok: true, dest: leg.dest, archivePath: back.tmpPath, stagedPath: back.tmpPath, sha256: back.sha256 ?? null, localPath };
+    } catch (err) {
+      /* UAT 2026-11-27 (owner ruling): a live fetch proving the object gone
+         clears the mirror flag — the badge re-resolves honestly. 2026-11-27
+         UAT transport ruling: a TRANSPORT failure inside a staged fetch
+         (DSM throttle, connection reset, fid churn) is a keyed 404 at the
+         route callers — never a bare throw → 500. The owner-visible detail
+         rides err.detail (`err?.code || err?.message || 'unknown'`). The
+         raw seam error rides err.raw for the verify route's mismatch
+         classification (ok=false RESULT semantics — never flattened). */
+      if (mirrorMissing(err)) await clearMirrorFlag(runId, leg.dest);
+      return {
+        ok: false,
+        dest: leg.dest,
+        reason: 'fetchFailed',
+        localPath,
+        err: { code: 'restoreArchiveMissing', detail: err?.code || err?.message || 'unknown', mirrorLost: mirrorMissing(err) ? leg.dest : null, raw: err },
+      };
+    }
+  }
+  /* every flagged leg skipped (disabled, skip mode) — the caller's own
+     terminal applies (units: "archive not found at the resolved path" /
+     "at either destination"). */
+  return { ok: false, dest: null, reason: 'missing', localPath, err: { code: 'restoreArchiveMissing', detail: null, mirrorLost: null, raw: null } };
+}
+
 async function dbRunAudit(action, operator, runId, targetName, workspaceId) {
   await dbRun(
     'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
