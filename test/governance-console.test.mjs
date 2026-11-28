@@ -101,7 +101,7 @@ test('the candidate search floors at 2 chars, filters on name AND email lowercas
   );
   assert.match(r, /matches\.filter\(u => !u\.is_instance_admin\)/, 'admin matches are not excluded from the candidates block');
   // candidate rows carry ONLY the promote action
-  const cand = r.match(/const candRow = u =>[\s\S]*?\n      \);/);
+  const cand = r.match(/const candRow = u =>[\s\S]*?\n    <\/tr>`;/);
   assert.ok(cand, 'candRow not found');
   assert.match(cand[0], /data-a="operatorPromote"/, 'the candidate row lost the promote CTA');
   assert.doesNotMatch(cand[0], /operatorRevoke/, 'a revoke-sessions control leaked onto a candidate row (seed constraint)');
@@ -137,7 +137,7 @@ test('zero matches and an empty roster render through the keyed empty states (D-
 /* (8) the query echo renders through esc() on the candidate side too */
 test('candidate payload strings render through esc() and the query echo never interpolates raw (T-79-10 backstop)', () => {
   const r = rosterView();
-  const cand = r.match(/const candRow = u =>[\s\S]*?\n      \);/);
+  const cand = r.match(/const candRow = u =>[\s\S]*?\n    <\/tr>`;/);
   assert.ok(cand, 'candRow not found');
   assert.match(cand[0], /\$\{esc\(u\.name \|\| ''\)\}/, 'the candidate name cell lost esc()');
   assert.match(cand[0], /\$\{esc\(u\.email \|\| ''\)\}/, 'the candidate email cell lost esc()');
@@ -149,7 +149,7 @@ test('candidate payload strings render through esc() and the query echo never in
 /* esc() discipline: the roster row interpolations never render raw payload strings */
 test('roster payload strings render through esc() (T-79-10 backstop)', () => {
   const r = rosterView();
-  const row = r.match(/const rosterRow = u =>[\s\S]*?\n    \);/);
+  const row = r.match(/const rosterRow = u =>[\s\S]*?\n  <\/tr>`;/);
   assert.ok(row, 'rosterRow not found');
   assert.match(row[0], /\$\{esc\(u\.name \|\| ''\)\}/, 'the roster name cell lost esc()');
   assert.match(row[0], /\$\{esc\(u\.email\)\}/, 'the roster email cell lost esc()');
@@ -163,11 +163,11 @@ test('roster payload strings render through esc() (T-79-10 backstop)', () => {
    backstop used elsewhere. */
 test('console roster + candidate rows carry title= on their truncating cells (90-UAT item 3)', () => {
   const r = rosterView();
-  const row = r.match(/const rosterRow = u =>[\s\S]*?\n    \);/);
+  const row = r.match(/const rosterRow = u =>[\s\S]*?\n  <\/tr>`;/);
   assert.ok(row, 'rosterRow not found');
   assert.match(row[0], /title="\$\{esc\(u\.name \|\| ''\)\}"/, 'the roster name cell lost title=');
   assert.match(row[0], /title="\$\{esc\(u\.email\)\}"/, 'the roster email cell lost title=');
-  const cand = r.match(/const candRow = u =>[\s\S]*?\n      \);/);
+  const cand = r.match(/const candRow = u =>[\s\S]*?\n    <\/tr>`;/);
   assert.ok(cand, 'candRow not found');
   assert.match(cand[0], /title="\$\{esc\(u\.name \|\| ''\)\}"/, 'the candidate name cell lost title=');
   assert.match(cand[0], /title="\$\{esc\(u\.email \|\| ''\)\}"/, 'the candidate email cell lost title=');

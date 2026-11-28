@@ -2393,6 +2393,7 @@
   "err.backupPickProject": "Wähle zuerst ein Projekt für die Sicherung",
   "page.governance.rolesGrant": "Rolle vergeben",
   "page.governance.rolesColUser": "Benutzer",
+  "page.governance.superColWhen": "Letzte Anmeldung",
   "page.governance.rolesColGrants": "Zuteilungen",
   "page.governance.rolesColGranted": "Vergeben am",
   "page.governance.rolesEmptyTitle": "Noch keine Instanz-Rollen vergeben",

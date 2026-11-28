@@ -2433,6 +2433,7 @@
   "err.backupPickProject": "Choisissez un projet à sauvegarder",
   "page.governance.rolesGrant": "Attribuer un rôle",
   "page.governance.rolesColUser": "Utilisateur",
+  "page.governance.superColWhen": "Dernière connexion",
   "page.governance.rolesColGrants": "Attributions",
   "page.governance.rolesColGranted": "Attribué le",
   "page.governance.rolesEmptyTitle": "Aucun rôle d’instance attribué",

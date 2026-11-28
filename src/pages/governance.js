@@ -22,7 +22,6 @@ import { api } from '../core/api.js';
 import { t } from '../core/i18n.js';
 import { av, empty } from '../ui/helpers.js';
 import { ROUTE_TEARDOWN } from '../shell/render.js';
-import { srow } from './settings.js';
 import { refreshGovernanceWorkspaces, refreshInstanceRoles, refreshOperatorUsers } from '../actions/actions.js';
 
 /* The four fullstates are verbatim dashboard.js:84-87 shapes: 403 → lock
@@ -167,23 +166,29 @@ function superRosterView() {
   if (!all) return '';
   const meId = api.user?.id;
   const admins = all.filter(u => u.is_instance_admin);
-  const rosterRow = u =>
-    srow(
-      `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom" title="${esc(u.name || '')}">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom" title="${esc(u.email)}">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span>`,
-      u.last_login_at ? ago(u.last_login_at) : '—',
-      S.ui.operatorRevoke === u.id
+  /* 109-01 (GOV-01): the srow cards → the v3.7 perm-t table idiom (the
+     mappings.js recipe) — container restyle ONLY: roster-first (above),
+     promote-only candidates, 2-char floor, cap-note (D-90-4) all carry
+     over untouched. Four columns: User / When (last sign-in) / gutter. */
+  const rosterRow = u => `<tr>
+    <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom" title="${esc(u.name || '')}">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom" title="${esc(u.email)}">${esc(u.email)}</span>${u.id === meId ? `<span class="badge green">${t('settings.operator.youBadge')}</span>` : ''}${u.is_instance_admin ? `<span class="badge">${t('settings.operator.ownerBadge')}</span>` : ''}</span></td>
+    <td><span class="faint">${u.last_login_at ? ago(u.last_login_at) : '—'}</span></td>
+    <td><span class="row" style="gap:8px;justify-content:flex-end">${S.ui.operatorRevoke === u.id
         ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorRevokeConfirm" data-id="${esc(u.id)}">${t('settings.operator.confirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeCancel">${t('common.cancel')}</button></span>`
         : S.ui.operatorDemote === u.id
           ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.operator.demoteConfirmBody')}</span><button class="btn btn-danger btn-sm" data-a="operatorDemote" data-id="${esc(u.id)}">${t('settings.operator.demoteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="operatorDemoteCancel">${t('common.cancel')}</button></span>`
           : u.is_instance_admin
             ? `<span class="row" style="gap:8px"><span class="hint">${u.id === meId ? t('settings.operator.selfNote') : t('settings.operator.ownerImmune')}</span><button class="btn btn-secondary btn-sm" data-a="operatorDemoteAsk" data-id="${esc(u.id)}">${t('settings.operator.demoteShort')}</button></span>`
-            : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`,
-    );
+            : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button><button class="btn btn-secondary btn-sm" data-a="operatorRevokeAsk" data-id="${esc(u.id)}">${t('settings.operator.revokeShort')}</button></span>`
+      }</span></td>
+  </tr>`;
   const search = `<div class="row" style="margin-bottom:10px;gap:8px;flex-wrap:wrap"><div class="inwrap">${ic('search', 13)}<input class="input search-sm" id="gov-op-q" data-in="govOpQ" placeholder="${t('page.governance.searchOp')}" value="${esc(S.ui.govOpQ || '')}" aria-label="${t('page.governance.searchOp')}"></div></div>`;
   /* D-90-3: the persistent threshold hint — no nag chrome, it explains the
      2-character floor once, always visible below the input. */
   const hint = `<p class="hint" style="margin:0 0 10px">${t('page.governance.superSearchHint')}</p>`;
-  const roster = `<div class="panel">${admins.length ? admins.map(rosterRow).join('') : empty('users', t('page.governance.superRosterEmptyTitle'), t('page.governance.superRosterEmptyBody'), '', 'sm', 1)}</div>`;
+  const roster = `<div class="panel" style="overflow-x:auto">${admins.length
+    ? `<table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.superColWhen')}</th><th></th></tr></thead><tbody>${admins.map(rosterRow).join('')}</tbody></table>`
+    : empty('users', t('page.governance.superRosterEmptyTitle'), t('page.governance.superRosterEmptyBody'), '', 'sm', 1)}</div>`;
   /* D-90-3: the search floor is 2 characters — below it ONLY the roster
      renders (no candidates block at all). At/above it the PINNED filter
      expression (name OR email, lowercase substring — the govOpQ idiom)
@@ -198,12 +203,11 @@ function superRosterView() {
   if (q.length >= 2) {
     const matches = all.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
     const candidates = matches.filter(u => !u.is_instance_admin);
-    const candRow = u =>
-      srow(
-        `<span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom" title="${esc(u.name || '')}">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom" title="${esc(u.email || '')}">${esc(u.email || '')}</span></span>`,
-        u.last_login_at ? ago(u.last_login_at) : '—',
-        `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button></span>`,
-      );
+    const candRow = u => `<tr>
+      <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:260px;vertical-align:bottom" title="${esc(u.name || '')}">${esc(u.name || '')}</span><span class="faint trunc" style="display:inline-block;max-width:220px;vertical-align:bottom" title="${esc(u.email || '')}">${esc(u.email || '')}</span></span></td>
+      <td><span class="faint">${u.last_login_at ? ago(u.last_login_at) : '—'}</span></td>
+      <td><span class="row" style="gap:8px;justify-content:flex-end"><button class="btn btn-secondary btn-sm" data-a="operatorPromote" data-id="${esc(u.id)}">${t('settings.operator.promote')}</button></span></td>
+    </tr>`;
     /* D-90-4: cap 10 + show-more (+10 per click) — the cap note is ALWAYS
        visible above the list so the cap itself is visible; the slice
        counter resets when the query changes (IN.govOpQ). No infinite
@@ -211,7 +215,7 @@ function superRosterView() {
     const shown = S.ui.govSuperShown || 10;
     const slice = candidates.slice(0, shown);
     candidatesHtml = `<div style="margin-top:12px"><div class="label">${t('page.governance.superMatchCount', { query: esc(qRaw), n: String(candidates.length) })}</div>${candidates.length
-      ? `<div class="hint" style="margin:4px 0 8px">${t('page.governance.superCapNote', { shown: String(Math.min(shown, candidates.length)), total: String(candidates.length) })}</div><div class="panel">${slice.map(candRow).join('')}</div>${candidates.length > shown ? `<div class="row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" data-a="govSuperMore">${t('page.governance.superShowMore')}</button></div>` : ''}`
+      ? `<div class="hint" style="margin:4px 0 8px">${t('page.governance.superCapNote', { shown: String(Math.min(shown, candidates.length)), total: String(candidates.length) })}</div><div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.superColWhen')}</th><th></th></tr></thead><tbody>${slice.map(candRow).join('')}</tbody></table></div>${candidates.length > shown ? `<div class="row" style="margin-top:8px"><button class="btn btn-secondary btn-sm" data-a="govSuperMore">${t('page.governance.superShowMore')}</button></div>` : ''}`
       : empty('search', t('page.governance.superNoMatchesTitle'), t('page.governance.superNoMatchesBody', { query: esc(qRaw) }), '', 'sm', 1)}</div>`;
   }
   return `${search}${hint}${roster}${candidatesHtml}`;

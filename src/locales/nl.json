@@ -2393,6 +2393,7 @@
   "err.backupPickProject": "Kies eerst een project om een back-up van te maken",
   "page.governance.rolesGrant": "Rol toekennen",
   "page.governance.rolesColUser": "Gebruiker",
+  "page.governance.superColWhen": "Laatste aanmelding",
   "page.governance.rolesColGrants": "Toekenningen",
   "page.governance.rolesColGranted": "Toegekend op",
   "page.governance.rolesEmptyTitle": "Nog geen instantierollen toegekend",

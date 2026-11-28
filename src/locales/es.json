@@ -2393,6 +2393,7 @@
   "err.backupPickProject": "Elige primero un proyecto del que hacer copia",
   "page.governance.rolesGrant": "Conceder rol",
   "page.governance.rolesColUser": "Usuario",
+  "page.governance.superColWhen": "Último inicio de sesión",
   "page.governance.rolesColGrants": "Concesiones",
   "page.governance.rolesColGranted": "Concedido el",
   "page.governance.rolesEmptyTitle": "Aún no hay roles de instancia concedidos",

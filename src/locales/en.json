@@ -2393,6 +2393,7 @@
   "err.backupPickProject": "Pick a project to back up first",
   "page.governance.rolesGrant": "Grant role",
   "page.governance.rolesColUser": "User",
+  "page.governance.superColWhen": "Last sign-in",
   "page.governance.rolesColGrants": "Grants",
   "page.governance.rolesColGranted": "Granted",
   "page.governance.rolesEmptyTitle": "No instance roles granted yet",
