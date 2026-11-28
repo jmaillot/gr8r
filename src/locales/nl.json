@@ -2247,6 +2247,8 @@
   "page.backup.summaryWeekly": "Elke week op {day} om {time}",
   "page.backup.summaryMonthly": "Op dag {dom} van elke maand om {time}",
   "page.backup.summaryYearly": "Elk jaar op dag {dom} om {time}",
+  "page.backup.colRun": "Uitvoering",
+  "page.backup.colInitiator": "Initiator",
   "page.backup.colTask": "Taak",
   "page.backup.colScope": "Bereik",
   "page.backup.colSchedule": "Planning",

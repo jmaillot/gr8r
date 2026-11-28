@@ -2247,6 +2247,8 @@
   "page.backup.summaryWeekly": "Jede Woche am {day} um {time}",
   "page.backup.summaryMonthly": "Am Tag {dom} jedes Monats um {time}",
   "page.backup.summaryYearly": "Jedes Jahr am Tag {dom} um {time}",
+  "page.backup.colRun": "Ausführung",
+  "page.backup.colInitiator": "Initiator",
   "page.backup.colTask": "Aufgabe",
   "page.backup.colScope": "Bereich",
   "page.backup.colSchedule": "Zeitplan",

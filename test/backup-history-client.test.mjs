@@ -164,6 +164,7 @@ test('5-locale key parity for every 87-04 backup page key', () => {
     'page.backup.statusInterrupted', 'page.backup.statusSkippedOverlap', 'page.backup.statusDeleted', 'page.backup.statusUnknown',
     'page.backup.triggerManual', 'page.backup.triggerScheduled', 'page.backup.triggerUnknown',
     'page.backup.summaryYearly', 'page.backup.colTask', 'page.backup.colScope', 'page.backup.colSchedule',
+    'page.backup.colRun', 'page.backup.colInitiator',
     'page.backup.colLastRun', 'page.backup.checksumWarn', 'page.backup.retentionLabel', 'page.backup.customScheduleHint',
     'page.backup.filterAll', 'page.backup.filterTrigger', 'page.backup.filterStatus', 'page.backup.historyManualEntry',
     'page.backup.historyManualHint', 'page.backup.historyPrev', 'page.backup.historyNext', 'page.backup.historyColType',

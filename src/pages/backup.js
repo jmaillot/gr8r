@@ -262,6 +262,7 @@ const historyTr = run => {
     <td style="padding-left:14px">${typeBadge}</td>
     <td>${runCell}</td>
     <td class="faint">${t(RUN_TRIGGER_KEYS[run.trigger] || 'page.backup.triggerUnknown')}</td>
+    <td><span class="faint">—</span></td>
     <td>${scheduleCell}</td>
     <td>${statusCell}</td>
     <td class="faint">${esc(when)}</td>
@@ -317,7 +318,7 @@ const historySblock = flags => {
     : h.err
       ? `<div class="faint" style="padding:8px 0">${t('page.backup.historyUnavailable')}</div>`
       : merged.length
-        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t hist-t" style="min-width:820px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th>${t('page.backup.colTask')}</th><th>${t('page.backup.filterTrigger')}</th><th>${t('page.backup.scheduleCol')}</th><th>${t('page.backup.filterStatus')}</th><th>${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${merged.map(m => m.row).join('')}</tbody></table></div>`
+        ? `<div class="panel" style="overflow-x:auto"><table class="perm-t hist-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.backup.historyColType')}</th><th>${t('page.backup.colRun')}</th><th>${t('page.backup.filterTrigger')}</th><th>${t('page.backup.colInitiator')}</th><th>${t('page.backup.scheduleCol')}</th><th>${t('page.backup.filterStatus')}</th><th>${t('page.backup.historyDateCol')}</th><th></th></tr></thead><tbody>${merged.map(m => m.row).join('')}</tbody></table></div>`
         : `<div class="faint" style="padding:8px 0">${t('page.backup.historyEmpty')}</div>`;
   return `<div id="backupHistorySblock" style="margin-top:16px">
     <div class="row" style="gap:8px;align-items:baseline">
@@ -783,8 +784,12 @@ const restoreProgress = () => {
   return `<div class="panel" style="margin-top:12px"><div class="panel-h"><h2>${t('page.restore.stageLabel')}</h2><span class="badge">${esc(String(run.stage || ''))}</span></div><div class="panel-b">${detail}</div></div>`;
 };
 
-/* UAT round-4/10: the unified sblock renders restore history as table rows
-   under the same Type/Run/Trigger/Schedule/Status/Date headers. Run =
+/* UAT round-4/10 + 111-01 (R-15 superset headers): the unified sblock renders
+   restore history as table rows under ONE superset header set shared with the
+   backup rows — Type / Run / Trigger / Initiator / Schedule / Status / When /
+   gutter. Honest '—' fills where a column does not apply: Trigger and
+   Schedule on restore rows, Initiator on backup rows (the backup payload
+   carries no operator field — never fabricated). Run =
    final_name (verbatim, esc'd — the server owns the restore-name counter,
    D-89-13) with the skipped tables report and the expandable error kept
    inside the Run cell; Trigger (CARRY-02, Phase 108) now shows the
@@ -823,7 +828,9 @@ const restoreRunTr = run => {
       : ''
   }`;
   return `<tr>
-    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>    <td>${runCell}</td>
+    <td style="padding-left:14px"><span class="badge" title="${esc(t('page.backup.historyColType'))}" style="min-width:72px;text-align:center">${esc(t('page.restore.title'))}</span></td>
+    <td>${runCell}</td>
+    <td><span class="faint">—</span></td>
     <td class="faint" title="${t('page.restore.initiatorLabel')}">${run.created_by_name ? esc(String(run.created_by_name)) : '—'}</td>
     <td><span class="faint">—</span></td>
     <td><span class="badge ${run.status === 'done' ? 'green' : ''}">${RESTORE_STAGE_KEYS[run.stage] ? t(RESTORE_STAGE_KEYS[run.stage]) : esc(String(run.stage || '—'))}</span></td>
