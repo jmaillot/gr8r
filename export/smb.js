@@ -1486,6 +1486,17 @@ export function connectSmb(config, opts = {}) {
         await closeFile(s, fileId, `close after read ${path}`).catch(() => { /* close failure never masks the data */ });
       }
     },
+    /* Phase 108 (CARRY-01): read()'s CREATE frame minus the READ —
+       FILE_RIGHTS_R + FILE_OPEN_IF, NO createOptions. NEVER the rm()
+       frame (FILE_DELETE_ON_CLOSE / DELETE access would DELETE the
+       archive on stat — Pitfall 2). Full QUERY_INFO is out of scope
+       (locked) — existence is all the badge needs. */
+    stat: async (path) => {
+      const s = await ensure();
+      const fileId = await createFile(s, path, { access: FILE_RIGHTS_R, disposition: FILE_OPEN_IF });
+      await closeFile(s, fileId, `stat ${path}`).catch(() => { /* close failure never masks the stat result */ });
+      return true;
+    },
     rm: async (path) => {
       const s = await ensure();
       /* Delete-on-close: CREATE with FILE_DELETE_ON_CLOSE + DELETE
@@ -1597,6 +1608,38 @@ export async function probeSmb(config, opts = {}) {
     const debug = await smb.__debug().catch(() => null);
     if (debug?.guestSession) result.guest = true;
     return finish(result);
+}
+
+/* Phase 108 (CARRY-01): the SMB stat seam — CREATE(read()'s frame minus
+   the READ) + immediate CLOSE, the honest read-only existence probe.
+   Keyed three-state result: { present: true | false } |
+   { unreachable: <smbClass | 'unreachable'> }. pathNotFound
+   (0xc0000034/3a/56 — the 2026-11-27 DSM ruling) is the missing class;
+   connection/tree-connect failure before CREATE rides probeSmb's
+   `e?.smbClass || 'unreachable'` idiom. */
+export async function statSmb(config, key, opts = {}) {
+  /* opts.onError(rawError) parity with probeSmb — the caller logs the raw
+     transport error while the returned result stays keys-only. */
+  const onError = (e) => { try { opts.onError?.(e); } catch { /* logging never breaks the stat */ } };
+  const smb = connectSmb(config, opts);
+  const finish = async (result) => {
+    await smb.close().catch(() => { /* best-effort, ftp quit parity */ });
+    return result;
+  };
+  try {
+    await smb.connect();
+  } catch (e) {
+    onError(e);
+    return finish({ unreachable: e?.smbClass || 'unreachable' });
+  }
+  try {
+    await smb.stat(key);
+    return finish({ present: true });
+  } catch (e) {
+    onError(e);
+    if (e?.smbClass === 'pathNotFound') return finish({ present: false });
+    return finish({ unreachable: e?.smbClass || 'unreachable' });
+  }
 }
 
 /* Restore seam (100-05 twins): read the whole remote archive, verify

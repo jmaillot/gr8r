@@ -305,6 +305,36 @@ export async function headBucket(config) {
   return res.status === 200;
 }
 
+/* Phase 108 (CARRY-01): read-only object stat — HEAD rides s3Request with
+   no payload and no signing change (headBucket's exact idiom).
+   Pitfall 1: a HEAD response carries NO XML body, so s3ErrorFrom maps 404
+   to the generic class — `err.s3Status === 404` is the ONLY missing
+   signal; everything else rethrows for the caller (statS3) to map via the
+   mapProbeError idiom. */
+export async function headObject(config, key) {
+  try {
+    await s3Request(config, { method: 'HEAD', key });
+    return true; // 200
+  } catch (e) {
+    if (e?.s3Status === 404) return false;
+    throw e;
+  }
+}
+
+/* Phase 108 (CARRY-01): the S3 stat seam — keyed three-state result:
+   { present: true | false } | { unreachable: <mapProbeError key> }.
+   Read-only frames only (HEAD) — never a marker PUT/DELETE. */
+export async function statS3(config, key) {
+  const httpWarning = String(config.endpoint).startsWith('http://');
+  const base = { ok: false, key: null, warning: false, httpWarning };
+  try {
+    const present = await headObject(config, key);
+    return { present };
+  } catch (e) {
+    return { unreachable: mapProbeError(e, base).key };
+  }
+}
+
 export async function createBucket(config) {
   await s3Request(config, { method: 'PUT' });
   return true;

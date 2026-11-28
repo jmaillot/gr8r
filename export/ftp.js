@@ -613,6 +613,29 @@ export async function probeFtp(config, opts = {}) {
   return { ...base, ok: true, key: 'success' };
 }
 
+/* Phase 108 (CARRY-01): the FTP stat seam — SIZE wrapped (read-only; the
+   same command the backup verify path already rides). Keyed three-state
+   result: { present: true | false } | { unreachable: <err.code verbatim> }.
+   550 (ftpPathNotFound) is the missing class; any other keyed class rides
+   verbatim. Quit is best-effort — the answer never rides the teardown. */
+export async function statFtp(config, key, opts = {}) {
+  const ftp = connectFtp(config, opts);
+  try {
+    await ftp.connect();
+  } catch (e) {
+    return { unreachable: e?.code || 'ftpUnreachable' };
+  }
+  try {
+    const n = await ftp.size(key);
+    await ftp.quit().catch(() => {});
+    return Number.isFinite(n) ? { present: true } : { unreachable: 'ftpGeneric' };
+  } catch (e) {
+    await ftp.quit().catch(() => {});
+    if (e?.code === 'ftpPathNotFound') return { present: false };
+    return { unreachable: e?.code || 'ftpGeneric' };
+  }
+}
+
 function cmdExpect(ctl, line, okCodes, context = '') {
   return sendCommand(ctl, line, { context }).then((res) => {
     const codes = Array.isArray(okCodes) ? okCodes : [okCodes];

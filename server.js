@@ -87,10 +87,10 @@ import { buildMspdi } from './export/mspdi.js';
 import { runExport, getRunState, cancelRun, sweepStaleBackupStaging, purgeSnapshots, setBackupRunWriter, setBackupDestination, setBackupGfsBucketProvider, scopeLabel, runLabel, instanceSlug, backupsRoot, sha256AndSize } from './export/backup.js';
 import { parseCron, nextRunAt, describeCron, cronToPreset } from './export/cron.js';
 import { assignGfsBuckets, gfsBucketFor } from './export/gfs.js'; // Phase 92 (BKNAME-02): THE single pure GFS definition — verbatim relocation
-import { probeS3 } from './export/s3.js'; // 88-01 seam (staged-fetch read-back) — Plan 103-02: the mirror legs collapsed into resolveRestoreSource (imported from export/restore.js below); server.js no longer calls the seams directly
-import { connectFtp, probeFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03); the ftp mirror leg rides resolveRestoreSource (Plan 103-02)
-import { probeSmb, connectSmb } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity); 100-04: connectSmb for the prune wrappers; the smb mirror leg rides resolveRestoreSource (Plan 103-02)
-import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter, resolveRestoreSource, mirrorMissing, clearMirrorFlag } from './export/restore.js';
+import { probeS3, statS3 } from './export/s3.js'; // 88-01 seam (staged-fetch read-back) — Plan 103-02: the mirror legs collapsed into resolveRestoreSource (imported from export/restore.js below); server.js no longer calls the seams directly. 108-01: statS3 (CARRY-01, NEW name — never probeS3 on the stat route, D-89-14 12-site pin)
+import { connectFtp, probeFtp, statFtp } from './export/ftp.js'; // Phase 98 (98-01): the 97 zero-dep client — descriptor upload/verify wiring; 98-02: probeFtp (DEST-03); the ftp mirror leg rides resolveRestoreSource (Plan 103-02). 108-01: statFtp (CARRY-01)
+import { probeSmb, connectSmb, statSmb } from './export/smb.js'; // Phase 100 (100-03): the 99 zero-dep client — probeSmb (DEST-03 SC-2 probe parity); 100-04: connectSmb for the prune wrappers; the smb mirror leg rides resolveRestoreSource (Plan 103-02). 108-01: statSmb (CARRY-01, CREATE-minus-READ frame — never rm()'s delete-on-close)
+import { streamVerifyArchive, sweepStaleRestoreStaging, restoreStagingDir, runRestore, restoreOverwriteUnit, restoreInstanceUnit, setRestoreRunEmitter, resolveRestoreSource, restoreRemoteKey, mirrorMissing, clearMirrorFlag } from './export/restore.js';
 import frLocale from './src/locales/fr.json' with { type: 'json' };
 /* Phase 45 (D-05): async dual-backend database facade. Boot, then every
    converted callsite, goes through this module — see db-adapter.mjs. */
@@ -10285,6 +10285,68 @@ async function handleApi(req, res, url) {
     await auditBackupTask(user, result.ok ? 'restore_probe_ok' : `restore_probe_failed:${source}`, user.id, result.key);
     if (!result.ok) logProbeFailure(source, result);
     logInfo(`restore probe: ${source} → ${result.key}${result.httpWarning ? ' (plain-http endpoint)' : ''}${result.guest ? ' (guest session)' : ''}`);
+    return json(res, 200, result);
+  }
+
+  /* -------------- restore archive stat (Phase 108, CARRY-01) --------------
+     POST /api/backup/restore/stat { runId, source } — a SEPARATE route
+     beside the probe route (CARRIED-ITEMS.md:35: the probe contract stays
+     byte-identical to T-104 docs). VERBATIM clone of the probe funnel
+     above, adapted: dedicated throttle key `restorestat|<uid>` (10/15min
+     — cheap-but-bounded, budget unchanged per locked decision; SEPARATE
+     from `restoreprobe|` — key separation pinned by 108-01); dispatch to
+     the NEW stat seams (statS3/statFtp/statSmb — calling the probe fns
+     would break the D-89-14 12-site pin, Pitfall 3). Three-state honest
+     result:
+       present     → 200 { ok: true,  present: true,  key: 'archivePresent' }
+       missing     → 200 { ok: false, present: false, key: 'archiveMissing' }
+       unreachable → 200 { ok: false, key: <seam class verbatim> }
+     The remote key rides restoreRemoteKey (export/restore.js) — the ONE
+     derivation shared with resolveRestoreSource; the ladder drifted once
+     (2026-11-27 UAT), never re-typed here (Pitfall 4).
+     NEVER mutates anything: no clearMirrorFlag, no run-row write, no
+     lock, no staging (Pitfall 8; T-104-06 discipline). Never on any list
+     GET (D-89-14). Refusals reuse the probe code family EXACTLY — NO new
+     err.* keys. Audit restore_stat_ok / restore_stat_failed:<source>,
+     detail = result.key ONLY — never config (T-98-04, locked). */
+  if (pathname === '/api/backup/restore/stat' && method === 'POST') {
+    if (!sameOrigin(req)) return fail(res, 403, 'crossOriginRejected', 'Cross-origin request rejected');
+    const user = await requireUser(req, res);
+    if (!user) return;
+    if (tooMany(`restorestat|${user.id}`, 10, 15 * 60 * 1000)) return fail(res, 429, 'tooManyAttempts', 'Too many attempts. Try again later.');
+    if (!(await hasInstanceRole(user.id, CAP.RESTORE_USE)) && !(await hasInstanceRole(user.id, CAP.BACKUP_MANAGE))) {
+      await auditBackupTask(user, 'restore_stat_refused:restoreRoleRequired');
+      return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator or Backup Operator can stat restore sources');
+    }
+    const body = await readJson(req);
+    const backupRunId = typeof body?.runId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(body.runId) ? body.runId : null;
+    if (!backupRunId) return fail(res, 400, 'restoreInvalidRunId', 'That backup run reference is invalid');
+    const row = await db.get('select id, task_id, filename, uploaded, ftp_uploaded, smb_uploaded from backup_runs where id = ?', [backupRunId]);
+    if (!row) {
+      await auditBackupTask(user, 'restore_stat_refused:restoreArchiveMissing');
+      return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
+    }
+    const source = body?.source === 's3' || body?.source === 'ftp' || body?.source === 'smb' ? body.source : null;
+    if (!source) {
+      await auditBackupTask(user, 'restore_stat_refused:restoreSourceInvalid');
+      return fail(res, 400, 'restoreSourceInvalid', NOT_RECOGNIZED_ERR);
+    }
+    if (restoreSourceFlag(row, source) !== 1) {
+      await auditBackupTask(user, 'restore_stat_refused:restoreSourceNotMirrored');
+      return fail(res, 400, 'restoreSourceNotMirrored', NO_SURVIVING_COPY_ERR);
+    }
+    const key = restoreRemoteKey(source, row);
+    const stat = source === 's3' ? await statS3(S3.config(), key)
+      : source === 'ftp' ? await statFtp(FTP.config(), key)
+      : await statSmb(SMB.config(), key, { onError: e => logWarn(`smb stat raw error: ${e?.message || e}`) });
+    const result = stat.unreachable !== undefined
+      ? { ok: false, key: stat.unreachable }
+      : stat.present
+        ? { ok: true, present: true, key: 'archivePresent' }
+        : { ok: false, present: false, key: 'archiveMissing' };
+    await auditBackupTask(user, result.ok ? 'restore_stat_ok' : `restore_stat_failed:${source}`, user.id, result.key);
+    if (!result.ok) logProbeFailure(source, result);
+    logInfo(`restore stat: ${source} → ${result.key}`);
     return json(res, 200, result);
   }
 

@@ -889,6 +889,36 @@ test('104-02 pin: every probeS3/probeFtp/probeSmb call site sits in a config-sav
   assert.ok(!/probeS3|probeFtp|probeSmb/.test(listSlice), 'the restore backups list GET contains zero probe-seam calls');
 });
 
+/* Phase 108-01 (CARRY-01) D-89-14 EXTENSION — extends, never weakens (the
+   ruling): the probe pin above stays at exactly 12; the NEW stat seams
+   (statS3/statFtp/statSmb) get a PARALLEL assertion with their own count,
+   their own allowed list (the stat route only), and the SAME
+   list-GET-slice-clean assertion — list GETs can never quietly gain stat
+   calls either. */
+test('108-01 pin: every statS3/statFtp/statSmb call site sits in the stat route handler — the list GETs never stat (D-89-14 extension)', () => {
+  const s = fs.readFileSync(path.join(process.cwd(), 'server.js'), 'utf8');
+  const statRe = /await stat(S3|Ftp|Smb)\(/g;
+  const allowedStat = ['/api/backup/restore/stat'];
+  let m;
+  const seen = [];
+  while ((m = statRe.exec(s)) !== null) {
+    const before = s.slice(0, m.index);
+    const lastRoute = before.lastIndexOf("pathname === '");
+    const route = before.slice(lastRoute).match(/pathname === '([^']+)'/)?.[1] ?? '(none)';
+    seen.push(route);
+    assert.ok(allowedStat.includes(route), `stat-seam call inside an unexpected route: ${route}`);
+  }
+  assert.equal(seen.length, 3, 'exactly the 3 expected stat seam call sites (the restore stat route only)');
+  /* The probe count stays EXACTLY 12 alongside (extended, never weakened). */
+  const probeCount = [...s.matchAll(/await (probeS3|probeFtp|probeSmb)\(/g)].length;
+  assert.equal(probeCount, 12, 'the 104 probe-seam pin still holds at exactly 12 (D-89-14 untouched)');
+  /* behavior pin: the restore/backups list GET slice itself carries zero stat calls */
+  const listStart = s.indexOf("pathname === '/api/backup/restore/backups' && method === 'GET'");
+  const listEnd = s.indexOf("pathname === '/api/backup/restore/backups'", listStart + 10) === -1 ? listStart + 4000 : s.indexOf("pathname === '/api/backup/restore/backups'", listStart + 10);
+  const listSlice = s.slice(listStart, listEnd);
+  assert.ok(!/statS3|statFtp|statSmb/.test(listSlice), 'the restore backups list GET contains zero stat-seam calls');
+});
+
 /* =====================================================================
    Task 104-02-3 — sources[] on the restore backups list GET (RSRC-03).
    Flags ARE the existence truth (R-4); destination `enabled` filters

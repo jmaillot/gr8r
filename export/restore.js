@@ -1375,6 +1375,20 @@ export async function clearMirrorFlag(runId, dest) {
    (task_id/id), units pass backupRun (taskId) + runId in opts — accepted
    explicitly, never guessed. opts.archivePath (units' override) replaces
    the local derivation when provided. */
+/* Phase 108 (CARRY-01): the ONE remote-key derivation, extracted verbatim
+   from resolveRestoreSource's fetch loop (the ladder drifted once —
+   2026-11-27 UAT). Pure extraction, zero behavior change: the 16 goldens
+   in test/restore-source-resolution.test.mjs stay byte-identical. Both
+   resolveRestoreSource AND the stat route call this — the expression is
+   never re-typed anywhere else (Pitfall 4). Semantics frozen:
+   s3 → s3BackupKey({taskId}, filename) (backup-manual fallback is S3-ONLY);
+   ftp/smb → `backup-task-${taskId}/${filename}` UNCONDITIONALLY. */
+export function restoreRemoteKey(dest, rowLike) {
+  const taskId = rowLike.task_id ?? rowLike.taskId;
+  const filename = rowLike.filename;
+  return dest === 's3' ? s3BackupKey({ taskId }, filename) : `backup-task-${taskId}/${filename}`;
+}
+
 export async function resolveRestoreSource(rowLike, configs, opts = {}) {
   const disabledBehavior = opts.disabledBehavior === 'skip' ? 'skip' : 'refuse';
   const taskId = rowLike.task_id ?? rowLike.taskId;
@@ -1479,7 +1493,7 @@ export async function resolveRestoreSource(rowLike, configs, opts = {}) {
       continue;
     }
     try {
-      const key = leg.dest === 's3' ? s3BackupKey({ taskId }, filename) : `backup-task-${taskId}/${filename}`;
+      const key = restoreRemoteKey(leg.dest, rowLike);
       const back = await (leg.dest === 's3' ? downloadToStaged : leg.dest === 'ftp' ? fetchToStaged : fetchSmbToStaged)(leg.config, key, sha256, restoreStagingDir());
       return { ok: true, dest: leg.dest, archivePath: back.tmpPath, stagedPath: back.tmpPath, sha256: back.sha256 ?? null, localPath };
     } catch (err) {
