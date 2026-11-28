@@ -308,11 +308,11 @@ function recentHtml() {
      exists — the old hasRows gate is dropped. A missing trail renders
      nothing — no skeleton, no fake rows (honest nulls, D-34 doctrine). */
   if (!Array.isArray(recent) || !recent.length) return '';
-  return `<div style="margin-top:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesRecentTitle')}</div>${recent
+  return `<div style="margin-top:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesRecentTitle')}</div><div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesRecentAction')}</th><th style="text-align:left">${t('page.governance.rolesRecentTarget')}</th><th style="text-align:left">${t('page.governance.rolesRecentBy')}</th><th style="text-align:left">${t('page.governance.rolesRecentWhen')}</th></tr></thead><tbody>${recent
     .map(
-      a => `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(roleVerb(a.action))}</span><span class="trunc">${esc(a.targetName || '—')}</span><span class="faint trunc">${esc(a.actorName || '—')}</span><span class="faint">${esc(ago(a.createdAt))}</span></div></div></div>`,
+      a => `<tr><td><span class="badge">${esc(roleVerb(a.action))}</span></td><td><span class="trunc">${esc(a.targetName || '—')}</span></td><td><span class="faint trunc">${esc(a.actorName || '—')}</span></td><td><span class="faint">${esc(ago(a.createdAt))}</span></td></tr>`,
     )
-    .join('')}</div>`;
+    .join('')}</tbody></table></div></div>`;
 }
 
 /* =====================================================================
