@@ -1822,6 +1822,8 @@
   "err.groupMappingBadRole": "Role must be owner, admin, or member",
   "err.groupMappingDuplicate": "That group is already mapped to this workspace",
   "err.groupMappingImmutable": "The group GUID cannot be changed on an existing mapping",
+  "err.groupMappingTeamUnknown": "That team does not exist in the target workspace",
+  "err.groupMappingDead": "This mapping points at a deleted or archived workspace and cannot be edited",
   "err.workspaceNameRequired": "Enter a workspace name",
   "err.invalidSlug": "Use 2–40 lowercase letters, numbers, or hyphens",
   "err.slugTaken": "That URL is already taken",

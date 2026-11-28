@@ -1822,6 +1822,8 @@
   "err.groupMappingBadRole": "El rol debe ser owner, admin o member",
   "err.groupMappingDuplicate": "Ese grupo ya está asignado a este espacio de trabajo",
   "err.groupMappingImmutable": "El GUID del grupo no se puede cambiar en una asignación existente",
+  "err.groupMappingTeamUnknown": "Ese equipo no existe en el espacio de trabajo de destino",
+  "err.groupMappingDead": "Esta asignación apunta a un espacio de trabajo eliminado o archivado y no se puede editar",
   "err.workspaceNameRequired": "Introduce un nombre de espacio de trabajo",
   "err.invalidSlug": "Usa de 2 a 40 letras minúsculas, números o guiones",
   "err.slugTaken": "Esa URL ya está en uso",

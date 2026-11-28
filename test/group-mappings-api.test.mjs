@@ -374,7 +374,7 @@ test('PATCH happy path: role + label partially updated, EXACTLY one group_mappin
 
     const res = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { role: 'member', label: 'New Label' });
     assert.equal(res.status, 200, `PATCH must succeed: ${JSON.stringify(res.data)}`);
-    assert.deepEqual(res.data.mapping, { id: 'gm-a1b2c3d4', groupGuid: GUID_OK.toLowerCase(), workspaceId: ws.id, role: 'member', kind: 'workspace', label: 'New Label' });
+    assert.deepEqual(res.data.mapping, { id: 'gm-a1b2c3d4', groupGuid: GUID_OK.toLowerCase(), workspaceId: ws.id, role: 'member', kind: 'workspace', teamId: null, label: 'New Label' });
 
     const row = patchRow(server, 'gm-a1b2c3d4');
     assert.equal(row.role, 'member');
@@ -481,6 +481,195 @@ test('PATCH bad role → 400 groupMappingBadRole via the POST funnel; empty-stri
     const cleared = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { label: '   ' });
     assert.equal(cleared.status, 200);
     assert.equal(patchRow(server, 'gm-a1b2c3d4').label, null, 'whitespace-only label → null (POST idiom verbatim)');
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------- Phase 106 Task 2: workspace/team fields, live-only, dead-row refusal, POST team slots ---------- */
+
+const setDocTeams = (srv, wsId, teams) =>
+  withDb(srv.dbPath, db => {
+    const row = db.prepare('select doc from workspaces where id = ?').get(wsId);
+    const doc = JSON.parse(row.doc);
+    doc.data.teams = teams;
+    db.prepare('update workspaces set doc = ? where id = ?').run(JSON.stringify(doc), wsId);
+  });
+
+test('PATCH workspaceId to a live workspace moves the row; audit detail shows the ws change (no dup)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    const joined = await signup(server.base, { name: 'Second Owner', email: 'second@test.local' });
+    const created = await joined.client.post('/api/workspaces', { name: 'Second Co' });
+    assert.equal(created.status, 201);
+    const ws2 = created.data.workspace.id;
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id, role: 'admin' });
+
+    const res = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { workspaceId: ws2 });
+    assert.equal(res.status, 200, `retarget must succeed: ${JSON.stringify(res.data)}`);
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').workspace_id, ws2, 'the row moved to the new workspace');
+    const audit = updatedAudits(server)[0];
+    assert.ok((audit.target_email || '').includes(`ws ${ws.id}→${ws2}`), 'audit carries the ws before→after');
+    assert.equal(audit.workspace_id, ws2, 'audit carries the NEW workspace id');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH retarget onto a workspace already holding the same group → 400 groupMappingDuplicate pre-check', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    const joined = await signup(server.base, { name: 'Third Owner', email: 'third@test.local' });
+    const ws2 = (await joined.client.post('/api/workspaces', { name: 'Third Co' })).data.workspace.id;
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id });
+    insertMapping(server, { guid: GUID_B, wsId: ws.id }); // noise, different guid
+    // the COLLIDING row: same guid, target workspace — inserted before the PATCH
+    withDb(server.dbPath, db =>
+      db.prepare('insert into group_mappings (id, group_guid, workspace_id, role, kind, created_at, updated_at) values (?,?,?,?,?,?,?)').run(
+        'gm-collide', GUID_OK.toLowerCase(), ws2, 'member', 'workspace', Date.now(), Date.now(),
+      ));
+    const res = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { workspaceId: ws2 });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'groupMappingDuplicate', 'the (guid, workspace) pair pre-check refuses before any write');
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').workspace_id, ws.id, 'the row did not move');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH retarget to an ARCHIVED workspace → 400 (live-only, no manufactured dead rows)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    const joined = await signup(server.base, { name: 'Archived Owner', email: 'archived-owner@test.local' });
+    const ws2 = (await joined.client.post('/api/workspaces', { name: 'Archived Co' })).data.workspace.id;
+    withDb(server.dbPath, db => db.prepare('update workspaces set archived = 1 where id = ?').run(ws2));
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id });
+    const res = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { workspaceId: ws2 });
+    assert.equal(res.status, 400);
+    assert.equal(res.data.code, 'groupMappingUnknownWorkspace');
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').workspace_id, ws.id);
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH teamId: valid team on the CURRENT workspace lands; unknown team → groupMappingTeamUnknown; null clears (nullable TEAM-01)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    setDocTeams(server, ws.id, [{ id: 'team-alpha', name: 'Alpha' }]);
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id });
+
+    const ok = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { teamId: 'team-alpha' });
+    assert.equal(ok.status, 200, `valid team must land: ${JSON.stringify(ok.data)}`);
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').team_id, 'team-alpha');
+    assert.ok((updatedAudits(server)[0].target_email || '').includes('team none→team-alpha'), 'audit carries the team before→after');
+
+    const unknown = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { teamId: 'team-ghost' });
+    assert.equal(unknown.status, 400);
+    assert.equal(unknown.data.code, 'groupMappingTeamUnknown');
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').team_id, 'team-alpha', 'a refused team edit leaves the row untouched');
+
+    const cleared = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { teamId: null });
+    assert.equal(cleared.status, 200);
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').team_id, null, 'null clears the team (nullable per TEAM-01)');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('PATCH team validated against the EFFECTIVE workspace when retargeting in the same PATCH', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server); // NO teams in its doc
+    const joined = await signup(server.base, { name: 'Fourth Owner', email: 'fourth@test.local' });
+    const ws2 = (await joined.client.post('/api/workspaces', { name: 'Fourth Co' })).data.workspace.id;
+    setDocTeams(server, ws2, [{ id: 'team-beta', name: 'Beta' }]);
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: ws.id });
+
+    // team-beta exists ONLY in the target workspace doc — must be accepted
+    const ok = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { workspaceId: ws2, teamId: 'team-beta' });
+    assert.equal(ok.status, 200, `effective-workspace whitelist must accept: ${JSON.stringify(ok.data)}`);
+    const row = patchRow(server, 'gm-a1b2c3d4');
+    assert.equal(row.workspace_id, ws2);
+    assert.equal(row.team_id, 'team-beta');
+
+    // team-beta lives only in Fourth Co's doc — retargeting BACK to acme
+    // must validate the team against ACME's doc (the effective workspace),
+    // not the row's current one
+    const bad = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { workspaceId: ws.id, teamId: 'team-beta' });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.data.code, 'groupMappingTeamUnknown', 'the CURRENT workspace doc is not consulted when retargeting');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('dead rows refuse edit → 400 groupMappingDead; retargeting the SAME dead row to a live workspace is the sanctioned repair', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    const joined = await signup(server.base, { name: 'Fifth Owner', email: 'fifth@test.local' });
+    const doomed = (await joined.client.post('/api/workspaces', { name: 'Doomed Co' })).data.workspace.id;
+    insertMapping(server, { guid: GUID_OK.toLowerCase(), wsId: doomed, role: 'admin' });
+    withDb(server.dbPath, db => db.prepare('update workspaces set archived = 1 where id = ?').run(doomed));
+
+    const deadEdit = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { role: 'member' });
+    assert.equal(deadEdit.status, 400);
+    assert.equal(deadEdit.data.code, 'groupMappingDead', 'EDIT-02: dead rows are display-only (targeted refusal, not 404)');
+    assert.equal(updatedAudits(server).length, 0);
+
+    const repair = await operator.patch('/api/governance/group-mappings/gm-a1b2c3d4', { workspaceId: ws.id });
+    assert.equal(repair.status, 200, `retarget to a live workspace repairs the dead row: ${JSON.stringify(repair.data)}`);
+    assert.equal(patchRow(server, 'gm-a1b2c3d4').workspace_id, ws.id);
+
+    // a workspace-DELETED row (purged workspace) is dead the same way
+    insertMapping(server, { guid: GUID_B, wsId: 'no-such-workspace' });
+    const goneEdit = await operator.patch('/api/governance/group-mappings/gm-22222222', { role: 'member' });
+    assert.equal(goneEdit.status, 400);
+    assert.equal(goneEdit.data.code, 'groupMappingDead');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('POST teamId: valid team lands; unknown team → groupMappingTeamUnknown; team on an ARCHIVED workspace → same key; no team keeps v3.6 behavior', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    setDocTeams(server, ws.id, [{ id: 'team-alpha', name: 'Alpha' }]);
+
+    const ok = await operator.post('/api/governance/group-mappings', { groupGuid: GUID_BRACED, workspaceId: ws.id, role: 'admin', teamId: 'team-alpha' });
+    assert.equal(ok.status, 200, `POST with team must succeed: ${JSON.stringify(ok.data)}`);
+    assert.equal(ok.data.mapping.teamId, 'team-alpha');
+    assert.equal(patchRow(server, ok.data.mapping.id).team_id, 'team-alpha');
+
+    const unknown = await operator.post('/api/governance/group-mappings', { groupGuid: GUID_B, workspaceId: ws.id, role: 'member', teamId: 'team-ghost' });
+    assert.equal(unknown.status, 400);
+    assert.equal(unknown.data.code, 'groupMappingTeamUnknown');
+
+    const joined = await signup(server.base, { name: 'Arch Owner 2', email: 'arch2@test.local' });
+    const ws2 = (await joined.client.post('/api/workspaces', { name: 'Arch Co 2' })).data.workspace.id;
+    setDocTeams(server, ws2, [{ id: 'team-arch', name: 'Arch' }]);
+    withDb(server.dbPath, db => db.prepare('update workspaces set archived = 1 where id = ?').run(ws2));
+    const archived = await operator.post('/api/governance/group-mappings', { groupGuid: '33333333-3333-3333-3333-333333333333', workspaceId: ws2, role: 'member', teamId: 'team-arch' });
+    assert.equal(archived.status, 400);
+    assert.equal(archived.data.code, 'groupMappingTeamUnknown', 'a team on an archived (non-live) workspace refuses live-only');
+
+    const plain = await operator.post('/api/governance/group-mappings', { groupGuid: '44444444-4444-4444-4444-444444444444', workspaceId: ws.id, role: 'member' });
+    assert.equal(plain.status, 200, 'no team slot = exactly v3.6 behavior');
+    assert.equal(plain.data.mapping.teamId, null);
+    assert.equal(patchRow(server, plain.data.mapping.id).team_id, null);
   } finally {
     await server.stop();
   }

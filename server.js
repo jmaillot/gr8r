@@ -9126,10 +9126,23 @@ async function handleApi(req, res, url) {
     const roleR = roleTokenRefusal(body?.role, 'groupMappingBadRole', 'Role must be owner, admin, or member');
     if (roleR) return fail(res, 400, roleR.code, roleR.message);
     const workspaceId = String(body?.workspaceId || '');
-    const ws = await db.get('select id from workspaces where id = ?', [workspaceId]);
+    const ws = await db.get('select id, archived, doc from workspaces where id = ?', [workspaceId]);
     if (!ws) return fail(res, 400, 'groupMappingUnknownWorkspace', 'No workspace with that ID exists');
     const dup = await db.get('select 1 from group_mappings where group_guid = ? and workspace_id = ?', [guid, ws.id]);
     if (dup) return fail(res, 400, 'groupMappingDuplicate', 'That group is already mapped to this workspace');
+    /* TEAM-08 (Phase 106): optional team slot — nullable (TEAM-01: no team is
+       exactly v3.6 behavior); present ⇒ the target workspace must be LIVE and
+       the team id must sit in its doc.teams whitelist (shared docTeamIds
+       helper, 40-char cap byte-identical to the 6016/11840 writers). The
+       GUID canonicalization funnel above is NOT bypassed (Pitfall 9). */
+    let teamId = null;
+    if (body?.teamId !== undefined && body.teamId !== null && body.teamId !== '') {
+      const tid = String(body.teamId).slice(0, 40);
+      if (ws.archived === 1 || !docTeamIds(ws.doc).has(tid)) {
+        return fail(res, 400, 'groupMappingTeamUnknown', 'That team does not exist in the target workspace');
+      }
+      teamId = tid;
+    }
     // T-80-07 (accepted): label is opaque display-only text — never a match
     // key, never rendered until Phase 83 (escaping happens there).
     const label = String(body?.label || '').trim().slice(0, 200) || null;
@@ -9140,6 +9153,7 @@ async function handleApi(req, res, url) {
       workspace_id: ws.id,
       role: body.role,
       kind: 'workspace',
+      team_id: teamId,
       label,
       created_by: operator.id,
       created_at: t,
@@ -9152,8 +9166,8 @@ async function handleApi(req, res, url) {
     // groupMappingDuplicate key verbatim — zero new locale keys.
     try {
       await db.run(
-        'insert into group_mappings (id, group_guid, workspace_id, role, kind, label, created_by, created_at, updated_at) values (?,?,?,?,?,?,?,?,?)',
-        [row.id, row.group_guid, row.workspace_id, row.role, row.kind, row.label, row.created_by, row.created_at, row.updated_at],
+        'insert into group_mappings (id, group_guid, workspace_id, role, kind, team_id, label, created_by, created_at, updated_at) values (?,?,?,?,?,?,?,?,?,?)',
+        [row.id, row.group_guid, row.workspace_id, row.role, row.kind, row.team_id, row.label, row.created_by, row.created_at, row.updated_at],
       );
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
@@ -9164,7 +9178,7 @@ async function handleApi(req, res, url) {
     await logSecurity(operator.id, 'group_mapping_saved');
     logInfo(`group mapping saved: group ${guid} → workspace ${ws.id} as ${row.role} by ${operator.email}`);
     return json(res, 200, {
-      mapping: { id: row.id, groupGuid: row.group_guid, workspaceId: row.workspace_id, role: row.role, kind: row.kind, label: row.label },
+      mapping: { id: row.id, groupGuid: row.group_guid, workspaceId: row.workspace_id, role: row.role, kind: row.kind, teamId: row.team_id, label: row.label },
     });
   }
 
@@ -9272,37 +9286,85 @@ async function handleApi(req, res, url) {
     const body = await readJson(req);
     if (body?.groupGuid !== undefined) return fail(res, 400, 'groupMappingImmutable', 'The group GUID cannot be changed on an existing mapping');
     /* Partial-update merge (workspace PATCH idiom): validate every provided
-       field BEFORE any write, keep the stored value otherwise. Task 106-02.1
-       wires role + label; workspace/team slots land in Task 106-02.2. */
-    const next = { role: row.role, label: row.label };
+       field BEFORE any write, keep the stored value otherwise. */
+    const next = { workspace_id: row.workspace_id, role: row.role, team_id: row.team_id, label: row.label };
+    /* EDIT-02 / D-11: dead rows refuse edit. The CURRENT workspace missing
+       or archived makes the row display-only — UNLESS workspaceId is being
+       retargeted to a LIVE workspace in the same PATCH (that is exactly the
+       sanctioned repair). A targeted refusal, not the generic 404. */
+    const curWsRow = await db.get('select id, archived, doc from workspaces where id = ?', [row.workspace_id]);
+    let targetWsRow = null;
+    if (body?.workspaceId !== undefined) {
+      next.workspace_id = String(body.workspaceId || '');
+      targetWsRow = await db.get('select id, archived, doc from workspaces where id = ?', [next.workspace_id]);
+      // LIVE-ONLY: editing onto a missing or archived workspace would
+      // manufacture dead rows — refused with the existing unknown-workspace
+      // key (research Open Question 1, planner-adopted).
+      if (!targetWsRow) return fail(res, 400, 'groupMappingUnknownWorkspace', 'No workspace with that ID exists');
+      if (targetWsRow.archived === 1) return fail(res, 400, 'groupMappingUnknownWorkspace', 'No workspace with that ID exists');
+    }
+    if ((!curWsRow || curWsRow.archived === 1) && !(targetWsRow && targetWsRow.archived === 0)) {
+      return fail(res, 400, 'groupMappingDead', 'This mapping points at a deleted or archived workspace and cannot be edited');
+    }
     if (body?.role !== undefined) {
       const roleR = roleTokenRefusal(body.role, 'groupMappingBadRole', 'Role must be owner, admin, or member');
       if (roleR) return fail(res, 400, roleR.code, roleR.message);
       next.role = body.role;
     }
+    /* TEAM-08: team validation on the EFFECTIVE workspace — the new one when
+       retargeting in the same PATCH, the current row's otherwise. Empty/null
+       clears the team (nullable per TEAM-01); otherwise the byte-same 40-char
+       cap as the 6016/11840 writers and the shared docTeamIds whitelist. */
+    if (body?.teamId !== undefined) {
+      if (body.teamId === null || body.teamId === '') {
+        next.team_id = null;
+      } else {
+        const teamId = String(body.teamId).slice(0, 40);
+        const effective = targetWsRow || curWsRow;
+        if (!effective || effective.archived === 1 || !docTeamIds(effective.doc).has(teamId)) {
+          return fail(res, 400, 'groupMappingTeamUnknown', 'That team does not exist in the target workspace');
+        }
+        next.team_id = teamId;
+      }
+    }
     if (body?.label !== undefined) next.label = String(body.label || '').trim().slice(0, 200) || null;
+    /* MAP-03 dup pre-check on workspace retarget: another mapping of the SAME
+       group already on the target workspace refuses before any write. */
+    if (next.workspace_id !== row.workspace_id) {
+      const dup = await db.get('select 1 from group_mappings where group_guid = ? and workspace_id = ? and id <> ?', [row.group_guid, next.workspace_id, row.id]);
+      if (dup) return fail(res, 400, 'groupMappingDuplicate', 'That group is already mapped to this workspace');
+    }
     /* Audit detail rides the DELETE's target_email slot style, but only the
        CHANGED parts (before→after) — a no-op edit still audits, with the
        group → ws stem only. */
     const parts = [];
+    if (next.workspace_id !== row.workspace_id) parts.push(`ws ${row.workspace_id}→${next.workspace_id}`);
     if (next.role !== row.role) parts.push(`${row.role}→${next.role}`);
+    if (next.team_id !== row.team_id) parts.push(`team ${row.team_id || 'none'}→${next.team_id || 'none'}`);
     if (next.label !== row.label) parts.push(`label "${row.label || ''}"→"${next.label || ''}"`);
-    const detail = `group ${row.group_guid} → ws ${row.workspace_id}${parts.length ? ` (${parts.join(', ')})` : ''}`;
+    const detail = `group ${row.group_guid} → ws ${next.workspace_id}${parts.length ? ` (${parts.join(', ')})` : ''}`;
     const t = now();
-    await db.tx(async () => {
-      await db.run('update group_mappings set role = ?, label = ?, updated_at = ? where id = ?', [next.role, next.label, t, row.id]);
-      // D-10/D-11: same audit shape as the DELETE sibling — operator actor,
-      // GUID + workspace + before→after detail in the free-text slot.
-      await db.run(
-        'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
-        [uid(), operator.id, row.workspace_id, 'group_mapping_updated', 0, clientIp(req), row.workspace_id,
-         operator.name, operator.email, row.label || row.workspace_id, detail, t],
-      );
-    });
+    try {
+      await db.tx(async () => {
+        await db.run('update group_mappings set workspace_id = ?, role = ?, team_id = ?, label = ?, updated_at = ? where id = ?', [next.workspace_id, next.role, next.team_id, next.label, t, row.id]);
+        // D-10/D-11: same audit shape as the DELETE sibling — operator actor,
+        // GUID + workspace + before→after detail in the free-text slot.
+        await db.run(
+          'insert into audit_log (id, actor_id, target_id, action, session_count, ip, workspace_id, actor_name, actor_email, target_name, target_email, created_at) values (?,?,?,?,?,?,?,?,?,?,?,?)',
+          [uid(), operator.id, next.workspace_id, 'group_mapping_updated', 0, clientIp(req), next.workspace_id,
+           operator.name, operator.email, row.label || row.workspace_id, detail, t],
+        );
+      });
+    } catch (err) {
+      // D-14 constraint backstop (POST idiom verbatim): the (guid, workspace)
+      // pair unique index can race past the pre-check — classify, never 500.
+      if (!isUniqueViolation(err)) throw err;
+      return fail(res, 400, 'groupMappingDuplicate', 'That group is already mapped to this workspace');
+    }
     await logSecurity(operator.id, 'group_mapping_updated');
     logInfo(`group mapping updated: ${detail} by ${operator.email}`);
     return json(res, 200, {
-      mapping: { id: row.id, groupGuid: row.group_guid, workspaceId: row.workspace_id, role: next.role, kind: row.kind, label: next.label },
+      mapping: { id: row.id, groupGuid: row.group_guid, workspaceId: next.workspace_id, role: next.role, kind: row.kind, teamId: next.team_id, label: next.label },
     });
   }
 
