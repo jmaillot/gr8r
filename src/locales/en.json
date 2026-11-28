@@ -2464,5 +2464,10 @@
   "err.restoreUploadInvalid": "Not a valid projects-studio backup archive",
   "err.restoreUploadFailed": "The archive upload failed",
   "restore.alert.done.project.subject": "Restore completed: project “{name}”",
-  "restore.alert.done.overwriteProject.body": "The overwrite restore of project “{name}” in workspace “{ws}” completed — the project’s content was replaced in place."
+  "restore.alert.done.overwriteProject.body": "The overwrite restore of project “{name}” in workspace “{ws}” completed — the project’s content was replaced in place.",
+  "settings.colDevice": "Device",
+  "settings.colIp": "IP",
+  "settings.colKey": "Key",
+  "settings.sessions.colLastSeen": "Last seen",
+  "settings.sessions.noSessions": "No signed-in sessions."
 }

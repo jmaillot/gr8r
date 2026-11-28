@@ -2464,5 +2464,10 @@
   "err.restoreUploadInvalid": "Dit is geen geldig projects-studio back-uparchief",
   "err.restoreUploadFailed": "Het uploaden van het archief is mislukt",
   "restore.alert.done.project.subject": "Herstel voltooi: project „{name}”",
-  "restore.alert.done.overwriteProject.body": "De overschrijdende herstel van project „{name}” in workspace „{ws}” is voltooid — de inhoud van het project is ter plaatse vervangen."
+  "restore.alert.done.overwriteProject.body": "De overschrijdende herstel van project „{name}” in workspace „{ws}” is voltooid — de inhoud van het project is ter plaatse vervangen.",
+  "settings.colDevice": "Apparaat",
+  "settings.colIp": "IP",
+  "settings.colKey": "Sleutel",
+  "settings.sessions.colLastSeen": "Laatst gezien",
+  "settings.sessions.noSessions": "Geen ingelogde sessies."
 }

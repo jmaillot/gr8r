@@ -2504,5 +2504,10 @@
   "err.restoreUploadInvalid": "Ce fichier n'est pas une archive de sauvegarde projects-studio valide",
   "err.restoreUploadFailed": "L'envoi de l'archive a échoué",
   "restore.alert.done.project.subject": "Restauration terminée : projet « {name} »",
-  "restore.alert.done.overwriteProject.body": "La restauration par écrasement du projet « {name} » dans l’espace « {ws} » est terminée — le contenu du projet a été remplacé sur place."
+  "restore.alert.done.overwriteProject.body": "La restauration par écrasement du projet « {name} » dans l’espace « {ws} » est terminée — le contenu du projet a été remplacé sur place.",
+  "settings.colDevice": "Appareil",
+  "settings.colIp": "IP",
+  "settings.colKey": "Clé",
+  "settings.sessions.colLastSeen": "Vu pour la dernière fois",
+  "settings.sessions.noSessions": "Aucune session connectée."
 }

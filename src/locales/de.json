@@ -2464,5 +2464,10 @@
   "err.restoreUploadInvalid": "Dies ist kein gültiges projects-studio-Backup-Archiv",
   "err.restoreUploadFailed": "Das Hochladen des Archivs ist fehlgeschlagen",
   "restore.alert.done.project.subject": "Wiederherstellung abgeschlossen: Projekt „{name}“",
-  "restore.alert.done.overwriteProject.body": "Die Überschreibungs-Wiederherstellung des Projekts „{name}“ im Workspace „{ws}“ ist abgeschlossen — der Inhalt des Projekts wurde an Ort und Stelle ersetzt."
+  "restore.alert.done.overwriteProject.body": "Die Überschreibungs-Wiederherstellung des Projekts „{name}“ im Workspace „{ws}“ ist abgeschlossen — der Inhalt des Projekts wurde an Ort und Stelle ersetzt.",
+  "settings.colDevice": "Gerät",
+  "settings.colIp": "IP",
+  "settings.colKey": "Schlüssel",
+  "settings.sessions.colLastSeen": "Zuletzt gesehen",
+  "settings.sessions.noSessions": "Keine angemeldeten Sitzungen."
 }

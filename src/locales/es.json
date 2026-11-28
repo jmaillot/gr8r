@@ -2464,5 +2464,10 @@
   "err.restoreUploadInvalid": "No es un archivo de copia de seguridad projects-studio válido",
   "err.restoreUploadFailed": "La subida del archivo falló",
   "restore.alert.done.project.subject": "Restauración completada: proyecto «{name}»",
-  "restore.alert.done.overwriteProject.body": "La restauración por sobrescritura del proyecto «{name}» en el espacio de trabajo «{ws}» se completó — el contenido del proyecto se reemplazó en su lugar."
+  "restore.alert.done.overwriteProject.body": "La restauración por sobrescritura del proyecto «{name}» en el espacio de trabajo «{ws}» se completó — el contenido del proyecto se reemplazó en su lugar.",
+  "settings.colDevice": "Dispositivo",
+  "settings.colIp": "IP",
+  "settings.colKey": "Clave",
+  "settings.sessions.colLastSeen": "Visto por última vez",
+  "settings.sessions.noSessions": "No hay sesiones iniciadas."
 }

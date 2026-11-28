@@ -809,21 +809,21 @@ export function settingsBody(sec, title) {
       const wss = api.workspaces || [];
       const scopeLabel = s => t(s === 'write' ? 'settings.apikeys.scopeWrite' : 'settings.apikeys.scopeRead');
       const row = k =>
-        srow(
-          `<span class="row" style="gap:8px">${ic('plug', 15)}${esc(k.label)}<span class="mono faint">${esc(k.prefix)}…</span><span class="badge ${k.scope === 'write' ? '' : 'faint'}">${scopeLabel(k.scope)}</span>${k.revokedAt ? `<span class="badge amber">${t('settings.apikeys.revoked')}</span>` : k.expired ? `<span class="badge amber">${t('settings.apikeys.expired')}</span>` : ''}</span>`,
-          `${esc(k.workspaceName || '—')} · ${t('settings.apikeys.expires')} ${ago(k.expiresAt)}${k.lastUsedAt ? ` · ${t('settings.apikeys.lastUsed')} ${ago(k.lastUsedAt)}` : ''}`,
+        `<tr><td><span class="row" style="gap:8px">${ic('plug', 15)}<b style="font-weight:500">${esc(k.label)}</b><span class="mono faint">${esc(k.prefix)}…</span>${k.revokedAt ? `<span class="badge amber">${t('settings.apikeys.revoked')}</span>` : k.expired ? `<span class="badge amber">${t('settings.apikeys.expired')}</span>` : ''}</span></td><td><span class="badge ${k.scope === 'write' ? '' : 'faint'}">${scopeLabel(k.scope)}</span></td><td class="faint">${esc(k.workspaceName || '—')}</td><td class="faint">${k.expiresAt ? esc(ago(k.expiresAt)) : '<span class="faint">—</span>'}</td><td class="faint">${k.lastUsedAt ? esc(ago(k.lastUsedAt)) : '<span class="faint">—</span>'}</td><td>${
           k.revokedAt || k.expired
             ? ''
             : S.ui.apiKeyRevoke === k.id
               ? `<span class="row" style="gap:8px"><span class="hint">${t('settings.apikeys.confirmBody')}</span><button class="btn btn-danger btn-sm" data-a="apiKeyRevokeConfirm" data-id="${esc(k.id)}">${t('settings.apikeys.revoke')}</button><button class="btn btn-secondary btn-sm" data-a="apiKeyCancel">${t('common.cancel')}</button></span>`
-              : `<button class="btn btn-danger-ghost btn-sm" data-a="apiKeyRevokeAsk" data-id="${esc(k.id)}">${t('settings.apikeys.revoke')}</button>`,
-        );
+              : `<button class="btn btn-danger-ghost btn-sm" data-a="apiKeyRevokeAsk" data-id="${esc(k.id)}">${t('settings.apikeys.revoke')}</button>`
+        }</td></tr>`;
       return (
         H(t('settings.apikeys.lead')) +
         (S.ui.newKey
           ? `<div class="alert ok" style="margin-bottom:14px"><span>${t('settings.apikeys.createdHint')}</span></div><div class="field" style="max-width:560px"><label class="label">${t('settings.apikeys.newKey')}</label><div class="row" style="gap:0"><input class="input" id="apikey-value" readonly value="${esc(S.ui.newKey)}" style="font-family:var(--mono,monospace);border-right:0;border-radius:6px 0 0 6px"><button type="button" class="btn btn-secondary" style="border-radius:0 6px 6px 0" data-a="copyText" data-text="${esc(S.ui.newKey)}">${t('settings.tfa.copy')}</button></div><span class="hint">${t('settings.apikeys.onceHint')}</span></div><div style="margin-top:10px"><button class="btn btn-secondary btn-sm" data-a="apiKeyDone">${t('common.next')}</button></div>`
           : '') +
-        rows.map(row).join('') +
+        (rows.length
+          ? `<div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('settings.colKey')}</th><th style="text-align:left">${t('settings.apikeys.scope')}</th><th style="text-align:left">${t('settings.apikeys.workspace')}</th><th style="text-align:left">${t('settings.apikeys.expires')}</th><th style="text-align:left">${t('settings.apikeys.lastUsed')}</th><th></th></tr></thead><tbody>${rows.map(row).join('')}</tbody></table></div>`
+          : '') +
         (rows.some(k => k.revokedAt)
           ? S.ui.apiKeyPurge
             ? srow(
@@ -856,15 +856,16 @@ export function settingsBody(sec, title) {
       const rows = S.ui.sessions || [];
       return (
         H(t('settings.sessions.lead')) +
-        rows
-          .map(s =>
-            srow(
-              `<span class="row" style="gap:8px">${ic(/iPhone|iPad|Android|Mobile/i.test(s.userAgent) ? 'smartphone' : 'monitor', 15)}${esc(deviceLabel(s.userAgent))}${s.current ? `<span class="badge green">${t('settings.sessions.thisDevice')}</span>` : ''}</span>`,
-              `${esc(s.ip || '—')} · ${esc(s.lastSeenAt || s.createdAt ? ago(s.lastSeenAt || s.createdAt) : '—')}`,
-              s.current ? '' : `<button class="btn btn-secondary btn-sm" data-a="revokeSession" data-id="${esc(s.id)}">${t('palette.signOut')}</button>`,
-            ),
-          )
-          .join('') +
+        /* perm-t conversion (112-01): 4 columns — narrow table, min-width
+           deliberately omitted (109's narrow-table precedent). */
+        (rows.length
+          ? `<div class="panel" style="overflow-x:auto"><table class="perm-t"><thead><tr><th style="padding-left:14px">${t('settings.colDevice')}</th><th style="text-align:left">${t('settings.colIp')}</th><th style="text-align:left">${t('settings.sessions.colLastSeen')}</th><th></th></tr></thead><tbody>${rows
+              .map(
+                s =>
+                  `<tr><td><span class="row" style="gap:8px">${ic(/iPhone|iPad|Android|Mobile/i.test(s.userAgent) ? 'smartphone' : 'monitor', 15)}${esc(deviceLabel(s.userAgent))}${s.current ? `<span class="badge green">${t('settings.sessions.thisDevice')}</span>` : ''}</span></td><td class="faint">${esc(s.ip || '—')}</td><td class="faint">${esc(s.lastSeenAt || s.createdAt ? ago(s.lastSeenAt || s.createdAt) : '—')}</td><td>${s.current ? '' : `<button class="btn btn-secondary btn-sm" data-a="revokeSession" data-id="${esc(s.id)}">${t('palette.signOut')}</button>`}</td></tr>`,
+              )
+              .join('')}</tbody></table></div>`
+          : `<p class="faint" style="padding:12px 0">${t('settings.sessions.noSessions')}</p>`) +
         `<div style="margin-top:16px"><button class="btn btn-danger-ghost" data-a="revokeAll" ${rows.length > 1 ? '' : 'disabled'}>${t('settings.sessions.revokeAll')}</button></div>`
       )
     }
