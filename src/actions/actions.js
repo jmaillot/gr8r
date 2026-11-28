@@ -364,9 +364,7 @@ A.go = el => {
   if (r === 'settings' && (p.sec === 'sessions' || p.sec === 'tfa' || p.sec === 'apikeys') && api.enabled) {
     refreshSessions();
     refreshTfa(); // T-16-13: the card's on/off split re-reads the server
-    if (p.sec === 'sessions') {
-      refreshAuditLog(); // AUD-03: the trail card lives on the sessions tab (the operator card relocated to governance, 79-03 D-01)
-    }
+    if (p.sec === 'sessions') { /* the trail card was removed; sessions + tfa refresh only */ }
     if (p.sec === 'apikeys') refreshApiKeys(); // MCP-01: the key rows re-read the server
   }
   if (r === 'settings' && p.sec === 'notif-push' && api.enabled) refreshPushState(); // Phase 59 (D-03): device list + master toggle re-read the server
@@ -2902,50 +2900,6 @@ A.operatorDemote = async el => {
   }
   await refreshOperatorUsers();
   toast(t('settings.operator.toastDemoted'));
-};
-
-/* AUD-03: the audit trail card's ground truth (D-T3, D-V1): the rows come from
-   GET /api/audit-log — never synthesized client-side. The server decides the
-   tier: instance operators get all rows, workspace admins get their own
-   workspaces' rows (server.js tier scoping), and a plain member's 403 leaves
-   the state null — the honest absence the card's null-guard renders (D-V1).
-   A non-401 failure leaves the state null; the 401 teardown belongs to the
-   central intercept (D-28). The fetch is unconditional because only the server
-   knows the caller's full admin/owner membership set (a client-side role gate
-   could never replicate it). */
-const auditVerb = () => S.ui.auditVerb || '';
-async function fetchAuditPage(params) {
-  const res = await api.auditLog(params);
-  if (!res.ok) {
-    if (res.status !== 401) S.ui.auditTrail = null; // D-28: 401 defers to the intercept
-    return null;
-  }
-  S.ui.auditTrail = { rows: res.data.rows || [], nextBefore: res.data.nextBefore || null };
-  render();
-  return S.ui.auditTrail;
-}
-export async function refreshAuditLog() {
-  if (!api.enabled) return null;
-  S.ui.auditTrail = null;
-  return fetchAuditPage(auditVerb() ? { verb: auditVerb() } : {});
-}
-A.auditVerbFilter = async el => {
-  S.ui.auditVerb = el.dataset.v || '';
-  await refreshAuditLog(); // D-V2: a chip click resets state and re-fetches page 1
-};
-A.auditLoadMore = async () => {
-  const trail = S.ui.auditTrail;
-  if (!trail?.nextBefore) return; // D-V3: the button only exists when a cursor exists
-  const params = { before: trail.nextBefore.created_at, beforeId: trail.nextBefore.id };
-  if (auditVerb()) params.verb = auditVerb();
-  const res = await api.auditLog(params);
-  if (!res.ok) {
-    if (res.status !== 401) return;
-    return; // D-28
-  }
-  trail.rows = [...trail.rows, ...(res.data.rows || [])]; // APPEND — never replace
-  trail.nextBefore = res.data.nextBefore || null;
-  render();
 };
 
 /* AUD-02: the workspace-admin revoke stage on the members surface — the same
