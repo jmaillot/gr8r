@@ -4784,7 +4784,10 @@ export async function refreshMappings() {
      only, so a refusal simply hides the warning card, never an error
      state. Re-checked against the sequence after the await. */
   const dead = await api.operatorDeadMappings();
-  if (my === mapFillSeq) S.ui.govDead = dead.ok ? { orphans: dead.data.orphans || [], trail: dead.data.trail || [] } : null;
+  /* 107-01 (SPA-04): the payload gains the Usage Log slice — staged as one
+     {orphans, trail, usage} object, still advisory (a refusal hides the
+     admin sections, never an error state). */
+  if (my === mapFillSeq) S.ui.govDead = dead.ok ? { orphans: dead.data.orphans || [], trail: dead.data.trail || [], usage: dead.data.usage || [] } : null;
   render();
   return S.ui.mapRows;
 }

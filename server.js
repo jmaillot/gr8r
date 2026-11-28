@@ -9432,7 +9432,24 @@ async function handleApi(req, res, url) {
     // `group_` prefix — `_` is ESCAPED so the LIKE cannot over-match
     // `groupX:group:…` one-char variants.
     const trail = await db.all("select action, workspace_id, created_at from audit_log where action like 'group\\_%:group:%' escape '\\' order by created_at desc limit 100");
-    return json(res, 200, { orphans, trail });
+    // Query C — Phase 107 (SPA-04): the Usage Log slice — the SAME escaped
+    // WR-83-03 LIKE (byte-exact: an unescaped group_% would pull
+    // group_mapping_saved/deleted configuration rows in, Pitfall 3), which
+    // correctly selects the 106-01 team verbs too (group_team_granted/
+    // removed/skipped are group lifecycle rows). Clones the instance-roles
+    // recent idiom (:9461): camelCase rows, targetName falls back to the
+    // email then stays honest-null — the FIRST-colon split for rendering is
+    // a client concern (D-08) and the encoded actions are NEVER transformed
+    // server-side (:9409 doctrine).
+    const usageRows = await db.all("select action, workspace_id, target_name, target_email, created_at from audit_log where action like 'group\\_%:group:%' escape '\\' order by created_at desc limit 100");
+    const usage = usageRows.map(a => ({
+      action: a.action,
+      workspaceId: a.workspace_id,
+      targetName: a.target_name || a.target_email,
+      targetEmail: a.target_email || null,
+      createdAt: a.created_at,
+    }));
+    return json(res, 200, { orphans, trail, usage });
   }
 
   /* -------------- instance roles (Phase 85, BKROLE-01..03, D-16/D-17/D-18) --------------

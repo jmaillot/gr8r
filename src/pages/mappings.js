@@ -62,7 +62,7 @@ const mapTr = m => {
      cancel pair. The id is the OPAQUE Phase 101 row id — never a
      GUID+workspace composite (Phase 101 D-08). */
   const ctl = S.ui.mapStage === m.id
-    ? `<span class="row" style="gap:8px;max-width:340px"><span class="hint">${t('page.mappings.deleteCopy')}</span><button class="btn btn-danger btn-sm" data-a="mapDeleteConfirm" data-id="${esc(m.id)}">${t('page.mappings.deleteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteCancel">${t('common.cancel')}</button></span>`
+    ? `<span class="row" style="gap:8px;max-width:340px"><span class="hint">${t('page.mappings.deleteCopy')}</span>${S.ui.mapRows.filter(r => r.groupGuid === m.groupGuid && r.workspaceId === m.workspaceId).length === 1 ? `<span class="hint">${t('page.mappings.deleteCopyRole')}</span>` : ''}<button class="btn btn-danger btn-sm" data-a="mapDeleteConfirm" data-id="${esc(m.id)}">${t('page.mappings.deleteConfirm')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteCancel">${t('common.cancel')}</button></span>`
     : `<span class="row" style="gap:8px"><button class="btn btn-secondary btn-sm" data-a="mapEditAsk" data-id="${esc(m.id)}">${t('page.mappings.edit')}</button><button class="btn btn-secondary btn-sm" data-a="mapDeleteAsk" data-id="${esc(m.id)}">${t('page.mappings.delete')}</button></span>`;
   return `<tr><td style="padding-left:14px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(m.label || '')}</span>${deadBadge}</td><td><span class="faint mono trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(m.groupGuid || '')}</span></td><td style="text-align:left"><span class="faint trunc" style="display:inline-block;max-width:180px;vertical-align:bottom">${esc(m.workspaceName || '—')}</span></td><td style="text-align:left">${teamCell}</td><td style="text-align:left"><span class="badge">${t('common.role.' + (m.role || 'member'))}</span></td><td style="text-align:left">${esc(String(m.liveMembers ?? 0))}</td><td style="text-align:left"><span class="faint">${esc(ago(m.createdAt))}</span></td><td style="text-align:left">${ctl}</td></tr>`;
 };
@@ -95,6 +95,7 @@ export function pageMappings() {
       <div class="panel" style="overflow-x:auto">${body}</div>
     </div>
     ${api.user?.isInstanceAdmin ? govDeadCard() : ''}
+    ${api.user?.isInstanceAdmin ? usageSection() : ''}
   </div>`;
 }
 
@@ -157,42 +158,79 @@ const mapCreateForm = () => {
 };
 
 /* =====================================================================
-   83-02 DEAD-MAPPING WARNING CARD (D-06/D-07/D-08/D-10/D-11, T-83-07)
-   MOVED WHOLESALE from governance.js (102-01): renders ONLY on the
-   Mappings page, BELOW the list. Operator-gated, DISPLAY-ONLY: lists
-   orphaned group_mappings rows and the Phase 82 refused-guard audit
-   trail. Rendered ONLY when the dead-mappings payload carries at least
-   one item — zero dead items → the markup is absent entirely, no
-   off-line shell (D-10). Every value is esc()d at FIRST render —
-   group_mappings.label is an opaque carried value (the Phase 80 XSS
-   watch-item) and the trail action string is split on the FIRST colon
-   only (D-08). No data-a anywhere in the card (D-11: cleanup stays
-   deferred with the mapping editor). Content keys unchanged apart from
-   the namespace rename page.governance.dead* → page.mappings.dead*
-   (D-07: zero new card content keys).
+   107-01 DEAD-MAPPINGS TABLE + USAGE LOG (SPA-03/SPA-04, D-06/D-07/D-08/
+   D-10/D-11, T-83-07) — the 83-02 card replaced by TWO perm-t tables
+   (the Task-1 idiom verbatim). DEAD SECTION: fed by orphans ONLY
+   (Group ID mono / Workspace / Team / Last seen) — quiet-absence when
+   the payload is empty (D-10: the markup is absent entirely). USAGE
+   SECTION: admin-only sblock below the dead section, fed by the
+   extended dead-trail GET's usage slice ({shown}=100 cap, cap-note
+   ONLY at cap); the encoded action strings split on the FIRST colon
+   client-side (D-08 — the server never transforms them, :9409
+   doctrine); the 106-01 team verbs (group_team_*) carry keyed labels;
+   the Group Name column is honest — the mapping's label when one
+   matches, the raw esc'd GUID otherwise (owner-accepted fallback).
+   No data-a anywhere in either section (D-11: display-only).
+   Every value rides esc() at FIRST render (T-107-01).
    ===================================================================== */
+const splitFirst = s => {
+  const [head, tail] = String(s ?? '').split(/:(.*)/s);
+  return [head || '', tail || ''];
+};
+
 const govDeadCard = () => {
   const dead = S.ui.govDead;
   if (!dead) return '';
   const orphans = dead.orphans || [];
-  const trail = dead.trail || [];
-  if (!orphans.length && !trail.length) return '';
-  /* FIRST-colon-only split (D-08/Pitfall 7): `group_<delta>:group:<guid>:<reason>`
-     → delta | group | guid | reason. A second first-colon split peels guid
-     from reason — a colon inside a reason never corrupts the split. */
-  const splitFirst = s => {
-    const [head, tail] = String(s ?? '').split(/:(.*)/s);
-    return [head || '', tail || ''];
-  };
-  const orphanRow = o =>
-    `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge amber">${esc(o.kind || '')}</span><span class="t trunc">${esc(o.label || '')}</span><span class="faint mono trunc">${esc(o.group_guid || '')} → ${esc(o.workspace_id || '')}</span></div></div></div>`;
-  const trailRow = r => {
-    const [delta, rest] = splitFirst(r.action);
+  if (!orphans.length) return '';
+  const orphanTr = o =>
+    `<tr><td style="padding-left:14px"><span class="faint mono trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(o.group_guid || '')}</span></td><td style="text-align:left"><span class="faint mono trunc" style="display:inline-block;max-width:220px;vertical-align:bottom">${esc(o.workspace_id || '')}</span></td><td style="text-align:left">${esc(o.team_id || '—')}</td><td style="text-align:left"><span class="faint">${esc(ago(o.created_at))}</span></td></tr>`;
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.mappings.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.mappings.deadLead')}</p><div class="panel" style="overflow-x:auto"><table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.mappings.deadColGuid')}</th><th style="text-align:left">${t('page.mappings.deadColWorkspace')}</th><th style="text-align:left">${t('page.mappings.deadColTeam')}</th><th style="text-align:left">${t('page.mappings.deadColLastSeen')}</th></tr></thead><tbody>${orphans.map(orphanTr).join('')}</tbody></table></div></div>`;
+};
+
+/* The Usage Log's encoded-action → keyed-label map (D-08: the FIRST-colon
+   head only). The 106-01 team verbs MUST be labeled or they render raw
+   (Pitfall 4). Unmapped heads fall back to the raw esc'd head. */
+const USAGE_ACTION_KEYS = {
+  group_granted: 'page.mappings.usage.action.granted',
+  group_role_upgraded: 'page.mappings.usage.action.upgraded',
+  group_role_downgraded: 'page.mappings.usage.action.downgraded',
+  group_membership_removed: 'page.mappings.usage.action.removed',
+  group_team_granted: 'page.mappings.usage.action.teamGranted',
+  group_team_removed: 'page.mappings.usage.action.teamRemoved',
+  group_membership_skipped: 'page.mappings.usage.action.skipped',
+  group_team_skipped: 'page.mappings.usage.action.skipped',
+};
+/* Reason tails → keyed faint labels; unknown tails render raw esc'd. */
+const USAGE_REASON_KEYS = {
+  'guard-refused': 'page.mappings.usage.reason.guardRefused',
+  'lost-claim': 'page.mappings.usage.reason.lostClaim',
+  'dead-team': 'page.mappings.usage.reason.deadTeam',
+  'mapped-lower': 'page.mappings.usage.reason.mappedLower',
+};
+
+const usageSection = () => {
+  const dead = S.ui.govDead;
+  if (!dead) return '';
+  const usage = dead.usage || [];
+  const orphans = dead.orphans || [];
+  /* A1 (planner): orphans exist but usage empty → the keyed empty state
+     (the operator navigated deliberately); NO dead/usage payload at all
+     → the whole sblock is '' (D-10). */
+  if (!usage.length && !orphans.length) return '';
+  const usageTr = u => {
+    const [delta, rest] = splitFirst(u.action);
     const [ns, tail2] = splitFirst(rest);
     const [guid, reason] = splitFirst(tail2);
-    return `<div class="srow"><div><div class="row" style="gap:8px"><span class="badge">${esc(delta)}</span><span class="faint">${esc(ns)}</span><span class="mono trunc">${esc(guid)}</span><span class="faint trunc">${esc(reason)}</span><span class="faint">${esc(ago(r.created_at))}</span></div></div></div>`;
+    const label = USAGE_ACTION_KEYS[delta] ? t(USAGE_ACTION_KEYS[delta]) : esc(delta);
+    const reasonLabel = reason && USAGE_REASON_KEYS[reason] ? `<span class="faint">${t(USAGE_REASON_KEYS[reason])}</span>` : reason ? `<span class="faint">${esc(reason)}</span>` : '';
+    const groupName = (S.ui.mapRows || []).find(r => r.groupGuid === guid)?.label;
+    return `<tr><td style="padding-left:14px"><span class="row" style="gap:8px"><span class="badge">${label}</span>${reasonLabel}</span></td><td><span class="faint mono trunc" style="display:inline-block;max-width:260px;vertical-align:bottom">${esc(guid)}</span></td><td style="text-align:left"><span class="trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(groupName || guid)}</span></td><td style="text-align:left"><span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(u.targetName || '')}</span></td><td style="text-align:left"><span class="faint">${esc(ago(u.createdAt))}</span></td></tr>`;
   };
-  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.mappings.deadTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.mappings.deadLead')}</p><div class="panel"><div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.mappings.deadOrphans')}</div>${orphans.map(orphanRow).join('')}</div><div><div class="label" style="margin-bottom:6px">${t('page.mappings.deadTrail')}</div>${trail.map(trailRow).join('')}</div></div></div>`;
+  const body = usage.length
+    ? `<table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.mappings.usageColAction')}</th><th>${t('page.mappings.usageColGuid')}</th><th style="text-align:left">${t('page.mappings.usageColGroup')}</th><th style="text-align:left">${t('page.mappings.usageColWho')}</th><th style="text-align:left">${t('page.mappings.usageColWhen')}</th></tr></thead><tbody>${usage.map(usageTr).join('')}</tbody></table>${usage.length === 100 ? `<p class="hint" style="margin:8px 0 0">${t('page.mappings.usageCapNote', { shown: String(usage.length), total: '100' })}</p>` : ''}`
+    : empty('history', t('page.mappings.usageEmptyTitle'), t('page.mappings.usageEmptyBody'), '', 'sm', 3);
+  return `<div class="sblock" style="margin-top:16px"><h2 style="margin-bottom:4px">${t('page.mappings.usageTitle')}</h2><p class="hint" style="margin-bottom:10px">${t('page.mappings.usageLead')}</p><div class="panel" style="overflow-x:auto">${body}</div></div>`;
 };
 
 /* =====================================================================

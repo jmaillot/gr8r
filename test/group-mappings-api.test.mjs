@@ -732,6 +732,39 @@ test('GET /api/auth/operator/workspaces carries teams per workspace from the doc
   }
 });
 
+/* ---------- Phase 107 Task 3: the dead-mappings GET usage slice (SPA-04) ---------- */
+
+test('dead-mappings GET returns {orphans, trail, usage}: usage rows camelCase with targetName, team verbs included, group_mapping_saved excluded (WR-83-03)', async () => {
+  const server = await startServer({});
+  try {
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const ws = acmeId(server);
+    const t = Date.now();
+    insertTrail(server, { action: 'group_granted:group:d16b5a5b-1234-4abc-9d2e-abcdef012345', wsId: ws.id, createdAt: t - 3000 });
+    insertTrail(server, { action: 'group_team_granted:group:22222222-2222-2222-2222-222222222222', wsId: ws.id, createdAt: t - 2000 });
+    insertTrail(server, { action: 'group_membership_skipped:group:d16b5a5b-1234-4abc-9d2e-abcdef012345:guard-refused', wsId: ws.id, createdAt: t - 1000 });
+    // a configuration row the escaped LIKE must NEVER pull in (Pitfall 3)
+    insertTrail(server, { action: 'group_mapping_saved', wsId: ws.id, createdAt: t - 500 });
+
+    const res = await operator.get('/api/auth/operator/dead-mappings');
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.data.orphans) && Array.isArray(res.data.trail), 'orphans/trail shape broken');
+    const usage = res.data.usage;
+    assert.ok(Array.isArray(usage), 'the usage slice is missing');
+    assert.equal(usage.length, 3, 'group_mapping_saved must NOT match the escaped LIKE');
+    assert.equal(usage[0].action, 'group_membership_skipped:group:d16b5a5b-1234-4abc-9d2e-abcdef012345:guard-refused', 'usage is newest-first raw (no server transform, D-08)');
+    for (const u of usage) {
+      assert.ok('workspaceId' in u && 'targetName' in u && 'createdAt' in u, `the usage row is not camelCased: ${JSON.stringify(u)}`);
+    }
+    assert.equal(usage[0].targetName, 'sys', 'targetName populated from the audit row');
+    assert.ok(usage.some(u => u.action.startsWith('group_team_granted:')), 'the 106-01 team verb must ride the usage slice');
+    /* the trail SELECT carries the Who columns too (the dead-trail extension) */
+    // the trail shape is untouched; usage is the new consumer
+  } finally {
+    await server.stop();
+  }
+});
+
 test('locale parity: the three Phase 106 refusal keys exist in ALL 5 catalogues (GD-7 same-commit rule)', () => {
   const files = ['en', 'de', 'es', 'fr', 'nl'];
   const keys = ['err.groupMappingImmutable', 'err.groupMappingTeamUnknown', 'err.groupMappingDead'];

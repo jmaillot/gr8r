@@ -330,9 +330,9 @@ test('governance.js keeps zero dead-card/dead-fetch references (strict move, D-0
 /* (b) the moved card is display-only — no data-a in the card region (D-06/D-07) */
 test('the govDeadCard block carries no data-a attributes (display-only; re-scoped 107-01 — the edit modal below it legitimately carries the mapEdit pair)', () => {
   const p = src('src/pages/mappings.js');
-  const card = p.match(/83-02 DEAD-MAPPING WARNING CARD[\s\S]*?^};/m);
-  assert.ok(card, 'the moved govDeadCard block is missing from mappings.js');
-  assert.doesNotMatch(card[0], /data-a=/, 'the dead card carries interactive controls');
+  const card = p.match(/107-01 DEAD-MAPPINGS TABLE \+ USAGE LOG[\s\S]*?^};/m);
+  assert.ok(card, 'the dead/usage section block is missing from mappings.js');
+  assert.doesNotMatch(card[0], /data-a=/, 'the dead/usage sections carry interactive controls');
   /* FIRST-colon split logic moved intact */
   assert.match(card[0], /splitFirst/, 'the FIRST-colon split logic did not move intact');
   /* rendered BELOW the list */
@@ -343,9 +343,12 @@ test('the govDeadCard block carries no data-a attributes (display-only; re-scope
 
 /* (c) the renamed keys: page.mappings.dead* ×5, page.governance.dead* nowhere */
 test('page.mappings.dead* keys exist ×5 and page.governance.dead* keys exist in NO catalogue', () => {
-  const keys = ['page.mappings.deadTitle', 'page.mappings.deadLead', 'page.mappings.deadOrphans', 'page.mappings.deadTrail'];
+  const keys = ['page.mappings.deadTitle', 'page.mappings.deadLead', 'page.mappings.deadColGuid', 'page.mappings.deadColWorkspace', 'page.mappings.deadColTeam', 'page.mappings.deadColLastSeen'];
   for (const k of keys) {
     assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+  for (const [name, cat] of [['en', en], ['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
+    assert.ok(!cat['page.mappings.deadOrphans'] && !cat['page.mappings.deadTrail'], `${name} still carries a retired deadOrphans/deadTrail key`);
   }
   const deadPrefix = /^page\.governance\.dead/;
   for (const [name, cat] of [['en', en], ['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
@@ -503,18 +506,94 @@ test('the staged delete row template keeps esc() coverage on every value-bearing
 });
 
 /* =====================================================================
-   102-02 Task 3: the D-06/D-07 display-only regression pin — the dead
-   card region still carries NO data-a attributes now that interactive
-   controls (the create form + the delete trio) surround it in the same
-   file: every data-a in mappings.js must sit BEFORE the card block.
+   107-01 Task 3 (SPA-03/SPA-04/TEAM-08): dead table + usage log +
+   the role-loss delete clause.
    ===================================================================== */
+
+/* (SPA-03) the dead section: perm-t table fed by orphans, quiet-absence */
+test('the dead mappings section renders as a perm-t table fed by orphans with quiet-absence (SPA-03)', () => {
+  const p = src('src/pages/mappings.js');
+  assert.doesNotMatch(p, /const mapRow/, 'the old srow builder lingers');
+  const dead = p.match(/const govDeadCard = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(dead, 'the dead section is missing');
+  assert.match(dead[0], /const orphans = dead\.orphans \|\| \[\];/, 'the section is not fed by orphans');
+  assert.doesNotMatch(dead[0], /dead\.trail/, 'the refused-guard trail must no longer render (usage slice supersedes it)');
+  assert.match(dead[0], /if \(!orphans\.length\) return '';/, 'quiet-absence (D-10) is missing');
+  assert.match(dead[0], /<table class="perm-t"/, 'the dead section is not a perm-t table');
+  for (const k of ['deadColGuid', 'deadColWorkspace', 'deadColTeam', 'deadColLastSeen']) {
+    assert.match(dead[0], new RegExp(`page\\.mappings\\.${k}`), `the ${k} column header is missing`);
+  }
+  assert.match(dead[0], /\$\{esc\(o\.group_guid \|\| ''\)\}/, 'the orphan GUID renders unescaped');
+});
+
+/* (SPA-04) the usage section: keyed action labels incl. team verbs, honest
+   group name with the raw-GUID fallback, cap-note ONLY at 100 */
+test('the usage section labels all group lifecycle actions incl. the 106-01 team verbs (SPA-04, Pitfall 4)', () => {
+  const p = src('src/pages/mappings.js');
+  const usage = p.match(/const usageSection = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(usage, 'the usage section is missing');
+  assert.match(p, /group_team_granted: 'page\.mappings\.usage\.action\.teamGranted'/, 'the teamGranted verb label is missing');
+  assert.match(p, /group_team_removed: 'page\.mappings\.usage\.action\.teamRemoved'/, 'the teamRemoved verb label is missing');
+  assert.match(p, /group_membership_skipped: 'page\.mappings\.usage\.action\.skipped'/, 'the skipped verb label is missing');
+  assert.match(p, /group_team_skipped: 'page\.mappings\.usage\.action\.skipped'/, 'the team-skipped verb label is missing');
+  /* the FIRST-colon split stays client-side (D-08) */
+  assert.match(usage[0], /splitFirst\(u\.action\)/, 'the encoded action split is not client-side');
+  /* honest Group Name: mapping label, raw GUID fallback */
+  assert.match(usage[0], /find\(r => r\.groupGuid === guid\)\?\.label/, 'the group-name lookup is missing');
+  assert.match(usage[0], /\$\{esc\(groupName \|\| guid\)\}/, 'the group-name fallback GUID renders unescaped');
+  /* Who + When + cap-note only at cap */
+  assert.match(usage[0], /\$\{esc\(u\.targetName \|\| ''\)\}/, 'Who renders unescaped');
+  assert.match(usage[0], /usage\.length === 100 \?/, 'the cap-note must render ONLY at the 100 cap');
+  assert.match(usage[0], /t\('page\.mappings\.usageCapNote', \{ shown: String\(usage\.length\), total: '100' \}\)/, 'the cap-note interpolation is missing');
+  /* the keyed empty state when orphans exist but usage is empty (A1) */
+  assert.match(usage[0], /usageEmptyTitle/, 'the usage empty state is missing');
+  assert.match(usage[0], /!usage\.length && !orphans\.length\) return '';/, 'the whole-sblock quiet-absence is missing');
+});
+
+/* ×5 parity for the Task-3 key batch */
+test('the 107-01 Task-3 i18n keys exist in ALL 5 catalogues', () => {
+  const keys = [
+    'page.mappings.usageTitle', 'page.mappings.usageLead',
+    'page.mappings.usageColAction', 'page.mappings.usageColGuid', 'page.mappings.usageColGroup', 'page.mappings.usageColWho', 'page.mappings.usageColWhen',
+    'page.mappings.usageEmptyTitle', 'page.mappings.usageEmptyBody', 'page.mappings.usageCapNote',
+    'page.mappings.usage.action.granted', 'page.mappings.usage.action.upgraded', 'page.mappings.usage.action.downgraded',
+    'page.mappings.usage.action.removed', 'page.mappings.usage.action.teamGranted', 'page.mappings.usage.action.teamRemoved', 'page.mappings.usage.action.skipped',
+    'page.mappings.usage.reason.guardRefused', 'page.mappings.usage.reason.lostClaim', 'page.mappings.usage.reason.deadTeam', 'page.mappings.usage.reason.mappedLower',
+  ];
+  for (const k of keys) {
+    assert.ok(en[k] && fr[k] && nl[k] && de[k] && es[k], `${k} missing from a catalogue`);
+  }
+});
+
+/* (TEAM-08) the only-mapping derivation: client-side count over mapRows for
+   the row's (groupGuid, workspaceId); the clause earns its keep exactly when
+   the group holds team-kind siblings in the same workspace (Pitfall 9) */
+test('the staged delete carries the TEAM-08 role-loss clause keyed on the client-side only-mapping derivation', () => {
+  const p = src('src/pages/mappings.js');
+  const row = p.match(/const mapTr = m => \{[\s\S]*?\n\};/);
+  assert.match(row[0], /S\.ui\.mapRows\.filter\(r => r\.groupGuid === m\.groupGuid && r\.workspaceId === m\.workspaceId\)\.length === 1/, 'the only-mapping derivation is missing');
+  assert.match(row[0], /page\.mappings\.deleteCopyRole/, 'the role-loss clause key is missing');
+  assert.match(row[0], /page\.mappings\.deleteCopy/, 'the lazy-revocation copy must stay (the clause appends, never replaces)');
+});
+
+/* the EN clause ships verbatim as drafted (planner-authored per the 106-02
+   W1 handoff — flagged for owner review before ship) */
+test('en.json page.mappings.deleteCopyRole carries the verbatim role-loss clause ×5', () => {
+  assert.ok(
+    en['page.mappings.deleteCopyRole'].includes('members will also lose their workspace role at that same next sign-in.'),
+    'the verbatim TEAM-08 clause is missing from en.json deleteCopyRole',
+  );
+  for (const [name, cat] of [['fr', fr], ['nl', nl], ['de', de], ['es', es]]) {
+    assert.ok(cat['page.mappings.deleteCopyRole'] && cat['page.mappings.deleteCopyRole'].length > 20, `${name} deleteCopyRole is missing or stub-length`);
+  }
+});
 test('all data-a attributes in mappings.js live outside the dead-card region (D-06/D-07 regression pin)', () => {
   const p = src('src/pages/mappings.js');
-  const cardStart = p.indexOf('83-02 DEAD-MAPPING WARNING CARD');
+  const cardStart = p.indexOf('107-01 DEAD-MAPPINGS TABLE + USAGE LOG');
   assert.ok(cardStart >= 0, 'the dead-card block marker is missing');
   /* 107-01 re-scope: the DISPLAY-only dead card block itself stays data-a-free;
      the mapEditBody modal AFTER it legitimately carries the staged edit pair. */
-  const card = p.match(/83-02 DEAD-MAPPING WARNING CARD[\s\S]*?^};/m);
+  const card = p.match(/107-01 DEAD-MAPPINGS TABLE \+ USAGE LOG[\s\S]*?^};/m);
   assert.doesNotMatch(card[0], /data-a=/, 'a data-a attribute leaked into the dead-card block');
   const afterCard = p.slice(cardStart);
   const afterModal = afterCard.slice(afterCard.indexOf('export function mapEditBody'));

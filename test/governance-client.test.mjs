@@ -258,12 +258,12 @@ test('the dead-mapping card escapes orphan label and trail segments and carries 
   const p = src('src/pages/mappings.js');
   const card = p.match(/const govDeadCard = \(\) => \{[\s\S]*?\n\};/);
   assert.ok(card, 'the moved govDeadCard not found in mappings.js');
-  assert.match(card[0], /esc\(o\.label \|\| ''\)/, 'the orphan label is not esc()d at first render');
-  assert.match(card[0], /esc\(o\.kind \|\| ''\)/, 'the orphan kind is not esc()d');
-  assert.match(card[0], /esc\(o\.group_guid \|\| ''\)/, 'the orphan group_guid is not esc()d');
-  assert.match(card[0], /esc\(guid\)/, 'the trail guid is not esc()d');
-  assert.match(card[0], /esc\(reason\)/, 'the trail reason is not esc()d');
-  assert.doesNotMatch(card[0], /data-a=/, 'the warning card carries a mutation control (D-11 forbids them)');
+  /* 107-01 re-scope: the card became the dead perm-t TABLE — the trail rows
+     dissolved into the usage section (splitFirst/esc pins live there now). */
+  assert.match(card[0], /esc\(o\.group_guid \|\| ''\)/, 'the orphan group_guid is not esc()d at first render');
+  assert.match(card[0], /esc\(o\.workspace_id \|\| ''\)/, 'the orphan workspace_id is not esc()d');
+  assert.match(card[0], /esc\(o\.team_id \|\| '—'\)/, 'the orphan team_id is not esc()d');
+  assert.doesNotMatch(card[0], /data-a=/, 'the dead table carries a mutation control (D-11 forbids them)');
 });
 
 /* (83-02 f) zero dead items → the card markup is absent entirely (D-10, GV-03/empty)
@@ -276,8 +276,11 @@ test('the dead-mapping card renders nothing when the payload is empty or absent 
   const card = p.match(/const govDeadCard = \(\) => \{[\s\S]*?\n\};/);
   assert.ok(card, 'the moved govDeadCard not found in mappings.js');
   assert.match(card[0], /const dead = S\.ui\.govDead;\s*if \(!dead\) return '';/, 'a null payload must hide the card entirely');
-  assert.match(card[0], /if \(!orphans\.length && !trail\.length\) return '';/, 'zero dead items must hide the card entirely (no off-line markup)');
-  assert.match(p, /api\.user\?\.isInstanceAdmin \? govDeadCard\(\) : ''/, 'the card is not operator-gated at the mount point');
+  assert.match(card[0], /if \(!orphans\.length\) return '';/, 'zero dead items must hide the section entirely (no off-line markup)');
+  assert.match(p, /api\.user\?\.isInstanceAdmin \? govDeadCard\(\) : ''/, 'the section is not operator-gated at the mount point');
+  const usage = p.match(/const usageSection = \(\) => \{[\s\S]*?\n\};/);
+  assert.ok(usage, 'the usage section moved away');
+  assert.match(usage[0], /!usage\.length && !orphans\.length\) return '';/, 'the usage section must hide entirely with no payload at all');
 });
 
 /* (83-02 g) the dead payload rides the fill loop — MOVED (102-01 D-06): the
@@ -288,7 +291,7 @@ test('refreshMappings fetches operatorDeadMappings alongside its fills and stage
   const mapRefresh = a.match(/export async function refreshMappings\(\) \{[\s\S]*?\n\}/);
   assert.ok(mapRefresh, 'refreshMappings moved');
   assert.match(mapRefresh[0], /const dead = await api\.operatorDeadMappings\(\);/, 'the dead-mappings read does not ride the mappings fill');
-  assert.match(mapRefresh[0], /S\.ui\.govDead = dead\.ok \? \{ orphans: dead\.data\.orphans \|\| \[\], trail: dead\.data\.trail \|\| \[\] \} : null;/, 'the payload is not normalized/honest on refusal');
+  assert.match(mapRefresh[0], /S\.ui\.govDead = dead\.ok \? \{ orphans: dead\.data\.orphans \|\| \[\], trail: dead\.data\.trail \|\| \[\], usage: dead\.data\.usage \|\| \[\] \} : null;/, 'the payload is not normalized/honest on refusal');
 });
 
 /* (83-02 h) the rename + dead-card keys exist with parity across all 5 catalogues.
@@ -309,8 +312,10 @@ test('the rename + dead-card keys exist with parity in all 5 locales (D-12)', ()
     // the moved dead-card keys (102-01 D-06/D-07 rename, ×5)
     'page.mappings.deadTitle',
     'page.mappings.deadLead',
-    'page.mappings.deadOrphans',
-    'page.mappings.deadTrail',
+    // 107-01: deadOrphans/deadTrail retired with the card→table migration (the
+    // dead/usage column keys ride the mappings-client ×5 pins)
+    'page.mappings.deadColGuid',
+    'page.mappings.usageTitle',
     'toast.governanceRenamed',
   ];
   for (const [lang, cat] of Object.entries({ en, fr, nl, de, es })) {

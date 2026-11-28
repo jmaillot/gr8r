@@ -281,7 +281,7 @@ test('zero dead items → both lists empty (D-10 hiding is client-side)', async 
     const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
     const res = await operator.get('/api/auth/operator/dead-mappings');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.data, { orphans: [], trail: [] });
+    assert.deepEqual(res.data, { orphans: [], trail: [], usage: [] }); // 107-01: the usage slice joined the payload
   } finally {
     await server.stop();
   }
