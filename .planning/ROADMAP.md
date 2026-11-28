@@ -26,6 +26,7 @@
 ## Phases
 
 ### Phase 106: Team Mapping & Mapping Edit — Backend
+
 **Goal:** The mapping row optionally targets a team; group-driven team memberships reconcile at SSO sign-in; mappings are editable.
 
 - `team_id` nullable column on group_mappings + `team_members.provenance` (TEAM-01/02, DDL lockstep both engines)
@@ -40,15 +41,16 @@
 3. PATCH changes role/label/workspace/team and audits; GUID tamper and dead-row edit are keyed refusals; ×5 locale parity.
 4. Deleted team → `team-deleted` orphan surfaces; workspace role still granted. Dual-engine DDL verified (SQLite + Postgres matrix).
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 106-01-PLAN.md — DDL lockstep + SSO reconcile team sync cell (grant/sweep/dead-team skip) + TEAM-04 PUT narrowing + team-deleted orphan machinery (TEAM-01..07)
+- [x] 106-01-PLAN.md — DDL lockstep + SSO reconcile team sync cell (grant/sweep/dead-team skip) + TEAM-04 PUT narrowing + team-deleted orphan machinery (TEAM-01..07)
 - [ ] 106-02-PLAN.md — PATCH edit route + POST/GET team validation + refusal keys ×5 locales (TEAM-08, EDIT-01/02)
 
 ---
 
 ### Phase 107: Mappings SPA — Sections, Tables, Edit UI, Usage Log
+
 **Goal:** The Mappings page becomes three sections with proper tables; mappings get an edit UI.
 
 - "Mappings" table (perm-t idiom): Label / Group ID / Workspace / Team / Role / Users added (liveMembers = current-members semantics) / When (SPA-01)
@@ -68,6 +70,7 @@ Plans:
 ---
 
 ### Phase 108: Restore Probing, Run Attribution & Closeout
+
 **Goal:** The probe badge verifies the run's archive exists on the leg; run history shows who restored; the two small SSO/docs items land. (Parallel-safe with 106/107 — zero shared files except test baseline.)
 
 - Stat-only per-run probe: FTP `size()`, S3 `headObject` (new, generic s3Request), SMB CREATE+CLOSE stat (CARRY-01); three-state badge + toasts ×5; no marker writes

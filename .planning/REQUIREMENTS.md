@@ -18,13 +18,13 @@
 
 ### Team mapping (Phase 106)
 
-- [ ] **TEAM-01**: `group_mappings` gains nullable `team_id` (`adapterEnsureColumn`, both engines; kind stays `'workspace'`; unique (group_guid, workspace_id) pair index unchanged — plain+team combo per (group, ws) collapses to one row, accepted). DDL lockstep checklist per research.
-- [ ] **TEAM-02**: `team_members` gains `provenance text` (conditional stamp `group:<guid>` only for group callers, mirroring the D-82-7 addMembership conditional); boot ensureColumn both engines.
-- [ ] **TEAM-03**: Reconcile pass extends to teams — group team rows granted/cleaned alongside workspace grants; selection key = guid from the row's own provenance (T-82-01 property); team-only sweep cell (membership survives, mapping died → team row removed); opportunistic sweep of doc-orphaned group team rows.
-- [ ] **TEAM-04**: Manual teams PUT narrowed — its delete-all must purge non-group rows only (latent-bug fix, research-flagged server.js:11843).
-- [ ] **TEAM-05**: Non-winner mappings still grant their team (team survives while mapping lives, regardless of highest-role-wins on the workspace row).
-- [ ] **TEAM-06**: Distinct audit verb `group_team_granted` (and team-removal rides the existing removal vocabulary with team provenance detail).
-- [ ] **TEAM-07**: Dead-mapping machinery: new `team-deleted` orphan class (boot warn loop + dead-mappings route); reconcile skips a dead team but still grants the workspace role.
+- [x] **TEAM-01**: `group_mappings` gains nullable `team_id` (`adapterEnsureColumn`, both engines; kind stays `'workspace'`; unique (group_guid, workspace_id) pair index unchanged — plain+team combo per (group, ws) collapses to one row, accepted). DDL lockstep checklist per research.
+- [x] **TEAM-02**: `team_members` gains `provenance text` (conditional stamp `group:<guid>` only for group callers, mirroring the D-82-7 addMembership conditional); boot ensureColumn both engines.
+- [x] **TEAM-03**: Reconcile pass extends to teams — group team rows granted/cleaned alongside workspace grants; selection key = guid from the row's own provenance (T-82-01 property); team-only sweep cell (membership survives, mapping died → team row removed); opportunistic sweep of doc-orphaned group team rows.
+- [x] **TEAM-04**: Manual teams PUT narrowed — its delete-all must purge non-group rows only (latent-bug fix, research-flagged server.js:11843).
+- [x] **TEAM-05**: Non-winner mappings still grant their team (team survives while mapping lives, regardless of highest-role-wins on the workspace row).
+- [x] **TEAM-06**: Distinct audit verb `group_team_granted` (and team-removal rides the existing removal vocabulary with team provenance detail).
+- [x] **TEAM-07**: Dead-mapping machinery: new `team-deleted` orphan class (boot warn loop + dead-mappings route); reconcile skips a dead team but still grants the workspace role.
 - [ ] **TEAM-08**: POST/PATCH routes validate team_id (exists in workspace doc.teams, belongs to the mapping's workspace, nullable); refusal keys ×5. Delete-confirm copy states lazy revocation + role loss when the row is the group's only mapping.
 
 ### Mapping edit (Phase 106)
