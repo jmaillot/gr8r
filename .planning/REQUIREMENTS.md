@@ -34,11 +34,11 @@
 
 ### Mappings SPA restructure (Phase 107)
 
-- [ ] **SPA-01**: "Mappings" section — proper table (`perm-t` idiom): Label, Group ID, Workspace, Team (— when unset), Role, Users added, When. Users added = **current members** with `provenance = 'group:<guid>'` (the existing `liveMembers` semantics — documented as current-members, not cumulative-ever).
-- [ ] **SPA-02**: Edit UI — inline or drawer edit for workspace/team/role/label (GUID read-only display), staged confirm consistent with the delete flow; ×5 copy.
-- [ ] **SPA-03**: "Dead group mappings" section — orphaned mappings as a table (orphaned GUID, target workspace/team, last-seen), replacing the v3.6 card.
-- [ ] **SPA-04**: "Usage Log" section — table of the five lifecycle audit actions (R-7): Action, Type (column dropped if always `group` — plan decides), Group ID, Group Name (Label; raw GUID when mapping deleted — accepted), Who (= target_name), When; cap 100 newest with a visible cap-note (no pagination in v1); consumes the extended dead-trail GET (`{orphans, trail, usage}`).
-- [ ] **SPA-05**: Team column in the create form (optional team picker fed by the workspace's doc.teams; hidden/disabled until a workspace is chosen).
+- [x] **SPA-01**: "Mappings" section — proper table (`perm-t` idiom): Label, Group ID, Workspace, Team (— when unset), Role, Users added, When. Users added = **current members** with `provenance = 'group:<guid>'` (the existing `liveMembers` semantics — documented as current-members, not cumulative-ever).
+- [x] **SPA-02**: Edit UI — inline or drawer edit for workspace/team/role/label (GUID read-only display), staged confirm consistent with the delete flow; ×5 copy.
+- [x] **SPA-03**: "Dead group mappings" section — orphaned mappings as a table (orphaned GUID, target workspace/team, last-seen), replacing the v3.6 card.
+- [x] **SPA-04**: "Usage Log" section — table of the five lifecycle audit actions (R-7): Action, Type (column dropped if always `group` — plan decides), Group ID, Group Name (Label; raw GUID when mapping deleted — accepted), Who (= target_name), When; cap 100 newest with a visible cap-note (no pagination in v1); consumes the extended dead-trail GET (`{orphans, trail, usage}`).
+- [x] **SPA-05**: Team column in the create form (optional team picker fed by the workspace's doc.teams; hidden/disabled until a workspace is chosen).
 
 ### Carried items (Phase 108)
 
