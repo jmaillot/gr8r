@@ -8,10 +8,10 @@ last_updated: "2026-11-28T12:29:00Z"
 state_head: 35a443d030e1aeb46ffbea692189b853bfdb7ff5
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 2
-  completed_plans: 2
-  percent: 33
+  completed_plans: 3
+  percent: 67
 ---
 
 # Project State: Projects Studio — v3.6
