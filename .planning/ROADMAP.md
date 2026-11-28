@@ -38,7 +38,7 @@
 4. Zero server.js/api.js diff (client-only phase).
 
 **Depends on:** none. **Plans:** 1 plan
-- [ ] 109-01-PLAN.md — Governance perm-t unification: SA tables, trail idiom, Backup/Restore When column (client-only)
+- [x] 109-01-PLAN.md — Governance perm-t unification: SA tables, trail idiom, Backup/Restore When column (client-only)
 
 ### Phase 110: Docs & Test Housekeeping
 **Goal:** The accumulated planning-bookkeeping debt and the last flake close out.

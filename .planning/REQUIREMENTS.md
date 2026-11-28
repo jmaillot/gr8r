@@ -17,15 +17,15 @@
 
 ### Governance UI unification (Phase 109 — client-only)
 
-- [ ] **GOV-01**: Super Admin tab converts to perm-t tables — the candidate srow cards (governance.js:165–218) become table rows; recent-activity trail (:301–312) follows the section/table idiom; D-90-3/4 semantics intact (roster-first, promote-only, 2-char floor, cap-note rendered per idiom).
-- [ ] **GOV-02**: Backup Operator + Restore Operator tabs gain the When column and adopt the standard min-width/table idiom (roleTabView :239–292) — all three tabs visually unified with the v3.7 mappings tables.
-- [ ] **GOV-03**: "When" column content per table decided in-plan (last_login_at vs grantedAt — trivial either way, documented).
-- [ ] **GOV-04**: ~2–4 new `page.governance.*` keys ×5 same commit; pin watch: verbs unchanged (no api calls); data-a bumped same-commit only if a markup occurrence moves (D-12).
+- [x] **GOV-01**: Super Admin tab converts to perm-t tables — the candidate srow cards (governance.js:165–218) become table rows; recent-activity trail (:301–312) follows the section/table idiom; D-90-3/4 semantics intact (roster-first, promote-only, 2-char floor, cap-note rendered per idiom).
+- [x] **GOV-02**: Backup Operator + Restore Operator tabs gain the When column and adopt the standard min-width/table idiom (roleTabView :239–292) — all three tabs visually unified with the v3.7 mappings tables.
+- [x] **GOV-03**: "When" column content per table decided in-plan (last_login_at vs grantedAt — trivial either way, documented).
+- [x] **GOV-04**: ~2–4 new `page.governance.*` keys ×5 same commit; pin watch: verbs unchanged (no api calls); data-a bumped same-commit only if a markup occurrence moves (D-12).
 
 ### Housekeeping (Phase 110)
 
-- [ ] **HK-01**: ROADMAP.md + PROJECT.md stale anchors corrected via bracketed annotation notes (v3.6 archive :81–82 anchor family + "2672 tests", v3.7 archive :20 baseline, :44 plan count, :77/:90 parallel-safe premise) — never silent rewrites; seed files annotated as implemented (all three in `.planning/seeds/`).
-- [ ] **HK-02**: webhook-events due.reminder flake fixed at the test — inject a fixed `now` (`${today}T08:05:00Z`, route already accepts it at server.js:6546) into both reminder passes; baseline becomes exactly 2 documented failures; zero server change.
+- [x] **HK-01**: ROADMAP.md + PROJECT.md stale anchors corrected via bracketed annotation notes (v3.6 archive :81–82 anchor family + "2672 tests", v3.7 archive :20 baseline, :44 plan count, :77/:90 parallel-safe premise) — never silent rewrites; seed files annotated as implemented (all three in `.planning/seeds/`).
+- [x] **HK-02**: webhook-events due.reminder flake fixed at the test — inject a fixed `now` (`${today}T08:05:00Z`, route already accepts it at server.js:6546) into both reminder passes; baseline becomes exactly 2 documented failures; zero server change.
 
 ## Requirement → phase map
 
