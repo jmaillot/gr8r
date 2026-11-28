@@ -83,7 +83,7 @@ test('(c) rolesCard dissolution: no roles seg value, no sblock/h2 wrapper, roles
 /* (d) per-role tab body: shared User/Grants/Actions columns + stacked grant badges */
 test('(d) per-role tabs render User/Grants/Actions columns with STACKED grant badges (role + date + granted-by, esc)', () => {
   const p = page();
-  const thead = p.match(/<thead><tr><th style="padding-left:14px">\$\{t\('page\.governance\.rolesColUser'\)\}<\/th><th style="text-align:left">\$\{t\('page\.governance\.rolesColGrants'\)\}<\/th><th><\/th><\/tr><\/thead>/);
+  const thead = p.match(/<thead><tr><th style="padding-left:14px">\$\{t\('page\.governance\.rolesColUser'\)\}<\/th><th style="text-align:left">\$\{t\('page\.governance\.rolesColGrants'\)\}<\/th><th style="text-align:left">\$\{t\('page\.governance\.rolesColGranted'\)\}<\/th><th><\/th><\/tr><\/thead>/);
   assert.ok(thead, 'the per-tab table header must be User / Grants / (actions) — got no User/Grants columns');
   /* the stacked badge: one badge per grant carrying grantedByName and the granted date, esc()d */
   assert.match(p, /grants\.map\(\s*\(?r\)?\s*=>\s*`<div[^>]*>\$\{roleBadge\(r\.role\)\}[\s\S]{0,200}?<\/div>`\s*\)\.join\(''\)/, 'the stacked per-grant badge block is missing');

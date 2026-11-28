@@ -275,9 +275,10 @@ export function roleTabView(role) {
     const first = grants[0];
     const dup = dupUid === first.userId;
     return `<tr${dup ? ' style="background:var(--amber-soft)"' : ''}>
-    <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(first.userName)}</span>${first.userEmail ? `<span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(first.userEmail)}</span>` : ''}${dup ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</span></td>
+   <td style="padding-left:14px"><span class="row" style="gap:8px"><span class="trunc" style="display:inline-block;max-width:220px;vertical-align:bottom;font-weight:600">${esc(first.userName)}</span>${first.userEmail ? `<span class="faint trunc" style="display:inline-block;max-width:200px;vertical-align:bottom">${esc(first.userEmail)}</span>` : ''}${dup ? `<span class="badge amber">${t('page.governance.rolesDupBadge')}</span>` : ''}</span></td>
     <td>${grants.map(r => `<div style="margin:2px 0;display:flex;flex-direction:column;gap:2px">${roleBadge(r.role)}<span class="hint" style="margin:0">${grantMeta(r)}</span></div>`).join('')}</td>
-    <td><span class="row" style="gap:8px;justify-content:flex-end;align-items:flex-start;flex-direction:column">${grants.map(r => revokeCtl(r)).join('')}</span></td>
+   <td><span class="faint">${esc(ago(first.grantedAt))}</span></td>
+   <td><span class="row" style="gap:8px;justify-content:flex-end;align-items:flex-start;flex-direction:column">${grants.map(r => revokeCtl(r)).join('')}</span></td>
   </tr>`;
   };
   const grantBtn = `<button class="btn btn-primary btn-sm" data-a="govRoleGrantAsk">${ic('plus', 13)}${t('page.governance.rolesGrant')}</button>`;
@@ -289,7 +290,7 @@ export function roleTabView(role) {
     ? `<div style="margin-bottom:12px"><div class="label" style="margin-bottom:6px">${t('page.governance.rolesGrantTitle')}</div>${govPickerInput('gov-role-tab-q', st, 'gov-role-tab-list', role)}${govPickerList(role, st, 'gov-role-tab-list')}</div>`
     : '';
   const body = byUser.size
-    ? `<table class="perm-t" style="min-width:760px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColGrants')}</th><th></th></tr></thead><tbody>${[...byUser.values()].map(row).join('')}</tbody></table>`
+    ? `<table class="perm-t" style="min-width:880px"><thead><tr><th style="padding-left:14px">${t('page.governance.rolesColUser')}</th><th style="text-align:left">${t('page.governance.rolesColGrants')}</th><th style="text-align:left">${t('page.governance.rolesColGranted')}</th><th></th></tr></thead><tbody>${[...byUser.values()].map(row).join('')}</tbody></table>`
     : /* D-34: the standard governance empty box — the Grant button front and center. */
       empty('users', t('page.governance.rolesEmptyTitle'), t('page.governance.rolesEmptyBody'), `<div class="row" style="justify-content:center;margin-top:10px">${grantBtn}</div>`, 'sm', 3);
   return `<div>${picker}${byUser.size ? `<div class="row" style="margin-bottom:10px;justify-content:flex-end">${grantBtn}</div>` : ''}<div class="panel" style="overflow-x:auto">${body}</div></div>`;
