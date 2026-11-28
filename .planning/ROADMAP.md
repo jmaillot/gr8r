@@ -65,7 +65,10 @@ Plans:
 3. Usage log shows granted/upgraded/downgraded/removed/guard-refused rows with honest Group Name (raw GUID when mapping deleted); cap-note visible at cap.
 4. Team picker only offers teams of the selected workspace; ×5 locale parity; i18n-scan + client test pins green.
 
-**Depends on:** 106 (edit route + team fields). **Plans:** TBD
+**Depends on:** 106 (edit route + team fields). **Plans:** 1 plan
+
+Plans:
+- [ ] 107-01-PLAN.md — Three table sections + edit modal + usage log + team picker + TEAM-08 clause (tracer-first, 3 tasks)
 
 ---
 
