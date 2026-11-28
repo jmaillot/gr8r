@@ -263,11 +263,11 @@ No external dependencies (zero-dep project). Probe seams require the destination
 | A6 | `source: 'local'` is accepted (no fall-through to mirrors) | Source-Param Flow | if owner wants mirrors-only for explicit source, drop 'local' from enum |
 | A7 | sources[] only in restore/backups list GET (preview optional) | sources[] Placement | gray area per phase context |
 
-## Open Questions
+## Open Questions (RESOLVED — decided as GD-1..GD-8 in plans, commit 776c8521)
 
-1. **Probe capability tier (A2)** — restore drawer serves Restore Operators; the destination probe routes are Backup-Operator-only. Recommend RESTORE_USE ∥ BACKUP_MANAGE; confirm with owner.
-2. **`source: 'local'` semantics (A6)** — explicit local with a rotated-away archive refusing (vs falling back) is the fail-closed reading; confirm.
-3. **sources[] in preview response (A7)** — cheap add, planner's discretion.
+1. **Probe capability tier (A2)** — RESOLVED: `RESTORE_USE ∥ BACKUP_MANAGE` (GD-1, 104-02).
+2. **`source: 'local'` semantics (A6)** — RESOLVED: accepted, fail-closed, no mirror fall-through (GD-2, 104-01).
+3. **sources[] in preview response (A7)** — RESOLVED: backups GET only, not preview (GD-8, 104-02).
 
 ## Sources
 
