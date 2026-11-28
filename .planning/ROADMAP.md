@@ -38,7 +38,10 @@
 3. Zero server.js/api.js diff; data-a/data-v/data-r/verbs pins unchanged (annotated same-commit if any shifts).
 4. ×5 parity + i18n:scan clean; backup/restore client suites green.
 
-**Depends on:** none. **Plans:** TBD
+**Depends on:** none. **Plans:** 1 plan
+
+Plans:
+- [ ] 111-01-PLAN.md — Superset run-history headers (R-15/BK-02) as the tracer, then min-width 880 (BK-01) + 11-point checklist sweep (BK-03); zero server diff
 
 ### Phase 112: Settings Unification — Client Only
 **Goal:** All 6 settings data lists on the design language (R-14); preference rows untouched (R-17).
