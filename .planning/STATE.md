@@ -14,19 +14,19 @@ progress:
   percent: 0
 ---
 
-# Project State: Projects Studio — v3.6
+# Project State: Projects Studio — v3.9
 
 ## Project Reference
 
 - **Core value:** Self-hosted, zero-dependency, multi-tenant project-management workspace.
-- **Current milestone:** v3.6 Entra ID Mappings & Restore Sources
+- **Current milestone:** v3.9 Backup & Settings UI Refresh (Phases 111–113)
 - **Milestone goal:** Operator UI for Entra group → workspace mappings (manual GUID + manual label, no Graph), honest OIDC linking docs, and the deferred restore-source selection.
 - **Roadmap:** `.planning/ROADMAP.md` — Phases 101–105, 15/15 requirements mapped.
 - **Requirements:** `.planning/REQUIREMENTS.md` (owner rulings R-1..R-5 baked in).
 
 ## Current Position
 
-- **Phase:** 107 — complete (1/1 plans)
+- **Phase:** 113 — in planning (1/1 plans; milestone v3.9, phases 111/112 done-or-in-flight)
 - **Status:** Milestone v3.8 complete — audit passed (6/6 requirements, E2E verified, owner-change integrated), archived
 - **Progress:** ▰▰▰▰▰ 109 · ▰▰▰▰▰ 110
 
