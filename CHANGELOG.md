@@ -5,6 +5,22 @@ All notable changes to Projects Studio are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] — 2026-11-29 — Governance UI Refresh
+
+2 phases (109–110). Highlights:
+
+- **Governance tabs unified on the v3.7 table design language**: Super Admin
+  roster + candidate cards converted to perm-t tables (D-90 semantics
+  untouched), the recent-activity trail becomes a compact Action/Target/By/
+  When table, and the Backup/Restore operator tabs gain the Granted column +
+  the standard min-width — all three tabs visually consistent.
+- **Housekeeping**: 6 bracketed corrections on stale planning anchors
+  (annotate-not-rewrite), seeds marked implemented, and the webhook-events
+  due.reminder test flake fixed via fixed-now injection (baseline now exactly
+  2 documented failures).
+- **Post-phase owner change**: the settings audit-trail card removed
+  (client surface only; server route + audit_log table untouched).
+
 ## [3.7.0] — 2026-11-29 — Mappings UX & Team Mapping
 
 3 phases (106–108). Highlights:

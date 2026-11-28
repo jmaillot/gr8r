@@ -1,8 +1,10 @@
 # Projects Studio — project context
 
-*Last updated: 2026-11-29 — Milestone v3.8 Governance UI Refresh started.*
+*Last updated: 2026-11-29 — Milestone v3.8 Governance UI Refresh SHIPPED.*
 
 ## Current State
+
+**v3.8 shipped 2026-11-29** (2 phases, 109–110, all verified; audit passed — 6/6 requirements, E2E verified). All Governance tabs unified on the v3.7 table design language (SA candidates fully converted, Backup/Restore tabs at parity); the webhook-events due.reminder flake is dead (baseline now exactly 2 documented failures: french-typography content, webhook-routes GET list); planning-bookkeeping debt closed (6 bracketed annotations, 3 seeds marked). Post-phase owner change integrated: the settings audit-trail card removed (client surface only; D-12 pins annotated — verbs 86, data-a 635, data-v 94).
 
 **v3.7 shipped 2026-11-29** (3 phases, 106–108, all verified; audit passed — 15/15 requirements wired, 4/4 E2E flows). The project is a
 self-hosted, zero-dependency, multi-tenant project-management workspace: hand-rolled Node server
@@ -11,13 +13,18 @@ local+S3+FTP+SMB destinations, OIDC SSO with Entra group→workspace mappings **
 targets and mapping edit**, per-source restore selection with availability probes **now with per-run
 archive presence stat** (stat-only, three-state badge). Test baseline: 2836 tests with exactly 2 documented pre-existing failures (french-typography content, webhook-routes GET list).
 
-## Current Milestone: v3.8 Governance UI Refresh (started 2026-11-29)
+## Milestone v3.8 Governance UI Refresh — SHIPPED (2026-11-29)
 
-**Goal:** Unify all Governance tabs on the v3.7 table design language (Super Admin candidates fully converted — owner ruling; Backup/Restore tabs brought to visual parity), plus docs/test housekeeping (ROADMAP corrections as bracketed annotations, seed marks, and the due.reminder flake fix — HK-02, webhook-events suite).
+**Goal:** Unify all Governance tabs on the v3.7 table design language (Super Admin candidates fully converted — owner ruling R-11; Backup/Restore tabs brought to visual parity — R-12), plus docs/test housekeeping (R-13).
 
-**Phase shape (owner-approved):** 109 Governance perm-t unification (client-only, zero server changes) → 110 housekeeping (docs annotations + flake fix; parallel-safe, disjoint files).
+**Shipped:**
+- **Governance unification** — SA roster + candidates srow → perm-t tables (D-90-3/4 semantics untouched: roster-first, promote-only, 2-char floor, cap-note); activity trail → compact Action/Target/By/When table; Backup/Restore tabs gain the Granted (When) column + min-width:880 — all three tabs on the v3.7 idiom
+- **Housekeeping** — 6 bracketed `[correction v3.8: …]` annotations beside surviving originals (annotate-not-rewrite, survival-gated); 3 seeds marked implemented; the webhook-events due.reminder flake fixed via fixed-now injection (route seam untouched) — baseline now exactly 2 documented failures
+- **Post-phase owner change integrated** — settings audit-trail card removed (client surface only; zero dangling refs; D-12 pins annotated same-commit)
 
-**Research:** `.planning/research/GOVERNANCE-REFRESH.md` (e4395efe — HIGH; drift located to governance.js:165–218/:239–292/:301–312; flake root-caused: live `new Date()` vs 08:00 UTC window, fix = fixed-now injection, route already accepts it).
+**Decisions:** R-11 full SA conversion · R-12 unify Backup/Restore tabs · R-13 housekeeping rides 110. Phases 109/110 executed in parallel (genuinely disjoint file sets — checker-verified GO). W4 key budget exceeded by 1 (5 vs ≤4) — verifier-accepted (no truthful existing keys for the trail headers).
+
+<!-- Next Milestone Goals placeholder — filled by /gsd-new-milestone -->
 
 ## Milestone v3.7 Mappings UX & Team Mapping — SHIPPED (2026-11-29)
 
