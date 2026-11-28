@@ -116,8 +116,12 @@ Plans:
   4. DEPLOY.md Azure setup steps document `groupMembershipClaims: "ApplicationGroup"` (assigned-groups-only semantics), assigning the Entra group to the Enterprise Application, and where to copy the group Object-ID GUID for the mappings page.
   5. .env.example's `OIDC_TRUST_TENANT_EMAIL` comment states the why (Azure AD work/school tokens omit the claim), the guest carve-out, and points to the DEPLOY.md section.
 
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 105-01-PLAN.md — Restore-source SPA: chip picker fed by sources[], per-source probe UI (badge + toast), source transport on all 6 restore calls, ×5 i18n + verb pin 85 (RSRC-04)
+- [ ] 105-02-PLAN.md — OIDC docs: DEPLOY.md linking-policy rewrite (flag lead + guest carve-out + symptom table), Azure GUID copy-path, .env.example expansion, docs-fidelity test (OIDCDOC-01..03)
 
 ---
 
