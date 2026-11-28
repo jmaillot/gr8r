@@ -5654,7 +5654,12 @@ A.backupDownload = async el => {
   try {
     let res;
     try {
-      res = await fetch(`/api/backup/download?runId=${encodeURIComponent(el.dataset.id || '')}`, {
+      /* Phase 105 (RSRC-04): the drawer-armed source rides the download GET
+         as &source= (the server accepts it on the download route) — omitted
+         when nothing non-default is armed, so the URL is byte-identical to
+         the default. */
+      const src = restoreArmedSource(el.dataset.id);
+      res = await fetch(`/api/backup/download?runId=${encodeURIComponent(el.dataset.id || '')}${src ? `&source=${encodeURIComponent(src)}` : ''}`, {
         method: 'GET',
         credentials: 'same-origin',
       });
@@ -5697,7 +5702,7 @@ A.backupVerifyChecksum = async el => {
   busy.add(id);
   render();
   try {
-    const res = await api.backupVerifyChecksum(id);
+    const res = await api.backupVerifyChecksum(id, { source: restoreArmedSource(id) });
     if (!res.ok) {
       if (res.status === 401) return; // D-28: the central intercept owns the teardown
       /* call()'s refusal envelope carries the centrally translated message
@@ -5861,7 +5866,7 @@ A.restorePreview = async el => {
     const scopes = await api.backupScopes();
     if (scopes.ok) S.ui.backupScopes = Array.isArray(scopes.data?.workspaces) ? scopes.data.workspaces : null;
   }
-  const res = await api.restorePreview(runId);
+  const res = await api.restorePreview(runId, { source: restoreArmedSource(runId) });
   if (!res.ok) {
     S.ui.restorePreview = null;
     render();
@@ -6001,7 +6006,7 @@ A.restoreOverwrite = el => {
       danger: true,
       typeName: targetProject.name,
       run: async () => {
-        const res = await api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name });
+        const res = await api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name, source: restoreArmedSource(runId) });
         if (!res.ok) {
           if (res.status === 401) return;
           return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
@@ -6030,7 +6035,7 @@ A.restoreOverwrite = el => {
     danger: true,
     typeName: target.name,
     run: async () => {
-      const res = await api.restoreOverwrite({ runId, targetId: target.id, confirmName: target.name });
+      const res = await api.restoreOverwrite({ runId, targetId: target.id, confirmName: target.name, source: restoreArmedSource(runId) });
       if (!res.ok) {
         if (res.status === 401) return;
         return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });
@@ -6062,7 +6067,7 @@ A.restoreInstance = el => {
     danger: true,
     typeName: DR_CONFIRM_PHRASE,
     run: async () => {
-      const res = await api.restoreInstance({ runId, confirmPhrase: DR_CONFIRM_PHRASE });
+      const res = await api.restoreInstance({ runId, confirmPhrase: DR_CONFIRM_PHRASE, source: restoreArmedSource(runId) });
       if (!res.ok) {
         if (res.status === 401) return;
         return toast(restoreMissingToast(res.data?.code, res.data), { kind: 'err' });

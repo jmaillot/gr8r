@@ -527,8 +527,11 @@ export const api = {
      outcomes (a mismatch is a RESULT, never a refusal); the refusal
      vocabulary (backupRoleRequired / restoreArchiveMissing / tooManyAttempts)
      flows through call()'s central keyed handling. */
-  async backupVerifyChecksum(runId, { signal } = {}) {
-    return call('POST', '/api/backup/verify-checksum', { runId }, { signal });
+  async backupVerifyChecksum(runId, { source, signal } = {}) {
+    /* Phase 105 (RSRC-04): the armed source rides the re-hash POST as
+       body.source (GD-4: POSTs carry camelCase body fields) — omitted when
+       nothing non-default is armed. */
+    return call('POST', '/api/backup/verify-checksum', { runId, source }, { signal });
   },
   /* 90-03 (D-90-12/13/14/15): the rotation projection — GET the dry-run
      grouped delete set for one task, computed server-side from the CURRENT
@@ -572,8 +575,11 @@ export const api = {
   async restoreBackups({ signal } = {}) {
     return call('GET', '/api/backup/restore/backups', undefined, { signal });
   },
-  async restorePreview(runId, { signal } = {}) {
-    return call('GET', `/api/backup/restore/preview?runId=${encodeURIComponent(runId)}`, undefined, { signal });
+  async restorePreview(runId, { source, signal } = {}) {
+    /* Phase 105 (RSRC-04): the armed source rides the preview GET as
+       &source= (GD-4: GETs carry query params) — omitted when nothing
+       non-default is armed, so the URL is byte-identical to the default. */
+    return call('GET', `/api/backup/restore/preview?runId=${encodeURIComponent(runId)}${source ? `&source=${encodeURIComponent(source)}` : ''}`, undefined, { signal });
   },
   /* UAT 2026-11-27 (owner): an off-instance archive uploads as a RAW body —
      the same response envelope as call() without the JSON encoding. */

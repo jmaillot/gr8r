@@ -181,6 +181,61 @@ test('5-locale key parity for the 89-06 restore surface', () => {
 });
 
 /* =====================================================================
+   Task 3 (105-01): the source transport matrix — the armed source rides
+   all 6 restore calls (GD-4: GETs query, POSTs camelCase body), omitted
+   when nothing non-default is armed; the zero-derivation guard; the
+   reset coverage.
+   ===================================================================== */
+test('105-01: the armed source threads through all 6 restore calls — query on GETs, camelCase body on POSTs, omitted when default', () => {
+  /* preview: GET builder appends &source= (encodeURIComponent'd) */
+  assert.match(apiSrc, /async restorePreview\(runId, \{ source, signal \} = \{\}\)/, 'the preview builder accepts the armed source');
+  assert.match(apiSrc, /&source=\$\{encodeURIComponent\(source\)\}/, 'the preview GET appends &source= encoded');
+  /* verify: camelCase body.source */
+  assert.match(apiSrc, /async backupVerifyChecksum\(runId, \{ source, signal \} = \{\}\)/, 'the verify builder accepts the armed source');
+  assert.match(apiSrc, /call\('POST', '\/api\/backup\/verify-checksum', \{ runId, source \}/, 'the verify POST carries body.source camelCase');
+  /* the actions pass restoreArmedSource — only values that came from sources[] */
+  const preview = actionsSrc.slice(actionsSrc.indexOf('A.restorePreview ='), actionsSrc.indexOf('A.restorePreview =') + 2400);
+  assert.ok(preview.includes('api.restorePreview(runId, { source: restoreArmedSource(runId) })'), 'the preview action passes the armed source');
+  const dl = actionsSrc.slice(actionsSrc.indexOf('A.backupDownload ='), actionsSrc.indexOf('A.backupDownload =') + 900);
+  assert.ok(dl.includes('restoreArmedSource(el.dataset.id)'), 'the download action threads the armed source');
+  assert.ok(dl.includes('&source=${encodeURIComponent(src)}'), 'the download URL appends &source= encoded (omitted → byte-identical URL)');
+  const verify = actionsSrc.slice(actionsSrc.indexOf('A.backupVerifyChecksum ='), actionsSrc.indexOf('A.backupVerifyChecksum =') + 900);
+  assert.ok(verify.includes('api.backupVerifyChecksum(id, { source: restoreArmedSource(id) })'), 'the verify action threads the armed source');
+  for (const name of ['A.restoreNew =', 'A.restoreOverwrite =', 'A.restoreInstance =']) {
+    const slice = actionsSrc.slice(actionsSrc.indexOf(name), actionsSrc.indexOf(name) + 4600);
+    assert.ok(slice.includes('source: restoreArmedSource(runId)'), `${name} carries body.source camelCase (omitted when default)`);
+  }
+  const newBody = actionsSrc.slice(actionsSrc.indexOf('api.restoreRun('), actionsSrc.indexOf('api.restoreRun(') + 200);
+  assert.ok(newBody.includes('source: restoreArmedSource(runId)'), 'the import-new trigger body carries the armed source');
+});
+
+test('105-01: the picker consumes sources[] verbatim — zero client-side availability derivation; reset coverage is total', () => {
+  /* Zero-derivation guard (D-23): the client never computes availability —
+     no destination-enabled math anywhere under the page. The mirror flags
+     themselves DO render as row badges (render-verbatim, R-4) — what is
+     forbidden is deriving the PICKER's availability from them. */
+  assert.ok(!pagesSrc.includes('S3.enabled') && !pagesSrc.includes('FTP.enabled') && !pagesSrc.includes('SMB.enabled'), 'no destination-enabled derivation under the page');
+  const picker = pagesSrc.slice(pagesSrc.indexOf('const sourcePicker'), pagesSrc.indexOf('${sourcePicker}'));
+  assert.ok(!picker.includes('uploaded') && !picker.includes('.enabled'), 'the picker reads ONLY sources[] — no flag math inside the picker');
+  /* The pending-run progress panel carries NO source/probe markup (no
+     mid-run swap — RSRC-04: new runId semantics). */
+  const progress = pagesSrc.slice(pagesSrc.indexOf('const restoreProgress ='), pagesSrc.indexOf('const restoreRunTr ='));
+  assert.ok(!progress.includes('restoreSource') && !progress.includes('restoreProbe'), 'no source control in the pending-run progress panel');
+  /* Resets: close + all three accepted-trigger paths null the full picker
+     state (arm, probe badges, feed). */
+  const close = actionsSrc.slice(actionsSrc.indexOf('A.restorePreviewClose ='), actionsSrc.indexOf('A.restorePreviewClose =') + 700);
+  for (const slot of ['S.ui.restoreSource = null', 'S.ui.restoreProbe = null', 'S.ui.restoreSourcesById = null']) {
+    assert.ok(close.includes(slot), `the close action resets ${slot}`);
+  }
+  const resets = actionsSrc.split('S.ui.restoreProbe = null;').length - 1;
+  assert.ok(resets >= 6, `every accepted-trigger path resets the probe state too (found ${resets} reset sites: close + open-different-run + 4 triggers)`);
+  /* The runId-different reopen invalidates the arm (no stale arm across drawers). */
+  const preview = actionsSrc.slice(actionsSrc.indexOf('A.restorePreview ='), actionsSrc.indexOf('A.restorePreview =') + 2400);
+  assert.ok(preview.includes('prevRunId !== runId'), 'opening a DIFFERENT run resets the armed source + probe badges');
+  /* 5-locale parity gate for the whole source* key family rides the Task-2 parity test. */
+});
+
+/* =====================================================================
    Task 2 (D-89-23/27): destructive confirm flows + workspace picker +
    the CLOSED refusal-toast map.
    ===================================================================== */
@@ -479,7 +534,7 @@ test('95-05: the project overwrite wraps the POST in confirmDlg with the CURRENT
 
 test('95-05: the overwrite payload carries targetId + targetProjectId + confirmName; success resets the armed project', () => {
   const proj = actionsSrc.slice(actionsSrc.indexOf('A.restoreOverwrite ='), actionsSrc.indexOf('const scopeId = S.ui.restorePreviewData?.data?.scope?.id;'));
-  assert.ok(proj.includes('api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name })'), 'the POST mirrors the 95-04 route contract');
+  assert.ok(proj.includes('api.restoreOverwrite({ runId, targetId: wsId, targetProjectId: projId, confirmName: targetProject.name, source: restoreArmedSource(runId) })'), 'the POST mirrors the 95-04 route contract (105-01: + armed source, omitted when default)');
   assert.ok(proj.includes('S.ui.restoreTargetProject = null'), 'the accepted overwrite resets the armed project');
   assert.ok(proj.includes("'restoreTargetMissing'"), 'a trigger attempt without a target refuses client-side with the keyed message');
 });

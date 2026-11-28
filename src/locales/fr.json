@@ -2449,7 +2449,7 @@
   "page.backup.typeSnapshot": "Snapshot",
   "page.restore.snapshotTip": "Avant la restauration, un snapshot de l'espace cible est stocké localement (conservé 30 jours) afin de permettre l'annulation de l'opération.",
   "page.restore.sourcePickLabel": "Restaurer depuis",
-  "page.restore.sourcePickHint": "Choisissez d'où l'archive est récupérée. Par défaut, la première disponible.",
+  "page.restore.sourcePickHint": "Choisissez d’où l’archive est récupérée. Par défaut, la première disponible.",
   "page.restore.sourceProbeCheck": "Vérifier la disponibilité",
   "page.restore.sourceProbeChecking": "Vérification…",
   "page.restore.sourceProbeOk": "Disponible",

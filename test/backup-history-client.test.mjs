@@ -338,7 +338,7 @@ test('90-02 task 3: the verify CTA renders only for non-missing runs — busy sw
      (payload-derived — the client stores no verify result) — and NO toast
      call sits on the result path (restoreToast is refusal-only, D-90-11). */
   const actionHead = actionsSrc.slice(actionsSrc.indexOf('A.backupVerifyChecksum ='), actionsSrc.indexOf('};', actionsSrc.indexOf('A.backupVerifyChecksum =')));
-  assert.ok(actionHead.includes('api.backupVerifyChecksum(id)'), 'the action rides the api verify method');
+  assert.ok(actionHead.includes('api.backupVerifyChecksum(id'), 'the action rides the api verify method');
   assert.ok(actionHead.includes('toast(restoreMissingToast('), 'refusals surface through the closed map — the detail-carrying wrapper (restoreArchiveMissing carries the seam detail)');
   assert.ok(actionHead.includes('refreshOpenBackupHistories()'), 'the result re-renders through the open-history refresh');
   /* UAT round-5 (owner ruling): the RESULT path toasts at click time — the
