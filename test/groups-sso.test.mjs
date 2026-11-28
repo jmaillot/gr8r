@@ -4,6 +4,9 @@
    with provenance `group:<guid>` per D-81-6. */
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { idp, startMockIdp } from './helpers/oidc-idp.mjs';
 import { ADMIN, login, startServer, withDb } from './helpers/server.mjs';
@@ -1121,5 +1124,68 @@ test('lost-claim removal purges the granted team row via the GS-01 blanket delet
     });
   } finally {
     await server.stop();
+  }
+});
+
+/* ---------------- Phase 106 Plan 01 Task 3 — TEAM-04 PUT narrowing ---------------- */
+
+/* A manual teams PUT on a user holding group-stamped team rows preserves
+   those rows and reinserts only the submitted manual set (TEAM-04, SC2). */
+test('manual teams PUT preserves group-stamped rows and reinserts only the manual set (TEAM-04)', async () => {
+  const server = await startServer({ env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-put', slug: 'putws', name: 'PUT WS', teams: [{ id: 'team-a', name: 'A' }, { id: 'team-m', name: 'M' }] });
+      const admin = db.prepare('select id from users where email = ?').get(ADMIN.email);
+      db.prepare("insert into memberships (workspace_id, user_id, role, member_id, provenance) values ('ws-put', ?, 'owner', ?, 'manual')").run(admin.id, `m_${admin.id.slice(0, 8)}`);
+      seedMapping(db, { guid: 'a2111111-2222-3333-4444-555555555555', workspaceId: 'ws-put', role: 'member', teamId: 'team-a' });
+    });
+    const { callback } = await runFlow(server, { sub: 'sub-put', email: 'put@example.com', email_verified: true, groups: ['a2111111-2222-3333-4444-555555555555'] }, 'code-put');
+    assert.equal(callback.location, '/');
+    const ssoUid = withDb(server.dbPath, db => db.prepare('select id from users where email = ?').get('put@example.com').id);
+    const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const res = await admin.put('/api/workspaces/putws/members/' + ssoUid + '/teams', { teams: ['team-m'] });
+    assert.equal(res.status, 200, `manual PUT must succeed: ${JSON.stringify(res.data)}`);
+    withDb(server.dbPath, db => {
+      const rows = db.prepare('select team_id, provenance from team_members where workspace_id = ? and user_id = ? order by team_id').all('ws-put', ssoUid);
+      assert.deepEqual(rows.map(r => r.team_id), ['team-a', 'team-m'], 'the group row survived AND the manual set landed');
+      assert.equal(rows[0].provenance, 'group:a2111111-2222-3333-4444-555555555555', 'the group row keeps its provenance');
+      assert.equal(rows[1].provenance, null, 'the manual row is provenance-null');
+    });
+  } finally {
+    await server.stop();
+  }
+});
+
+/* ---------------- Phase 106 Plan 01 Task 3 — TEAM-07 boot warn + route ---------------- */
+
+/* Boot log discipline: a dead-team mapping warns per the boot format; the
+   zero-rows boot stays exactly the ONE logInfo line (Pitfall 6). */
+test('boot warns dead-team mappings; zero-rows boot stays byte-identical (TEAM-07)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-boot-'));
+  const server = await startServer({ dataDir: dir, env: oidcEnv() });
+  try {
+    withDb(server.dbPath, db => {
+      seedWorkspaceWithTeams(db, { id: 'ws-boot', slug: 'bootws', name: 'Boot WS', teams: [] });
+      seedMapping(db, { guid: 'a3111111-2222-3333-4444-555555555555', workspaceId: 'ws-boot', role: 'member', teamId: 'team-a' });
+    });
+    await server.stop();
+    const booted = await startServer({ dataDir: dir, env: oidcEnv() });
+    try {
+      const out = booted.output();
+      assert.ok(out.includes('group mapping dead: group a3111111-2222-3333-4444-555555555555 → missing team team-a in workspace ws-boot'), 'the dead-team boot warn is present');
+    } finally {
+      await booted.stop();
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  const empty = await startServer({ env: oidcEnv() });
+  try {
+    const out = empty.output();
+    assert.equal((out.match(/group mappings: off/g) || []).length, 1, 'exactly ONE "group mappings: off" line');
+    assert.equal((out.match(/group mapping dead/g) || []).length, 0, 'zero-rows boot emits NO dead warnings');
+  } finally {
+    await empty.stop();
   }
 });

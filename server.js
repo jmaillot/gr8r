@@ -4703,6 +4703,19 @@ function roleRank(role) {
   return ROLE_RANK[role] || 0;
 }
 
+/* Phase 106 (TEAM-07): the doc-teams whitelist — the verbatim 11839
+   predicate, defensively parsed (T-106-04): a doc parse failure yields an
+   EMPTY whitelist (dead-team posture), never a throw. Shared by the boot
+   warn loop and the dead-mappings route so the team-deleted orphan class
+   has exactly one definition (D-09: derived on read, no schema change). */
+function docTeamIds(doc) {
+  try {
+    return new Set((JSON.parse(doc)?.data?.teams || []).map(t => t?.id).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
 /* Memberships joined with the account, in the order people joined. */
 async function membersOf(workspaceId) {
   return await db.all(
@@ -9252,9 +9265,17 @@ async function handleApi(req, res, url) {
     // id match. Raw values returned; the FIRST-colon split for rendering
     // is a client concern (D-08) — the server does not transform the
     // encoded action strings.
-    const mappings = await db.all('select group_guid, workspace_id, kind, label from group_mappings');
-    const wsIds = new Set((await db.all('select id from workspaces')).map(r => r.id));
-    const orphans = mappings.filter(m => !wsIds.has(m.workspace_id));
+    const mappings = await db.all('select group_guid, workspace_id, kind, label, team_id from group_mappings');
+    const liveWs = await db.all('select id, doc from workspaces');
+    const wsIds = new Set(liveWs.map(r => r.id));
+    /* Phase 106 (TEAM-07): the orphan predicate gains the team check via the
+       shared docTeamIds helper — a mapping whose team left the workspace doc
+       is dead too, with deadReason 'team-deleted' alongside the existing
+       workspace reason. */
+    const wsTeams = new Map(liveWs.map(r => [r.id, docTeamIds(r.doc)]));
+    const orphans = mappings
+      .filter(m => !wsIds.has(m.workspace_id) || (m.team_id && wsIds.has(m.workspace_id) && !wsTeams.get(m.workspace_id).has(m.team_id)))
+      .map(m => ({ ...m, deadReason: !wsIds.has(m.workspace_id) ? 'workspace-deleted' : 'team-deleted' }));
     // Query B — Phase 82 encoded guard trail (group_<delta>:group:<guid>:<reason>),
     // bounded and newest-first (discretion bound: 100). WR-83-03: the literal
     // `group_` prefix — `_` is ESCAPED so the LIKE cannot over-match
@@ -11951,7 +11972,12 @@ async function handleApi(req, res, url) {
     const teams = [...new Set(body.teams.map(t => String(t).slice(0, 40)))];
     if (teams.some(t => !known.has(t))) return fail(res, 400, 'unknownTeam', 'Unknown team');
     await db.tx(async () => {
-      await db.run('delete from team_members where workspace_id = ? and user_id = ?', [ctx.ws.id, target.id]);
+      /* Phase 106 (TEAM-04): manual teams edits own ONLY manual/invite rows —
+         group-stamped rows (`group:<guid>`) are the sync cell's property and
+         are swept at the next sign-in, never purged here (same immunity
+         doctrine as GS-01/GS-03). The reinsert loop below cannot resurrect
+         group rows, which is correct — manual edits must not own them. */
+      await db.run("delete from team_members where workspace_id = ? and user_id = ? and (provenance is null or provenance not like 'group:%')", [ctx.ws.id, target.id]);
       for (const t of teams)
         await db.run('insert or ignore into team_members (workspace_id, team_id, member_id, user_id) values (?,?,?,?)', [
           ctx.ws.id,
@@ -13777,15 +13803,22 @@ async function main() {
        longer present in workspaces (the non-cascading FK deliberately
        leaves the row behind — D-82-6 detection; the operator-console
        section that renders these is Phase 83). */
-    const groupMappings = await db.all('select group_guid, workspace_id from group_mappings');
+    const groupMappings = await db.all('select group_guid, workspace_id, team_id from group_mappings');
     if (groupMappings.length === 0) {
       logInfo('group mappings: off');
     } else {
       logInfo(`group mappings: ${groupMappings.length}`);
-      const wsIds = new Set((await db.all('select id from workspaces')).map(r => r.id));
+      /* Phase 106 (TEAM-07): the docs of referenced LIVE workspaces only —
+         zero-rows path above stays byte-identical (Pitfall 6), and doc
+         parsing happens ONLY inside this rows-exist else. */
+      const liveWs = await db.all('select id, doc from workspaces');
+      const wsIds = new Set(liveWs.map(r => r.id));
+      const wsTeams = new Map(liveWs.map(r => [r.id, docTeamIds(r.doc)]));
       for (const m of groupMappings) {
         if (!wsIds.has(m.workspace_id)) {
           logWarn(`group mapping dead: group ${m.group_guid} → missing workspace ${m.workspace_id}`);
+        } else if (m.team_id && !wsTeams.get(m.workspace_id).has(m.team_id)) {
+          logWarn(`group mapping dead: group ${m.group_guid} → missing team ${m.team_id} in workspace ${m.workspace_id}`);
         }
       }
     }

@@ -322,3 +322,25 @@ test('isUniqueViolation: true for SQLite and pg unique-violation shapes, false f
   assert.equal(isUniqueViolation(new Error('no such table: group_mappings')), false);
   assert.equal(isUniqueViolation(Object.assign(new Error('syntax error'), { code: '42601' })), false);
 });
+
+/* ---------- T8: TEAM-07 — the dead-mappings route reports team-deleted orphans ---------- */
+
+test('dead-mappings route: a mapping whose team vanished from the doc is an orphan with deadReason team-deleted; workspace reasons still render', async () => {
+  const server = await startServer({});
+  try {
+    const ws = acmeId(server);
+    withDb(server.dbPath, db =>
+      db.prepare('insert into group_mappings (id, group_guid, workspace_id, role, kind, team_id, created_at, updated_at) values (?,?,?,?,?,?,?,?)').run(
+        'gm-teamdead', GUID_OK.toLowerCase(), ws.id, 'member', 'workspace', 'team-gone', Date.now(), Date.now(),
+      ));
+    insertMapping(server, { guid: GUID_B, wsId: 'missing-workspace-id' }); // the pre-existing workspace-deleted class
+    const operator = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const res = await operator.get('/api/auth/operator/dead-mappings');
+    assert.equal(res.status, 200);
+    const byGuid = Object.fromEntries(res.data.orphans.map(o => [o.group_guid, o]));
+    assert.deepEqual({ deadReason: byGuid[GUID_OK.toLowerCase()].deadReason, teamId: byGuid[GUID_OK.toLowerCase()].team_id }, { deadReason: 'team-deleted', teamId: 'team-gone' });
+    assert.equal(byGuid[GUID_B].deadReason, 'workspace-deleted', 'the pre-existing workspace class still renders');
+  } finally {
+    await server.stop();
+  }
+});
