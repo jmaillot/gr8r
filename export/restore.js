@@ -1823,10 +1823,18 @@ export async function restoreOverwriteUnit(opts = {}) {
      envelopes verbatim (failWith so the funnel releases the
      restore_lock, 89-05 CR) and its dropStagedTmp contract (D-89-16).
      Disabled destinations silently skip (documented divergence). */
-  const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath });
+  const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath, source: opts.source });
   if (src.ok) {
     archivePath = src.archivePath;
     stagedTmp = src.stagedPath;
+  } else if (src.reason === 'sourceInvalid') {
+    /* Phase 104 (RSRC-02): explicit-source refusals surface through the
+       unit's OWN failWith funnel (never a raw throw past it — 89-05). */
+    return failWith(keyed('restoreSourceInvalid', 'restore: requested source is not recognized'));
+  } else if (src.reason === 'sourceNotMirrored') {
+    /* GD-5: explicit+not-mirrored/disabled refuses even in skip mode —
+       the helper returns the structured reason; the envelope stays HERE. */
+    return failWith(keyed('restoreSourceNotMirrored', 'restore: that backup archive has no surviving copy at the requested source'));
   } else if (src.reason === 'fetchFailed') {
     dropStagedTmp();
     const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
@@ -2290,10 +2298,18 @@ export async function runRestore(opts = {}) {
        own keyed envelopes verbatim (throw keyed — resolve-by-design, the
        outer catch folds the failure into the run row). */
     let archivePath = opts.archivePath ?? null;
-    const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath: opts.archivePath });
+    const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath: opts.archivePath, source: opts.source });
     if (src.ok) {
       archivePath = src.archivePath;
       stagedTmp = src.stagedPath;
+    } else if (src.reason === 'sourceInvalid') {
+      /* Phase 104 (RSRC-02): explicit-source refusal through this unit's
+         own keyed throw (resolve-by-design — the outer catch folds it
+         into the run row; never a raw throw past the funnel, 89-05). */
+      throw keyed('restoreSourceInvalid', 'restore: requested source is not recognized');
+    } else if (src.reason === 'sourceNotMirrored') {
+      /* GD-5: explicit+not-mirrored/disabled refuses even in skip mode. */
+      throw keyed('restoreSourceNotMirrored', 'restore: that backup archive has no surviving copy at the requested source');
     } else if (src.reason === 'fetchFailed') {
       const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`
         : src.dest === 'ftp' ? `restore: archive not retrievable — local missing and the FTP seam failed (${src.err.detail})`
@@ -2530,10 +2546,17 @@ export async function restoreInstanceUnit(opts = {}) {
      restore_lock (89-05 CR contract — a stranded lock wedges every later
      restore AND backup run). The unit keeps its own keyed envelopes
      verbatim and its dropStagedTmp contract (D-89-16). */
-  const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath: opts.archivePath });
+  const src = await resolveRestoreSource(backupRun, { s3: opts.s3Config, ftp: opts.ftpConfig, smb: opts.smbConfig }, { disabledBehavior: 'skip', runId, archivePath: opts.archivePath, source: opts.source });
   if (src.ok) {
     archivePath = src.archivePath;
     stagedTmp = src.stagedPath;
+  } else if (src.reason === 'sourceInvalid') {
+    /* Phase 104 (RSRC-02): explicit-source refusal through failWith —
+       the funnel releases the restore_lock (89-05 CR). */
+    return failWith(keyed('restoreSourceInvalid', 'restore: requested source is not recognized'));
+  } else if (src.reason === 'sourceNotMirrored') {
+    /* GD-5: explicit+not-mirrored/disabled refuses even in skip mode. */
+    return failWith(keyed('restoreSourceNotMirrored', 'restore: that backup archive has no surviving copy at the requested source'));
   } else if (src.reason === 'fetchFailed') {
     dropStagedTmp();
     const why = src.dest === 's3' ? `restore: archive not retrievable — local missing and the S3 seam failed (${src.err.detail})`

@@ -10520,6 +10520,18 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
     }
+    /* Phase 104 (RSRC-02): explicit `source` (body.source, GD-4) — validated
+       SYNCHRONOUSLY after the row read and BEFORE claimRestoreLock
+       (D-89-23 position; a refused trigger never touches the lock, 89-05).
+       Omitted → today's behavior verbatim. */
+    const reqSource = parseRestoreSource(body?.source);
+    if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
+      const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+      await auditBackupTask(user, `restore_refused:${code}`);
+      return fail(res, 400, code, reqSource === 'invalid'
+        ? 'That restore source is not recognized'
+        : 'That backup archive has no surviving copy at the requested source');
+    }
     let scope = null;
     try {
       scope = JSON.parse(row.scope);
@@ -10578,6 +10590,7 @@ async function handleApi(req, res, url) {
       s3Config: S3.enabled ? S3.config() : null,
       ftpConfig: FTP.enabled ? FTP.config() : null, // the 98-04 read-back seam — restore fetches an ftp_uploaded archive via the 97 client
       smbConfig: SMB.enabled ? SMB.config() : null, // the 100-05 read-back seam — restore fetches an smb_uploaded archive via the 99 client
+      source: reqSource ?? undefined, // Phase 104 (RSRC-02): explicit source rides into the unit → resolveRestoreSource opts
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:import_new', null, scope.kind);
@@ -10641,6 +10654,17 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
     }
+    /* Phase 104 (RSRC-02): explicit `source` (body.source, GD-4) — same
+       synchronous post-row pre-lock validation as import_new (a refused
+       trigger never touches the lock, 89-05). Omitted → verbatim today. */
+    const reqSource = parseRestoreSource(body?.source);
+    if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
+      const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+      await auditBackupTask(user, `restore_refused:${code}`);
+      return fail(res, 400, code, reqSource === 'invalid'
+        ? 'That restore source is not recognized'
+        : 'That backup archive has no surviving copy at the requested source');
+    }
     let scope = null;
     try {
       scope = JSON.parse(row.scope);
@@ -10670,6 +10694,7 @@ async function handleApi(req, res, url) {
       s3Config: S3.enabled ? S3.config() : null, // the 88-01 seam — DR must fetch a rotated-away archive (90-04 e2e, Rule 1)
       ftpConfig: FTP.enabled ? FTP.config() : null, // the 98-04 read-back seam — DR fetches an ftp_uploaded archive via the 97 client
       smbConfig: SMB.enabled ? SMB.config() : null, // the 100-05 read-back seam — DR fetches an smb_uploaded archive via the 99 client
+      source: reqSource ?? undefined, // Phase 104 (RSRC-02): explicit source rides into the unit → resolveRestoreSource opts
       operator: { id: user.id, email: user.email },
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`instance restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
@@ -10769,6 +10794,17 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'restore_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
     }
+    /* Phase 104 (RSRC-02): explicit `source` (body.source, GD-4) — same
+       synchronous post-row pre-lock validation as import_new/DR (a refused
+       trigger never touches the lock, 89-05). Omitted → verbatim today. */
+    const reqSource = parseRestoreSource(body?.source);
+    if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
+      const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+      await auditBackupTask(user, `restore_refused:${code}`);
+      return fail(res, 400, code, reqSource === 'invalid'
+        ? 'That restore source is not recognized'
+        : 'That backup archive has no surviving copy at the requested source');
+    }
     let scope = null;
     try {
       scope = JSON.parse(row.scope);
@@ -10821,6 +10857,7 @@ async function handleApi(req, res, url) {
       ftpConfig: FTP.enabled ? FTP.config() : null,
       smbConfig: SMB.enabled ? SMB.config() : null,
       s3Config: S3.enabled ? S3.config() : null, // 2026-11-27 UAT: the overwrite s3 twin needs the 88-01 seam like import_new/DR
+      source: reqSource ?? undefined, // Phase 104 (RSRC-02): explicit source rides into the unit → resolveRestoreSource opts
       releaseLock: () => releaseRestoreLock(user.id),
     }).catch(err => logWarn(`overwrite restore run ${restoreRunId}: ${err?.message || err}`)); // resolve-by-design — belt-and-braces only
     await auditBackupTask(user, 'restore_started:overwrite', null, projectScope ? 'project' : 'workspace');
@@ -11053,6 +11090,18 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
     }
+    /* Phase 104 (RSRC-02): explicit `source` on the query (GD-4) — same
+       post-row pre-ladder validation posture as the preview route (R-4;
+       keyed refusal + backup_download_refused audit BEFORE the ladder).
+       Omitted → today's behavior verbatim. */
+    const reqSource = parseRestoreSource(url.searchParams.get('source'));
+    if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
+      const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+      await auditBackupTask(user, `backup_download_refused:${code}`);
+      return fail(res, 400, code, reqSource === 'invalid'
+        ? 'That restore source is not recognized'
+        : 'That backup archive has no surviving copy at the requested source');
+    }
     let scope = null;
     try {
       scope = JSON.parse(row.scope);
@@ -11081,7 +11130,7 @@ async function handleApi(req, res, url) {
           await auditBackupTask(user, 'backup_download_refused:restoreArchiveMissing');
           return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
         }
-        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse' });
+        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse', source: reqSource ?? undefined });
         if (src.ok) {
           /* The 88-01 seam re-verifies the digest on the stream-back itself —
              a mismatch refuses keyed before any byte reaches the client. */
@@ -11165,6 +11214,19 @@ async function handleApi(req, res, url) {
       await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
       return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from both destinations');
     }
+    /* Phase 104 (RSRC-02): explicit `source` on the body (GD-4 camelCase) —
+       same post-row pre-ladder validation posture as preview/download
+       (R-4; keyed refusal + backup_verify_refused audit BEFORE the ladder).
+       Omitted → today's behavior verbatim; the sha-mismatch RESULT
+       semantics below are untouched. */
+    const reqSource = parseRestoreSource(body?.source);
+    if (reqSource === 'invalid' || (reqSource !== null && reqSource !== 'local' && restoreSourceFlag(row, reqSource) !== 1)) {
+      const code = reqSource === 'invalid' ? 'restoreSourceInvalid' : 'restoreSourceNotMirrored';
+      await auditBackupTask(user, `backup_verify_refused:${code}`);
+      return fail(res, 400, code, reqSource === 'invalid'
+        ? 'That restore source is not recognized'
+        : 'That backup archive has no surviving copy at the requested source');
+    }
     const localPath = path.join(backupsRoot(), row.filename);
     const hasLocal = fs.existsSync(localPath);
     let stagedPath = null;
@@ -11186,7 +11248,7 @@ async function handleApi(req, res, url) {
           await auditBackupTask(user, 'backup_verify_refused:restoreArchiveMissing');
           return fail(res, 404, 'restoreArchiveMissing', 'That backup archive is gone from all destinations');
         }
-        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse' });
+        const src = await resolveRestoreSource(row, { s3: S3.enabled ? S3.config() : null, ftp: FTP.enabled ? FTP.config() : null, smb: SMB.enabled ? SMB.config() : null }, { disabledBehavior: 'refuse', source: reqSource ?? undefined });
         if (src.ok) {
           /* The 88-01 seam re-hashes ON the stream-back and refuses keyed
              (s3Class sha256Mismatch) — that keyed throw IS the verify result

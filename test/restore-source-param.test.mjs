@@ -344,10 +344,166 @@ test('104-01 engine: helper explicit ftp with a LIVE-configured ftp leg but dead
 });
 
 /* ---------------------------------------------------------------------
-   UNITS — added in Task 2 with the unit wiring (the structured reasons
-   map through each unit's OWN keyed funnel — failWith / throw keyed,
-   never a raw throw past the funnel, 89-05).
+   UNITS — the structured reasons map through each unit's OWN keyed
+   funnel (failWith / throw keyed — never a raw throw past the funnel,
+   89-05). Codes ride the new keyed family; envelope text is caller-owned.
    --------------------------------------------------------------------- */
+
+test('104-02 unit: restoreOverwriteUnit explicit source on a flag-0 run → keyed restoreSourceNotMirrored through failWith', async () => {
+  await resetWorld();
+  const result = await restore.restoreOverwriteUnit({
+    runId: 'ovw-param-not-mirrored-1',
+    backupRun: { filename: 'backup-gone-local.tar.gz', sha256: 'a'.repeat(64), taskId: 'task-fixture', uploaded: 1, ftp_uploaded: 0, smb_uploaded: 0 },
+    scope: { kind: 'workspace', id: 'ws-src' },
+    targetWorkspaceId: 'ws-target',
+    operator: OP,
+    source: 'ftp',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'restoreSourceNotMirrored');
+  assert.ok(result.error.includes('restore:'), 'the envelope text stays caller-owned');
+});
+
+test('104-02 unit: runRestore explicit bogus source → keyed restoreSourceInvalid (throw keyed — resolve-by-design)', async () => {
+  await resetWorld();
+  const result = await restore.runRestore({
+    runId: 'runrestore-param-invalid-1',
+    backupRun: { filename: 'backup-gone-local.tar.gz', sha256: 'a'.repeat(64), taskId: 'task-fixture', uploaded: 1, ftp_uploaded: 0, smb_uploaded: 0 },
+    source: 'bogus',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'restoreSourceInvalid');
+});
+
+test('104-02 unit: restoreInstanceUnit explicit source on a flag-0 run → keyed restoreSourceNotMirrored through failWith', async () => {
+  await resetWorld();
+  const result = await restore.restoreInstanceUnit({
+    runId: 'dr-param-not-mirrored-1',
+    backupRun: { filename: 'backup-gone-local.tar.gz', sha256: 'a'.repeat(64), taskId: 'task-fixture', uploaded: 1, ftp_uploaded: 0, smb_uploaded: 0 },
+    operator: OP,
+    source: 'smb',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'restoreSourceNotMirrored');
+});
+
+/* ---------------------------------------------------------------------
+   ROUTE FAMILIES (Task 2): download + verify-checksum refusals, and the
+   three trigger POSTs refusing SYNCHRONOUSLY BEFORE the lock claim —
+   the same refused trigger re-issued right after gets the SAME keyed
+   refusal (never a 409 backupRestoreInProgress), proving the lock row
+   was never touched (D-89-23 position, 89-05 CR).
+   --------------------------------------------------------------------- */
+
+const BACKUP_VERIFY_REFUSED = dataDir => () =>
+  withDb(path.join(dataDir, 'projects.db'), db2 =>
+    db2.prepare("select * from audit_log where action like 'backup_%_refused:restoreSource%' order by created_at, id").all());
+
+test('104-02 route: download ?source= — bogus → 400 restoreSourceInvalid; flag-0 valid → 400 restoreSourceNotMirrored (backup_download_refused tokens)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-dl-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-dl@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-dl@test.local', restoreOp);
+    plantRows(server, [{ id: 'param-dl-invalid', uploaded: 1 }, { id: 'param-dl-flag0', uploaded: 1, ftp_uploaded: 0 }]);
+    const bad = await restoreOp.get('/api/backup/download?runId=param-dl-invalid&source=bogus');
+    assert.equal(bad.status, 400, `download bogus: ${JSON.stringify(bad.data)}`);
+    assert.equal(bad.data.code, 'restoreSourceInvalid');
+    const flag0 = await restoreOp.get('/api/backup/download?runId=param-dl-flag0&source=ftp');
+    assert.equal(flag0.status, 400, `download flag-0: ${JSON.stringify(flag0.data)}`);
+    assert.equal(flag0.data.code, 'restoreSourceNotMirrored');
+  } finally {
+    await server.stop();
+  }
+  const audits = BACKUP_VERIFY_REFUSED(dataDir)();
+  assert.ok(audits.some(a => a.action === 'backup_download_refused:restoreSourceInvalid'), 'download audits backup_download_refused:restoreSourceInvalid');
+  assert.ok(audits.some(a => a.action === 'backup_download_refused:restoreSourceNotMirrored'), 'download audits backup_download_refused:restoreSourceNotMirrored');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 route: verify-checksum body.source — bogus → 400 restoreSourceInvalid; flag-0 valid → 400 restoreSourceNotMirrored (backup_verify_refused tokens)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-vf-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-vf@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-vf@test.local', restoreOp);
+    plantRows(server, [{ id: 'param-vf-invalid', uploaded: 1 }, { id: 'param-vf-flag0', uploaded: 1, smb_uploaded: 0 }]);
+    const bad = await restoreOp.post('/api/backup/verify-checksum', { runId: 'param-vf-invalid', source: 'bogus' });
+    assert.equal(bad.status, 400, `verify bogus: ${JSON.stringify(bad.data)}`);
+    assert.equal(bad.data.code, 'restoreSourceInvalid');
+    const flag0 = await restoreOp.post('/api/backup/verify-checksum', { runId: 'param-vf-flag0', source: 'smb' });
+    assert.equal(flag0.status, 400, `verify flag-0: ${JSON.stringify(flag0.data)}`);
+    assert.equal(flag0.data.code, 'restoreSourceNotMirrored');
+  } finally {
+    await server.stop();
+  }
+  const audits = BACKUP_VERIFY_REFUSED(dataDir)();
+  assert.ok(audits.some(a => a.action === 'backup_verify_refused:restoreSourceInvalid'), 'verify audits backup_verify_refused:restoreSourceInvalid');
+  assert.ok(audits.some(a => a.action === 'backup_verify_refused:restoreSourceNotMirrored'), 'verify audits backup_verify_refused:restoreSourceNotMirrored');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 route: POST /api/backup/restore trigger refuses source BEFORE the lock claim — re-issued refusal, never 409 (lock still free)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-tr-'));
+  const server = await startServer({ dataDir });
+  try {
+    const restoreOp = await makeRestoreOp(server, 'rop-param-tr@test.local');
+    await makeBackupOpAndRun(server, 'bop-param-tr@test.local', restoreOp);
+    plantRows(server, [{ id: 'param-tr-flag0', uploaded: 1, ftp_uploaded: 0 }, { id: 'param-tr-invalid', uploaded: 1 }]);
+    const first = await restoreOp.post('/api/backup/restore', { runId: 'param-tr-flag0', source: 'ftp' });
+    assert.equal(first.status, 400, `trigger flag-0: ${JSON.stringify(first.data)}`);
+    assert.equal(first.data.code, 'restoreSourceNotMirrored');
+    /* The lock was never claimed: the SAME refused trigger re-issued
+       immediately answers with the SAME 400 — a consumed lock would 409. */
+    const again = await restoreOp.post('/api/backup/restore', { runId: 'param-tr-flag0', source: 'ftp' });
+    assert.equal(again.status, 400, `re-issued trigger (lock must still be free): ${JSON.stringify(again.data)}`);
+    assert.equal(again.data.code, 'restoreSourceNotMirrored');
+    const bad = await restoreOp.post('/api/backup/restore', { runId: 'param-tr-invalid', source: 'bogus' });
+    assert.equal(bad.status, 400, `trigger bogus: ${JSON.stringify(bad.data)}`);
+    assert.equal(bad.data.code, 'restoreSourceInvalid');
+  } finally {
+    await server.stop();
+  }
+  const audits = makeAuditReader(dataDir)();
+  assert.ok(audits.some(a => a.action === 'restore_refused:restoreSourceNotMirrored'), 'trigger audits restore_refused:restoreSourceNotMirrored');
+  assert.ok(audits.some(a => a.action === 'restore_refused:restoreSourceInvalid'), 'trigger audits restore_refused:restoreSourceInvalid');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+test('104-02 route: instance + overwrite triggers refuse source (restore_refused tokens; Super Admin / Backup Operator tiers)', async () => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'projects-studio-src-param-dr-'));
+  const server = await startServer({ dataDir });
+  try {
+    const backupOpJoined = await signup(server.base, { name: 'Backup Op DR', email: 'bop-param-dr@test.local' });
+    assert.equal(backupOpJoined.status, 201);
+    const admin = (await login(server.base, ADMIN.email, ADMIN.password)).client;
+    const userId = withDb(server.dbPath, db2 => db2.prepare("select id from users where email = 'bop-param-dr@test.local'").get().id);
+    const grant = await admin.post('/api/auth/operator/instance-roles', { userId, role: 'backup_operator' });
+    assert.equal(grant.status, 200, `grant: ${JSON.stringify(grant.data)}`);
+    const backupOp = (await login(server.base, 'bop-param-dr@test.local', 'password-1234')).client;
+    plantRows(server, [
+      { id: 'param-dr-invalid', scope: { kind: 'instance', id: null }, uploaded: 1 },
+      { id: 'param-ovw-invalid', scope: { kind: 'workspace', id: 'ws-1' }, uploaded: 1 },
+    ]);
+    /* the overwrite route gates targetId/confirmName BEFORE the run-row read —
+       plant a live target so the source refusal (post-row position) answers. */
+    withDb(server.dbPath, db2 => {
+      db2.prepare('insert into workspaces (id, slug, name, color, doc, revision, created_at, updated_at, archived) values (?,?,?,?,?,?,?,?,?)')
+        .run('ws-tgt-param', 'tgt-param-fixture', 'Param Target', '#999999', JSON.stringify({ data: { members: [], projects: [], tasks: [], comments: [], files: [], teams: [], projOrder: [], logo: null, notifs: [], events: [], savedViews: [], recentSearches: [], activity: [] }, _meta: { workspaceName: 'Param Target' } }), 1, T, T, 0);
+    });
+    const dr = await admin.post('/api/backup/restore/instance', { runId: 'param-dr-invalid', confirmPhrase: 'RESTORE-INSTANCE', source: 'bogus' });
+    assert.equal(dr.status, 400, `instance trigger: ${JSON.stringify(dr.data)}`);
+    assert.equal(dr.data.code, 'restoreSourceInvalid');
+    const owv = await backupOp.post('/api/backup/restore/overwrite', { runId: 'param-ovw-invalid', targetId: 'ws-tgt-param', confirmName: 'Param Target', source: 'nope' });
+    assert.equal(owv.status, 400, `overwrite trigger: ${JSON.stringify(owv.data)}`);
+    assert.equal(owv.data.code, 'restoreSourceInvalid');
+  } finally {
+    await server.stop();
+  }
+  const audits = makeAuditReader(dataDir)();
+  assert.ok(audits.filter(a => a.action === 'restore_refused:restoreSourceInvalid').length >= 2, 'both triggers audited restore_refused:restoreSourceInvalid');
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
 
 /* ---------------------------------------------------------------------
    LOCALES (GD-7): both keys present ×5 in the SAME commit as the first
