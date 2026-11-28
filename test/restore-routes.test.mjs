@@ -49,6 +49,7 @@ const RESTORE_RUN_COLUMNS = [
   'finished_at',
   'created_at',
   'archive_name', // UAT 2026-11-27: the source archive filename rides the history (adapterEnsureColumn appends)
+  'created_by', // Phase 108 CARRY-02: the operator's uid, stamped at the start event (adapterEnsureColumn appends) — write-once at start
 ];
 const RESTORE_LOCK_COLUMNS = ['id', 'claimed_by', 'claimed_at'];
 const RESTORE_TRIGGERS = ['import_new', 'overwrite', 'instance'];

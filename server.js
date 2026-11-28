@@ -1157,6 +1157,13 @@ async function initDb() {
      the start event and persists so the history names WHICH archive was
      restored. Nullable — pre-column rows read as null → '—'. */
   await adapterEnsureColumn('restore_runs', 'archive_name', 'text');
+  /* Phase 108 (CARRY-02): run attribution — the operator who triggered the
+     restore rides the start event and persists as the uid. Nullable text,
+     engine-agnostic additive DDL (NOT a schema-block edit, NOT an
+     epoch-registry entry — a text uid is not epoch-ms). Legacy rows read
+     NULL → '—'; the display name resolves server-side via left join
+     users (runs GET below) — never a raw uid on the wire for display. */
+  await adapterEnsureColumn('restore_runs', 'created_by', 'text');
   /* Phase 100 (100-04, D-03): remote-prune truth — the pruned badge's
      payload source. Def byte-identical to the SCHEMA declaration (Pitfall
      P-B); existing rows default 0 — no run has been remote-pruned before
@@ -3874,8 +3881,8 @@ async function emitRestoreRunEvent(event) {
 const writeRestoreRunRow = async event => {
   if (event.kind === 'start') {
     await db.run(
-      'insert into restore_runs (id, scope, trigger, status, stage, archive_name, started_at, created_at) values (?,?,?,?,?,?,?,?)',
-      [event.runId, JSON.stringify({ kind: event.scope?.kind, id: event.scope?.id ?? null }), event.trigger, 'running', 'fetching', typeof event.archiveName === 'string' ? event.archiveName : null, event.startedAt, now()],
+      'insert into restore_runs (id, scope, trigger, status, stage, archive_name, created_by, started_at, created_at) values (?,?,?,?,?,?,?,?,?)',
+      [event.runId, JSON.stringify({ kind: event.scope?.kind, id: event.scope?.id ?? null }), event.trigger, 'running', 'fetching', typeof event.archiveName === 'string' ? event.archiveName : null, typeof event.createdBy === 'string' ? event.createdBy : null, event.startedAt, now()],
     );
   } else if (event.kind === 'update') {
     await db.run(
@@ -11018,7 +11025,7 @@ async function handleApi(req, res, url) {
       return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
     }
     const restoreRunId = uid();
-    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: scope.id ?? null }, trigger: 'import_new', startedAt: now(), archiveName: row.filename ?? null });
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: scope.id ?? null }, trigger: 'import_new', startedAt: now(), archiveName: row.filename ?? null, createdBy: user.id });
     runRestore({
       runId: restoreRunId,
       backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, ftp_uploaded: row.ftp_uploaded, smb_uploaded: row.smb_uploaded, taskId: row.task_id },
@@ -11126,7 +11133,7 @@ async function handleApi(req, res, url) {
       return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
     }
     const restoreRunId = uid();
-    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: 'instance', id: null }, trigger: 'instance', startedAt: now(), archiveName: row.filename ?? null });
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: 'instance', id: null }, trigger: 'instance', startedAt: now(), archiveName: row.filename ?? null, createdBy: user.id });
     restoreInstanceUnit({
       runId: restoreRunId,
       backupRun: { filename: row.filename, sha256: row.sha256, uploaded: row.uploaded, ftp_uploaded: row.ftp_uploaded, smb_uploaded: row.smb_uploaded, taskId: row.task_id },
@@ -11278,7 +11285,7 @@ async function handleApi(req, res, url) {
       return fail(res, 409, 'backupRestoreInProgress', 'A restore is in progress');
     }
     const restoreRunId = uid();
-    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: projectScope ? scope.id : targetId }, trigger: 'overwrite', startedAt: now(), archiveName: row.filename ?? null });
+    await emitRestoreRunEvent({ kind: 'start', runId: restoreRunId, scope: { kind: scope.kind, id: projectScope ? scope.id : targetId }, trigger: 'overwrite', startedAt: now(), archiveName: row.filename ?? null, createdBy: user.id });
     restoreOverwriteUnit({
       runId: restoreRunId,
       /* 2026-11-26 UAT (owner: overwrite restore of an smb-located run
@@ -11333,7 +11340,12 @@ async function handleApi(req, res, url) {
       return fail(res, 403, 'backupRoleRequired', 'Only a Restore Operator can see restore history');
     }
     const rows = await db.all(
-      'select id, scope, status, stage, final_name, summary, snapshot_run_id, snapshot_tag, archive_name, error, started_at, finished_at, created_at from restore_runs order by created_at desc, started_at desc limit 50',
+      /* CARRY-02: the operator's display name resolves SERVER-SIDE via the
+         left join on users (uid → name in one place, no client round-trip);
+         legacy rows join nothing — created_by_name null → '—' client-side. */
+      `select r.id, r.scope, r.status, r.stage, r.final_name, r.summary, r.snapshot_run_id, r.snapshot_tag, r.archive_name, r.created_by, u.name as created_by_name, r.error, r.started_at, r.finished_at, r.created_at
+         from restore_runs r left join users u on u.id = r.created_by
+        order by r.created_at desc, r.started_at desc limit 50`,
     );
     return json(res, 200, {
       runs: rows.map(r => {
